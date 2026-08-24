@@ -32,21 +32,12 @@ bamboo/
 #### `@bamboocss/dev` (packages/cli)
 
 - **Purpose**: Main entry point for end users
-- **Exports**: CLI binary (`bamboo` command), PostCSS plugin, presets
+- **Exports**: CLI binary (`bamboo` command), presets
 - **Key responsibilities**:
   - Command-line interface (init, codegen, build, analyze, debug)
   - Interactive setup wizard
   - Update notifications
 - **Dependencies**: Orchestrates all other packages
-
-#### `@bamboocss/postcss` (packages/postcss)
-
-- **Purpose**: PostCSS plugin integration
-- **Key responsibilities**:
-  - Integrates Bamboo into PostCSS build pipeline
-  - Uses `Builder` class to process CSS files
-  - Registers file dependencies for hot module replacement
-  - Validates and processes Bamboo-specific CSS
 
 ### 2. Core Processing Packages
 
@@ -236,8 +227,6 @@ Interactive wizard or flag parsing
     ↓
 setupConfig() - Creates bamboo.config.ts
     ↓
-setupPostcss() - Optional postcss.config.js
-    ↓
 loadConfigAndCreateContext() - Loads and validates config
     ↓
 codegen() - Generates styled-system directory
@@ -284,27 +273,7 @@ Optimize CSS (postcss plugins)
     └─→ Format with oxfmt
 ```
 
-### 3. PostCSS Integration Flow
-
-```
-Build tool runs PostCSS
-    ↓
-@bamboocss/postcss plugin
-    ↓
-Builder.setup() - Same as above
-    ↓
-Builder.isValidRoot() - Check for Bamboo CSS
-    ↓
-Builder.emit() - Generate artifacts
-    ↓
-Builder.extract() - Extract from changed files
-    ↓
-Builder.write(root) - Inject CSS into PostCSS AST
-    ↓
-Register dependencies for HMR
-```
-
-### 4. Parser Extraction Flow
+### 3. Parser Extraction Flow
 
 ```
 Source file (e.g., App.tsx)
@@ -357,7 +326,7 @@ StyleEncoder - Encode to atomic classes
    - `getVar(path)` returns CSS variable for semantic/virtual tokens
 5. Result is stored in ParserResult with `setToken()`
 
-### 5. Code Generation Flow
+### 4. Code Generation Flow
 
 ```
 Generator.getArtifacts()

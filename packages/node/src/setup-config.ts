@@ -90,10 +90,3 @@ ${
     logger.log(messages.thankYou())
   }
 }
-
-export async function setupPostcss(_cwd: string): Promise<void> {
-  throw new BambooError(
-    'CONFIG_ERROR',
-    '@bamboocss/postcss is not a styling integration. Add `@bamboocss/vite` to your Vite config and import `virtual:bamboo.css`. See https://bamboocss.com/docs/installation/vite',
-  )
-}

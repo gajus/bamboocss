@@ -19,8 +19,7 @@
     "bin",
     "app",
     "bin.js",
-    "*.d.ts",
-    "postcss.js"
+    "*.d.ts"
   ],
   "sideEffects": false,
   "main": "dist/index.cjs",
@@ -45,7 +44,6 @@
         "default": "./dist/presets.mjs"
       }
     },
-    "./postcss": "./postcss.js",
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -59,7 +57,6 @@
   "dependencies": {
     "@bamboocss/logger": "workspace:*",
     "@bamboocss/node": "workspace:*",
-    "@bamboocss/postcss": "workspace:*",
     "@bamboocss/preset-bamboo": "workspace:*",
     "@bamboocss/preset-base": "workspace:*",
     "@bamboocss/shared": "workspace:*",

@@ -139,10 +139,6 @@ There is no `postcss.config.cjs` entry for Bamboo and no file carrying the `@lay
 stylesheet as a virtual module that emits its own layer order. You still need PostCSS for anything else you run through
 it, autoprefixer included.
 
-<Callout type="warning">
-  Do not use `bamboo init --postcss` here. `@bamboocss/postcss` is not a styling integration.
-</Callout>
-
 ### Import the virtual stylesheet
 
 Import it once, from `app/root.tsx`:

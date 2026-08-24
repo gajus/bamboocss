@@ -2,12 +2,6 @@ import type { Config } from '@bamboocss/types'
 import * as p from '@clack/prompts'
 import { version } from '../package.json'
 
-/**
- * PostCSS is not a Bamboo styling integration. Kept so existing callers still compile, and
- * always answers no.
- */
-export const suggestPostcss = (_cwd: string) => 'no' as const
-
 export const interactive = async (_options: { cwd?: string } = {}) => {
   p.intro(`bamboo v${version}`)
 
@@ -56,7 +50,6 @@ export const interactive = async (_options: { cwd?: string } = {}) => {
   p.outro("Let's get started! 🎋")
 
   return {
-    postcss: false,
     outExtension: initFlags.useMjsExtension === 'yes' ? 'mjs' : 'js',
     strictValues: strictValuesFrom(initFlags.withStrictTokens),
     gitignore: initFlags.shouldUpdateGitignore === 'yes',
@@ -67,7 +60,6 @@ export const interactive = async (_options: { cwd?: string } = {}) => {
 const strictValuesFrom = (answer: string): Config['strictValues'] | undefined => (answer === 'yes' ? true : undefined)
 
 interface InitFlags {
-  postcss: boolean
   /** The two the prompt offers, rather than `string`, which is what the config accepts. */
   outExtension: 'mjs' | 'js'
   /**

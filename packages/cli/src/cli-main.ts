@@ -12,7 +12,6 @@ import {
   setLogStream,
   setupConfig,
   setupGitIgnore,
-  setupPostcss,
   spec,
   startProfiling,
   type CssGenOptions,
@@ -76,7 +75,6 @@ export async function main() {
     .command('init', 'Initialize the bamboo config file')
     .option('-i, --interactive', 'Run in interactive mode', { default: false })
     .option('-f, --force', 'Force overwrite existing config file')
-    .option('-p, --postcss', 'Emit postcss config file')
     .option('-c, --config <path>', 'Path to bamboo config file')
     .option('--cwd <cwd>', 'Current working directory', { default: cwd })
     .option('--silent', 'Suppress all messages except errors')
@@ -93,14 +91,12 @@ export async function main() {
       let options: Partial<InitCommandFlags> = {}
 
       if (initFlags.interactive) {
-        // The cwd, so the PostCSS question can be answered from the project rather than asked
-        // cold — a Vite config means the compiler is available, and that decides it.
         options = await interactive({ cwd: resolve(initFlags.cwd ?? '') })
       }
 
       const flags = { ...initFlags, ...options }
 
-      const { force, postcss, silent, gitignore, outExtension, strictValues, config: configPath } = flags
+      const { force, silent, gitignore, outExtension, strictValues, config: configPath } = flags
 
       const cwd = resolve(flags.cwd ?? '')
 
@@ -113,10 +109,6 @@ export async function main() {
       logger.info('cli', `Bamboo v${version}\n`)
 
       const done = logger.time.info('✨ Bamboo initialized')
-
-      if (postcss) {
-        await setupPostcss(cwd)
-      }
 
       await setupConfig(
         cwd,

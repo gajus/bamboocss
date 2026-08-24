@@ -2085,7 +2085,12 @@ export const foldSource = (options: FoldOptions): FoldResult => {
 
       // Syntactic, so no language service is involved. See `localReferencesTo` for why that
       // matters: one query binds the project's whole `.d.ts` closure into the bundler's heap.
-      const references = localReferencesTo(identifiersByName(), binding, nameNode)
+      const references = localReferencesTo(identifiersByName(), binding, nameNode).filter(
+        // `RecipeVariantProps<typeof button>` is erased by TypeScript and does not keep the
+        // recipe binding alive at runtime. Treating that type query as a value read rejects
+        // the generated API's documented way to derive component props.
+        (reference) => !reference.getFirstAncestorByKind(SyntaxKind.TypeQuery),
+      )
 
       const declined = skipped
         .filter((item) => SURVIVES_TO_RUNTIME.has(item.reason) && item.end > item.start)

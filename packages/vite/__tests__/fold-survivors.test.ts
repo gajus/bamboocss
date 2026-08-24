@@ -16,6 +16,17 @@ const survivors = (result: { skipped: Array<{ reason: string; name: string }> })
   result.skipped.filter((entry) => entry.reason === 'runtime-binding').map((entry) => entry.name)
 
 describe('a binding the rewrite left behind', () => {
+  test('ignores recipe references erased inside a type query', () => {
+    const { foldStrict } = createFoldFixture()
+    const result = foldStrict(`import { cva, type RecipeVariantProps } from 'styled-system/css'
+const button = cva({ base: { color: 'red.300' } })
+export type ButtonProps = RecipeVariantProps<typeof button>
+export const className = button()
+`)
+
+    expect(survivors(result)).toEqual([])
+  })
+
   test('passed on rather than called', () => {
     const { foldStrict } = createFoldFixture()
     const result = foldStrict(`import { css } from 'styled-system/css'\nexport const pass = css\n`)

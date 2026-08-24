@@ -23,7 +23,6 @@ with workspace support.
   /config/         # Config loading and resolution
   /types/          # Type definitions (config options live here)
   /vite/           # Vite plugin, including the build-time fold
-  /postcss/        # PostCSS plugin
   /plugin-*/       # vue and svelte are auto-injected; lightningcss is opt-in
   /preset-*/       # Design system presets (base, bamboo, atlaskit, open-props)
   /eslint-plugin/  # Lint rules
@@ -33,8 +32,8 @@ with workspace support.
 /sandbox/          # Integration tests and examples
   /codegen/        # Generated code validation tests (the scenario suites)
   /runtime-perf/   # Bundle-size and real-build assertions, on Vite 7 and Vite 8/Rolldown
-  /vite-ts/, /next-js-*/, /remix/, /astro/, /nuxt/, /svelte/, /solid-ts/,
-  /preact-ts/, /qwik-ts/, /waku-ts/, /gatsby-ts/, /docusaurus-ts/,
+ /vite-ts/, /astro/, /nuxt/, /svelte/, /solid-ts/,
+ /preact-ts/, /qwik-ts/,
   /storybook/, /component-lib/    # per-framework integration apps
 
 /playground/       # Interactive playground application
@@ -411,7 +410,6 @@ Brief description of the change and its impact.
   │   ├─ @bamboocss/parser (static analysis)
   │   ├─ @bamboocss/generator (codegen)
   │   └─ @bamboocss/config (config resolution)
-  └─ @bamboocss/postcss (PostCSS plugin)
 
 @bamboocss/core
   ├─ postcss (CSS processing)

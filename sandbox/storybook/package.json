@@ -20,6 +20,7 @@
   },
   "devDependencies": {
     "@bamboocss/dev": "workspace:*",
+    "@bamboocss/vite": "workspace:*",
     "@storybook/addon-docs": "10.1.2",
     "@storybook/addon-links": "10.1.2",
     "@storybook/react": "^10.1.2",

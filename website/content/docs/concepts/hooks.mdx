@@ -269,7 +269,7 @@ export interface BambooHooks {
   /**
    * Called right before adding the design-system CSS (global, static, preflight, tokens, keyframes) to the final CSS
    * Called right before writing/injecting the final CSS (styles.css) that contains the design-system CSS and the parser CSS
-   * You can use it to tweak the CSS content before it's written to disk or injected through the postcss plugin.
+   * You can use it to tweak the CSS content before it is emitted by the Vite plugin.
    */
   'cssgen:done': (args: CssgenDoneHookArgs) => string | void
   /**

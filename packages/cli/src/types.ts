@@ -11,7 +11,6 @@ export interface InitCommandFlags extends Pick<
    */
   strictValues?: boolean | string | number
   force?: boolean
-  postcss?: boolean
   silent?: boolean
   interactive?: boolean
   config?: string

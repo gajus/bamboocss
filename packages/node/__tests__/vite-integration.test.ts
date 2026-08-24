@@ -2,7 +2,6 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'vitest'
-import { setupPostcss } from '../src/setup-config'
 import { isStaticCompilerActive as isStaticCompilerActiveFromRoot } from '../src'
 import { isStaticCompilerActive, markStaticCompilerActive } from '../src/static-compiler'
 import { findViteConfig, hasUncompilableSources } from '../src/vite-integration'
@@ -77,12 +76,5 @@ describe('sources the compiler cannot reach', () => {
   test('and a project with neither is not a reason to throw', () => {
     expect(hasUncompilableSources({ cwd: project({}) })).toBe(false)
     expect(hasUncompilableSources({ cwd: project({ 'package.json': 'not json' }) })).toBe(false)
-  })
-})
-
-describe('bamboo init --postcss', () => {
-  test('refuses: PostCSS is not a styling integration', async () => {
-    const cwd = project({ 'package.json': '{}' })
-    await expect(setupPostcss(cwd)).rejects.toThrow('@bamboocss/vite')
   })
 })

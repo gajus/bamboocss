@@ -12,7 +12,7 @@ export { generatePackageExports } from '@bamboocss/generator'
 export { setupGitIgnore } from './git-ignore'
 export { setLogStream } from './logstream'
 export { parseDependency } from './parse-dependency'
-export { setupConfig, setupPostcss } from './setup-config'
+export { setupConfig } from './setup-config'
 export { spec } from './spec'
 export {
   findViteConfig,

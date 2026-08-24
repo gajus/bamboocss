@@ -1,15 +1,8 @@
-import { AngularLogo } from '@/icons/angular'
 import { AstroLogo } from '@/icons/astro'
-import { EmberLogo } from '@/icons/ember'
-import { GatsbyLogo } from '@/icons/gatsby'
-import { NextjsLogo } from '@/icons/nextjs'
 import { NuxtLogo } from '@/icons/nuxt'
 import { PreactLogo } from '@/icons/preact'
 import { ReactRouterLogo } from '@/icons/react-router'
 import { QwikLogo } from '@/icons/qwik'
-import { RedwoodLogo } from '@/icons/redwood'
-import { RsbuildLogo } from '@/icons/rsbuild'
-import { RemixLogo } from '@/icons/remix'
 import { SolidjsLogo } from '@/icons/solid'
 import { StorybookLogo } from '@/icons/storybook'
 import { SvelteLogo } from '@/icons/svelte'
@@ -20,16 +13,6 @@ import { center, flex, grid } from '@/styled-system/patterns'
 import Link from 'next/link'
 
 const logoMap = {
-  nextjs: {
-    name: 'Next.js',
-    href: '/docs/installation/nextjs',
-    logo: NextjsLogo,
-  },
-  gatsby: {
-    name: 'Gatsby',
-    logo: GatsbyLogo,
-    href: '/docs/installation/gatsby',
-  },
   solid: {
     name: 'Solid',
     logo: SolidjsLogo,
@@ -55,11 +38,6 @@ const logoMap = {
     logo: AstroLogo,
     href: '/docs/installation/astro',
   },
-  remix: {
-    name: 'Remix',
-    logo: RemixLogo,
-    href: '/docs/installation/remix',
-  },
   reactrouter: {
     name: 'React Router',
     logo: ReactRouterLogo,
@@ -69,16 +47,6 @@ const logoMap = {
     name: 'Qwik',
     logo: QwikLogo,
     href: '/docs/installation/qwik',
-  },
-  redwood: {
-    name: 'Redwood',
-    logo: RedwoodLogo,
-    href: '/docs/installation/redwood',
-  },
-  rsbuild: {
-    name: 'Rsbuild',
-    logo: RsbuildLogo,
-    href: '/docs/installation/rsbuild',
   },
   vue: {
     name: 'Vue',
@@ -90,20 +58,10 @@ const logoMap = {
     logo: NuxtLogo,
     href: '/docs/installation/nuxt',
   },
-  angular: {
-    name: 'Angular',
-    logo: AngularLogo,
-    href: '/docs/installation/angular',
-  },
   storybook: {
     name: 'Storybook',
     logo: StorybookLogo,
     href: '/docs/installation/storybook',
-  },
-  ember: {
-    name: 'Ember',
-    logo: EmberLogo,
-    href: '/docs/installation/ember',
   },
 }
 

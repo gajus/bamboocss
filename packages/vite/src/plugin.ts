@@ -223,10 +223,8 @@ const formatSkipped = (id: string, skipped: SkippedCall[]) => {
 export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
   const { configPath, cwd, reportSkipped = false, reportSummary = true, maxRecipeStates, pruneCss = true } = options
 
-  // Announced here, as the Vite config is evaluated, which is before anything else Bamboo runs
-  // in this process. `@bamboocss/postcss` reads it to tell a project that deliberately emits
-  // CSS through PostCSS from one that has Vite and never added this plugin — the second ships
-  // the style engine to the client, and nothing else about it looks wrong.
+  // Announced as the Vite config is evaluated so generated runtime guards and internal
+  // integrations can identify the compiler before any application module runs.
   markStaticCompilerActive()
 
   if (maxRecipeStates !== undefined && (!Number.isSafeInteger(maxRecipeStates) || maxRecipeStates < 1)) {
@@ -403,6 +401,14 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     dependenciesByModule: Map<string, Set<string>>
     filesByModule: Map<string, string>
     foldSignatures: Map<string, { input: string; output: string; path: string }>
+    /**
+     * Exact bytes and parser identity used by the last successful dev transform.
+     *
+     * SFC source on disk is not what Bamboo folds: Vue, Svelte and Astro hand the post
+     * plugin compiled JavaScript. Retaining that input lets the unchanged-output HMR check
+     * re-fold the same module without reading and parsing the raw template.
+     */
+    foldInputsByModule: Map<string, { code: string; input: string; parsePath: string }>
     recipeConfigCache: Map<string, ForeignRecipes>
     transformedModulesThisRun: Set<string>
     unchangedFolds: Map<string, boolean>
@@ -530,6 +536,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     dependenciesByModule: new Map(),
     filesByModule: new Map(),
     foldSignatures: new Map(),
+    foldInputsByModule: new Map(),
     recipeConfigCache: new Map(),
     transformedModulesThisRun: new Set(),
     unchangedFolds: new Map(),
@@ -547,6 +554,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     ),
     filesByModule: new Map(state.filesByModule),
     foldSignatures: new Map(state.foldSignatures),
+    foldInputsByModule: new Map(state.foldInputsByModule),
     recipeConfigCache: new Map(state.recipeConfigCache),
     transformedModulesThisRun: new Set(state.transformedModulesThisRun),
     unchangedFolds: new Map(state.unchangedFolds),
@@ -1149,7 +1157,10 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
 
     recordFoldDependencies(state, moduleId, file, artifact.dependencies)
     if (artifact.signature) state.foldSignatures.set(moduleId, artifact.signature)
-    else state.foldSignatures.delete(moduleId)
+    else {
+      state.foldSignatures.delete(moduleId)
+      state.foldInputsByModule.delete(moduleId)
+    }
   }
 
   /**
@@ -1247,7 +1258,9 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     if (!signature || !ctx || !foldSourceImpl || !runtimeCss || !styleCompiler) return false
 
     try {
-      const code = readFileSync(signature.path, 'utf8')
+      const retained = state.foldInputsByModule.get(dependent)
+      const code = retained?.input === signature.input ? retained.code : readFileSync(signature.path, 'utf8')
+      const parsePath = retained?.input === signature.input ? retained.parsePath : signature.path
       const inputDigest = digest(code)
       if (inputDigest !== signature.input) return false
 
@@ -1288,7 +1301,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
 
       let raw: FoldResult
       let parserDependencies: readonly string[]
-      const memoKey = foldMemoKey(signature.path, inputDigest)
+      const memoKey = foldMemoKey(parsePath, inputDigest)
       const memoized = foldMemoByContent.get(memoKey)
       if (memoized) {
         // Another environment's pass over this same event already folded these bytes. The
@@ -1298,15 +1311,15 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       } else {
         // `addSourceFile` returns the tree it already holds when the text matches, which it does
         // here by the line above — so this is a parse and a fold, not a re-parse of the module.
-        const sourceFile = ctx.project.addSourceFile(signature.path, code)
-        const parserResult = ctx.project.parseSourceFile(signature.path)
+        const sourceFile = ctx.project.addSourceFile(parsePath, code)
+        const parserResult = ctx.project.parseSourceFile(parsePath)
         if (!parserResult) return false
 
         raw = foldSourceImpl({
           ctx,
           code,
           parserResult,
-          filePath: signature.path,
+          filePath: parsePath,
           runtimeCss,
           styleCompiler,
           maxRecipeStates,
@@ -1331,7 +1344,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       }
 
       const result = withResolutionClosure(
-        signature.path,
+        parsePath,
         raw,
         parserDependencies,
         state.dependenciesByModule.get(dependent),
@@ -1809,13 +1822,16 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       // of asymmetry that only shows up as a fold that quietly stopped refreshing.
       const [filePath] = id.split('?')
       if (!filePath) return
+
+      // Whole-map rather than this file's entry: a config is cached under the module that
+      // *declares* it, and an edit here can change what any other module re-exports. This
+      // must run for SFCs too: their compiled script lives under a synthetic parser path,
+      // but consumers cache recipes exported from that path just like any other module.
+      for (const state of transformStateByEnvironment.values()) state.recipeConfigCache.clear()
+
       // Raw SFC bytes are not what the fold parses. Prefetching them under the real path
       // would run `parser:before` and poison the module the script transform reads.
       if (SFC_EXTENSIONS.test(filePath)) return
-
-      // Whole-map rather than this file's entry: a config is cached under the module that
-      // *declares* it, and an edit here can change what any other module re-exports.
-      for (const state of transformStateByEnvironment.values()) state.recipeConfigCache.clear()
 
       if (change.event === 'delete') {
         ctx.project.removeSourceFile(filePath)
@@ -1828,6 +1844,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
             if (normalizeFsPath(moduleFile) !== deleted) continue
             recordFoldDependencies(state, moduleId, moduleFile, [])
             state.foldSignatures.delete(moduleId)
+            state.foldInputsByModule.delete(moduleId)
             state.transformArtifactsByModule.delete(moduleId)
             state.filesByModule.delete(moduleId)
           }
@@ -2159,6 +2176,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
           state.transformArtifactsByModule.delete(id)
           recordFoldDependencies(state, id, filePath, [])
           state.foldSignatures.delete(id)
+          state.foldInputsByModule.delete(id)
           return null
         }
 
@@ -2212,6 +2230,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       // The signature is not, for the reason the edges are. It is a claim about output this
       // pass did not produce, and acting on a stale one suppresses a real update.
       state.foldSignatures.delete(id)
+      state.foldInputsByModule.delete(id)
       if (command === 'serve') {
         // Normalized, never rethrown as caught. `catch` binds `unknown`, and anything under
         // the fold — a config hook, a dependency, a bare `throw 'string'` — may throw a
@@ -2254,12 +2273,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       transformedFile: result.folded.some((entry) => entry.kind === 'class' || entry.kind === 'slots'),
       classNames: [...new Set(result.folded.flatMap((entry) => entry.classNames))],
       dependencies: [...result.dependencies],
-      // The HMR re-fold reads `signature.path` from disk. An SFC's fold input is compiled JS
-      // (or a `type=script` submodule), not the file on disk, so a digest of those bytes can
-      // never match `readFileSync` of the `.vue` / `.svelte` / `.astro` path — and feeding
-      // that path to ts-morph would run `parser:before` on the raw template. Skip the
-      // signature; Vite re-transforms the module instead.
-      ...(result.dependencies.length && parsePath === filePath
+      ...(result.dependencies.length
         ? { signature: { input: (inputDigest ??= digest(code)), output: digest(result.code), path: filePath } }
         : {}),
     })
@@ -2267,6 +2281,11 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     // one path for fresh and cached modules is what keeps new per-transform state from being
     // added to one and silently omitted from the other.
     applyTransformArtifact(state, artifact, id, environmentName(this))
+    if (artifact.signature && (command === 'serve' || parsePath !== filePath)) {
+      state.foldInputsByModule.set(id, { code, input: artifact.signature.input, parsePath })
+    } else {
+      state.foldInputsByModule.delete(id)
+    }
 
     if (reportSkipped && result.skipped.length) {
       logger.info('vite:transform', formatSkipped(filePath, result.skipped))
@@ -2285,6 +2304,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       // ends up holding is an error and not the output just digested. Comparing against it on
       // a later edit would call a module unchanged that never landed to begin with.
       state.foldSignatures.delete(id)
+      state.foldInputsByModule.delete(id)
       throw createSurvivorError(artifact.survivors.map((survivor) => ({ file: filePath, ...survivor })))
     }
 

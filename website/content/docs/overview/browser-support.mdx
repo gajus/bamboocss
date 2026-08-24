@@ -55,7 +55,7 @@ operating-system media query.
 
 ## Additional CSS processing
 
-PostCSS remains useful after Vite emits Bamboo's stylesheet—for example, to run Autoprefixer over the final CSS. Do not
-add `@bamboocss/postcss` or `@bamboocss/dev/postcss`; those packages are not a styling integration.
+PostCSS remains useful for application CSS outside Bamboo—for example, to run Autoprefixer. Bamboo itself is compiled
+and emitted by its Vite plugin.
 
 Cascade-layer flattening is unsupported. Removing layer boundaries changes Bamboo's precedence contract.

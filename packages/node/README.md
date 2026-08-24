@@ -3,9 +3,9 @@
 The Node runtime behind Bamboo CSS: config loading, context creation, extraction and the write side of codegen and
 `styles.css`.
 
-This is an internal package. It is what `@bamboocss/dev` (the CLI), `@bamboocss/postcss` and `@bamboocss/vite` are built
-on, and it is versioned with them — most projects should install one of those instead. User-facing documentation lives
-at [bamboocss.com/docs](https://bamboocss.com/docs).
+This is an internal package. It is what `@bamboocss/dev` (the CLI) and `@bamboocss/vite` are built on, and it is
+versioned with them — most projects should install one of those instead. User-facing documentation lives at
+[bamboocss.com/docs](https://bamboocss.com/docs).
 
 ## Exports
 
@@ -35,7 +35,7 @@ Each takes a `BambooContext`, and each backs the CLI command of the same name.
 
 ### Setup and utilities
 
-- `setupConfig(cwd, options?)` / `setupPostcss(cwd)` – scaffold `bamboo.config.ts` and the PostCSS config.
+- `setupConfig(cwd, options?)` – scaffold `bamboo.config.ts`.
 - `setupGitIgnore(ctx)` – add the outdir to `.gitignore`, unless `config.gitignore` is off.
 - `parseDependency(fileOrGlob)` – turn a `config.dependencies` entry into a PostCSS `dependency` or `dir-dependency`
   message.

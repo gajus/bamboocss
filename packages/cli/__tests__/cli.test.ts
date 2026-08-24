@@ -1,10 +1,7 @@
 import { execSync } from 'node:child_process'
-import fsSync from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, test } from 'vitest'
-import { suggestPostcss } from '../src/interactive'
 import fs from 'node:fs/promises'
 import { afterAll } from 'vitest'
 import { beforeAll } from 'vitest'
@@ -40,7 +37,6 @@ describe('CLI', () => {
   const testsCwd = path.resolve(cwd, _dirname, './samples')
   const paths = {
     config: path.resolve(testsCwd, 'bamboo.config.ts'),
-    postcssConfig: path.resolve(testsCwd, 'postcss.config.cjs'),
     styledSystem: path.resolve(testsCwd, 'styled-system'),
     logFile: path.resolve(testsCwd, 'bamboo.log'),
     pkgJson: path.resolve(testsCwd, 'package.json'),
@@ -55,7 +51,6 @@ describe('CLI', () => {
     try {
       await Promise.allSettled([
         fs.unlink(paths.config),
-        fs.unlink(paths.postcssConfig),
         fs.unlink(paths.logFile),
         fs.rm(paths.styledSystem, { recursive: true }),
       ])
@@ -270,42 +265,5 @@ describe('CLI', () => {
     expect(pkg).toMatchObject(owned)
     expect(pkg.exports['./css']).toBeDefined()
     expect(pkg.license).toBeUndefined()
-  })
-})
-
-/**
- * Which integration the interactive prompt suggests, before anybody is asked.
- *
- * "Would you like to use PostCSS?" defaulted to yes for every project, and that question decides
- * whether style calls are compiled away or the style engine ships to the client. Both render
- * identically, so pressing Enter picked the heavier one and nothing afterwards said so.
- *
- * The prompt itself needs a TTY; this is the decision behind it, which is the part with a wrong
- * answer.
- */
-describe('the PostCSS suggestion', () => {
-  const dirs: string[] = []
-
-  const project = (files: Record<string, string>) => {
-    const dir = fsSync.mkdtempSync(path.join(os.tmpdir(), 'bamboo-suggest-'))
-    dirs.push(dir)
-    for (const [name, body] of Object.entries(files)) fsSync.writeFileSync(path.join(dir, name), body)
-    return dir
-  }
-
-  afterAll(() => {
-    for (const dir of dirs) fsSync.rmSync(dir, { force: true, recursive: true })
-  })
-
-  const react = JSON.stringify({ dependencies: { react: '^19' } })
-
-  test('is always no: PostCSS is not a styling integration', () => {
-    expect(suggestPostcss(project({ 'vite.config.ts': '', 'package.json': react }))).toBe('no')
-    expect(suggestPostcss(project({ 'package.json': react }))).toBe('no')
-    expect(
-      suggestPostcss(
-        project({ 'vite.config.ts': '', 'package.json': JSON.stringify({ devDependencies: { svelte: '*' } }) }),
-      ),
-    ).toBe('no')
   })
 })

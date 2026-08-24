@@ -44,9 +44,6 @@
     "packages/parser": {
       "project": ["src/**/*.ts"]
     },
-    "packages/postcss": {
-      "project": ["src/**/*.ts"]
-    },
     "packages/preset-atlaskit": {
       "project": ["src/**/*.ts"]
     },

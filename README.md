@@ -88,8 +88,7 @@ import { flex } from '../styled-system/patterns'
 <div className={css({ fontSize: 'lg', color: 'red.400' })}>Box 2</div>
 ```
 
-Not on Vite? [PostCSS](https://bamboocss.com/docs/installation/postcss) provides extraction-only output, but only the
-Vite integration compiles calls and globally deduplicates recipe declarations.
+Bamboo requires Vite: the plugin compiles style calls and globally deduplicates recipe declarations.
 
 ## Directory Structure
 
@@ -99,7 +98,6 @@ Installed by you:
 | --------------------------------------------------- | ------------------------------------------------------------- |
 | [cli](packages/cli)                                 | The `@bamboocss/dev` package and the `bamboo` command         |
 | [vite](packages/vite)                               | Strict whole-program source and CSS compiler                  |
-| [postcss](packages/postcss)                         | PostCSS plugin                                                |
 | [eslint-plugin](packages/eslint-plugin)             | Lint rules for token paths, escape hatches and recipe usage   |
 | [mcp](packages/mcp)                                 | MCP server exposing tokens, recipes and usage to assistants   |
 | [plugin-lightningcss](packages/plugin-lightningcss) | Opt-in LightningCSS optimizer, replacing the PostCSS pipeline |

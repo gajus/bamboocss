@@ -1,5 +1,6 @@
 import { mergeConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import bamboocss from '@bamboocss/vite'
 import { fileURLToPath } from 'url'
 import { resolve } from 'path'
 
@@ -21,6 +22,7 @@ export default {
         react({
           jsxRuntime: 'automatic',
         }),
+        bamboocss(),
       ],
       resolve: {
         alias: {

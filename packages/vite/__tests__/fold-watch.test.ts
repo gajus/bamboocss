@@ -93,6 +93,27 @@ const driver = (options: Parameters<typeof bamboocss>[0] = {}) => {
   }
 }
 
+const sfcDriver = () => {
+  const list = bamboocss({ cwd, reportSummary: false })
+  const lifecycle = list.find((p) => p.name === 'bamboocss:compiler')!
+  const sfc = list.find((p) => p.name === 'bamboocss:compiler-sfc')!
+  const buildStart = hookOf(lifecycle.buildStart)
+  const transformModule = hookOf(lifecycle.transform)
+  const transformSfc = hookOf(sfc.transform)
+  const watchChange = hookOf(lifecycle.watchChange)
+  const hotUpdate = hookOf(lifecycle.hotUpdate)
+
+  return {
+    start: () => buildStart?.call({} as never, {} as never),
+    fold: (file: string, code: string) => transformSfc?.call({ addWatchFile() {} } as never, code, file, {} as never),
+    foldModule: (file: string, code: string) =>
+      transformModule?.call({ addWatchFile() {} } as never, code, file, {} as never),
+    change: (file = DEPENDENCY) => watchChange?.call({} as never, file, { event: 'update' } as never),
+    hot: (file: string, graph: ReturnType<typeof stubGraph>['graph']) =>
+      hotUpdate?.call({ environment: { moduleGraph: graph } } as never, { file, modules: [] } as never),
+  }
+}
+
 /**
  * Writes the dependency and nothing else — the consumer stays off disk on purpose.
  *
@@ -341,6 +362,47 @@ describe('a dependent the edit does not actually change', () => {
     const second = stubGraph({ [CONSUMER]: [{ id: CONSUMER }], [OTHER_CONSUMER]: [{ id: OTHER_CONSUMER }] })
     expect(hot(DEPENDENCY, second.graph, [])).toEqual([{ id: OTHER_CONSUMER }])
     expect(second.invalidated).toEqual([OTHER_CONSUMER])
+  }, 60_000)
+
+  test('re-folds retained compiled SFC bytes instead of the raw component', async () => {
+    const file = join(FIXTURE_DIR, 'component.vue')
+    const compiled = consumerOf('beta')
+    const { start, fold, change, hot } = sfcDriver()
+
+    writePair('red.300', 'blue.500')
+    await start()
+    const initial = await fold(file, compiled)
+    expect(typeof initial === 'object' && initial !== null ? initial.code : initial).toContain('"c_blue.500"')
+
+    // The file on disk is deliberately raw Vue source. Re-reading it cannot answer whether
+    // the compiled module changed; the retained post-plugin bytes can.
+    writeFileSync(file, `<script setup>const templateOnly = true</script>\n<template><div /></template>\n`)
+    writePair('red.400', 'blue.500')
+    change()
+
+    const graph = stubGraph({ [file]: [{ id: file }] })
+    expect(hot(DEPENDENCY, graph.graph)).toBeUndefined()
+    expect(graph.invalidated).toEqual([])
+  }, 60_000)
+
+  test('invalidates recipe configs exported from an edited SFC', async () => {
+    const file = join(FIXTURE_DIR, 'recipe.vue')
+    const consumer = join(FIXTURE_DIR, 'recipe-consumer.ts')
+    const recipe = (color: string) =>
+      `import { cva } from 'styled-system/css'\nexport const badge = cva({ base: { color: '${color}' } })\n`
+    const useRecipe = `import { badge } from './recipe.vue.__bamboo__.ts'\nexport const className = badge()\n`
+    const { start, fold, foldModule, change } = sfcDriver()
+
+    mkdirSync(FIXTURE_DIR, { recursive: true })
+    await start()
+    await fold(file, recipe('red.300'))
+    const initial = await foldModule(consumer, useRecipe)
+    expect(typeof initial === 'object' && initial !== null ? initial.code : initial).toContain('"c_red.300"')
+
+    change(file)
+    await fold(file, recipe('blue.500'))
+    const updated = await foldModule(consumer, useRecipe)
+    expect(typeof updated === 'object' && updated !== null ? updated.code : updated).toContain('"c_blue.500"')
   }, 60_000)
 })
 

@@ -1,9 +1,8 @@
 ---
 '@bamboocss/vite': minor
-'@bamboocss/postcss': major
-'@bamboocss/dev': major
+'@bamboocss/dev': minor
 '@bamboocss/node': minor
 ---
 
-Require Vite as the styling integration. Vue, Svelte and Astro compile after the framework plugin; PostCSS no longer
-emits a stylesheet.
+Require Vite as the styling integration. Vue, Svelte and Astro compile after the framework plugin; the PostCSS package
+and CLI export are removed.

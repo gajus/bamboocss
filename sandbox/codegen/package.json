@@ -19,6 +19,7 @@
     "react-dom": "19.2.0"
   },
   "devDependencies": {
+    "@bamboocss/vite": "workspace:*",
     "@builder.io/qwik": "1.17.2",
     "@preact/preset-vite": "2.10.2",
     "@solidjs/testing-library": "0.8.10",

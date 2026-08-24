@@ -438,7 +438,7 @@ export class BambooContext extends Generator {
     })
   }
 
-  writeSplitCss = async (sheet: Stylesheet, { includeRecipes = true }: { includeRecipes?: boolean } = {}) => {
+  writeSplitCss = async (sheet: Stylesheet, { includeRecipes = false }: { includeRecipes?: boolean } = {}) => {
     const { path: pathUtil, fs } = this.runtime
     const rootDir = this.paths.root
     const stylesDir = [...rootDir, 'styles']

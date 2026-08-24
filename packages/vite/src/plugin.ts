@@ -69,6 +69,14 @@ export interface BambooVitePluginOptions {
 }
 
 const DEFAULT_EXTENSIONS = /\.(?:[cm]?[jt]sx?)$/
+const SFC_EXTENSIONS = /\.(?:vue|svelte|astro)$/i
+/**
+ * Framework script submodules. Vue spells `lang.ts` as a bare query key; Svelte uses
+ * `lang=ts`; both set `type=script`. The compiler must see that JS, not the wrapping SFC —
+ * folding the SFC uses parser:before offsets that do not match the file Vite emits.
+ */
+const SFC_SCRIPT_QUERY = /[?&](?:type=script(?:&|$)|lang\.tsx?(?:&|$)|lang=tsx?(?:&|$)|lang\.jsx?(?:&|$))/i
+const SFC_SCRIPT_TAG = /<script[\s>/]/i
 const NODE_MODULES = /node_modules/
 const TRANSFORM_META_KEY = 'bamboocss:transform'
 const TRANSFORM_ARTIFACT_VERSION = 3 as const
@@ -112,7 +120,7 @@ const TRANSFORM_ARTIFACT_VERSION = 3 as const
  */
 const WRAPPED_MODULE_QUERY = /[?&](?:raw|url|worker|sharedworker)(?:&|=|$)/
 
-const shouldTransform = (id: string) => {
+export const shouldTransform = (id: string) => {
   // Rollup marks a virtual module by prefixing its id with a NUL. Those have no file
   // on disk, so the CSS extractor never reads them and a class folded here could have
   // no rule behind it — besides which, the id is not a path ts-morph should be given.
@@ -122,7 +130,30 @@ const shouldTransform = (id: string) => {
   const [filePath] = id.split('?')
   if (!filePath) return false
   if (NODE_MODULES.test(filePath)) return false
-  return DEFAULT_EXTENSIONS.test(filePath)
+  return DEFAULT_EXTENSIONS.test(filePath) || SFC_EXTENSIONS.test(filePath)
+}
+
+/**
+ * Path ts-morph should parse for this transform.
+ *
+ * A `.vue` / `.svelte` / `.astro` id is either a raw SFC (skip — offsets would not match), a
+ * `type=script` submodule, or the framework's compiled JS stored under the SFC path. The last
+ * two are JavaScript: parsing them as the SFC would run `parser:before` and fold the wrong
+ * bytes. A sibling path with a `.ts` suffix keeps ScriptKind TS and skips those hooks.
+ *
+ * Returns `null` when the module is still a raw SFC and must be left to the framework plugin.
+ * Astro frontmatter is `---`, not `<script>`, so a tag check alone would parse the template.
+ */
+export const compilerParsePath = (id: string, code: string): string | null => {
+  const [filePath, query = ''] = id.split('?')
+  if (!filePath) return null
+  if (!SFC_EXTENSIONS.test(filePath)) return filePath
+  if (SFC_SCRIPT_QUERY.test(`?${query}`)) return `${filePath}.__bamboo__.ts`
+  const trimmed = code.trimStart()
+  if (/\.astro$/i.test(filePath) && (trimmed.startsWith('---') || trimmed.startsWith('<'))) return null
+  if (SFC_SCRIPT_TAG.test(code) || /<(?:template|style)[\s>/]/i.test(code)) return null
+  if (trimmed.startsWith('<')) return null
+  return `${filePath}.__bamboo__.ts`
 }
 
 /**
@@ -182,15 +213,12 @@ const formatSkipped = (id: string, skipped: SkippedCall[]) => {
 /**
  * Vite integration for Bamboo CSS.
  *
- * Two plugins, because they do unrelated jobs on different schedules. The first emits the
- * stylesheet as a virtual module and runs in dev and build alike — that is the integration,
- * and nothing styles without it. The second compiles every Bamboo source call in both dev
- * and build; there is no runtime styling fallback.
- *
- * The compiler runs with `enforce: 'pre'` so it sees module source as close as possible to what
- * the CSS extractor reads off disk. A plugin that rewrites style calls before bamboo
- * sees them would otherwise make the two disagree, and a folded class could end up
- * with no matching rule.
+ * Three plugins. The first emits the stylesheet as a virtual module. The second compiles
+ * JavaScript and TypeScript with `enforce: 'pre'` so it sees source close to what the CSS
+ * extractor reads off disk. The third compiles Vue, Svelte and Astro with `enforce: 'post'`
+ * so it folds the framework's compiled JavaScript — a `pre` hook that skipped the raw SFC
+ * would never run again on the same id. Script submodules (`type=script`) are SFC paths and
+ * therefore fold in the post plugin, after the framework has extracted them.
  */
 export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
   const { configPath, cwd, reportSkipped = false, reportSummary = true, maxRecipeStates, pruneCss = true } = options
@@ -1781,6 +1809,9 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       // of asymmetry that only shows up as a fold that quietly stopped refreshing.
       const [filePath] = id.split('?')
       if (!filePath) return
+      // Raw SFC bytes are not what the fold parses. Prefetching them under the real path
+      // would run `parser:before` and poison the module the script transform reads.
+      if (SFC_EXTENSIONS.test(filePath)) return
 
       // Whole-map rather than this file's entry: a config is cached under the module that
       // *declares* it, and an edit here can change what any other module re-exports.
@@ -1914,190 +1945,8 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     },
 
     async transform(code, id) {
-      if (!shouldTransform(id)) return null
-
-      try {
-        await ensureCompilerState()
-      } catch (error) {
-        throw asError(error, 'failed to initialize the bamboo compiler')
-      }
-      if (!ctx || !foldSourceImpl || !runtimeCss || !styleCompiler) return null
-
-      const [filePath] = id.split('?')
-
-      // The generated styled-system is bamboo's own runtime, not user code. It is not in
-      // the project's `include`, so parsing it fails, and folding it would be meaningless
-      // even if it did not.
-      if (isGeneratedOutput(filePath, ctx)) return null
-
-      const state = environmentState(this)
-      state.transformedModulesThisRun.add(id)
-      let inputDigest: string | undefined
-      const previousSignature = state.foldSignatures.get(id)
-      const previousDependencies =
-        previousSignature && previousSignature.input === (inputDigest ??= digest(code))
-          ? state.dependenciesByModule.get(id)
-          : undefined
-
-      let result: FoldResult
-      try {
-        const memoKey = command === 'serve' ? foldMemoKey(filePath, (inputDigest ??= digest(code))) : undefined
-        const memoized = memoKey ? foldMemoByContent.get(memoKey) : undefined
-        let valueReads: FoldMemoEntry['valueReads'] = []
-        if (memoized?.reportedSurvivors) {
-          // These exact bytes were already folded this change event — for the other
-          // environment, or by a framework re-driving the same update. Only the resolution
-          // closure is per-environment, so only it is recomputed.
-          valueReads = memoized.valueReads
-          result = withResolutionClosure(filePath, memoized.result, memoized.parserDependencies, previousDependencies)
-        } else {
-          const sourceFile = ctx.project.addSourceFile(filePath, code)
-          const parserResult = ctx.project.parseSourceFile(filePath)
-          // An empty extraction result is not proof that the module has no Bamboo runtime
-          // binding. The strict compiler also scans the source AST after planning rewrites.
-          if (!parserResult) {
-            state.transformArtifactsByModule.delete(id)
-            recordFoldDependencies(state, id, filePath, [])
-            state.foldSignatures.delete(id)
-            return null
-          }
-
-          const folded = foldSourceImpl({
-            ctx,
-            code,
-            parserResult,
-            filePath,
-            runtimeCss,
-            styleCompiler,
-            maxRecipeStates,
-            // On demand rather than from a registry built at `buildStart`: a consumer is
-            // transformed before the module it imports, so anything accumulated during the
-            // build would make the fold depend on discovery order.
-            parseModule: (path) => ctx?.project.parseSourceFile(path),
-            recipeConfigCache: state.recipeConfigCache,
-            reportSurvivors: true,
-            sourceFile,
-          })
-          const parserDependencies = parserResult.getDependencies()
-          valueReads = (parserResult as { getExportReads?: () => FoldMemoEntry['valueReads'] }).getExportReads?.() ?? []
-          if (memoKey) {
-            foldMemoByContent.set(memoKey, { result: folded, parserDependencies, valueReads, reportedSurvivors: true })
-          }
-          result = withResolutionClosure(filePath, folded, parserDependencies, previousDependencies)
-        }
-        state.exportReadsByModule.set(id, [
-          ...valueReads.map((read) => ({ kind: 'value' as const, ...read })),
-          ...result.exportReads,
-        ])
-      } catch (error) {
-        logger.caughtError('vite:transform', `Failed to compile ${filePath}`, error)
-
-        // Fold dependencies are deliberately left as they were. A throw establishes nothing
-        // about what this module reads, and keeping the last known edges is the recoverable
-        // direction: fixing the *dependency* then re-transforms this module, which is how a
-        // user gets out of the failure. Retracting would cost that, to save nothing.
-        const previousDependencies = [...(state.dependenciesByModule.get(id) ?? [])]
-        const failedArtifact = sealTransformArtifact(environmentName(this), {
-          version: TRANSFORM_ARTIFACT_VERSION,
-          moduleId: id,
-          file: filePath,
-          folded: 0,
-          skipped: [['compile-failed', 1]],
-          survivors: [{ line: 1, name: 'compiler', reason: 'compile-failed' }],
-          transformedFile: false,
-          classNames: [],
-          dependencies: previousDependencies,
-        })
-        applyTransformArtifact(state, failedArtifact, id, environmentName(this))
-        // The signature is not, for the reason the edges are. It is a claim about output this
-        // pass did not produce, and acting on a stale one suppresses a real update.
-        state.foldSignatures.delete(id)
-        if (command === 'serve') {
-          // Normalized, never rethrown as caught. `catch` binds `unknown`, and anything under
-          // the fold — a config hook, a dependency, a bare `throw 'string'` — may throw a
-          // primitive. Vite's dev error middleware puts what it is given into a `WeakSet` to
-          // dedupe it, which throws `TypeError: Invalid value used in weak set` on anything
-          // that is not an object. The real failure is then lost behind a message about weak
-          // sets, in the one mode where the user is watching the terminal for it.
-          throw asError(error, `failed to compile ${filePath}`)
-        }
-        return null
-      }
-
-      const skippedHere = new Map<SkipReason, number>()
-      for (const entry of result.skipped) {
-        skippedHere.set(entry.reason, (skippedHere.get(entry.reason) ?? 0) + 1)
-      }
-
-      const survivorsHere: Array<Omit<Survivor, 'file'>> = []
-      for (const entry of result.skipped) {
-        if (entry.reason === 'not-imported' || entry.reason === 'overlapping') {
-          continue
-        }
-        // `cx` is the one intentional runtime surface: with unknown external inputs it is a
-        // tiny class-string joiner, not a styling engine. Bamboo only promises semantic
-        // StyleSet composition when every argument is analyzable; nested Bamboo calls are
-        // still compiled independently before this runtime join.
-        if (entry.name === 'cx' && entry.reason === 'dynamic') continue
-        // Every skipped entry indexes the module being folded: each module reports only about
-        // its own text, so there is no foreign offset to translate.
-        survivorsHere.push({ line: lineAt(code, entry.start), name: entry.name, reason: entry.reason })
-      }
-
-      const artifact = sealTransformArtifact(environmentName(this), {
-        version: TRANSFORM_ARTIFACT_VERSION,
-        moduleId: id,
-        file: filePath,
-        folded: result.folded.length,
-        skipped: [...skippedHere],
-        survivors: survivorsHere,
-        transformedFile: result.folded.some((entry) => entry.kind === 'class' || entry.kind === 'slots'),
-        classNames: [...new Set(result.folded.flatMap((entry) => entry.classNames))],
-        dependencies: [...result.dependencies],
-        ...(result.dependencies.length
-          ? { signature: { input: (inputDigest ??= digest(code)), output: digest(result.code), path: filePath } }
-          : {}),
-      })
-      // Applied through the same serializable boundary a cached rebuild replays below. Keeping
-      // one path for fresh and cached modules is what keeps new per-transform state from being
-      // added to one and silently omitted from the other.
-      applyTransformArtifact(state, artifact, id, environmentName(this))
-
-      if (reportSkipped && result.skipped.length) {
-        logger.info('vite:transform', formatSkipped(filePath, result.skipped))
-      }
-
-      // A folded literal can depend on a module this one only imports. Register the
-      // edge so editing that module invalidates this one, instead of leaving a stale
-      // class string behind. Optional-chained because not every harness that drives a
-      // transform hook supplies the full Rollup plugin context.
-      for (const dependency of result.dependencies) {
-        this.addWatchFile?.(dependency)
-      }
-
-      if (command === 'serve' && artifact.survivors.length) {
-        // Retracted rather than kept: this module is about to fail to load, so what the browser
-        // ends up holding is an error and not the output just digested. Comparing against it on
-        // a later edit would call a module unchanged that never landed to begin with.
-        state.foldSignatures.delete(id)
-        throw createSurvivorError(artifact.survivors.map((survivor) => ({ file: filePath, ...survivor })))
-      }
-
-      const meta = { [TRANSFORM_META_KEY]: artifact }
-      if (!result.folded.length) {
-        // A real bundler needs a transform result in order to retain metadata for this module,
-        // including the zero-fold entry that makes coverage's file denominator accurate. Tiny
-        // hook harnesses in this package deliberately omit the module graph and retain the old
-        // `null` contract; they have nowhere that metadata could be replayed from.
-        const hasModuleGraph = typeof (this as unknown as { getModuleInfo?: unknown }).getModuleInfo === 'function'
-        return hasModuleGraph ? { code, map: null, meta } : null
-      }
-
-      logger.debug('vite:transform', `Compiled ${result.folded.length} call(s) in ${filePath}`)
-
-      return { code: result.code, map: result.map, meta }
+      return compileModule.call(this, code, id, false)
     },
-
     buildEnd(buildError) {
       const environment = environmentName(this)
       const state = environmentState(this)
@@ -2249,6 +2098,211 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     },
   }
 
+  const compilerSfc: Plugin = {
+    name: 'bamboocss:compiler-sfc',
+    enforce: 'post',
+    sharedDuringBuild: true,
+    async transform(code, id) {
+      return compileModule.call(this, code, id, true)
+    },
+  }
+
+  async function compileModule(this: any, code: string, id: string, sfcOnly: boolean) {
+    if (!shouldTransform(id)) return null
+    const [pathForFilter] = id.split('?')
+    if (!pathForFilter) return null
+    if (SFC_EXTENSIONS.test(pathForFilter) !== sfcOnly) return null
+
+    try {
+      await ensureCompilerState()
+    } catch (error) {
+      throw asError(error, 'failed to initialize the bamboo compiler')
+    }
+    if (!ctx || !foldSourceImpl || !runtimeCss || !styleCompiler) return null
+
+    const [filePath] = id.split('?')
+
+    // The generated styled-system is bamboo's own runtime, not user code. It is not in
+    // the project's `include`, so parsing it fails, and folding it would be meaningless
+    // even if it did not.
+    if (isGeneratedOutput(filePath, ctx)) return null
+
+    const parsePath = compilerParsePath(id, code)
+    if (parsePath === null) return null
+
+    const state = environmentState(this)
+    state.transformedModulesThisRun.add(id)
+    let inputDigest: string | undefined
+    const previousSignature = state.foldSignatures.get(id)
+    const previousDependencies =
+      previousSignature && previousSignature.input === (inputDigest ??= digest(code))
+        ? state.dependenciesByModule.get(id)
+        : undefined
+
+    let result: FoldResult
+    try {
+      const memoKey = command === 'serve' ? foldMemoKey(parsePath, (inputDigest ??= digest(code))) : undefined
+      const memoized = memoKey ? foldMemoByContent.get(memoKey) : undefined
+      let valueReads: FoldMemoEntry['valueReads'] = []
+      if (memoized?.reportedSurvivors) {
+        // These exact bytes were already folded this change event — for the other
+        // environment, or by a framework re-driving the same update. Only the resolution
+        // closure is per-environment, so only it is recomputed.
+        valueReads = memoized.valueReads
+        result = withResolutionClosure(parsePath, memoized.result, memoized.parserDependencies, previousDependencies)
+      } else {
+        const sourceFile = ctx.project.addSourceFile(parsePath, code)
+        const parserResult = ctx.project.parseSourceFile(parsePath)
+        // An empty extraction result is not proof that the module has no Bamboo runtime
+        // binding. The strict compiler also scans the source AST after planning rewrites.
+        if (!parserResult) {
+          state.transformArtifactsByModule.delete(id)
+          recordFoldDependencies(state, id, filePath, [])
+          state.foldSignatures.delete(id)
+          return null
+        }
+
+        const folded = foldSourceImpl({
+          ctx,
+          code,
+          parserResult,
+          filePath: parsePath,
+          runtimeCss,
+          styleCompiler,
+          maxRecipeStates,
+          // On demand rather than from a registry built at `buildStart`: a consumer is
+          // transformed before the module it imports, so anything accumulated during the
+          // build would make the fold depend on discovery order.
+          parseModule: (path) => ctx?.project.parseSourceFile(path),
+          recipeConfigCache: state.recipeConfigCache,
+          reportSurvivors: true,
+          sourceFile,
+        })
+        const parserDependencies = parserResult.getDependencies()
+        valueReads = (parserResult as { getExportReads?: () => FoldMemoEntry['valueReads'] }).getExportReads?.() ?? []
+        if (memoKey) {
+          foldMemoByContent.set(memoKey, { result: folded, parserDependencies, valueReads, reportedSurvivors: true })
+        }
+        result = withResolutionClosure(parsePath, folded, parserDependencies, previousDependencies)
+      }
+      state.exportReadsByModule.set(id, [
+        ...valueReads.map((read) => ({ kind: 'value' as const, ...read })),
+        ...result.exportReads,
+      ])
+    } catch (error) {
+      logger.caughtError('vite:transform', `Failed to compile ${filePath}`, error)
+
+      // Fold dependencies are deliberately left as they were. A throw establishes nothing
+      // about what this module reads, and keeping the last known edges is the recoverable
+      // direction: fixing the *dependency* then re-transforms this module, which is how a
+      // user gets out of the failure. Retracting would cost that, to save nothing.
+      const previousDependencies = [...(state.dependenciesByModule.get(id) ?? [])]
+      const failedArtifact = sealTransformArtifact(environmentName(this), {
+        version: TRANSFORM_ARTIFACT_VERSION,
+        moduleId: id,
+        file: filePath,
+        folded: 0,
+        skipped: [['compile-failed', 1]],
+        survivors: [{ line: 1, name: 'compiler', reason: 'compile-failed' }],
+        transformedFile: false,
+        classNames: [],
+        dependencies: previousDependencies,
+      })
+      applyTransformArtifact(state, failedArtifact, id, environmentName(this))
+      // The signature is not, for the reason the edges are. It is a claim about output this
+      // pass did not produce, and acting on a stale one suppresses a real update.
+      state.foldSignatures.delete(id)
+      if (command === 'serve') {
+        // Normalized, never rethrown as caught. `catch` binds `unknown`, and anything under
+        // the fold — a config hook, a dependency, a bare `throw 'string'` — may throw a
+        // primitive. Vite's dev error middleware puts what it is given into a `WeakSet` to
+        // dedupe it, which throws `TypeError: Invalid value used in weak set` on anything
+        // that is not an object. The real failure is then lost behind a message about weak
+        // sets, in the one mode where the user is watching the terminal for it.
+        throw asError(error, `failed to compile ${filePath}`)
+      }
+      return null
+    }
+
+    const skippedHere = new Map<SkipReason, number>()
+    for (const entry of result.skipped) {
+      skippedHere.set(entry.reason, (skippedHere.get(entry.reason) ?? 0) + 1)
+    }
+
+    const survivorsHere: Array<Omit<Survivor, 'file'>> = []
+    for (const entry of result.skipped) {
+      if (entry.reason === 'not-imported' || entry.reason === 'overlapping') {
+        continue
+      }
+      // `cx` is the one intentional runtime surface: with unknown external inputs it is a
+      // tiny class-string joiner, not a styling engine. Bamboo only promises semantic
+      // StyleSet composition when every argument is analyzable; nested Bamboo calls are
+      // still compiled independently before this runtime join.
+      if (entry.name === 'cx' && entry.reason === 'dynamic') continue
+      // Every skipped entry indexes the module being folded: each module reports only about
+      // its own text, so there is no foreign offset to translate.
+      survivorsHere.push({ line: lineAt(code, entry.start), name: entry.name, reason: entry.reason })
+    }
+
+    const artifact = sealTransformArtifact(environmentName(this), {
+      version: TRANSFORM_ARTIFACT_VERSION,
+      moduleId: id,
+      file: filePath,
+      folded: result.folded.length,
+      skipped: [...skippedHere],
+      survivors: survivorsHere,
+      transformedFile: result.folded.some((entry) => entry.kind === 'class' || entry.kind === 'slots'),
+      classNames: [...new Set(result.folded.flatMap((entry) => entry.classNames))],
+      dependencies: [...result.dependencies],
+      // The HMR re-fold reads `signature.path` from disk. An SFC's fold input is compiled JS
+      // (or a `type=script` submodule), not the file on disk, so a digest of those bytes can
+      // never match `readFileSync` of the `.vue` / `.svelte` / `.astro` path — and feeding
+      // that path to ts-morph would run `parser:before` on the raw template. Skip the
+      // signature; Vite re-transforms the module instead.
+      ...(result.dependencies.length && parsePath === filePath
+        ? { signature: { input: (inputDigest ??= digest(code)), output: digest(result.code), path: filePath } }
+        : {}),
+    })
+    // Applied through the same serializable boundary a cached rebuild replays below. Keeping
+    // one path for fresh and cached modules is what keeps new per-transform state from being
+    // added to one and silently omitted from the other.
+    applyTransformArtifact(state, artifact, id, environmentName(this))
+
+    if (reportSkipped && result.skipped.length) {
+      logger.info('vite:transform', formatSkipped(filePath, result.skipped))
+    }
+
+    // A folded literal can depend on a module this one only imports. Register the
+    // edge so editing that module invalidates this one, instead of leaving a stale
+    // class string behind. Optional-chained because not every harness that drives a
+    // transform hook supplies the full Rollup plugin context.
+    for (const dependency of result.dependencies) {
+      this.addWatchFile?.(dependency)
+    }
+
+    if (command === 'serve' && artifact.survivors.length) {
+      // Retracted rather than kept: this module is about to fail to load, so what the browser
+      // ends up holding is an error and not the output just digested. Comparing against it on
+      // a later edit would call a module unchanged that never landed to begin with.
+      state.foldSignatures.delete(id)
+      throw createSurvivorError(artifact.survivors.map((survivor) => ({ file: filePath, ...survivor })))
+    }
+
+    const meta = { [TRANSFORM_META_KEY]: artifact }
+    if (!result.folded.length) {
+      // A real bundler needs a transform result in order to retain metadata for this module,
+      // including the zero-fold entry that makes coverage's file denominator accurate. Tiny
+      // hook harnesses in this package deliberately omit the module graph and retain the old
+      // `null` contract; they have nowhere that metadata could be replayed from.
+      const hasModuleGraph = typeof (this as unknown as { getModuleInfo?: unknown }).getModuleInfo === 'function'
+      return hasModuleGraph ? { code, map: null, meta } : null
+    }
+
+    logger.debug('vite:transform', `Compiled ${result.folded.length} call(s) in ${filePath}`)
+
+    return { code: result.code, map: result.map, meta }
+  }
+
   const outputWriteObserver: Plugin = {
     name: 'bamboocss:output-write-observer',
     enforce: 'pre',
@@ -2302,5 +2356,5 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
 
   // The css plugin first: it owns the extraction the compiler's context reads from, and Vite
   // preserves array order within one `enforce` bucket.
-  return [bamboocssCss({ configPath, cwd, session: staticSession, pruneCss }), compiler]
+  return [bamboocssCss({ configPath, cwd, session: staticSession, pruneCss }), compiler, compilerSfc]
 }

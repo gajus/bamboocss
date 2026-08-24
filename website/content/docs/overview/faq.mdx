@@ -44,8 +44,7 @@ The reliable fix is to stop expressing the override as an opaque class name. Acc
 fit when the choices are finite.
 
 If both arguments are analyzable at the call site, `cx(css(base), css(override))` is also composed semantically and
-losing declarations are never allocated. Extraction-only CLI/PostCSS output retains the older recipe-layer override
-model; Vite recipes and utilities intentionally share the global atom layer.
+losing declarations are never allocated. Recipes and utilities share the global atom layer.
 
 ---
 
@@ -164,9 +163,8 @@ export default defineConfig({
 
 ## Why are my styles not applied?
 
-Check that the [`@layer` rules](/docs/concepts/cascade-layers#layer-css) are set and the corresponding `.css` file is
-included. [If you're not using `postcss`](/docs/installation/cli), ensure that `styled-system/styles.css` is imported
-and that the `bamboo` command has been run (or is running with `--watch`).
+Check that you import [`virtual:bamboo.css`](/docs/installation/vite) from a JavaScript or TypeScript module and that
+`bamboocss()` is listed in the Vite config.
 
 ---
 

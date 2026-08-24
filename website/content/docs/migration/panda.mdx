@@ -22,7 +22,8 @@ For most projects this is a find-and-replace of `panda` with `bamboo`, plus a re
 - The output directory. It still defaults to `styled-system`, so imports like `styled-system/css` do not move.
 
 Because the generated output directory keeps its name and shape, the only imports you have to touch are the ones that
-name the tool itself – the config file, the PostCSS plugin, and any direct `@pandacss/*` imports.
+name the tool itself – the config file, and any direct `@pandacss/*` imports. Replace `@pandacss/postcss` with
+[`@bamboocss/vite`](/docs/installation/vite), not `@bamboocss/postcss`.
 
 ## Rename the packages
 
@@ -34,7 +35,7 @@ Every package moves from the `@pandacss` scope to `@bamboocss`. The ones a proje
 | `@pandacss/types`        | `@bamboocss/types`         |
 | `@pandacss/preset-base`  | `@bamboocss/preset-base`   |
 | `@pandacss/preset-panda` | `@bamboocss/preset-bamboo` |
-| `@pandacss/postcss`      | `@bamboocss/postcss`       |
+| `@pandacss/postcss`      | `@bamboocss/vite`          |
 
 The internal packages (`@pandacss/core`, `/node`, `/parser`, `/generator`, `/token-dictionary` and the rest) follow the
 same rule if you import them directly.
@@ -98,16 +99,10 @@ export default defineConfig({
 })
 ```
 
-### Update the PostCSS config
+### Use the Vite plugin
 
-```js
-// postcss.config.cjs
-module.exports = {
-  plugins: {
-    '@bamboocss/dev/postcss': {},
-  },
-}
-```
+Delete any `@pandacss/postcss` (or `@bamboocss/postcss`) entry. Add `bamboocss()` from `@bamboocss/vite` and import
+`virtual:bamboo.css`. See [Using Vite](/docs/installation/vite).
 
 ### Update your scripts
 
@@ -176,7 +171,7 @@ Bamboo composes the StyleSets in argument order before allocating classes, so ov
 order.
 
 Finite runtime axes become a reduced lookup whose leaves already include matching compound variants. The recipe config
-and recipe-specific selectors do not ship. Extraction-only CLI and PostCSS output retains Bamboo's named recipe model.
+and recipe-specific selectors do not ship. Bamboo has no extraction-only runtime recipe mode.
 
 ## Things that are easy to miss
 

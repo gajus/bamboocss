@@ -68,9 +68,7 @@ classes.root // shared atoms for the selected root styles
 classes.control // shared atoms for the selected control styles
 ```
 
-CLI/PostCSS extraction can instead use
-[`scopeRoots`](/docs/concepts/slot-recipes#variant-scoping-in-extraction-only-output) to deliver variants through
-`@scope`.
+`scopeRoots` remains accepted as recipe metadata for compatibility, but compiled slot selections do not emit `@scope`.
 
 ## Patterns
 

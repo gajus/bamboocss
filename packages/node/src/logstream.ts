@@ -16,6 +16,10 @@ export const setLogStream = (options: LogstreamOptions) => {
     const outPath = path.resolve(cwd, options.logfile)
 
     ensure(outPath)
+    // `createWriteStream` opens lazily. A command that fails synchronously after configuring
+    // logging can otherwise exit before the file exists, losing the failure and making
+    // `--logfile` appear to have been ignored.
+    fs.closeSync(fs.openSync(outPath, 'a'))
     logger.info('logfile', outPath)
 
     stream = fs.createWriteStream(outPath, { flags: 'a' })

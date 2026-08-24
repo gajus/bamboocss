@@ -1,562 +1,110 @@
 ---
 title: Dynamic styling
-description: How to manage dynamic styling in Bamboo
+description: Represent runtime choices without a runtime style engine.
 ---
 
-While Bamboo is mainly focused on the statically analyzable styles, you might need to handle dynamic styles in your
-project.
+Bamboo style APIs are compile-time syntax. The Vite compiler must be able to recover every declaration a call can
+produce; there is no runtime CSS fallback.
 
-> We recommend that you **avoid relying on runtime values for your styles** . Consider using recipes, css variables or
-> `data-*` attributes instead.
+Choose the representation from the shape of the value:
 
-Which of the options below applies depends on the value:
+| Runtime input                              | Representation                                                                |
+| ------------------------------------------ | ----------------------------------------------------------------------------- |
+| One value from a finite set                | A recipe variant                                                              |
+| A finite branch between complete styles    | A branch between separately compiled calls                                    |
+| A continuous value such as width or offset | The `style` attribute, or a CSS variable when the cascade must still reach it |
+| A dynamic token name                       | A recipe variant that names the allowed token set                             |
 
-| the value                                | what to use                                                                                                   |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| one of a set you can name                | a [recipe variant](/docs/concepts/recipes) — it compiles to a lookup                                          |
-| anything continuous — a width, an offset | [the `style` attribute](#values-that-are-not-a-finite-set), or a CSS variable where it must vary by condition |
-| a token path chosen at runtime           | [`token()`](#using-token), which is extraction-only — under the compiler, name the set as a recipe variant    |
+## Finite choices
 
-<Callout type="warning">
-  **Which of these work depends on your integration.** `@bamboocss/vite` compiles style calls, and a call it cannot
-  resolve **fails the build**, naming the file and line — there is no fallback to fall back to. Every other integration
-  extracts instead, and the fallbacks below are real there: that is the CLI, `@bamboocss/postcss`, and every framework
-  guide that sets Bamboo up through PostCSS, which is most of them.
-
-So on the compiler, a runtime value has to become a recipe variant or leave the style call altogether. Several sections
-below are extraction-only for that reason — pre-generating with `staticCss`, a branch per runtime condition, a `token()`
-path built at runtime, and `css.raw()` composition — and the ones this guide leads with are marked. See
-[source compilation](/docs/guides/source-transformation) for the whole contract.
-
-</Callout>
-
-Here are some ways you can handle dynamic styles in Bamboo:
-
-## Values that are not a finite set
-
-A progress bar's width, a dragged element's offset, a computed grid position: these have no finite set of values to
-enumerate, so no build step can emit a rule for each one. Every styling system hands this back to the author in the end
-— the question is only where it lands.
-
-**Reach for the `style` attribute first.** A runtime value that applies unconditionally belongs there. It is smaller
-than any alternative, it needs nothing from Bamboo, and every React developer already knows it:
+Declare the possible values as recipe variants. Bamboo compiles every leaf and replaces the runtime choice with a small
+lookup:
 
 ```tsx
-import { css } from '../styled-system/css'
-
-const bar = css({ height: '[4px]', bg: 'blue.500' })
-
-export const ProgressBar = ({ value }: { value: number }) => <div className={bar} style={{ width: `${value}%` }} />
-```
-
-**Use a CSS variable when the value has to participate in the cascade** — and only then. An inline style sits outside
-it, which costs exactly two things: a condition cannot reach the value, and a consumer cannot override it.
-
-A width the user drags, which still has to collapse on a small screen, is the first case. The media query cannot reach
-an inline `width`, so the property stays in a compiled rule and only the _value_ goes inline:
-
-```tsx
-const sidebar = css({
-  width: 'var(--w)',
-  _tablet: { width: '100%' },
-})
-
-export const Sidebar = ({ dragWidth }: { dragWidth: string }) => (
-  <aside className={sidebar} style={{ '--w': dragWidth } as React.CSSProperties} />
-)
-```
-
-The second case is the same fact wearing a different hat: a component that sets `style={{ width }}` internally has put
-that property beyond every consumer, including a `css()` they pass in — which is the one place Bamboo's "a consumer's
-`css()` wins" promise does not hold. Setting a variable instead leaves the declaration in a class, where it can be
-overridden normally.
-
-The cast is React's, not Bamboo's: `CSSProperties` has no index signature, so TypeScript rejects a custom property in a
-`style` object without one.
-
-Both forms leave the `css()` call fully static, so both compile.
-
-## Runtime values
-
-Using a value that is not statically analyzable at build-time will not work in Bamboo due to the inability to determine
-the style values.
-
-```tsx filename="App.tsx"
-import { useState } from 'react'
-import { css } from '../styled-system/css'
-
-const App = () => {
-  const [color, setColor] = useState('red.300')
-
-  return (
-    <div
-      className={css({
-        // ❌ Avoid: Bamboo can't determine the value of color at build-time
-        color,
-      })}
-    />
-  )
-}
-```
-
-The example above will not work because Bamboo can't determine the value of `color` at build-time. Here are some ways to
-fix this:
-
-### Using Static CSS
-
-<Callout type="warning">
-  Extraction-only. `staticCss` adds rules to the stylesheet; it does not make a dynamic call compile, so under the Vite
-  compiler `css({color})` still fails the build. What it is for there is a class name your markup builds *outside*
-  Bamboo's source graph — from a CMS field, a server response — where there is no call to compile in the first place.
-</Callout>
-
-Bamboo supports a [`staticCss`](/docs/guides/static) option in the config you can use to pre-generate some styles ahead
-of time.
-
-```tsx filename="bamboo.config.ts"
-import { defineConfig } from '@bamboocss/dev'
-
-export default defineConfig({
-  staticCss: {
-    css: [
-      {
-        properties: {
-          // ✅ Good: Pre-generate the styles for the color
-          color: ['red.300'],
-        },
-      },
-    ],
-  },
-})
-```
-
-```tsx filename="Button.tsx"
-import { useState } from 'react'
-import { css } from '../styled-system/css'
-
-export const Button = () => {
-  const [color, setColor] = useState('red.300')
-
-  // ✅ Extraction-only: this works because `red.300` is pre-generated by `staticCss`.
-  // Under the Vite compiler the call itself is rejected — see the note above.
-  return <button className={css({ color: color })} />
-}
-```
-
-### Using `token()`
-
-<Callout type="warning">
-  Extraction-only for a path built at runtime. `` token(`colors.${props.color}`) `` is rejected by the Vite compiler as
-  `dynamic`, exactly as a runtime style value is, and so is `token.value()` with such a path — a path spelled out at the
-  call compiles to a literal. Where the *set* of tokens is known, a recipe variant expresses it and compiles; where it
-  is genuinely open, the value belongs in a CSS variable set from data you already have.
-</Callout>
-
-The `token()` function is generated by Bamboo and contains an object of all tokens by dot-path, allowing you to query a
-token's CSS variable reference at runtime.
-
-```tsx filename="App.tsx"
-import { useState } from 'react'
-import { css } from '../styled-system/css'
-import { token } from '../styled-system/tokens'
-
-const Component = (props) => {
-  return (
-    <div
-      className={css({
-        // ✅ Good: Store the value in a CSS custom property
-        color: 'var(--color)',
-      })}
-      style={
-        {
-          // ✅ Good: Handle the runtime value in the style attribute
-          '--color': token(`colors.${props.color}`),
-        } as React.CSSProperties
-      }
-    >
-      Dynamic color with runtime value
-    </div>
-  )
-}
-
-// App.tsx
-const App = () => {
-  const [runtimeColor, setRuntimeColor] = useState('pink.300')
-
-  return <Component color={runtimeColor} />
-}
-```
-
-Because that reference is a plain string, it can also go straight into the style attribute without the intermediate
-custom property:
-
-```tsx filename="App.tsx"
-import { useState } from 'react'
-import { token } from '../styled-system/tokens'
-
-const Component = (props) => {
-  return (
-    <div
-      style={{
-        // ✅ Good: the token's CSS variable, resolved by the cascade
-        color: token(`colors.${props.color}`),
-      }}
-    >
-      Dynamic color with runtime value
-    </div>
-  )
-}
-
-const App = () => {
-  const [runtimeColor, setRuntimeColor] = useState('yellow.300')
-
-  return <Component color={runtimeColor} />
-}
-```
-
-### Using `token.value()`
-
-When you need the resolved literal rather than a reference — a `<canvas>` fill, a charting library, anywhere a CSS
-variable will not resolve — use `token.value()`:
-
-```tsx
-import { token } from '../styled-system/tokens'
-
-canvasContext.fillStyle = token.value('colors.red.300') // '#fca5a5'
-```
-
-<Callout type="warning">
-  A runtime path defeats the build's reachability analysis. `token()` hands back a variable for **any** token, so a path
-  Bamboo cannot resolve at build time means every token declaration has to be kept — see
-  [`prune.tokens`](/docs/references/config#prune). Prefer a path spelled out at the call, or one built from a constant
-  the extractor can follow. A template literal is bounded rather than lost: `` token(`colors.${shade}`) `` keeps the
-  `colors` category and prunes the rest. When there is no static head to bound it, name the category with
-  [`prune.keepTokens`](/docs/references/config#prunekeeptokens).
-</Callout>
-
-## Property Renaming
-
-Due to the static nature of Bamboo, you can't rename properties at runtime.
-
-```tsx filename="App.tsx"
-import { css } from '../styled-system/css'
-
-type Props = {
-  boxPadding?: string
-}
-
-const CustomBox = (props: Props) => {
-  const { boxPadding = '3' } = props
-  return (
-    <div
-      className={css({
-        // ❌ Avoid: Bamboo can't determine the value of `boxPadding` at build-time
-        padding: boxPadding,
-      })}
-    />
-  )
-}
-```
-
-### Alternative
-
-<Callout type="warning">
-  Extraction-only. `.raw()` returns a style object rather than a class, so it keeps the style runtime alive and the Vite
-  compiler rejects a live use of it as `raw-call` — including the composition examples further down this page.
-</Callout>
-
-`css`, the patterns and the recipes each have a `.raw()` method. It is an identity function, and only serves as a hint
-for the compiler to extract the css.
-
-It can be useful, for example, in Storybook args or custom react props.
-
-```tsx filename="App.tsx"
-// mark the object as valid css for the extractor
-<Button rootProps={css.raw({ bg: 'red.400' })} />
-```
-
-```tsx
-export const Funky: Story = {
-  // mark this as a button recipe usage
-  args: button.raw({
-    visual: 'funky',
-    shape: 'circle',
-    size: 'sm',
-  }),
-}
-```
-
-### Enhanced `css.raw` spreading
-
-You can also spread `css.raw` objects within nested selectors and conditions for better style composition:
-
-```tsx filename="App.tsx"
-import { css } from '../styled-system/css'
-
-const baseStyles = css.raw({ margin: 0, padding: 0 })
-const interactive = css.raw({ cursor: 'pointer', transition: 'all 0.2s' })
-
-const component = css({
-  // Spreading in child selectors
-  '& p': { ...baseStyles, fontSize: '1rem' },
-
-  // Spreading in nested conditions
-  _hover: {
-    ...interactive,
-    _dark: { ...interactive, color: 'white' },
-  },
-})
-```
-
-## Static expressions
-
-Bamboo supports static expressions in your styles, as long as they are statically analyzable.
-
-### Static Composition
-
-You can compose different style objects together using the `css.raw()` function.
-
-```tsx filename="App.tsx"
-import { css } from 'styled-system/css'
-
-const paragraphSpacingStyle = css.raw({
-  '& p': { marginBlockEnd: '1em' },
-})
-
-export const proseCss = css.raw({
-  '& h1': paragraphSpacingStyle,
-})
-```
-
-This will result in the following CSS:
-
-```css
-/* ... */
-@layer utilities {
-  .\[\&_p\]\:mb_1em p,
-  .\[\&_h1\]\:\[\&_p\]\:mb_1em h1 p {
-    margin-block-end: 1em;
-  }
-}
-```
-
-### Generated style objects
-
-Bamboo supports the use of functions to generate the style objects as long they are statically analyzable.
-
-You can only use functions that are defined in the ECMAScript spec such as `Math`, `Object`, `Array`, etc, to support
-the evaluation of basic expressions like this:
-
-```ts
-import { cva } from '../styled-system/css'
-
-const getVariants = () => {
-  const spacingTokens = Object.entries({
-    sm: 'token(spacing.1)',
-    md: 'token(spacing.2)',
-  })
-
-  // Generate variants programmatically
-  const variants = spacingTokens.map(([variant, token]) => [variant, { paddingX: token }])
-  return Object.fromEntries(variants)
-}
-
-const baseStyle = cva({
+const badge = cva({
   variants: {
-    variant: getVariants(),
-  },
-})
-```
-
-This will generate the following CSS:
-
-```css
-@layer utilities {
-  .px_token\(spacing\.1\) {
-    padding-inline: var(--spacing-1);
-  }
-
-  .px_token\(spacing\.2\) {
-    padding-inline: var(--spacing-2);
-  }
-}
-```
-
-## Runtime conditions
-
-Even though we recommend that you first look for better alternatives (such as using
-[recipe variants](/docs/concepts/recipes)), you may still occasionally need runtime conditions.
-
-When encountering a runtime condition, Bamboo will first try to resolve it statically. If it can't, it will fallback to
-the generating the corresponding CSS for each possible branches.
-
-<Callout type="warning">
-  Extraction-only, and the difference is visible: under the Vite compiler `css({ color: isHovered ? 'red.500' :
-  'red.600' })` is rejected as `dynamic` rather than emitting both branches. Declare the choice as a
-  [recipe variant](/docs/concepts/recipes) instead — the compiler enumerates a variant's finite states at build time
-  and emits a lookup over precompiled class strings, which is the same idea with a name attached.
-</Callout>
-
-```tsx
-import { useState } from 'react'
-import { css } from '../styled-system/css'
-
-const App = () => {
-  const [isHovered, setIsHovered] = useState(false)
-
-  return (
-    <div
-      className={css({
-        color: isHovered ? { _hover: 'red.100' } : 'red.200',
-        _hover: {
-          color: { base: 'red.300', md: isHovered ? 'red.400' : undefined },
-        },
-      })}
-    >
-      <div className={css({ color: isHovered ? 'red.500' : 'red.600' })} />
-    </div>
-  )
-}
-```
-
-Since none of the conditions above are statically extractable, an extraction build generates css for all possible code
-paths, resulting in a css that looks like this — where the compiler rejects the call instead:
-
-```css
-/* ... */
-@layer utilities {
-  .hover\:c_red\.100:is(:hover, [data-hover]) {
-    color: var(--colors-red-100);
-  }
-
-  .c_red\.200 {
-    color: var(--colors-red-200);
-  }
-
-  .hover\:c_red\.300:is(:hover, [data-hover]) {
-    color: var(--colors-red-300);
-  }
-
-  @media (width >= 48rem) {
-    .hover\:md\:c_red\.400:is(:hover, [data-hover]) {
-      color: var(--colors-red-400);
-    }
-  }
-
-  .c_red\.500 {
-    color: var(--colors-red-500);
-  }
-
-  .c_red\.600 {
-    color: var(--colors-red-600);
-  }
-}
-/* ... */
-```
-
-## Referenced values
-
-Although you should have your styles inlined most of the time, maybe you want to store a value in a variable and re-use
-in multiple places. This should be fine as long as you keep it statically analyzable.
-
-Here's a short list of things to avoid:
-
-- Variables that are not defined in the same file
-- Variables resulting from a function call (e.g. `const color = getColor()`)
-
-> If you don't know what value a variable holds with a quick glance, Bamboo won't be able to either.
-
-```tsx
-import { css } from '../styled-system/css'
-
-// ✅ Good: All values are statically extractable
-const mainColor = 'red.300'
-const sizes = { sm: '12px', md: '16px', '2xl': '42px' }
-
-const App = () => {
-  return (
-    <div
-      className={css({
-        color: mainColor,
-        fontSize: sizes.md,
-        width: sizes['2xl'],
-      })}
-    />
-  )
-}
-```
-
-### Runtime reference on known objects
-
-Using a more complex but still common example :
-
-```tsx
-import { useState } from 'react'
-import { css } from '../styled-system/css'
-
-const colorByType = {
-  primary: 'red.300',
-  secondary: 'blue.300',
-  tertiary: 'green.300',
-}
-
-const Section = () => {
-  const [type, setType] = useState('primary')
-
-  // ❌ Avoid: since only "gray.100" is statically extractable here
-  // This will not work as expected, the color CSS won't be generated
-  return <section className={css({ color: colorByType[type] ?? 'gray.100' })}>❌ Will not be extracted</section>
-}
-```
-
-Even though `colorByType` is statically analyzable, Bamboo does not _yet_ support this kind of automatic extraction
-fallback. This is the perfect opportunity to use the [recipes](/docs/concepts/recipes).
-
-```tsx
-import { useState } from 'react'
-import { cva } from '../styled-system/css'
-
-const sectionRecipe = cva({
-  base: { color: 'gray.100' },
-  variants: {
-    type: {
-      primary: { color: 'red.300' },
-      secondary: { color: 'blue.300' },
-      tertiary: { color: 'green.300' },
+    tone: {
+      neutral: { color: 'gray.700' },
+      danger: { color: 'red.700' },
     },
   },
 })
 
-const Section = () => {
-  const [type, setType] = useState('primary')
-
-  // ✅ Good: This will work as expected
-  return <section className={sectionRecipe({ type })}>✅ With a recipe</section>
-}
+export const Badge = ({ tone }: { tone: 'neutral' | 'danger' }) => <span className={badge({ tone })}>Status</span>
 ```
 
-Not only did you get the same end result, but you also got a more readable and maintainable code !
+An ordinary branch between complete calls is also finite:
 
-You can now :
+```tsx
+const className = compact ? css({ px: '2' }) : css({ px: '4' })
+```
 
-- add more variants to your recipe
-- add more properties
-- use a shorthand or a condition
+The compiler can rewrite both calls independently. Moving the branch inside a style value is open-ended and rejected:
 
-All of this with complete type-safety and without having to make drastic changes to the component.
+```tsx
+// Rejected: `color` is a runtime style value.
+css({ color: props.color })
+```
 
-> Note that you can also [integrate this recipe directly into your theme](/docs/concepts/recipes) if you want to only
-> generate the CSS that you use, among other things
+## Continuous values
 
-## Summary
+A dragged offset, progress percentage, or measured size has no finite rule set. Put an unconditional value in the style
+attribute:
 
-- Conditional values, arbitrary values and arbitrary selectors are all static.
-- A value with no finite set of possibilities belongs in the `style` attribute — or in a CSS variable, where it has to
-  vary by condition or stay overridable, since an inline style sits outside the cascade.
-- Under the Vite compiler an open runtime _value_ fails the build — a ternary between whole `css()` calls is fine — and
-  the entries below describing a fallback are the extraction-only path.
-- A runtime value only produces CSS if `staticCss` pre-generated it.
-- A runtime condition generates the CSS for every branch.
-- A referenced value works when it is declared in the same file and never computed.
-- A value from a function call, a computed key, or another file is not extracted.
-- A property name cannot come from a variable — use a recipe variant instead.
+```tsx
+const track = css({ height: '[4px]', bg: 'blue.500' })
+
+export const Progress = ({ value }: { value: number }) => <div className={track} style={{ width: `${value}%` }} />
+```
+
+Use a CSS variable when Bamboo conditions or consumer CSS must still be able to override the property:
+
+```tsx
+const sidebar = css({
+  width: 'var(--sidebar-width)',
+  _tablet: { width: '100%' },
+})
+
+export const Sidebar = ({ width }: { width: string }) => (
+  <aside className={sidebar} style={{ '--sidebar-width': width } as React.CSSProperties} />
+)
+```
+
+The variable value is runtime data; the declaration that reads it remains static and compiles normally.
+
+## Token choices
+
+`token('colors.red.500')` with a literal path is fine where the compiler can evaluate it. A path assembled from runtime
+data is not:
+
+```tsx
+// Rejected: the build cannot know which token declaration is needed.
+token(`colors.${tone}.500`)
+```
+
+Represent that set as recipe variants instead:
+
+```tsx
+const text = cva({
+  variants: {
+    tone: {
+      red: { color: 'red.500' },
+      blue: { color: 'blue.500' },
+    },
+  },
+})
+```
+
+## `css.raw()`
+
+`css.raw()` returns a style object for build-time composition; it does not return a class. The outer class-producing
+call must still compile:
+
+```tsx
+const shared = css.raw({ display: 'flex' })
+const className = css(shared, { gap: '4' })
+```
+
+A live `css.raw()` result passed around at runtime violates the strict compiler contract and fails the build.
+
+See [Source compilation](/docs/guides/source-transformation) for the complete list of accepted and rejected call shapes.

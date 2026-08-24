@@ -45,9 +45,9 @@ differently beyond the smaller surface — see [why Bamboo](/docs/overview/why-b
 
 ## How it works
 
-Bamboo scans your JavaScript and TypeScript for style function calls and generates CSS for the call sites it finds. The
-Vite integration additionally compiles those calls, globally pools recipe and utility atoms, and prunes against the
-module graph. CLI and PostCSS are extraction-only integrations.
+Bamboo scans your configured source graph and Vite compiles its style calls, globally pools recipe and utility atoms,
+and prunes the stylesheet against the module graph. The CLI generates the typed `styled-system` authoring surface and
+can inspect or preassemble CSS; it is not a styling integration. PostCSS does not emit Bamboo CSS.
 
 You author styles as plain objects. Tokens, recipes and variants are generated from your config as types, so the editor
 autocompletes them and the compiler checks them.
@@ -75,11 +75,12 @@ Every API on one page, with the class strings each call returns — see [Cheat S
 
 ### General Guides
 
-- [Using Vite](/docs/installation/vite): the compiled, globally deduplicated integration.
+- [Using Vite](/docs/installation/vite): the only styling integration. Compiles `css()` / `cva()` and serves
+  `virtual:bamboo.css`.
 
-- [Bamboo CLI](/docs/installation/cli): generate artifacts and extraction-only CSS without Vite.
+- [Bamboo CLI](/docs/installation/cli): codegen for the `styled-system` directory. CSS still comes from the Vite plugin.
 
-- [Using PostCSS](/docs/installation/postcss): integrate extraction-only output into an existing PostCSS pipeline.
+- [Using PostCSS](/docs/installation/postcss): not a styling integration — leftover configs fail on purpose.
 
 ### Framework Guides
 

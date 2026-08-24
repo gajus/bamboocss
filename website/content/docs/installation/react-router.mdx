@@ -140,10 +140,7 @@ stylesheet as a virtual module that emits its own layer order. You still need Po
 it, autoprefixer included.
 
 <Callout type="warning">
-  Do not use `bamboo init --postcss` here. `@bamboocss/postcss` emits the stylesheet and nothing else — it does not
-  compile source — so under it every `css()` and `cva()` call stays a runtime call and the generated style engine ships
-  in your client bundle. Both setups render identically, which is what makes the difference easy to miss. See [Source
-  compilation](/docs/guides/source-transformation).
+  Do not use `bamboo init --postcss` here. `@bamboocss/postcss` is not a styling integration.
 </Callout>
 
 ### Import the virtual stylesheet

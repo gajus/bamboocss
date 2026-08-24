@@ -1,5 +1,5 @@
 <script>
-  import '../app.css'
+  import 'virtual:bamboo.css'
 </script>
 
 <slot />

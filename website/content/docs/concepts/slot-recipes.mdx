@@ -209,13 +209,15 @@ const Checkbox = (props: CheckboxVariants) => {
 }
 ```
 
-## Variant scoping in extraction-only output
+## Legacy named-recipe scoping
 
-This section applies only to CLI/PostCSS extraction without the Vite source compiler. Vite does not emit named slot
-rules or `@scope`: every selected slot is a complete shared atom string, and a finite dynamic selection returns a
-precompiled slot object. `scopeRoots` has no effect on Vite output.
+<Callout type="warning">
+  No supported Bamboo integration emits the model documented in this section. It explains `@scope` found in output from
+  older extraction-only releases; do not design new components around it. Vite returns complete shared atom strings for
+  each selected slot, and `scopeRoots` has no effect on compiled output.
+</Callout>
 
-For extraction-only output, the behavior below applies to both `sva()` and [config slot recipes](#config-slot-recipe).
+Older extraction-only output applied the behavior below to both `sva()` and [config slot recipes](#config-slot-recipe).
 
 ### Only the root takes variants
 
@@ -436,7 +438,7 @@ to import. Under Vite their selected slots use the same shared atoms and finite 
 
 The config slot recipe takes the following additional properties:
 
-- `className`: Authoring metadata used by extraction-only integrations; it does not enter Vite atom identity
+- `className`: Optional semantic metadata; it does not enter compiled declaration-atom identity
 - `jsx`: An array of JSX components that use the recipe. Defaults to the uppercase version of the recipe name
 - `description`: An optional description of the recipe (used in the js-doc comments)
 

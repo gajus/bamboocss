@@ -564,7 +564,7 @@ export class Generator extends Context {
    */
   getSplitCssArtifacts = (
     sheet: Stylesheet,
-    { includeRecipes = true }: { includeRecipes?: boolean } = {},
+    { includeRecipes = false }: { includeRecipes?: boolean } = {},
   ): SplitCssResult => {
     const layerNames = this.config.layers as Record<string, string>
     const decoder = this.decoder.collect(this.encoder)

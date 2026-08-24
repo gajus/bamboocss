@@ -1,135 +1,19 @@
 ---
 title: Using Redwood
-description: Easily use Bamboo with Redwood.js with our dedicated integration.
+description: Use Bamboo in Redwood projects that expose a Vite plugin pipeline.
 ---
 
-> Redwood uses `yarn` as its primary package manager.
+Bamboo requires direct access to the application's Vite plugin list. Redwood distributions and versions use different
+web build pipelines, so first confirm that your web application has a `vite.config.ts` you control.
 
-## Start a new project
+If it does, follow [Using Vite](/docs/installation/vite):
 
-<Steps>
+1. install `@bamboocss/dev` and `@bamboocss/vite` in the web workspace;
+2. add `bamboocss()` to that Vite configuration;
+3. include the web source files in `bamboo.config.ts`; and
+4. import `virtual:bamboo.css` once from the web entry module.
 
-### Create Redwood project
-
-To get started, we will need to create a new Redwood project using `typescript` template.
-
-```bash
-yarn create redwood-app app
-```
-
-Respond to the prompts as follows:
-
-```bash
-✔ Compatibility checks passed
-✔ Select your preferred language · TypeScript
-✔ Do you want to initialize a git repo? · no / Yes
-✔ Enter a commit message · Initial commit
-✔ Do you want to run yarn install? · no / Yes
-✔ Project files created
-✔ Initialized a git repo with commit message "Initial commit"
-✔ Installed node modules
-✔ Generated types
-```
-
-### Install Bamboo
-
-Install bamboo and generate the `bamboo.config.ts` and `postcss.config.cjs` files.
-
-```bash
-cd web
-yarn add -D @bamboocss/dev postcss postcss-loader
-yarn bamboo init --postcss
-```
-
-### Move to config folder
-
-Redwood uses a `config` folder for all of the configuration files. Move the `bamboo.config.ts` and `postcss.config.cjs`
-files to the `config` folder.
-
-```bash
-mv bamboo.config.ts postcss.config.cjs config/
-```
-
-### Update configs
-
-Update the postcss config file to use the `bamboo.config.ts` file.
-
-```diff filename="web/config/postcss.config.cjs"
-+ const path = require('path')
-
-module.exports = {
-  plugins: {
-    "@bamboocss/dev/postcss": {
-+      configPath: path.resolve(__dirname, 'bamboo.config.ts'),
-   },
-  },
-}
-```
-
-Update the tsconfig file to include the `styled-system` folder.
-
-```json {6} filename="web/tsconfig.json"
-{
-  // ...
-  "compilerOptions": {
-    "paths": {
-      // ...
-      "styled-system/*": ["./styled-system/*"]
-    }
-  }
-}
-```
-
-### Update package.json scripts
-
-Add `"prepare": "bamboo codegen"` to `scripts` in `web/package.json`. It runs [codegen](/docs/references/cli#codegen)
-after every dependency install, so the output directory can stay in `.gitignore`.
-
-### Configure the content
-
-Make sure that all of the paths of your Redwood components are included in the `include` section of the
-`bamboo.config.ts` file.
-
-```js {5} filename="web/config/bamboo.config.ts"
-import { defineConfig } from '@bamboocss/dev'
-
-export default defineConfig({
-  preflight: true,
-  include: ['./src/**/*.{js,jsx,ts,tsx}'],
-  exclude: [],
-  outdir: 'styled-system',
-})
-```
-
-### Configure the entry CSS with layers
-
-Add this code to a `web/src/index.css` file imported in the root component of your project.
-
-```css filename="web/src/index.css"
-@layer reset, base, tokens, recipes, utilities;
-```
-
-## Start your build process
-
-Run the following command to start your development server.
-
-```bash
-yarn rw dev
-```
-
-### Start using Bamboo
-
-```tsx filename="web/src/pages/HomePage/HomePage.tsx"
-import { css } from 'styled-system/css'
-
-const HomePage = () => <h1 className={css({ fontSize: '4xl', fontWeight: 'bold' })}>Hello 🎋!</h1>
-
-export default HomePage
-```
-
-</Steps>
-
-## Troubleshooting
-
-If your IDE does not autocomplete `styled-system` imports, add that directory to `include` in `web/tsconfig.json`. See
-[the CLI guide](/docs/installation/cli#troubleshooting).
+<Callout type="warning">
+  A Redwood setup that does not expose Vite plugins is not currently supported. `@bamboocss/postcss` and `bamboo init
+  --postcss` are not fallbacks: generated style APIs require source compilation and throw when they run.
+</Callout>

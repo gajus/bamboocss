@@ -3,9 +3,9 @@ title: Styled System
 description: What is the styled-system folder and how does it work?
 ---
 
-The generated `styled-system` folder is Bamboo's typed authoring interface. Under Vite, its style functions are
-compile-time syntax: the compiler replaces them before the browser bundle and the styling engine tree-shakes away.
-CLI/PostCSS integrations execute the generated functions at runtime instead.
+The generated `styled-system` folder is Bamboo's typed authoring interface. Its style functions are compile-time syntax:
+the Vite compiler replaces them before the browser bundle. If a generated class-producing function runs, it throws and
+explains that the call was not compiled.
 
 When running the `bamboo` or `bamboo codegen` commands, the [`config.outdir`](/docs/references/config#outdir) will be
 used as output path to generate the `styled-system` in.

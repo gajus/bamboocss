@@ -1,8 +1,16 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+import bamboocss from '@bamboocss/vite'
+import { fileURLToPath } from 'node:url'
+
 export default defineNuxtConfig({
   telemetry: false,
-  postcss: {
-    plugins: { '@bamboocss/dev/postcss': {} },
+  alias: {
+    '@sandbox-nuxt-lib-source/styled-system': fileURLToPath(
+      new URL('../css-lib/@sandbox-nuxt-lib-source/styled-system', import.meta.url),
+    ),
   },
-  css: ['~/assets/main.css'],
+  vite: {
+    plugins: [bamboocss()],
+  },
+  css: ['virtual:bamboo.css'],
 })

@@ -5,14 +5,12 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, test } from 'vitest'
 import { VIRTUAL_CSS_ID } from '../src/css'
-import { bamboocss, isGeneratedOutput } from '../src/plugin'
+import { bamboocss, compilerParsePath, isGeneratedOutput, shouldTransform } from '../src/plugin'
 
 /**
  * The plugin wrapper, separate from the fold itself.
  *
- * `bamboocss()` returns two plugins: the css emitter, which is the integration and runs in
- * dev and build alike, and the compiler, which runs in both modes. These assert the strict
- * contract a user relies on before any config is loaded.
+ * `bamboocss()` returns the css emitter, the JS/TS compiler, and the SFC compiler.
  */
 const plugins = (options?: Parameters<typeof bamboocss>[0]) => {
   const list = bamboocss(options)
@@ -47,13 +45,41 @@ describe('plugin contract', () => {
     const { list } = plugins()
 
     // The css plugin owns the extraction the fold's context reads from, so it goes first.
-    expect(list.map((p) => p.name)).toEqual(['bamboocss:css', 'bamboocss:compiler'])
+    expect(list.map((p) => p.name)).toEqual(['bamboocss:css', 'bamboocss:compiler', 'bamboocss:compiler-sfc'])
   })
 
   test('the fold runs before other plugins', () => {
     // Runs `pre` so it sees module source as close as possible to what the CSS
     // extractor reads off disk.
     expect(plugins().fold.enforce).toBe('pre')
+  })
+
+  test('compiles Vue, Svelte and Astro script modules, not the wrapping SFC', () => {
+    expect(shouldTransform('/app/src/Card.tsx')).toBe(true)
+    expect(shouldTransform('/app/src/Card.vue')).toBe(true)
+    expect(shouldTransform('/app/src/Card.svelte?svelte&type=script&lang=ts')).toBe(true)
+    expect(shouldTransform('\0virtual:app.vue')).toBe(false)
+
+    const sfc =
+      '<script setup lang="ts">import { css } from "s"\nconst x = css({ color: "red.300" })</script>\n<template />'
+    expect(compilerParsePath('/app/src/Card.vue', sfc)).toBeNull()
+    expect(
+      compilerParsePath('/app/src/Card.vue?vue&type=script&setup=true&lang.ts', 'const x = css({ color: "red.300" })'),
+    ).toBe('/app/src/Card.vue.__bamboo__.ts')
+    expect(
+      compilerParsePath('/app/src/Card.svelte', 'export function Card() { return css({ color: "red.300" }) }'),
+    ).toBe('/app/src/Card.svelte.__bamboo__.ts')
+    expect(
+      compilerParsePath('/app/src/Page.astro', '---\nconst x = css({ color: "red.300" })\n---\n<div />'),
+    ).toBeNull()
+    expect(
+      compilerParsePath('/app/src/Page.astro', 'import { css } from "s"\nexport const x = css({ color: "red.300" })'),
+    ).toBe('/app/src/Page.astro.__bamboo__.ts')
+  })
+
+  test('SFC compilation runs after framework plugins', () => {
+    const sfc = plugins().list.find((p) => p.name === 'bamboocss:compiler-sfc')!
+    expect(sfc.enforce).toBe('post')
   })
 
   test('the compiler and css emitter both apply in development and builds', () => {

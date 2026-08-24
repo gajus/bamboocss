@@ -826,7 +826,7 @@ export class Builder {
    */
   toCss = ({
     layerParams = false,
-    includeRecipes = true,
+    includeRecipes = false,
   }: { layerParams?: boolean; includeRecipes?: boolean } = {}) => {
     const ctx = this.getContextOrThrow()
     const sheet = assembleExtractedSheet(ctx, {

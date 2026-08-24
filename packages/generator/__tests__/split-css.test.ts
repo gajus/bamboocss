@@ -18,7 +18,7 @@ const createSplitCssContext = (staticCss: StaticCssOptions) => {
   generator.appendLayerParams(sheet)
   generator.appendBaselineCss(sheet)
 
-  const artifacts = generator.getSplitCssArtifacts(sheet)
+  const artifacts = generator.getSplitCssArtifacts(sheet, { includeRecipes: true })
 
   return {
     generator,

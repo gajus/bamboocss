@@ -88,12 +88,8 @@ describe('CLI', () => {
     expect(output2.includes('It looks like you already have bamboo created')).toBe(true)
 
     // init with --force
-    const output3 = runCommand(cmd + ' --force --postcss --logfile="./bamboo.log"', { cwd: testsCwd })
+    const output3 = runCommand(cmd + ' --force --logfile="./bamboo.log"', { cwd: testsCwd })
     expect(output3.includes('Bamboo initialized')).toBe(true)
-
-    // Check if the postcss config file was created
-    const postcssConfigFileExists = await fs.access(paths.postcssConfig)
-    expect(postcssConfigFileExists).toBeUndefined()
 
     // Check if the log file was created
     const logFileExists = await fs.access(paths.logFile)
@@ -303,22 +299,13 @@ describe('the PostCSS suggestion', () => {
 
   const react = JSON.stringify({ dependencies: { react: '^19' } })
 
-  test('is no for a Vite project whose components the compiler can transform', () => {
+  test('is always no: PostCSS is not a styling integration', () => {
     expect(suggestPostcss(project({ 'vite.config.ts': '', 'package.json': react }))).toBe('no')
-  })
-
-  test('is yes without a Vite config, where the compiler is not an option', () => {
-    expect(suggestPostcss(project({ 'package.json': react }))).toBe('yes')
-    expect(suggestPostcss(project({ 'vitest.config.ts': '', 'package.json': react }))).toBe('yes')
-  })
-
-  test('is yes for Svelte, Vue and Astro, whose components it cannot transform', () => {
-    for (const dependency of ['svelte', '@sveltejs/kit', 'vue', 'nuxt', 'astro']) {
-      const dir = project({
-        'vite.config.ts': '',
-        'package.json': JSON.stringify({ devDependencies: { [dependency]: '*' } }),
-      })
-      expect(suggestPostcss(dir), dependency).toBe('yes')
-    }
+    expect(suggestPostcss(project({ 'package.json': react }))).toBe('no')
+    expect(
+      suggestPostcss(
+        project({ 'vite.config.ts': '', 'package.json': JSON.stringify({ devDependencies: { svelte: '*' } }) }),
+      ),
+    ).toBe('no')
   })
 })

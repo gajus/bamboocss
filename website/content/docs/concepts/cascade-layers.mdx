@@ -139,8 +139,7 @@ The first line of the generated CSS declares the layer order:
 @layer reset, base, tokens, utilities;
 ```
 
-Extraction-only CLI and PostCSS output retains the named `recipes` layer because it has no source compiler to resolve
-recipe selections into shared atoms.
+The named `recipes` layer is not emitted. Recipe selections compile into shared atoms in `utilities`.
 
 ## Customize layers
 
@@ -150,19 +149,4 @@ customizing layers [here](/docs/references/config#layers).
 ## Polyfills
 
 The Vite compiler rejects cascade-layer polyfills: flattening layers destroys the boundary its reachability and atom
-renaming pass relies on. For extraction-only PostCSS output, you can use:
-
-- [postcss-cascade-layers](https://www.npmjs.com/package/@csstools/postcss-cascade-layers): Adds support for CSS Cascade
-  Layers.
-
-Here is an example of a `postcss.config.js` file that uses these polyfills:
-
-```js
-module.exports = {
-  plugins: ['@bamboocss/dev/postcss', '@csstools/postcss-cascade-layers'],
-}
-```
-
-Since CSS `@layer`s have a lower priority than other CSS rules, this postcss plugin is also useful in cases where your
-styles are being overridden by some other stylesheets that you're not in total control of, since it will remove the
-`@layer` rules and still emulate their specificity.
+renaming pass relies on. Do not run `@bamboocss/dev/postcss` in a PostCSS pipeline.

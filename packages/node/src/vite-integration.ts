@@ -25,18 +25,12 @@ export const findViteConfig = (cwd: string) =>
   VITE_CONFIG_FILES.map((file) => join(cwd, file)).find((file) => existsSync(file))
 
 /**
- * Frameworks that author styles in a file the Vite compiler does not transform.
- *
- * It compiles JavaScript and TypeScript. A `.svelte`, `.vue` or `.astro` file is a template
- * with a script in it, and the compiler leaves those alone — which for a Svelte or Vue project
- * makes the PostCSS integration the right one, not a downgrade. Worse than that: switching one
- * to `@bamboocss/vite` would prune every rule only its components reach, since reachability is
- * computed from modules the compiler saw, so the pages would render unstyled.
- *
- * So this is the exception to the advice, and it has to be checked before giving it.
+ * Frameworks that author styles in a file the Vite compiler does not transform as JavaScript
+ * until a dedicated preprocessor exists. Vue, Svelte and Astro compile through
+ * `bamboocss:compiler-sfc`. HTML / Handlebars templates still do not.
  */
-const TEMPLATE_EXTENSIONS = /\b(?:svelte|vue|astro|html|hbs|mdx?)\b/
-const TEMPLATE_PACKAGES = ['svelte', '@sveltejs/kit', 'vue', 'nuxt', 'astro']
+const TEMPLATE_EXTENSIONS = /\b(?:html|hbs)\b/
+const TEMPLATE_PACKAGES: string[] = []
 
 /**
  * Does this project author styles somewhere the Vite compiler cannot reach?

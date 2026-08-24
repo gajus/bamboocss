@@ -19,6 +19,7 @@
     "solid-js": "1.9.10"
   },
   "devDependencies": {
-    "@bamboocss/dev": "workspace:*"
+    "@bamboocss/dev": "workspace:*",
+    "@bamboocss/vite": "workspace:*"
   }
 }

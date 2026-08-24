@@ -89,7 +89,8 @@ reuse the same class and rule; the names below are illustrative.
 
 ### Naming the recipe
 
-`className` is authoring metadata and remains accepted for shared configs and extraction-only tooling:
+`className` is optional authoring metadata. It gives a shared config a stable semantic identity, but does not enter the
+identity of compiled declaration atoms:
 
 ```jsx
 const button = cva({
@@ -315,7 +316,7 @@ Only complete StyleSet leaves reachable from that table enter the atom pool.
 
 The config recipe takes the following additional properties:
 
-- `className`: Authoring metadata used by extraction-only integrations; it does not enter Vite atom identity
+- `className`: Optional semantic metadata; it does not enter compiled declaration-atom identity
 - `jsx`: An array of JSX components that use the recipe. Defaults to the uppercase version of the recipe name
 - `description`: An optional description of the recipe (used in the js-doc comments)
 
@@ -730,8 +731,7 @@ selection tables.
 | Can accept a runtime variant selection under Vite    | ✅ finite axes become a decision table | ✅ finite axes become a decision table                               |
 | Can use a responsive object as the runtime selection | ❌ put it in the declarations          | ❌ put it in the declarations                                        |
 
-The Vite rows describe the compiler. Extraction-only CLI or PostCSS output retains the generated recipe runtime and its
-named recipe representation.
+These rows describe Bamboo's only styling path. Generated recipe functions throw if a build leaves one uncompiled.
 
 ### Reading an inline recipe, rather than calling it
 

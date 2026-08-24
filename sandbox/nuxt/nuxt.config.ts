@@ -1,9 +1,12 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+import { defineNuxtConfig } from 'nuxt/config'
+import bamboocss from '@bamboocss/vite'
+
 export default defineNuxtConfig({
   telemetry: false,
-  postcss: {
-    plugins: { '@bamboocss/dev/postcss': {} },
+  vite: {
+    plugins: [bamboocss()],
   },
-  css: ['~/assets/main.css'],
+  css: ['virtual:bamboo.css'],
   compatibilityDate: '2025-04-25',
 })

@@ -1,53 +1,18 @@
-import { findViteConfig, hasUncompilableSources } from '@bamboocss/node'
 import type { Config } from '@bamboocss/types'
 import * as p from '@clack/prompts'
 import { version } from '../package.json'
 
 /**
- * Which integration this project wants, before anybody is asked.
- *
- * The question is not really a preference. `@bamboocss/vite` compiles every `css()` and `cva()`
- * call to a literal class string; `@bamboocss/postcss` emits the stylesheet and compiles
- * nothing, so those calls stay runtime calls and the style engine ships to the client. Which of
- * the two applies is decided by the bundler, and the answer is on disk: a Vite config means the
- * compiler is available.
- *
- * Asked cold, with `yes` preselected, this steered every Vite project onto the runtime path by
- * pressing Enter — and both setups render identically, so nothing afterwards reveals the
- * choice. That is the same defect the React Router guide had, reached by a different door.
- *
- * Svelte, Vue and Astro are the exception in the other direction: their components are
- * templates the compiler does not transform, so PostCSS is the integration they should be on
- * and the default stays `yes`.
+ * PostCSS is not a Bamboo styling integration. Kept so existing callers still compile, and
+ * always answers no.
  */
-export const suggestPostcss = (cwd: string) => {
-  if (!findViteConfig(cwd)) return 'yes'
-  return hasUncompilableSources({ cwd }) ? 'yes' : 'no'
-}
+export const suggestPostcss = (_cwd: string) => 'no' as const
 
-export const interactive = async (options: { cwd?: string } = {}) => {
-  const cwd = options.cwd ?? process.cwd()
-  const postcssDefault = suggestPostcss(cwd)
-
+export const interactive = async (_options: { cwd?: string } = {}) => {
   p.intro(`bamboo v${version}`)
 
   const initFlags = await p.group(
     {
-      usePostcss: () =>
-        p.select({
-          // Named by what it decides rather than by the tool, because "would you like to use
-          // PostCSS?" reads as "do you have PostCSS in this project?" — which most Vite and
-          // Next projects do, for autoprefixer, and which is not the question being asked.
-          message:
-            postcssDefault === 'no'
-              ? 'Emit the stylesheet through PostCSS? This project has a Vite config, and `@bamboocss/vite` compiles your style calls away instead.'
-              : 'Emit the stylesheet through PostCSS?',
-          initialValue: postcssDefault,
-          options: [
-            { value: 'yes', label: 'Yes' },
-            { value: 'no', label: 'No' },
-          ],
-        }),
       useMjsExtension: () =>
         p.select({
           message: 'Use the mjs extension ?',
@@ -91,7 +56,7 @@ export const interactive = async (options: { cwd?: string } = {}) => {
   p.outro("Let's get started! 🎋")
 
   return {
-    postcss: initFlags.usePostcss === 'yes',
+    postcss: false,
     outExtension: initFlags.useMjsExtension === 'yes' ? 'mjs' : 'js',
     strictValues: strictValuesFrom(initFlags.withStrictTokens),
     gitignore: initFlags.shouldUpdateGitignore === 'yes',

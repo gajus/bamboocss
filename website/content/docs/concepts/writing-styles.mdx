@@ -458,9 +458,8 @@ finite public API.
 
 ### Hashing
 
-The `hash` option shortens class names and CSS variables, and it is the only thing that does. It applies to every build
-path — Vite, the CLI and PostCSS alike — so a project wanting short names in its compiled output sets it here rather
-than per integration.
+The `hash` option shortens class names and CSS variables, and it is the only thing that does. The Vite compiler and CLI
+artifacts read the same setting, so a project sets it here rather than per command.
 
 ```ts filename="bamboo.config.ts"
 import { defineConfig } from '@bamboocss/dev'

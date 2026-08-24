@@ -248,36 +248,6 @@ Compilation and strict rejection are not options. A style-producing call that ca
 fails instead of retaining a runtime fallback. See [Source compilation](/docs/guides/source-transformation) for the
 accepted static and finite-dynamic shapes.
 
-## Alternative: emit CSS from PostCSS
-
-Bamboo can emit the stylesheet through PostCSS instead of the Vite plugin. Install `@bamboocss/dev` alone, run
-`bamboo init --postcss` to write `postcss.config.cjs`, and add an entry CSS file carrying the layer order:
-
-```css filename="src/index.css"
-@layer reset, base, tokens, recipes, utilities;
-```
-
-Import that file from your root component in place of `virtual:bamboo.css`. This is a different integration: it has no
-source compiler, so `css()` calls resolve at runtime and recipes retain their named extraction representation — which
-means the generated style engine ships in your client bundle, where the plugin above compiles it away entirely.
-
-Because that is invisible from the outside — both render the same — the PostCSS plugin says so when it finds a Vite
-config. Declare the choice to silence it:
-
-```js filename="postcss.config.cjs"
-module.exports = {
-  plugins: {
-    '@bamboocss/dev/postcss': { runtimeStyling: true },
-  },
-}
-```
-
-<Callout type="warning">
-  Use this **or** `@bamboocss/vite`, not both. Each emits a complete stylesheet, so configuring the two together puts
-  two copies of it in your bundle – and a minifier merges most of the duplication away, which makes it read as a
-  rounding error rather than as the whole sheet twice.
-</Callout>
-
 ## Troubleshooting
 
 If your IDE does not autocomplete `styled-system` imports, add that directory to `include` in `tsconfig.json`. See

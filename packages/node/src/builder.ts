@@ -1,5 +1,4 @@
 import { findConfig, getConfigDependencies } from '@bamboocss/config'
-import { prunesPreflight } from '@bamboocss/core'
 import { logger } from '@bamboocss/logger'
 import { BambooError, uniq } from '@bamboocss/shared'
 import type { DiffConfigResult } from '@bamboocss/types'
@@ -11,7 +10,8 @@ import { codegen } from './codegen'
 import { loadConfigAndCreateContext } from './config'
 import { BambooContext } from './create-context'
 import { parseDependency } from './parse-dependency'
-import { collectSourceScans, createSourceScanCache, keyframeNames, pruneTokensForBuild } from './token-references'
+import { assembleExtractedSheet } from './assemble-sheet'
+import { createSourceScanCache } from './token-references'
 
 const fileModifiedMap = new Map<string, number>()
 
@@ -829,63 +829,13 @@ export class Builder {
     includeRecipes = true,
   }: { layerParams?: boolean; includeRecipes?: boolean } = {}) => {
     const ctx = this.getContextOrThrow()
-    const sheet = ctx.createSheet()
-    if (layerParams) {
-      if (includeRecipes) {
-        ctx.appendLayerParams(sheet)
-      } else {
-        const recipeLayer = ctx.config.layers?.recipes ?? 'recipes'
-        sheet.layers.root.prepend(
-          `@layer ${sheet.layers.layerNames.filter((name) => name !== recipeLayer).join(', ')};`,
-        )
-      }
-    }
-    ctx.appendBaselineCss(sheet)
-
-    // A strict static-style build lowers every recipe selection to ordinary shared atoms.
-    // Its encoder has already interned those atoms before this method is called, so retaining
-    // the extraction-only recipe rules would ship both representations. Clear all four staging layers
-    // before reachability scans: tokens referenced only by removed recipe rules should leave
-    // with them, while the atomized utility rules keep the declarations they actually use.
-    if (!includeRecipes) {
-      sheet.layers.recipes.removeAll()
-      sheet.layers.recipes_base.removeAll()
-      sheet.layers.recipes_slots.removeAll()
-      sheet.layers.recipes_slots_base.removeAll()
-    }
-
-    // `extract` has already run, so this sheet carries the utilities and recipes too.
-    // Parser results are not retained across that call, so the reference set comes from
-    // the source scan alone; re-parsing here would encode every style a second time.
-    //
-    // One walk answers every prune step, and the per-file cache keeps it O(changed) on a
-    // rebuild: the mtimes come from the sweep `setup` already performed this pass, so a file
-    // the pass knows to be unchanged contributes its previous scan without being re-read.
-    const collectElements = prunesPreflight(ctx.config.preflight)
-    const declaredKeyframes = ctx.config.prune?.keyframes ? keyframeNames(ctx) : []
-    // Walked only when a pass below will read the answers: `prune.tokens: false` skips the
-    // token scan inside `pruneTokensForBuild` too, and a context with every pass off — the
-    // shape harness tests hand `write` — must not pay for or depend on a source walk.
-    const needsScans = ctx.config.prune?.tokens !== false || collectElements || declaredKeyframes.length > 0
-    const scans = needsScans
-      ? collectSourceScans(
-          ctx,
-          { keyframeNames: declaredKeyframes, elements: collectElements },
-          this.sourceScanCache,
-          (filePath) => this.filesMeta?.changes.get(filePath)?.mtime,
-          this.sourceInventory,
-        )
-      : undefined
-    const reachableVars = pruneTokensForBuild(ctx, sheet, [], scans)
-
-    if (collectElements && scans) {
-      ctx.prunePreflight(sheet, scans.elements)
-    }
-
-    if (ctx.config.prune?.keyframes && scans) {
-      ctx.pruneKeyframes(sheet, scans.keyframeHits, reachableVars)
-    }
-
+    const sheet = assembleExtractedSheet(ctx, {
+      layerParams,
+      includeRecipes,
+      sourceScanCache: this.sourceScanCache,
+      mtimeOf: (filePath) => this.filesMeta?.changes.get(filePath)?.mtime,
+      sourceInventory: this.sourceInventory,
+    })
     return ctx.getCss(sheet)
   }
 

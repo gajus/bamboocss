@@ -24,14 +24,24 @@ let generation = 0
 
 /** Stand in for a resolved context, so this exercises `write` rather than a whole build. */
 const stubContext = () => ({
-  createSheet: () => ({}),
+  encoder: { atomizeObservedRecipes: () => {} },
+  createSheet: () => ({
+    layers: {
+      root: { prepend: () => {} },
+      recipes: { removeAll: () => {} },
+      recipes_base: { removeAll: () => {} },
+      recipes_slots: { removeAll: () => {} },
+      recipes_slots_base: { removeAll: () => {} },
+      layerNames: ['reset', 'base', 'tokens', 'recipes', 'utilities'],
+    },
+  }),
   appendBaselineCss: () => {},
   pruneTokens: () => {},
   pruneKeyframes: () => {},
   // Pruning off explicitly: this exercises `write`, and the token pass would want a real
   // source tree. It used to be skipped because an absent `prune` read as falsy here, which
   // was an accident of the old boolean rather than the documented default.
-  config: { prune: { tokens: false } },
+  config: { layers: { recipes: 'recipes' }, prune: { tokens: false } },
   isValidLayerParams: (params: string) => {
     const names = new Set(params.split(',').map((n) => n.trim()))
     return names.size >= 5 && ['reset', 'base', 'tokens', 'recipes', 'utilities'].every((n) => names.has(n))

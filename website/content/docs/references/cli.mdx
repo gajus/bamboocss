@@ -113,7 +113,7 @@ bamboo cssgen tokens
 # Generate CSS for specific glob
 bamboo cssgen "src/**/*.css"
 
-# Generate CSS files split into separate files per layer and recipe
+# Generate CSS files split into separate files per layer
 bamboo cssgen --splitting
 ```
 
@@ -126,9 +126,10 @@ The `--splitting` flag enables CSS code splitting, which generates separate CSS 
 system instead of a single monolithic CSS file. This is useful for:
 
 - **Selective loading** - Load only the CSS you need for specific pages
-- **Easier debugging** - Identify which layer or recipe contributes to the final CSS
+- **Easier debugging** - Identify which layer contributes to the final CSS
 
-When using `--splitting`, Bamboo will generate the following structure:
+Recipe selections compile to the same shared utility atoms as `css()`, so there is no per-recipe file. When using
+`--splitting`, Bamboo will generate the following structure:
 
 ```
 styled-system/
@@ -138,11 +139,6 @@ styled-system/
     ├── global.css          # Global CSS styles
     ├── tokens.css          # Design token CSS variables
     ├── utilities.css       # Atomic utility classes
-    ├── recipes.css         # @imports for all recipe files
-    ├── recipes/
-    │   ├── button.css      # Individual recipe: button
-    │   ├── card.css        # Individual recipe: card
-    │   └── ...             # Other recipes as separate files
     └── themes/
         └── dark.css        # Theme-specific tokens (not auto-imported)
         └── light.css       # Theme-specific tokens (not auto-imported)
@@ -152,27 +148,26 @@ The main `styles.css` file contains the `@layer` declarations and imports all th
 
 ```css
 /* styled-system/styles.css */
-@layer reset, base, tokens, recipes, utilities;
+@layer reset, base, tokens, utilities;
 
 @import './styles/reset.css';
 @import './styles/global.css';
 @import './styles/tokens.css';
-@import './styles/recipes.css';
 @import './styles/utilities.css';
 ```
 
-Import `styles.css` for everything, or any of the files above on its own — the per-layer, per-recipe and per-theme files
-are all importable directly.
+Import `styles.css` for everything, or any of the files above on its own — the per-layer and per-theme files are all
+importable directly.
 
-| Flag                   | Description                                                                            | Related                                               |
-| ---------------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| `--outfile, -o [file]` | Output file for extracted css, default to './styled-system/styles.css'                 | -                                                     |
-| `--minify, -m`         | Whether to minify the generated CSS                                                    | [`config.minify`](/docs/references/config#minify)     |
-| `--clean`              | Whether to clean the output directory before emitting                                  | [`config.clean`](/docs/references/config#clean)       |
-| `--watch, -w`          | Whether to watch for changes in the project                                            | [`config.watch`](/docs/references/config#watch)       |
-| `--splitting`          | Emit CSS as separate files per layer (reset, global, tokens, utilities) and per recipe | -                                                     |
-| `--poll, -p`           | Whether to poll for file changes                                                       | [`config.poll`](/docs/references/config#poll)         |
-| `--polyfill`           | Polyfill CSS @layers at-rules for older browsers                                       | [`config.polyfill`](/docs/references/config#polyfill) |
+| Flag                   | Description                                                             | Related                                               |
+| ---------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------- |
+| `--outfile, -o [file]` | Output file for extracted css, default to './styled-system/styles.css'  | -                                                     |
+| `--minify, -m`         | Whether to minify the generated CSS                                     | [`config.minify`](/docs/references/config#minify)     |
+| `--clean`              | Whether to clean the output directory before emitting                   | [`config.clean`](/docs/references/config#clean)       |
+| `--watch, -w`          | Whether to watch for changes in the project                             | [`config.watch`](/docs/references/config#watch)       |
+| `--splitting`          | Emit CSS as separate files per layer (reset, global, tokens, utilities) | -                                                     |
+| `--poll, -p`           | Whether to poll for file changes                                        | [`config.poll`](/docs/references/config#poll)         |
+| `--polyfill`           | Polyfill CSS @layers at-rules for older browsers                        | [`config.polyfill`](/docs/references/config#polyfill) |
 
 ## spec
 

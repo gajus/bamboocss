@@ -562,7 +562,10 @@ export class Generator extends Context {
    * Get all split CSS artifacts for the stylesheet
    * Used when --splitting flag is enabled
    */
-  getSplitCssArtifacts = (sheet: Stylesheet): SplitCssResult => {
+  getSplitCssArtifacts = (
+    sheet: Stylesheet,
+    { includeRecipes = true }: { includeRecipes?: boolean } = {},
+  ): SplitCssResult => {
     const layerNames = this.config.layers as Record<string, string>
     const decoder = this.decoder.collect(this.encoder)
 
@@ -583,20 +586,22 @@ export class Generator extends Context {
         code: l.css,
       }))
 
-    // Recipe artifacts
+    // Recipe artifacts. Compiled emission has no recipe layer; atoms live in utilities.
     const recipes: SplitCssArtifact[] = []
-    for (const recipeName of this.recipes.keys) {
-      const recipeSheet = this.createSheet()
-      recipeSheet.processDecoderForRecipe(decoder, recipeName)
-      const code = recipeSheet.getLayerCss('recipes')
-      if (code.trim()) {
-        recipes.push({
-          type: 'recipe',
-          name: recipeName,
-          file: `${dashCase(recipeName)}.css`,
-          code,
-          dir: 'recipes',
-        })
+    if (includeRecipes) {
+      for (const recipeName of this.recipes.keys) {
+        const recipeSheet = this.createSheet()
+        recipeSheet.processDecoderForRecipe(decoder, recipeName)
+        const code = recipeSheet.getLayerCss('recipes')
+        if (code.trim()) {
+          recipes.push({
+            type: 'recipe',
+            name: recipeName,
+            file: `${dashCase(recipeName)}.css`,
+            code,
+            dir: 'recipes',
+          })
+        }
       }
     }
 
@@ -621,7 +626,9 @@ export class Generator extends Context {
     const recipesIndex = recipes.map((r) => `@import './recipes/${r.file}';`).join('\n')
 
     // Build main styles.css content
-    const layerOrder = [layerNames.reset, layerNames.base, layerNames.tokens, layerNames.recipes, layerNames.utilities]
+    const layerOrder = includeRecipes
+      ? [layerNames.reset, layerNames.base, layerNames.tokens, layerNames.recipes, layerNames.utilities]
+      : [layerNames.reset, layerNames.base, layerNames.tokens, layerNames.utilities]
     const imports = [`@layer ${layerOrder.join(', ')};`, '']
 
     for (const layer of layers) {

@@ -21,9 +21,26 @@ import { pruneTokensForBuild } from '../src/token-references'
 const createContext = (config: Config) => {
   const calls: string[] = []
 
+  const sheet = {
+    layers: {
+      root: { prepend: () => {} },
+      recipes: { removeAll: () => {} },
+      recipes_base: { removeAll: () => {} },
+      recipes_slots: { removeAll: () => {} },
+      recipes_slots_base: { removeAll: () => {} },
+      layerNames: ['reset', 'base', 'tokens', 'recipes', 'utilities'],
+    },
+  }
+
   const ctx = {
-    config: { cwd: '/app', ...config, prune: { tokens: true, keyframes: true, ...config.prune } },
-    createSheet: () => ({}),
+    config: {
+      cwd: '/app',
+      layers: { recipes: 'recipes' },
+      ...config,
+      prune: { tokens: true, keyframes: true, ...config.prune },
+    },
+    encoder: { atomizeObservedRecipes: () => calls.push('atomize') },
+    createSheet: () => sheet,
     parseFiles: () => ({ files: [], results: [] }),
     messages: { buildComplete: () => '', cssArtifactComplete: () => '' },
     appendLayerParams: () => {},
@@ -31,8 +48,6 @@ const createContext = (config: Config) => {
     appendParserCss: () => {},
     appendCssOfType: (type: string) => calls.push(`append:${type}`),
     prunePreflight: () => calls.push('preflight'),
-    // Called either way — with a reference set for the full pass, without one when only the
-    // `@property` registrations are being dropped.
     pruneTokens: (_sheet: unknown, keep?: unknown) => calls.push(keep ? 'tokens' : 'properties'),
     pruneKeyframes: () => calls.push('keyframes'),
     getFiles: () => [],
@@ -56,24 +71,25 @@ const run = async (config: Config, options: Record<string, unknown> = {}) => {
 
 describe('cssgen prune flags', () => {
   test('both passes run by default', async () => {
-    expect(await run({})).toEqual(['tokens', 'keyframes'])
+    expect(await run({})).toEqual(['atomize', 'tokens', 'keyframes'])
   })
 
   test('disabling both still drops the @property registrations', async () => {
-    expect(await run({ prune: { tokens: false, keyframes: false } })).toEqual(['properties'])
+    expect(await run({ prune: { tokens: false, keyframes: false } })).toEqual(['atomize', 'properties'])
   })
 
   test('pruneUnusedKeyframes alone still prunes keyframes', async () => {
-    expect(await run({ prune: { tokens: false, keyframes: true } })).toEqual(['properties', 'keyframes'])
+    expect(await run({ prune: { tokens: false, keyframes: true } })).toEqual(['atomize', 'properties', 'keyframes'])
   })
 
   test('pruneUnusedTokens alone does not prune keyframes', async () => {
-    expect(await run({ prune: { tokens: true, keyframes: false } })).toEqual(['tokens'])
+    expect(await run({ prune: { tokens: true, keyframes: false } })).toEqual(['atomize', 'tokens'])
   })
 
   test('preflight.prune is a third independent switch', async () => {
-    expect(await run({ preflight: { prune: true } })).toEqual(['tokens', 'preflight', 'keyframes'])
+    expect(await run({ preflight: { prune: true } })).toEqual(['atomize', 'tokens', 'preflight', 'keyframes'])
     expect(await run({ preflight: { prune: true }, prune: { tokens: false, keyframes: false } })).toEqual([
+      'atomize',
       'properties',
       'preflight',
     ])

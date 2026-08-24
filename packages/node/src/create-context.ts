@@ -438,13 +438,12 @@ export class BambooContext extends Generator {
     })
   }
 
-  writeSplitCss = async (sheet: Stylesheet) => {
+  writeSplitCss = async (sheet: Stylesheet, { includeRecipes = true }: { includeRecipes?: boolean } = {}) => {
     const { path: pathUtil, fs } = this.runtime
     const rootDir = this.paths.root
     const stylesDir = [...rootDir, 'styles']
 
-    // Get all artifacts from the generator
-    const artifacts = this.getSplitCssArtifacts(sheet)
+    const artifacts = this.getSplitCssArtifacts(sheet, { includeRecipes })
 
     // Derive and create directories from artifacts
     const subDirs = new Set([...artifacts.recipes, ...artifacts.themes].map((a) => a.dir).filter(Boolean))
@@ -492,6 +491,17 @@ export class BambooContext extends Generator {
       dir: rootDir,
       files: [{ file: 'styles.css', code: artifacts.index }],
     })
+
+    // Compiled emission no longer owns per-recipe files. A previous `--splitting` run left
+    // `styles/recipes/` on disk, and nothing else deletes it — codegen's prune skips `styles/`
+    // on purpose. Drop the leftovers here so a rebuild cannot keep serving named recipe rules
+    // beside the atom sheet.
+    if (!includeRecipes) {
+      const recipesIndex = pathUtil.join(...stylesDir, 'recipes.css')
+      const recipesDir = pathUtil.join(...stylesDir, 'recipes')
+      if (fs.existsSync(recipesIndex)) fs.rmFileSync(recipesIndex)
+      if (fs.existsSync(recipesDir)) fs.rmFileSync(recipesDir)
+    }
   }
 
   watchConfig = (cb: (file: string) => void | Promise<void>, opts?: Omit<WatchOptions, 'include'>) => {

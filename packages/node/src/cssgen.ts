@@ -1,8 +1,9 @@
 import { prunesPreflight } from '@bamboocss/core'
 import { logger } from '@bamboocss/logger'
 import type { CssArtifactType } from '@bamboocss/types'
+import { assembleExtractedSheet } from './assemble-sheet'
 import type { BambooContext } from './create-context'
-import { collectRenderedElements, collectSourceScans, keyframeNames, pruneTokensForBuild } from './token-references'
+import { collectRenderedElements } from './token-references'
 
 export interface CssGenOptions {
   cwd: string
@@ -14,9 +15,8 @@ export interface CssGenOptions {
 export const cssgen = async (ctx: BambooContext, options: CssGenOptions) => {
   const { outfile, type, splitting } = options
 
-  const sheet = ctx.createSheet()
-
   if (type) {
+    const sheet = ctx.createSheet()
     const done = logger.time.info(ctx.messages.cssArtifactComplete(type))
 
     ctx.appendCssOfType(type, sheet)
@@ -43,34 +43,14 @@ export const cssgen = async (ctx: BambooContext, options: CssGenOptions) => {
 
     done()
   } else {
-    const { files, results } = ctx.parseFiles()
+    const { files } = ctx.parseFiles()
 
     const done = logger.time.info(ctx.messages.buildComplete(files.length))
 
-    ctx.appendLayerParams(sheet)
-    ctx.appendBaselineCss(sheet)
-    ctx.appendParserCss(sheet)
-
-    // Only now does the sheet hold everything that could reference a token. Gathering the
-    // references reads every source file, so the passes share one walk rather than each
-    // paying its own.
-    const collectElements = prunesPreflight(ctx.config.preflight)
-    const scans = collectSourceScans(ctx, {
-      keyframeNames: ctx.config.prune?.keyframes ? keyframeNames(ctx) : [],
-      elements: collectElements,
-    })
-    const reachableVars = pruneTokensForBuild(ctx, sheet, results, scans)
-
-    if (collectElements) {
-      ctx.prunePreflight(sheet, scans.elements)
-    }
-
-    if (ctx.config.prune?.keyframes) {
-      ctx.pruneKeyframes(sheet, scans.keyframeHits, reachableVars)
-    }
+    const sheet = assembleExtractedSheet(ctx, { layerParams: true, includeRecipes: false })
 
     if (splitting) {
-      await ctx.writeSplitCss(sheet)
+      await ctx.writeSplitCss(sheet, { includeRecipes: false })
     } else if (outfile) {
       const css = ctx.getCss(sheet)
       logger.info('css', ctx.runtime.path.resolve(outfile))

@@ -1,10 +1,9 @@
-import { prunesPreflight } from '@bamboocss/core'
 import { logger } from '@bamboocss/logger'
 import type { ArtifactId, Config } from '@bamboocss/types'
+import { assembleExtractedSheet } from './assemble-sheet'
 import { codegen } from './codegen'
 import { loadConfigAndCreateContext } from './config'
 import { BambooContext } from './create-context'
-import { collectSourceScans, keyframeNames, pruneTokensForBuild } from './token-references'
 
 async function build(ctx: BambooContext, artifactIds?: ArtifactId[]) {
   await codegen(ctx, artifactIds)
@@ -15,27 +14,8 @@ async function build(ctx: BambooContext, artifactIds?: ArtifactId[]) {
 
   const done = logger.time.info('')
 
-  const sheet = ctx.createSheet()
-  ctx.appendLayerParams(sheet)
-  ctx.appendBaselineCss(sheet)
   const parsed = ctx.parseFiles()
-  ctx.appendParserCss(sheet)
-
-  // Gathering the references reads every source file, so the passes share one walk.
-  const collectElements = prunesPreflight(ctx.config.preflight)
-  const scans = collectSourceScans(ctx, {
-    keyframeNames: ctx.config.prune?.keyframes ? keyframeNames(ctx) : [],
-    elements: collectElements,
-  })
-  const reachableVars = pruneTokensForBuild(ctx, sheet, parsed.results, scans)
-
-  if (collectElements) {
-    ctx.prunePreflight(sheet, scans.elements)
-  }
-
-  if (ctx.config.prune?.keyframes) {
-    ctx.pruneKeyframes(sheet, scans.keyframeHits, reachableVars)
-  }
+  const sheet = assembleExtractedSheet(ctx, { layerParams: true, includeRecipes: false })
 
   await ctx.writeCss(sheet)
   done(ctx.messages.buildComplete(parsed.files.length))
@@ -84,30 +64,7 @@ export async function generate(config: Config, configPath?: string) {
 
       const outfile = ctx.runtime.path.join(...ctx.paths.root, 'styles.css')
       const done = logger.time.info(ctx.messages.buildComplete(parsed))
-      const sheet = ctx.createSheet()
-      ctx.appendLayerParams(sheet)
-      ctx.appendBaselineCss(sheet)
-      ctx.appendParserCss(sheet)
-
-      // Scan every file, not just the ones that changed, so a token stops being kept only
-      // once its last reference is gone. Parser results are deliberately not gathered
-      // here: `parseFiles` would encode every style into the running encoder a second
-      // time on each change.
-      const collectWatchElements = prunesPreflight(ctx.config.preflight)
-      const watchScans = collectSourceScans(ctx, {
-        keyframeNames: ctx.config.prune?.keyframes ? keyframeNames(ctx) : [],
-        elements: collectWatchElements,
-      })
-      const reachableVars = pruneTokensForBuild(ctx, sheet, [], watchScans)
-
-      if (collectWatchElements) {
-        ctx.prunePreflight(sheet, watchScans.elements)
-      }
-
-      if (ctx.config.prune?.keyframes) {
-        ctx.pruneKeyframes(sheet, watchScans.keyframeHits, reachableVars)
-      }
-
+      const sheet = assembleExtractedSheet(ctx, { layerParams: true, includeRecipes: false })
       const css = ctx.getCss(sheet)
       await ctx.runtime.fs.writeFile(outfile, css)
 

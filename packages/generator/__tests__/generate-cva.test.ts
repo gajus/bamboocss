@@ -16,7 +16,7 @@ describe('generate cva', () => {
   test('names classes semantically, without resolving styles', () => {
     const { js } = generateCvaFn(createGeneratorContext() as any)
 
-    expect(js).toContain('getRecipeClassNames(name, variants, getVariantProps(props)')
+    expect(js).toContain('uncompiledStyle')
     expect(js).not.toContain('__atomicCss')
 
     // `resolve` still exists, for `raw()` — which returns styles rather than classes — so
@@ -25,7 +25,8 @@ describe('generate cva', () => {
     const start = js.indexOf('function cvaFn')
     expect(start).toBeGreaterThan(-1)
     const body = js.slice(start, start + 200)
-    expect(body).toContain('getRecipeClassNames')
+    expect(body).toContain('uncompiledStyle')
+    expect(body).not.toContain('getRecipeClassNames')
     expect(body).not.toContain('resolve(props)')
   })
 

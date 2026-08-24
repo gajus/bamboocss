@@ -21,7 +21,8 @@ declaration reuses the same class and rule.
 
 A fallback model has two expensive properties:
 
-- one unresolved call retains the generated style engine and its lookup tables;
+- one unresolved call retains the generated style engine and its lookup tables — and generated `css()` / `cva()` now
+  throw if they run at all, so a missed fold cannot silently ship that engine;
 - recipe-specific classes prevent declarations such as `display: flex` from being shared with other recipes or `css()`
   calls.
 

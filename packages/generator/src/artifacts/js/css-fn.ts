@@ -2,10 +2,6 @@ import type { Context } from '@bamboocss/core'
 import { outdent } from 'outdent'
 
 export function generateCssFn(ctx: Context) {
-  const { utility, hash, prefix } = ctx
-
-  const { separator } = utility
-
   return {
     dts: outdent`
     ${ctx.file.importType('SystemStyleObject, ViewTransitionFn', '../types/index')}
@@ -56,46 +52,12 @@ export function generateCssFn(ctx: Context) {
 
     `,
     js: outdent`
-    ${ctx.file.import(
-      'cloneStyles, createCssUncached, hypenateProperty, memo, viewTransitionClassName, withoutSpace',
-      '../helpers',
-    )}
-    ${ctx.file.import('sortConditions, finalizeConditions', './conditions')}
-    ${ctx.file.import('classNameByProp', './utilities')}
-    ${ctx.file.import('mergeCss, mergeCssUncached, resolveShorthand', './merge-css')}
+    ${ctx.file.import('cloneStyles, uncompiledStyle', '../helpers')}
+    ${ctx.file.import('mergeCss', './merge-css')}
 
-    const context = {
-      ${hash.className ? 'hash: true,' : ''}
-      conditions: {
-        shift: sortConditions,
-        finalize: finalizeConditions,
-      },
-      utility: {
-        ${prefix.className ? 'prefix: ' + JSON.stringify(prefix.className) + ',' : ''}
-        transform: ${
-          utility.hasShorthand
-            ? `(prop, value) => {
-              const key = resolveShorthand(prop)
-              const propKey = classNameByProp.get(key) || hypenateProperty(key)
-              return { className: \`$\{propKey}${separator}$\{withoutSpace(value)}\` }
-            }`
-            : `(key, value) => ({ className: \`$\{classNameByProp.get(key) || hypenateProperty(key)}${separator}$\{withoutSpace(value)}\` })`
-        },
-        ${utility.hasShorthand ? 'hasShorthand: true,' : ''}
-        toHash: ${utility.toHash},
-        resolveShorthand: ${utility.hasShorthand ? 'resolveShorthand' : 'prop => prop'},
-      }
-    }
-
-    const cssFn = createCssUncached(context)
-    // \`createCssUncached\` and \`mergeCssUncached\` rather than their cached forms: this
-    // callback runs only when the memo above it missed, and a miss means these arguments
-    // have not been seen — so a second cache keyed on the same arguments, or on the merge
-    // derived from them, can only miss too, after paying for the lookup.
-    export const css = /* @__PURE__ */ memo((...styles) => cssFn(mergeCssUncached(...styles)))
-    // The cached merge here, since \`raw\` is called straight from user code with no memo
-    // above it. The merged result is cached and shared, so a caller mutating a nested
-    // condition object would otherwise poison it for everyone after them.
+    export const css = (..._styles) => uncompiledStyle('css')
+    // \`raw\` is a style object, not a class string. The compiler leaves it; \`css(css.raw(...))\`
+    // is what has to fold.
     css.raw = (...styles) => cloneStyles(mergeCss(...styles))
 
     // Sugar for the string form, so the feature has an import to discover, a signature to
@@ -103,10 +65,7 @@ export function generateCssFn(ctx: Context) {
     // value reaching \`css()\` is the same literal either way.
     export const fallback = (...values) => \`fallback($\{values.join(', ')})\`
 
-    // The class is the whole return value — the CSS behind it was emitted at build time
-    // from the same options, hashed by this same function. A call the extractor never saw
-    // still returns a class, exactly as \`css()\` does for a value it never saw.
-    export const viewTransition = (options) => viewTransitionClassName(options, ${JSON.stringify(prefix.className ?? '')})
+    export const viewTransition = (_options) => uncompiledStyle('viewTransition')
 
 `,
   }

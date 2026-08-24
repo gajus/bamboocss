@@ -37,41 +37,9 @@ describe('sva', () => {
     },
   })
 
-  test('base styles', () => {
-    const result = button()
-
-    expect(result).toMatchInlineSnapshot(`
-      {
-        "icon": "sva_grxEQD__icon",
-        "root": "sva_grxEQD__root sva_grxEQD__root--visual_unstyled",
-      }
-    `)
-  })
-
-  test('solid variant styles', () => {
-    const result = button({ visual: 'solid' })
-
-    expect(result).toMatchInlineSnapshot(
-      `
-      {
-        "icon": "sva_grxEQD__icon",
-        "root": "sva_grxEQD__root sva_grxEQD__root--visual_solid",
-      }
-    `,
-    )
-  })
-
-  test('outline variant styles', () => {
-    const result = button({ visual: 'outline' })
-
-    expect(result).toMatchInlineSnapshot(
-      `
-      {
-        "icon": "sva_grxEQD__icon",
-        "root": "sva_grxEQD__root sva_grxEQD__root--visual_outline",
-      }
-    `,
-    )
+  test('refuses to resolve slot classes at runtime', () => {
+    expect(() => button()).toThrow('was not compiled')
+    expect(() => button({ visual: 'solid' })).toThrow('sva')
   })
 
   test('split variant props', () => {

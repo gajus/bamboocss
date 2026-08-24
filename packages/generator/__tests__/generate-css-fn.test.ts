@@ -52,39 +52,12 @@ describe('generate css-fn', () => {
        */
       export declare const viewTransition: ViewTransitionFn;
       ",
-        "js": "import { cloneStyles, createCssUncached, hypenateProperty, memo, viewTransitionClassName, withoutSpace } from '../helpers.mjs';
-      import { sortConditions, finalizeConditions } from './conditions.mjs';
-      import { classNameByProp } from './utilities.mjs';
-      import { mergeCss, mergeCssUncached, resolveShorthand } from './merge-css.mjs';
+        "js": "import { cloneStyles, uncompiledStyle } from '../helpers.mjs';
+      import { mergeCss } from './merge-css.mjs';
 
-      const context = {
-        
-        conditions: {
-          shift: sortConditions,
-          finalize: finalizeConditions,
-        },
-        utility: {
-          
-          transform: (prop, value) => {
-                    const key = resolveShorthand(prop)
-                    const propKey = classNameByProp.get(key) || hypenateProperty(key)
-                    return { className: \`\${propKey}_\${withoutSpace(value)}\` }
-                  },
-          hasShorthand: true,
-          toHash: (path, hashFn) => hashFn(path.join(":")),
-          resolveShorthand: resolveShorthand,
-        }
-      }
-
-      const cssFn = createCssUncached(context)
-      // \`createCssUncached\` and \`mergeCssUncached\` rather than their cached forms: this
-      // callback runs only when the memo above it missed, and a miss means these arguments
-      // have not been seen — so a second cache keyed on the same arguments, or on the merge
-      // derived from them, can only miss too, after paying for the lookup.
-      export const css = /* @__PURE__ */ memo((...styles) => cssFn(mergeCssUncached(...styles)))
-      // The cached merge here, since \`raw\` is called straight from user code with no memo
-      // above it. The merged result is cached and shared, so a caller mutating a nested
-      // condition object would otherwise poison it for everyone after them.
+      export const css = (..._styles) => uncompiledStyle('css')
+      // \`raw\` is a style object, not a class string. The compiler leaves it; \`css(css.raw(...))\`
+      // is what has to fold.
       css.raw = (...styles) => cloneStyles(mergeCss(...styles))
 
       // Sugar for the string form, so the feature has an import to discover, a signature to
@@ -92,10 +65,7 @@ describe('generate css-fn', () => {
       // value reaching \`css()\` is the same literal either way.
       export const fallback = (...values) => \`fallback(\${values.join(', ')})\`
 
-      // The class is the whole return value — the CSS behind it was emitted at build time
-      // from the same options, hashed by this same function. A call the extractor never saw
-      // still returns a class, exactly as \`css()\` does for a value it never saw.
-      export const viewTransition = (options) => viewTransitionClassName(options, "")
+      export const viewTransition = (_options) => uncompiledStyle('viewTransition')
       ",
       }
     `)
@@ -172,44 +142,12 @@ describe('generate css-fn', () => {
        */
       export declare const viewTransition: ViewTransitionFn;
       ",
-        "js": "import { cloneStyles, createCssUncached, hypenateProperty, memo, viewTransitionClassName, withoutSpace } from '../helpers.mjs';
-      import { sortConditions, finalizeConditions } from './conditions.mjs';
-      import { classNameByProp } from './utilities.mjs';
-      import { mergeCss, mergeCssUncached, resolveShorthand } from './merge-css.mjs';
+        "js": "import { cloneStyles, uncompiledStyle } from '../helpers.mjs';
+      import { mergeCss } from './merge-css.mjs';
 
-      const context = {
-        
-        conditions: {
-          shift: sortConditions,
-          finalize: finalizeConditions,
-        },
-        utility: {
-          
-          transform: (prop, value) => {
-                    const key = resolveShorthand(prop)
-                    const propKey = classNameByProp.get(key) || hypenateProperty(key)
-                    return { className: \`\${propKey}_\${withoutSpace(value)}\` }
-                  },
-          hasShorthand: true,
-          toHash: toHash(paths, toHash) {
-                            const stringConds = paths.join(":");
-                            const splitConds = stringConds.split("_");
-                            const hashConds = splitConds.map(toHash);
-                            return hashConds.join("_");
-                          },
-          resolveShorthand: resolveShorthand,
-        }
-      }
-
-      const cssFn = createCssUncached(context)
-      // \`createCssUncached\` and \`mergeCssUncached\` rather than their cached forms: this
-      // callback runs only when the memo above it missed, and a miss means these arguments
-      // have not been seen — so a second cache keyed on the same arguments, or on the merge
-      // derived from them, can only miss too, after paying for the lookup.
-      export const css = /* @__PURE__ */ memo((...styles) => cssFn(mergeCssUncached(...styles)))
-      // The cached merge here, since \`raw\` is called straight from user code with no memo
-      // above it. The merged result is cached and shared, so a caller mutating a nested
-      // condition object would otherwise poison it for everyone after them.
+      export const css = (..._styles) => uncompiledStyle('css')
+      // \`raw\` is a style object, not a class string. The compiler leaves it; \`css(css.raw(...))\`
+      // is what has to fold.
       css.raw = (...styles) => cloneStyles(mergeCss(...styles))
 
       // Sugar for the string form, so the feature has an import to discover, a signature to
@@ -217,10 +155,7 @@ describe('generate css-fn', () => {
       // value reaching \`css()\` is the same literal either way.
       export const fallback = (...values) => \`fallback(\${values.join(', ')})\`
 
-      // The class is the whole return value — the CSS behind it was emitted at build time
-      // from the same options, hashed by this same function. A call the extractor never saw
-      // still returns a class, exactly as \`css()\` does for a value it never saw.
-      export const viewTransition = (options) => viewTransitionClassName(options, "")
+      export const viewTransition = (_options) => uncompiledStyle('viewTransition')
       ",
       }
     `)

@@ -1,11 +1,8 @@
 import { createCss, createMergeCss, getPatternStyles, memo } from '@bamboocss/shared'
 
 /**
- * The runtime shape `generateCssFn` / `generatePattern` emit, shared by the two bench files
- * that measure it — `css-fn.bench.ts` for the cached path, `css-fn-miss.bench.ts` for the
- * uncached one.
- *
- * They are separate files on purpose; see the header of `css-fn-miss.bench.ts`.
+ * Benchmarks `createCss` from `@bamboocss/shared` — the engine the Vite compiler uses.
+ * Generated `css()` throws if a call was not folded, so it is not what these measure.
  */
 export const ITERATIONS = 10_000
 

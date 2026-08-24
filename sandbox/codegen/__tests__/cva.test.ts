@@ -28,22 +28,9 @@ describe('cva', () => {
     },
   })
 
-  test('base styles', () => {
-    const result = button()
-
-    expect(result).toMatchInlineSnapshot(`"cva_iwgVLg cva_iwgVLg--visual_unstyled"`)
-  })
-
-  test('solid variant styles', () => {
-    const result = button({ visual: 'solid' })
-
-    expect(result).toMatchInlineSnapshot(`"cva_iwgVLg cva_iwgVLg--visual_solid"`)
-  })
-
-  test('outline variant styles', () => {
-    const result = button({ visual: 'outline' })
-
-    expect(result).toMatchInlineSnapshot(`"cva_iwgVLg cva_iwgVLg--visual_outline"`)
+  test('refuses to resolve a class string at runtime', () => {
+    expect(() => button()).toThrow('was not compiled')
+    expect(() => button({ visual: 'solid' })).toThrow('cva')
   })
 
   test('split variant props', () => {
@@ -75,12 +62,8 @@ describe('cva', () => {
     const first = button.raw({ visual: 'solid' })
     const second = button.raw({ visual: 'solid' })
 
-    // `resolve` is memoized, so the two calls share one computation. They must not share the
-    // object: mutating what `raw` handed back would otherwise poison every later call.
     expect(first).not.toBe(second)
 
-    // Snapshotted before the mutation. Comparing against `second` directly would be vacuous
-    // under a shallow copy, since `second.color` would be the very object being poisoned.
     const expected = structuredClone(second)
 
     first.fontWeight = 'poisoned'
@@ -90,10 +73,6 @@ describe('cva', () => {
   })
 
   test('the copy reaches nested condition blocks', () => {
-    // `resolve` ends in `mergeCss`, and `mergeProps` builds a fresh top level while assigning
-    // nested objects by reference — so a condition block aliases straight into the `cva`
-    // config. A shallow copy at the `raw` boundary would let this escape into every later
-    // call, and into the class names built from it.
     const outline = button.raw({ visual: 'outline' })
     delete (outline.color as Record<string, unknown>)._dark
 

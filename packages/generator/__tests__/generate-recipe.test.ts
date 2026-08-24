@@ -19,55 +19,12 @@ describe('generate recipes', () => {
     expect(createRecipeJs(fixtureDefaults)).toMatchInlineSnapshot(`
       {
         "dts": "",
-        "js": "import { finalizeConditions, sortConditions } from '../css/conditions.mjs';
-      import { assertCompoundVariant, getCompoundVariantCss } from '../css/cva.mjs';
-      import { cx } from '../css/cx.mjs';
-      import { compact, createCssUncached, getRecipeClassNames, splitProps, toHash, uniq, withoutSpace } from '../helpers.mjs';
+        "js": "import { compact, splitProps, uniq, uncompiledStyle } from '../helpers.mjs';
 
-      /**
-       * What \`createCss\` does to a class name: prefix it, and hash it when \`hash.className\`
-       * is set.
-       *
-       * A slot that takes variants gets this for free, because its classes come from
-       * \`createCss\`. A *scoped* slot's class never goes through it — it is a constant — so it
-       * has to be formatted here or the runtime hands back a raw name while the stylesheet
-       * emits the rule under a hashed one, and the slot renders unstyled.
-       */
       const withPrefix = (className) => className
       export const formatRecipeClass = withPrefix
 
-      export const createRecipe = (name, defaultVariants, compoundVariants, variantMap) => {
-       /**
-        * \`variantMap\` as \`getRecipeClassNames\` wants it — value *keys* rather than a list.
-        *
-        * Built once per recipe at module init. The lookup needs \`Object.hasOwn\`, and an array
-        * answers that for its indices rather than its contents, so a list cannot be passed
-        * straight through.
-        */
-       const variantValues = variantMap
-         ? Object.fromEntries(
-             Object.entries(variantMap).map(([variant, values]) => [
-               variant,
-               Object.fromEntries(values.map((value) => [value, true])),
-             ]),
-           )
-         : undefined
-
-       /**
-        * Whether every selected value is a plain scalar, and so nameable without \`createCss\`.
-        *
-        * \`typeof value === 'object'\` covers a conditional value like \`{ base: 'sm', md: 'lg' }\`,
-        * whose classes carry condition prefixes only \`createCss\` can build. It also catches
-        * \`null\`, which \`compact\` keeps — that goes to the path below and comes out as it did
-        * before, since \`createCss\` names no class for a null value either.
-        */
-       const isScalarSelection = (declared) => {
-         for (const key in declared) {
-           if (typeof declared[key] === 'object') return false
-         }
-         return true
-       }
-
+      export const createRecipe = (name, defaultVariants, _compoundVariants, _variantMap) => {
        const getVariantProps = (variants) => {
          return {
            [name]: '__ignore__',
@@ -76,82 +33,12 @@ describe('generate recipes', () => {
          };
        };
 
-        const recipeFn = (variants) => {
-         const declaredProps = getVariantProps(variants)
-
-         // A scalar selection names its classes by lookup: the recipe's own class plus one per
-         // selected variant, which is all \`createCss\` was deriving here. Measured at 4.1x the
-         // \`createCss\` path on a three-variant recipe. The gain is on a \`memo\` miss — the first
-         // call for each variant combination — since a hit never reaches this at all.
-         //
-         // Compound variants stay absent, as they are on the path below: their rule selects on the
-         // variant classes already named, so it applies without one of its own.
-         if (variantValues && isScalarSelection(declaredProps)) {
-           return getRecipeClassNames(name, variantValues, declaredProps, '_', formatRecipeClass)
-         }
-
-         const transform = (prop, value) => {
-           assertCompoundVariant(name, compoundVariants, variants, prop)
-
-            if (value === '__ignore__') {
-              return { className: name }
-            }
-
-            value = withoutSpace(value)
-            return { className: \`\${name}--\${prop}_\${value}\` }
-         }
-
-         // Uncached: this runs *inside* \`recipeFn\`, which is itself memoized, so the cache a
-         // cached \`createCss\` would build here is constructed fresh per call and used once.
-         const recipeCss = createCssUncached({
-           
-           conditions: {
-             shift: sortConditions,
-             finalize: finalizeConditions,
-           },
-           utility: {
-             
-             toHash: (path, hashFn) => hashFn(path.join(":")),
-             transform,
-           }
-         })
-
-         // Only what the config declares names a class.
-         //
-         // Without this the transform named one for *any* prop it was handed — the build emits
-         // rules only for declared values, so the element carried a class nothing backed. It also
-         // disagreed with \`cva\`, which skips an undeclared value, leaving the two recipe kinds
-         // with different class strings for the same call.
-         //
-         // Filtered here rather than in \`getVariantProps\`, which is public and is what compound
-         // variants are matched against.
-         const declared = declaredProps
-         const recipeStyles = variantMap
-           ? Object.fromEntries(
-               Object.entries(declared).filter(([prop, value]) => {
-                 if (prop === name) return true
-                 // A conditional or responsive value is an object of leaves, and the leaves are
-                 // what name classes: createCss walks them and calls transform per condition.
-                 // Only a scalar can be judged here.
-                 if (value === null || typeof value === 'object') return true
-                 return Object.hasOwn(variantMap, prop) && variantMap[prop].includes(String(value))
-               }),
-             )
-           : declared
-
-         // No class for the compound variants. Their rule selects on the variant classes
-         // \`recipeCss\` just named — \`.btn--size_sm.btn--tone_a\` — so it applies on its own,
-         // and it is in the same layer as the rest of the recipe rather than atomically in
-         // \`utilities\` above it.
-         return recipeCss(recipeStyles)
-        }
+        const recipeFn = (_variants) => uncompiledStyle(name)
 
          return {
            recipeFn,
            getVariantProps,
-           __getCompoundVariantCss__: (variants) => {
-             return getCompoundVariantCss(compoundVariants, getVariantProps(variants));
-           },
+           __getCompoundVariantCss__: (_variants) => uncompiledStyle(name),
          }
       }
 
@@ -159,7 +46,7 @@ describe('generate recipes', () => {
        if (recipeA && !recipeB) return recipeA
        if (!recipeA && recipeB) return recipeB
 
-       const recipeFn = (...args) => cx(recipeA(...args), recipeB(...args))
+       const recipeFn = (..._args) => uncompiledStyle(recipeA.__name__ || 'recipe')
        const variantKeys = uniq(Object.keys(recipeA.variantMap), Object.keys(recipeB.variantMap))
        const variantMap = variantKeys.reduce((acc, key) => {
          acc[key] = uniq(recipeA.variantMap[key], recipeB.variantMap[key])

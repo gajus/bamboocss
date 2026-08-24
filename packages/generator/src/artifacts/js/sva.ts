@@ -4,7 +4,7 @@ import { outdent } from 'outdent'
 export function generateSvaFn(ctx: Context) {
   return {
     js: outdent`
-    ${ctx.file.import('compact, getRecipeIdentity, getSlotRecipes, memo, splitProps', '../helpers')}
+    ${ctx.file.import('compact, getRecipeIdentity, getSlotRecipes, memo, splitProps, uncompiledStyle', '../helpers')}
     ${ctx.file.import('cva, formatRecipeClass', './cva')}
     ${ctx.file.import('cx', './cx')}
 
@@ -46,12 +46,8 @@ export function generateSvaFn(ctx: Context) {
       // atomic and nothing else carried the name to target it in the DOM. The slot's cva is
       // now named \`name__slot\` and returns that as its base class, so joining it again
       // would just repeat it.
-      function svaFn(props) {
-        const result = slots.map(([slot, cvaFn]) => [
-          slot,
-          anchors.length && !anchors.includes(slot) ? formatRecipeClass(cvaFn.config.className) : cvaFn(props),
-        ])
-        return Object.fromEntries(result)
+      function svaFn(_props) {
+        return uncompiledStyle('sva')
       }
 
       function raw(props) {

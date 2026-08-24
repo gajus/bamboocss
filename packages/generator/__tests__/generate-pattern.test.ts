@@ -39,8 +39,7 @@ test('should generate pattern', () => {
 
     export declare const flex: FlexPatternFn;
     ",
-        "js": "import { getPatternStyles, createPatternFns, memo } from '../helpers.mjs';
-    import { css } from '../css/index.mjs';
+        "js": "import { getPatternStyles, createPatternFns, uncompiledStyle } from '../helpers.mjs';
     import { token } from '../tokens/index.mjs';
 
     /**
@@ -74,7 +73,7 @@ test('should generate pattern', () => {
       return flexConfig.transform(_styles, patternHelpers)
     }
 
-    export const flex = /* @__PURE__ */ memo((styles) => css(getFlexStyle(styles)))
+    export const flex = (styles) => uncompiledStyle("flex")
     flex.raw = getFlexStyle",
         "name": "flex",
       },
@@ -99,8 +98,7 @@ test('should generate pattern', () => {
 
     export declare const spacer: SpacerPatternFn;
     ",
-        "js": "import { getPatternStyles, createPatternFns, memo } from '../helpers.mjs';
-    import { css } from '../css/index.mjs';
+        "js": "import { getPatternStyles, createPatternFns, uncompiledStyle } from '../helpers.mjs';
     import { token } from '../tokens/index.mjs';
 
     /**
@@ -133,7 +131,7 @@ test('should generate pattern', () => {
       return spacerConfig.transform(_styles, patternHelpers)
     }
 
-    export const spacer = /* @__PURE__ */ memo((styles) => css(getSpacerStyle(styles)))
+    export const spacer = (styles) => uncompiledStyle("spacer")
     spacer.raw = getSpacerStyle",
         "name": "spacer",
       },
@@ -159,8 +157,7 @@ test('should generate pattern', () => {
 
     export declare const center: CenterPatternFn;
     ",
-        "js": "import { getPatternStyles, createPatternFns, memo } from '../helpers.mjs';
-    import { css } from '../css/index.mjs';
+        "js": "import { getPatternStyles, createPatternFns, uncompiledStyle } from '../helpers.mjs';
     import { token } from '../tokens/index.mjs';
 
     /**
@@ -192,7 +189,7 @@ test('should generate pattern', () => {
       return centerConfig.transform(_styles, patternHelpers)
     }
 
-    export const center = /* @__PURE__ */ memo((styles) => css(getCenterStyle(styles)))
+    export const center = (styles) => uncompiledStyle("center")
     center.raw = getCenterStyle",
         "name": "center",
       },
@@ -217,8 +214,7 @@ test('should generate pattern', () => {
 
     export declare const linkOverlay: LinkOverlayPatternFn;
     ",
-        "js": "import { getPatternStyles, createPatternFns, memo } from '../helpers.mjs';
-    import { css } from '../css/index.mjs';
+        "js": "import { getPatternStyles, createPatternFns, uncompiledStyle } from '../helpers.mjs';
     import { token } from '../tokens/index.mjs';
 
     /**
@@ -250,7 +246,7 @@ test('should generate pattern', () => {
       return linkOverlayConfig.transform(_styles, patternHelpers)
     }
 
-    export const linkOverlay = /* @__PURE__ */ memo((styles) => css(getLinkOverlayStyle(styles)))
+    export const linkOverlay = (styles) => uncompiledStyle("linkOverlay")
     linkOverlay.raw = getLinkOverlayStyle",
         "name": "link-overlay",
       },
@@ -275,8 +271,7 @@ test('should generate pattern', () => {
 
     export declare const aspectRatio: AspectRatioPatternFn;
     ",
-        "js": "import { getPatternStyles, createPatternFns, memo } from '../helpers.mjs';
-    import { css } from '../css/index.mjs';
+        "js": "import { getPatternStyles, createPatternFns, uncompiledStyle } from '../helpers.mjs';
     import { token } from '../tokens/index.mjs';
 
     /**
@@ -322,7 +317,7 @@ test('should generate pattern', () => {
       return aspectRatioConfig.transform(_styles, patternHelpers)
     }
 
-    export const aspectRatio = /* @__PURE__ */ memo((styles) => css(getAspectRatioStyle(styles)))
+    export const aspectRatio = (styles) => uncompiledStyle("aspectRatio")
     aspectRatio.raw = getAspectRatioStyle",
         "name": "aspect-ratio",
       },
@@ -351,8 +346,7 @@ test('should generate pattern', () => {
 
     export declare const grid: GridPatternFn;
     ",
-        "js": "import { getPatternStyles, createPatternFns, memo } from '../helpers.mjs';
-    import { css } from '../css/index.mjs';
+        "js": "import { getPatternStyles, createPatternFns, uncompiledStyle } from '../helpers.mjs';
     import { token } from '../tokens/index.mjs';
 
     /**
@@ -387,7 +381,7 @@ test('should generate pattern', () => {
       return gridConfig.transform(_styles, patternHelpers)
     }
 
-    export const grid = /* @__PURE__ */ memo((styles) => css(getGridStyle(styles)))
+    export const grid = (styles) => uncompiledStyle("grid")
     grid.raw = getGridStyle",
         "name": "grid",
       },
@@ -417,8 +411,7 @@ test('should generate pattern', () => {
 
     export declare const gridItem: GridItemPatternFn;
     ",
-        "js": "import { getPatternStyles, createPatternFns, memo } from '../helpers.mjs';
-    import { css } from '../css/index.mjs';
+        "js": "import { getPatternStyles, createPatternFns, uncompiledStyle } from '../helpers.mjs';
     import { token } from '../tokens/index.mjs';
 
     /**
@@ -451,7 +444,7 @@ test('should generate pattern', () => {
       return gridItemConfig.transform(_styles, patternHelpers)
     }
 
-    export const gridItem = /* @__PURE__ */ memo((styles) => css(getGridItemStyle(styles)))
+    export const gridItem = (styles) => uncompiledStyle("gridItem")
     gridItem.raw = getGridItemStyle",
         "name": "grid-item",
       },
@@ -476,8 +469,7 @@ test('should generate pattern', () => {
 
     export declare const container: ContainerPatternFn;
     ",
-        "js": "import { getPatternStyles, createPatternFns, memo } from '../helpers.mjs';
-    import { css } from '../css/index.mjs';
+        "js": "import { getPatternStyles, createPatternFns, uncompiledStyle } from '../helpers.mjs';
     import { token } from '../tokens/index.mjs';
 
     /**
@@ -506,7 +498,7 @@ test('should generate pattern', () => {
       return containerConfig.transform(_styles, patternHelpers)
     }
 
-    export const container = /* @__PURE__ */ memo((styles) => css(getContainerStyle(styles)))
+    export const container = (styles) => uncompiledStyle("container")
     container.raw = getContainerStyle",
         "name": "container",
       },
@@ -533,8 +525,7 @@ test('should generate pattern', () => {
 
     export declare const divider: DividerPatternFn;
     ",
-        "js": "import { getPatternStyles, createPatternFns, memo } from '../helpers.mjs';
-    import { css } from '../css/index.mjs';
+        "js": "import { getPatternStyles, createPatternFns, uncompiledStyle } from '../helpers.mjs';
     import { token } from '../tokens/index.mjs';
 
     /**
@@ -567,7 +558,7 @@ test('should generate pattern', () => {
       return dividerConfig.transform(_styles, patternHelpers)
     }
 
-    export const divider = /* @__PURE__ */ memo((styles) => css(getDividerStyle(styles)))
+    export const divider = (styles) => uncompiledStyle("divider")
     divider.raw = getDividerStyle",
         "name": "divider",
       },
@@ -595,8 +586,7 @@ test('should generate pattern', () => {
 
     export declare const float: FloatPatternFn;
     ",
-        "js": "import { getPatternStyles, createPatternFns, memo } from '../helpers.mjs';
-    import { css } from '../css/index.mjs';
+        "js": "import { getPatternStyles, createPatternFns, uncompiledStyle } from '../helpers.mjs';
     import { token } from '../tokens/index.mjs';
 
     /**
@@ -656,7 +646,7 @@ test('should generate pattern', () => {
       return floatConfig.transform(_styles, patternHelpers)
     }
 
-    export const float = /* @__PURE__ */ memo((styles) => css(getFloatStyle(styles)))
+    export const float = (styles) => uncompiledStyle("float")
     float.raw = getFloatStyle",
         "name": "float",
       },
@@ -682,8 +672,7 @@ test('should generate pattern', () => {
 
     export declare const bleed: BleedPatternFn;
     ",
-        "js": "import { getPatternStyles, createPatternFns, memo } from '../helpers.mjs';
-    import { css } from '../css/index.mjs';
+        "js": "import { getPatternStyles, createPatternFns, uncompiledStyle } from '../helpers.mjs';
     import { token } from '../tokens/index.mjs';
 
     /**
@@ -715,7 +704,7 @@ test('should generate pattern', () => {
       return bleedConfig.transform(_styles, patternHelpers)
     }
 
-    export const bleed = /* @__PURE__ */ memo((styles) => css(getBleedStyle(styles)))
+    export const bleed = (styles) => uncompiledStyle("bleed")
     bleed.raw = getBleedStyle",
         "name": "bleed",
       },

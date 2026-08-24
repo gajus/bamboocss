@@ -10,7 +10,7 @@ export function generateCvaFn(ctx: Context) {
 
   return {
     js: outdent`
-    ${ctx.file.import('cloneStyles, compact, getRecipeClassNames, getRecipeIdentity, mergeProps, memo, splitProps, toHash, uniq', '../helpers')}
+    ${ctx.file.import('cloneStyles, compact, getRecipeIdentity, mergeProps, memo, splitProps, toHash, uniq, uncompiledStyle', '../helpers')}
     ${ctx.file.import('mergeCss', './merge-css')}
     ${ctx.file.import('cx', './cx')}
 
@@ -82,8 +82,8 @@ export function generateCvaFn(ctx: Context) {
       // Compound variants are absent on purpose. Their rule selects on the variant classes
       // already in this list — \`.btn--size_sm.btn--tone_a\` — so it applies without anything
       // being added here, and adding a class for it would name a rule that does not exist.
-      function cvaFn(props) {
-        return getRecipeClassNames(name, variants, getVariantProps(props), '${utility.separator}', formatRecipeClass)
+      function cvaFn(_props) {
+        return uncompiledStyle('cva')
       }
 
       const variantKeys = Object.keys(variants)

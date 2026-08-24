@@ -2,17 +2,8 @@ import { bench, describe } from 'vitest'
 import { buildCss, buildStack, ITERATIONS } from './css-fn-harness'
 
 /**
- * Benchmarks the runtime shape `generateCssFn` / `generatePattern` emit, so the
- * numbers track what actually ships in `styled-system`.
- *
- * Every bench here is a *cached* path: the memo answers each call after the first, which is
- * the shape a real render has. The uncached counterparts live in `css-fn-miss.bench.ts`,
- * which has to be a separate file — see its header.
- *
- * Reported, not asserted: wall-clock ratios are machine- and load-dependent, so a
- * threshold here would fail on a busy CI box rather than on a real regression. The
- * behaviour these rely on is locked down deterministically instead, by counting
- * serialization work in `packages/shared/__tests__/memo.test.ts`.
+ * Benchmarks `createCss` from `@bamboocss/shared` (via `css-fn-harness`), the engine the
+ * Vite compiler uses. Generated `css()` throws if a call was not folded.
  */
 const css = buildCss()
 const stack = buildStack()

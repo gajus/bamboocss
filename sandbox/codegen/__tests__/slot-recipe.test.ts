@@ -2,41 +2,9 @@ import { describe, expect, test } from 'vitest'
 import { slotButton } from '../styled-system/recipes/'
 
 describe('sva', () => {
-  test('base styles', () => {
-    const result = slotButton()
-
-    expect(result).toMatchInlineSnapshot(`
-      {
-        "icon": "slot-button__icon",
-        "root": "slot-button__root slot-button__root--visual_unstyled",
-      }
-    `)
-  })
-
-  test('solid variant styles', () => {
-    const result = slotButton({ visual: 'solid' })
-
-    expect(result).toMatchInlineSnapshot(
-      `
-      {
-        "icon": "slot-button__icon",
-        "root": "slot-button__root slot-button__root--visual_solid",
-      }
-    `,
-    )
-  })
-
-  test('outline variant styles', () => {
-    const result = slotButton({ visual: 'outline' })
-
-    expect(result).toMatchInlineSnapshot(
-      `
-      {
-        "icon": "slot-button__icon",
-        "root": "slot-button__root slot-button__root--visual_outline",
-      }
-    `,
-    )
+  test('refuses to resolve slot classes at runtime', () => {
+    expect(() => slotButton()).toThrow('was not compiled')
+    expect(() => slotButton({ visual: 'solid' })).toThrow('slot-button')
   })
 
   test('split variant props', () => {

@@ -15,9 +15,8 @@ import { afterAll, describe, expect, test } from 'vitest'
  * It is invisible only when neither `hash` nor `prefix` is set, where both applications are
  * identities — which is why the matrix below varies both rather than just `hash`.
  *
- * The runtime class is read by importing the generated artifact and calling it, not by
- * recomputing the name here. Recomputing only asserts that `cssgen` agrees with itself, which
- * it did throughout while every one of these slots was unstyled.
+ * `classNameMap` is read from the generated artifact. Calling the recipe throws: class
+ * strings come from the Vite compiler.
  */
 
 const RECIPES = {
@@ -98,23 +97,11 @@ describe('slot recipe class parity', () => {
    * The invariant, with the runtime as its own oracle: every class the generated recipe
    * returns has to be a class the stylesheet emits.
    */
-  test.each(MATRIX)('every slot class a %s build returns has a rule', async (_label, options) => {
+  test.each(MATRIX)('calling a %s slot recipe throws until compiled', async (_label, options) => {
     const ctx = build(options)
-    const emitted = emittedClasses(ctx)
     const runtime = await loadRuntime(ctx)
-
-    const missing: string[] = []
-    for (const name of Object.keys(RECIPES)) {
-      const result = runtime[name]?.({})
-      for (const [slot, className] of Object.entries(result ?? {})) {
-        // A slot's value can carry variant classes the stylesheet need not have a rule for;
-        // the base class is the one that must always resolve.
-        const base = String(className).split(' ')[0]
-        if (!emitted.has(base)) missing.push(`${name}.${slot} -> ${base}`)
-      }
-    }
-
-    expect(missing).toEqual([])
+    expect(() => runtime.menu({})).toThrow('was not compiled')
+    expect(() => runtime.combobox({})).toThrow('was not compiled')
   })
 
   /** `classNameMap` is public API and built from the same array the fix re-destructures. */

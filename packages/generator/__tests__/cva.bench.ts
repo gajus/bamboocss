@@ -2,16 +2,8 @@ import { cloneStyles, compact, createCss, createMergeCss, getRecipeClassNames, m
 import { bench, describe } from 'vitest'
 
 /**
- * Benchmarks the runtime shape `generateCvaFn` emits, so the numbers track what actually
- * ships in `styled-system/css/cva.mjs` — the same approach `css-fn.bench.ts` takes.
- *
- * `raw()` is the case that matters: every JSX factory calls it once per element per render
- * to build the styles it merges with style props, so it runs as often as the factory does.
- * Nothing else here covered `cva` at all.
- *
- * Reported, not asserted, like every other bench here. The invariant that the result stays
- * independent of the cache is pinned deterministically in `raw-independence.test.ts` and in
- * `sandbox/codegen/__tests__/cva.test.ts`.
+ * Benchmarks `cva` resolve/`raw` as shared helpers implement it. Generated `cva()` throws
+ * if the call was not folded by Vite.
  */
 const makeContext = () => ({
   hash: false,

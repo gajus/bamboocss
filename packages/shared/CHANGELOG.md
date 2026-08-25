@@ -1,5 +1,13 @@
 # @bamboocss/shared
 
+## 1.48.0
+
+### Patch Changes
+
+- 49839f1: Remove obsolete PostCSS injection APIs and generated runtime modules. Compiled stylesheet assembly now emits
+  recipe declarations directly as shared utility atoms instead of creating named recipe layers and deleting them
+  afterward.
+
 ## 1.47.0
 
 ## 1.46.3

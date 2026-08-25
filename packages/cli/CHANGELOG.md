@@ -1,5 +1,25 @@
 # @bamboocss/dev
 
+## 1.48.0
+
+### Minor Changes
+
+- 235397c: Remove the incompatible cascade-layer `polyfill` configuration and CLI flags from the Vite-only styling
+  integration.
+
+### Patch Changes
+
+- Updated dependencies [b961974]
+- Updated dependencies [49839f1]
+- Updated dependencies [235397c]
+  - @bamboocss/node@1.48.0
+  - @bamboocss/shared@1.48.0
+  - @bamboocss/types@1.48.0
+  - @bamboocss/token-dictionary@1.48.0
+  - @bamboocss/logger@1.48.0
+  - @bamboocss/preset-bamboo@1.48.0
+  - @bamboocss/preset-base@1.48.0
+
 ## 1.47.0
 
 ### Minor Changes

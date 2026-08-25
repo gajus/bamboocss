@@ -79,7 +79,8 @@ reachable statically or say so.
 
 ### Styling engine
 
-Bamboo runs anywhere PostCSS does, and there is a [CLI](/docs/installation/cli) for anywhere it does not.
+Bamboo integrates through [Vite](/docs/installation/vite). Its compiler turns analyzable style calls into shared atomic
+CSS during the build, and fails when a class-producing call would survive to runtime.
 
 ```jsx
 import { css } from '../styled-system/css'

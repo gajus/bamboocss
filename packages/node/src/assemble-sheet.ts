@@ -31,13 +31,6 @@ export const assembleExtractedSheet = (
     sourceInventory,
   }: AssembleExtractedSheetOptions = {},
 ): Stylesheet => {
-  if (!includeRecipes && ctx.config.polyfill) {
-    throw new Error(
-      'bamboocss: the cascade-layer polyfill is incompatible with compiled atomic styles. ' +
-        'The polyfill removes the utility-layer boundary required for safe atom reachability and renaming.',
-    )
-  }
-
   if (!includeRecipes) {
     ctx.encoder.atomizeObservedRecipes()
   }

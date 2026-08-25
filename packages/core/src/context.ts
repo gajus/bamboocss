@@ -366,7 +366,6 @@ export class Context {
       hooks: this.hooks,
       isValidProperty: this.isValidProperty,
       browserslist: this.config.browserslist,
-      polyfill: this.config.polyfill,
       cssVarRoot: this.config.cssVarRoot!,
       helpers: this.patternHelpers,
       globalVars: this.globalVars,

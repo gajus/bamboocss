@@ -1,4 +1,3 @@
-import layersPolyfill from '@csstools/postcss-cascade-layers'
 import merge from 'lodash.merge'
 import { logger } from '@bamboocss/logger'
 import type { CascadeLayer, Dict, SystemStyleObject, ViewTransitionResult } from '@bamboocss/types'
@@ -205,17 +204,14 @@ export class Stylesheet {
        * accident: a string cannot be mutated, so the round trip was the only thing keeping the
        * context's layers intact across two `toCss` calls. Doing it deliberately is both safer
        * and much cheaper -- 3.7ms against 15.2ms on a 663 kB sheet -- and it extends the
-       * protection to `sortMediaQueries` and the layer polyfill, which ran against the shared
-       * tree even under the old spelling.
+       * protection to `sortMediaQueries`, which ran against the shared tree even under the old
+       * spelling.
        */
       const root = this.context.layers.insert().clone()
 
       breakpoints.expandScreenAtRule(root)
 
       const plugins: postcss.AcceptedPlugin[] = [sortMediaQueries()]
-      if (this.context.polyfill) {
-        plugins.push(layersPolyfill())
-      }
 
       // The tree, not its text: `optimizeCssRoot` consumes what it is handed, and the clone
       // above exists to be consumed. Serializing it for `optimizeCss` to parse straight back

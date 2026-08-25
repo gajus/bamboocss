@@ -234,9 +234,6 @@ importers:
       '@bamboocss/types':
         specifier: workspace:*
         version: link:../types
-      '@csstools/postcss-cascade-layers':
-        specifier: 6.0.0
-        version: 6.0.0(postcss@8.5.26)
       browserslist:
         specifier: 4.28.7
         version: 4.28.7
@@ -1862,18 +1859,6 @@ packages:
   '@csstools/css-tokenizer@3.0.4':
     resolution: {integrity: sha512-Vd/9EVDiu6PPJt9yAh6roZP6El1xHrdvIVGjyBsHR0RYwNHgL7FJPyIIW4fANJNG6FtyZfvlRPpFI4ZM/lubvw==}
     engines: {node: '>=18'}
-
-  '@csstools/postcss-cascade-layers@6.0.0':
-    resolution: {integrity: sha512-WhsECqmrEZQGqaPlBA7JkmF/CJ2/+wetL4fkL9sOPccKd32PQ1qToFM6gqSI5rkpmYqubvbxjEJhyMTHYK0vZQ==}
-    engines: {node: '>=20.19.0'}
-    peerDependencies:
-      postcss: ^8.4
-
-  '@csstools/selector-specificity@6.0.0':
-    resolution: {integrity: sha512-4sSgl78OtOXEX/2d++8A83zHNTgwCJMaR24FvsYL7Uf/VS8HZk9PTwR51elTbGqMuwH3szLvvOXEaVnqn0Z3zA==}
-    engines: {node: '>=20.19.0'}
-    peerDependencies:
-      postcss-selector-parser: ^7.1.1
 
   '@dxup/nuxt@0.2.2':
     resolution: {integrity: sha512-RNpJjDZs9+JcT9N87AnOuHsNM75DEd58itADNd/s1LIF6BZbTLZV0xxilJZb55lntn4TYvscTaXLCBX2fq9CXg==}
@@ -8851,10 +8836,6 @@ packages:
     peerDependencies:
       postcss: ^8.4.32
 
-  postcss-selector-parser@7.1.1:
-    resolution: {integrity: sha512-orRsuYpJVw8LdAwqqLykBj9ecS5/cRHlI5+nvTo8LcCKmzDmqVORXtOIYEEQuL9D4BxtA1lm5isAqzQZCoQ6Eg==}
-    engines: {node: '>=4'}
-
   postcss-selector-parser@7.1.4:
     resolution: {integrity: sha512-HeP7D2wyhkR+XaK6v4W8oRF62Dsz4flyuczALJp61GckGm42u1saSSJ/0auvcBqxs3jMRFEcPK34At/0JBKdOg==}
     engines: {node: '>=4'}
@@ -11975,16 +11956,6 @@ snapshots:
   '@csstools/css-syntax-patches-for-csstree@1.0.19': {}
 
   '@csstools/css-tokenizer@3.0.4': {}
-
-  '@csstools/postcss-cascade-layers@6.0.0(postcss@8.5.26)':
-    dependencies:
-      '@csstools/selector-specificity': 6.0.0(postcss-selector-parser@7.1.1)
-      postcss: 8.5.26
-      postcss-selector-parser: 7.1.1
-
-  '@csstools/selector-specificity@6.0.0(postcss-selector-parser@7.1.1)':
-    dependencies:
-      postcss-selector-parser: 7.1.1
 
   '@dxup/nuxt@0.2.2':
     dependencies:
@@ -20141,11 +20112,6 @@ snapshots:
     dependencies:
       postcss: 8.5.26
       postcss-value-parser: 4.2.0
-
-  postcss-selector-parser@7.1.1:
-    dependencies:
-      cssesc: 3.0.0
-      util-deprecate: 1.0.2
 
   postcss-selector-parser@7.1.4:
     dependencies:

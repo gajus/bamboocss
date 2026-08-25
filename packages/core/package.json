@@ -43,7 +43,6 @@
     "@bamboocss/shared": "workspace:*",
     "@bamboocss/token-dictionary": "workspace:*",
     "@bamboocss/types": "workspace:*",
-    "@csstools/postcss-cascade-layers": "6.0.0",
     "browserslist": "4.28.7",
     "css-tree": "3.2.1",
     "lodash.merge": "4.6.2",

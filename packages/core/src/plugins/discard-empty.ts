@@ -104,9 +104,8 @@ export function discardEmpty(): Plugin {
      *
      * Reproducing it is not cosmetic. `prettify` runs in the visitor phase, before any
      * `OnceExit`, so nothing downstream re-normalizes this on the non-minified path -- the
-     * default one. It is reachable whenever a top-level node can be empty, which is any sheet
-     * built with `config.polyfill` (the cascade-layer polyfill unwraps the `@layer` blocks that
-     * otherwise keep every root child non-empty) and any caller of the exported `optimizeCss`.
+     * default one. It is reachable whenever a top-level node can be empty, including callers of
+     * the exported `optimizeCss`.
      */
     if (container.type === 'root' && kept.length && nodes[0] !== kept[0]) {
       kept[0]!.raws.before = nodes[0]!.raws.before

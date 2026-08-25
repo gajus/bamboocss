@@ -42,7 +42,6 @@ export interface StylesheetContext extends Pick<
   helpers: PatternHelpers
   hash?: boolean
   browserslist?: string[]
-  polyfill?: boolean
   cssVarRoot: string
 }
 

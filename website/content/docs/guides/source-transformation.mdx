@@ -226,7 +226,7 @@ Import `virtual:bamboo.css` exactly once. A build fails if compiled classes exis
 a transformed source module is outside Bamboo's configured `include` graph. Both cases would otherwise produce class
 values with no backing rules.
 
-The cascade-layer polyfill is incompatible with compiled atom pruning and is rejected. The compiler emits the layer
-order itself; because named recipe rules are absent, the order is `reset, base, tokens, utilities`.
+The compiler emits the layer order itself. Because named recipe rules are absent, the order is
+`reset, base, tokens, utilities`.
 
 See [Using Vite](/docs/installation/vite#plugin-options) for the remaining tuning and diagnostic options.

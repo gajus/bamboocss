@@ -1,6 +1,6 @@
 ---
 title: Bamboo CLI
-description: An alternative way to use Bamboo is by running the Bamboo CLI tool.
+description: Use the Bamboo CLI for code generation and maintenance alongside the required Vite integration.
 ---
 
 <Steps>
@@ -51,85 +51,23 @@ export default defineConfig({
 })
 ```
 
-### Update package.json scripts
+### Generate the authoring surface
 
-Add `"prepare": "bamboo codegen"` to `scripts`. It runs [codegen](/docs/references/cli#codegen) after every dependency
-install, so the output directory can stay in `.gitignore`.
+Add `"prepare": "bamboo codegen"` to `scripts`. It generates the typed `styled-system` authoring surface after every
+dependency install, so the output directory can stay in `.gitignore`.
 
-### Import the generated CSS
-
-For each Bamboo run, it emits the generated CSS at the `styled-system/styles.css` file path. Import this file at the
-root component of your project.
-
-```jsx {1}
-import './styled-system/styles.css'
-
-export function App() {
-  return <div>Page</div>
+```json filename="package.json"
+{
+  "scripts": {
+    "prepare": "bamboo codegen"
+  }
 }
 ```
 
-### Start the Bamboo build process
+### Configure Vite
 
-Run the CLI tool to scan your JavaScript and TypeScript files for style properties and call expressions.
-
-<Tabs items={['pnpm', 'npm', 'yarn', 'bun']}>
-  {/* <!-- prettier-ignore-start --> */}
-  <Tab>
-    ```bash
-    # Run it once
-    pnpm bamboo
-
-    # Run it in watch mode
-    pnpm bamboo --watch
-    ```
-
-  </Tab>
-  <Tab>
-    ```bash
-    # Run it once
-    npx bamboo
-
-    # Run it in watch mode
-    npx bamboo --watch
-    ```
-
-  </Tab>
-  <Tab>
-    ```bash
-    # Run it once
-    yarn bamboo
-
-    # Run it in watch mode
-    yarn bamboo --watch
-    ```
-
-  </Tab>
-  <Tab>
-    ```bash
-    # Run it once
-    bun bamboo
-
-    # Run it in watch mode
-    bun bamboo --watch
-    ```
-
-  </Tab>
-  {/* <!-- prettier-ignore-end --> */}
-</Tabs>
-
-### Start using Bamboo
-
-Use the generated style utilities in your code and bamboo will extract them to the generated CSS file. Then run your
-build process.
-
-```jsx
-import { css } from './styled-system/css'
-
-export function App() {
-  return <div className={css({ bg: 'red.400' })} />
-}
-```
+The CLI is not a standalone styling integration. Bamboo requires [`@bamboocss/vite`](/docs/installation/vite) to compile
+style calls and emit `virtual:bamboo.css`. The Vite plugin also keeps `styled-system` current while the app is running.
 
 </Steps>
 

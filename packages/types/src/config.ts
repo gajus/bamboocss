@@ -369,12 +369,6 @@ interface CssgenOptions {
    * @default 'true'
    */
   layers?: Partial<CascadeLayers>
-  /**
-   * Polyfill CSS @layers at-rules for older browsers.
-   * @default 'false'
-   * @see https://www.npmjs.com/package/@csstools/postcss-cascade-layers
-   */
-  polyfill?: boolean
 }
 
 export type UnresolvedTokenSeverity = 'off' | 'warn' | 'error'

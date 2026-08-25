@@ -40,6 +40,50 @@ const createFiles = (files: Record<string, string>) => {
 }
 
 describe('generate watch add invalidation', () => {
+  test('reconciles extractor-resolved token facts across changes and deletion', async () => {
+    const directory = createFiles({
+      'src/key.ts': `export const KEY = 'colors.blue.500'`,
+      'src/consumer.ts': `
+        import { token } from 'styled-system/tokens'
+        import { KEY } from './key'
+        export const brand = token(KEY)
+      `,
+    })
+    const ctx = new BambooContext({
+      ...fixtureDefaults,
+      config: {
+        ...fixtureDefaults.config,
+        cwd: directory,
+        include: ['src/**/*.ts'],
+        outdir: 'styled-system',
+        prune: { tokens: true, unresolvedPath: 'error' },
+        watch: true,
+      },
+    })
+    let onFile!: (event: WatcherEventType, file: string) => void | Promise<void>
+    ctx.watchConfig = vi.fn()
+    ctx.watchFiles = vi.fn((callback) => {
+      onFile = callback
+    })
+    mocked.loadConfigAndCreateContext.mockResolvedValue(ctx)
+
+    await generate(ctx.config)
+
+    const outfile = path.join(directory, 'styled-system/styles.css')
+    const declares = (name: string) => new RegExp(`\\${name}\\s*:`).test(readFileSync(outfile, 'utf8'))
+    expect(declares('--colors-blue-500')).toBe(true)
+    expect(declares('--colors-teal-500')).toBe(false)
+
+    writeFileSync(path.join(directory, 'src/key.ts'), `export const KEY = 'colors.teal.500'`)
+    await onFile('change', 'src/key.ts')
+    expect(declares('--colors-blue-500')).toBe(false)
+    expect(declares('--colors-teal-500')).toBe(true)
+
+    rmSync(path.join(directory, 'src/consumer.ts'))
+    await onFile('unlink', 'src/consumer.ts')
+    expect(declares('--colors-teal-500')).toBe(false)
+  })
+
   test('rebuilds every transitive dependent of an importer waiting on a higher-priority extension', async () => {
     const directory = createFiles({
       'src/target.tsx': `export const base = { color: 'blue' }`,

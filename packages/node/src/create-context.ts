@@ -413,10 +413,16 @@ export class BambooContext extends Generator {
       // the case worth warning about.
       const result = this.parseFile(file, encoder)
 
-      if (!result || result.isEmpty() || encoder.isEmpty()) return
+      if (!result || result.isEmpty()) return
+
+      // Token calls are parser output even though they encode no CSS. Keep their lightweight
+      // source facts available to stylesheet assembly; otherwise a token-only file disappears
+      // from `results` and an extractor-resolved constant falls back to the whole token layer.
+      results.push(result)
+
+      if (encoder.isEmpty()) return
 
       filesWithCss.push(file)
-      results.push(result)
     })
 
     this.assertExtracted(files)

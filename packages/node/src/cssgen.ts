@@ -43,11 +43,11 @@ export const cssgen = async (ctx: BambooContext, options: CssGenOptions) => {
 
     done()
   } else {
-    const { files } = ctx.parseFiles()
+    const { files, results } = ctx.parseFiles()
 
     const done = logger.time.info(ctx.messages.buildComplete(files.length))
 
-    const sheet = assembleExtractedSheet(ctx, { layerParams: true })
+    const sheet = assembleExtractedSheet(ctx, { layerParams: true, parserResults: results })
 
     if (splitting) {
       await ctx.writeSplitCss(sheet)

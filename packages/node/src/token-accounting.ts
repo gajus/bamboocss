@@ -45,6 +45,9 @@ export interface DeclinedReference {
   filePath: string
   line: number
   reason: DeclineReason
+  /** Exact source range when the decline belongs to one syntax node. */
+  start?: number
+  end?: number
 }
 
 export interface TokenAccounting {
@@ -232,7 +235,8 @@ function accountFile(
   prefixes: Set<string>,
   declined: DeclinedReference[],
 ) {
-  const decline = (node: Node, reason: DeclineReason) => declined.push({ filePath, line: lineOf(node), reason })
+  const decline = (node: Node, reason: DeclineReason) =>
+    declined.push({ filePath, line: lineOf(node), reason, start: node.getStart(), end: node.getEnd() })
 
   /** Local names bound to the artifact: the `token` export, and any namespace of it. */
   const bindings = new Set<string>()

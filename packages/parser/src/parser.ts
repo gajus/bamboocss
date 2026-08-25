@@ -15,6 +15,17 @@ const combineResult = (unboxed: Unboxed) => {
   return [...unboxed.conditions, unboxed.raw, ...unboxed.spreadConditions]
 }
 
+/** The exact binding token accounting visits for a token call. */
+const tokenCalleeRange = (call: Node) => {
+  if (!Node.isCallExpression(call)) return undefined
+
+  let current: Node = call.getExpression()
+  while (Node.isPropertyAccessExpression(current)) current = current.getExpression()
+  if (!Node.isIdentifier(current)) return undefined
+
+  return { start: current.getStart(), end: current.getEnd() }
+}
+
 const defaultEnv: EvaluateOptions['environment'] = {
   preset: 'ECMA',
 }
@@ -319,6 +330,7 @@ export function createParser(context: ParserOptions) {
                   name: 'token.value',
                   box: (query.box.value[0] as BoxNodeMap) ?? box.fallback(query.box),
                   data: combineResult(unbox(query.box.value[0])),
+                  tokenCalleeRange: tokenCalleeRange(query.box.getNode()),
                 },
                 'tokenValue',
               )
@@ -362,6 +374,7 @@ export function createParser(context: ParserOptions) {
                   name,
                   box: (query.box.value[0] as BoxNodeMap) ?? box.fallback(query.box),
                   data: combineResult(unbox(query.box.value[0])),
+                  tokenCalleeRange: tokenCalleeRange(query.box.getNode()),
                 })
               }
             })

@@ -4,8 +4,9 @@ import { assembleExtractedSheet } from './assemble-sheet'
 import { codegen } from './codegen'
 import { loadConfigAndCreateContext } from './config'
 import { BambooContext } from './create-context'
+import { createSourceScanCache, recordResolvedTokenReferences, type SourceScanCache } from './token-references'
 
-async function build(ctx: BambooContext, artifactIds?: ArtifactId[]) {
+async function build(ctx: BambooContext, sourceScanCache?: SourceScanCache, artifactIds?: ArtifactId[]) {
   await codegen(ctx, artifactIds)
 
   if (ctx.config.emitTokensOnly) {
@@ -15,7 +16,19 @@ async function build(ctx: BambooContext, artifactIds?: ArtifactId[]) {
   const done = logger.time.info('')
 
   const parsed = ctx.parseFiles()
-  const sheet = assembleExtractedSheet(ctx, { layerParams: true })
+  if (sourceScanCache) {
+    for (const result of parsed.results) {
+      if (result.filePath) {
+        recordResolvedTokenReferences(sourceScanCache, ctx.runtime.path.abs(ctx.config.cwd, result.filePath), result)
+      }
+    }
+  }
+  const sheet = assembleExtractedSheet(
+    ctx,
+    sourceScanCache
+      ? { layerParams: true, sourceScanCache, sourceInventory: parsed.files }
+      : { layerParams: true, parserResults: parsed.results },
+  )
 
   await ctx.writeCss(sheet)
   done(ctx.messages.buildComplete(parsed.files.length))
@@ -23,9 +36,9 @@ async function build(ctx: BambooContext, artifactIds?: ArtifactId[]) {
 
 export async function generate(config: Config, configPath?: string) {
   let ctx = await loadConfigAndCreateContext({ config, configPath })
-  await build(ctx)
-
+  const sourceScanCache = createSourceScanCache()
   const { cwd, watch, poll } = ctx.config
+  await build(ctx, watch ? sourceScanCache : undefined)
 
   if (watch) {
     //
@@ -34,10 +47,12 @@ export async function generate(config: Config, configPath?: string) {
         const affecteds = await ctx.diff.reloadConfigAndRefreshContext((conf) => {
           ctx = new BambooContext(conf)
         })
+        sourceScanCache.entries.clear()
+        sourceScanCache.resolvedTokenReferences.clear()
 
         logger.info('ctx:updated', 'config rebuilt ✅')
         await ctx.hooks['config:change']?.({ config: ctx.config, changes: affecteds })
-        return build(ctx, Array.from(affecteds.artifacts))
+        return build(ctx, sourceScanCache, Array.from(affecteds.artifacts))
       },
       { cwd, poll },
     )
@@ -50,21 +65,23 @@ export async function generate(config: Config, configPath?: string) {
      * per file. Writing per file would run the optimize pipeline and hit the disk
      * once per importer for a single keystroke.
      */
-    const bundleStyles = async (ctx: BambooContext, changedFilePaths: string[]) => {
+    const bundleStyles = async (ctx: BambooContext, changedFilePaths: string[], inventoryChanged = false) => {
       let parsed = 0
       const encoder = ctx.parserOptions.encoder
       for (const filePath of changedFilePaths) {
         // The initial `build` records this disk extraction under `extract`. Keep watch
         // rebuilds on the same owner so replacing a file retracts its previous atoms instead
         // of adding a second, independent `parse` reading beside them.
-        if (encoder.withOwner('extract', filePath, () => ctx.project.parseSourceFile(filePath, encoder))) parsed++
+        const result = encoder.withOwner('extract', filePath, () => ctx.project.parseSourceFile(filePath, encoder))
+        recordResolvedTokenReferences(sourceScanCache, filePath, result)
+        if (result) parsed++
       }
 
-      if (parsed === 0) return
+      if (parsed === 0 && !inventoryChanged) return
 
       const outfile = ctx.runtime.path.join(...ctx.paths.root, 'styles.css')
       const done = logger.time.info(ctx.messages.buildComplete(parsed))
-      const sheet = assembleExtractedSheet(ctx, { layerParams: true })
+      const sheet = assembleExtractedSheet(ctx, { layerParams: true, sourceScanCache })
       const css = ctx.getCss(sheet)
       await ctx.runtime.fs.writeFile(outfile, css)
 
@@ -78,7 +95,9 @@ export async function generate(config: Config, configPath?: string) {
         // to be rebuilt to stop emitting them.
         const dependents = ctx.project.getDependents(filePath)
         ctx.project.removeSourceFile(filePath)
-        await bundleStyles(ctx, dependents)
+        sourceScanCache.entries.delete(filePath)
+        sourceScanCache.resolvedTokenReferences.delete(filePath)
+        await bundleStyles(ctx, dependents, true)
       } else if (event === 'change') {
         // Absolute, like every other call here: a relative specifier is not
         // guaranteed to match the file the project holds, and a reload that

@@ -204,9 +204,93 @@ export interface SourceScanResult {
 export interface SourceScanCache {
   signature: string
   entries: Map<string, { mtime: number; scan: SourceFileScan }>
+  /** Extractor-resolved token calls, retained without keeping complete ParserResults alive. */
+  resolvedTokenReferences: Map<string, readonly ResolvedTokenReference[]>
 }
 
-export const createSourceScanCache = (): SourceScanCache => ({ signature: '', entries: new Map() })
+interface ResolvedTokenReference {
+  start: number
+  end: number
+  paths: readonly string[]
+}
+
+export const createSourceScanCache = (): SourceScanCache => ({
+  signature: '',
+  entries: new Map(),
+  resolvedTokenReferences: new Map(),
+})
+
+const resolvedTokenReferences = (result: ParserResult | undefined): readonly ResolvedTokenReference[] => {
+  if (!result) return []
+
+  const facts: ResolvedTokenReference[] = []
+  for (const item of result.token) {
+    if (!item.tokenCalleeRange || !item.data?.length) continue
+    const paths: string[] = []
+    for (const value of item.data) {
+      if (typeof value !== 'string') break
+      paths.push(value)
+    }
+    if (paths.length !== item.data.length) continue
+    facts.push({ ...item.tokenCalleeRange, paths: [...new Set(paths)].sort() })
+  }
+
+  return facts.sort((left, right) => left.start - right.start || left.end - right.end)
+}
+
+const sameResolvedTokenReferences = (
+  left: readonly ResolvedTokenReference[] | undefined,
+  right: readonly ResolvedTokenReference[],
+) =>
+  (left?.length ?? 0) === right.length &&
+  right.every(
+    (fact, index) =>
+      fact.start === left![index]!.start &&
+      fact.end === left![index]!.end &&
+      fact.paths.length === left![index]!.paths.length &&
+      fact.paths.every((path, pathIndex) => path === left![index]!.paths[pathIndex]),
+  )
+
+/**
+ * Reconcile one file's lightweight token facts after extraction.
+ *
+ * Deleting the source scan only when the semantic facts moved is important for dependents:
+ * changing an imported constant can change `token(KEY)` without changing the consumer's mtime.
+ */
+export const recordResolvedTokenReferences = (
+  cache: SourceScanCache,
+  filePath: string,
+  result: ParserResult | undefined,
+) => {
+  const next = resolvedTokenReferences(result)
+  const previous = cache.resolvedTokenReferences.get(filePath)
+  if (sameResolvedTokenReferences(previous, next)) return
+
+  if (next.length) cache.resolvedTokenReferences.set(filePath, next)
+  else cache.resolvedTokenReferences.delete(filePath)
+  cache.entries.delete(filePath)
+}
+
+const reconcileAccounting = (
+  accounting: TokenAccounting,
+  references: readonly ResolvedTokenReference[] | undefined,
+  filePath?: string,
+) => {
+  if (!references?.length) return
+
+  const ranges = new Set(references.map(({ start, end }) => `${start}:${end}`))
+  for (const reference of references) {
+    for (const path of reference.paths) accounting.paths.add(path)
+  }
+  accounting.declined = accounting.declined.filter(
+    (entry) =>
+      entry.reason !== 'unresolved-reference' ||
+      (filePath !== undefined && entry.filePath !== filePath) ||
+      entry.start == null ||
+      entry.end == null ||
+      !ranges.has(`${entry.start}:${entry.end}`),
+  )
+}
 
 const OPEN_TAG = /<\s*([a-z][\w-]*)(?=[\s/>]|$)/g
 
@@ -215,6 +299,7 @@ const scanSnapshot = (
   snapshot: ReturnType<typeof readSnapshot>,
   options: SourceScanOptions,
   patterns: readonly (readonly [string, RegExp])[],
+  resolvedReferences?: readonly ResolvedTokenReference[],
 ): SourceFileScan => {
   const tokenPaths = new Set<string>()
   const cssVars = new Set<string>()
@@ -238,6 +323,7 @@ const scanSnapshot = (
 
   const accounting: TokenAccounting = { paths: new Set<string>(), prefixes: new Set<string>(), declined: [] }
   accountSnapshot(ctx, snapshot, accounting)
+  reconcileAccounting(accounting, resolvedReferences)
 
   return {
     tokenPaths: [...tokenPaths],
@@ -320,7 +406,13 @@ export function collectSourceScans(
         merge(entry.scan)
         continue
       }
-      const scan = scanSnapshot(ctx, readSnapshot(ctx, filePath), options, allPatterns)
+      const scan = scanSnapshot(
+        ctx,
+        readSnapshot(ctx, filePath),
+        options,
+        allPatterns,
+        cache.resolvedTokenReferences.get(filePath),
+      )
       cache.entries.set(filePath, { mtime, scan })
       merge(scan)
       continue
@@ -335,6 +427,9 @@ export function collectSourceScans(
   if (cache && seen) {
     for (const filePath of cache.entries.keys()) {
       if (!seen.has(filePath)) cache.entries.delete(filePath)
+    }
+    for (const filePath of cache.resolvedTokenReferences.keys()) {
+      if (!seen.has(filePath)) cache.resolvedTokenReferences.delete(filePath)
     }
   }
 
@@ -387,6 +482,13 @@ export function pruneTokensForBuild(
 
   // What the extractor understood, including values it resolved through a constant.
   for (const result of results) {
+    if (result.filePath) {
+      reconcileAccounting(
+        accounting,
+        resolvedTokenReferences(result),
+        ctx.runtime.path.abs(ctx.config.cwd, result.filePath),
+      )
+    }
     for (const item of result.token) {
       for (const value of item.data ?? []) {
         if (typeof value === 'string') paths.add(value)

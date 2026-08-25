@@ -23,6 +23,8 @@ export interface ResultItem {
     | 'jsx-recipe'
     | 'cva-call'
   box?: BoxNodeMap | BoxNodeLiteral | BoxNodeArray
+  /** Root binding range for a token call, retained when argument boxes resolve into another file. */
+  tokenCalleeRange?: { start: number; end: number }
   /**
    * For a `cva-call`, the module the recipe was declared in when that is not this one.
    *

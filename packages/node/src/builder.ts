@@ -11,7 +11,7 @@ import { loadConfigAndCreateContext } from './config'
 import { BambooContext } from './create-context'
 import { assembleExtractedSheet } from './assemble-sheet'
 import { globIgnore } from './node-runtime'
-import { createSourceScanCache } from './token-references'
+import { createSourceScanCache, recordResolvedTokenReferences } from './token-references'
 
 const fileModifiedMap = new Map<string, number>()
 
@@ -327,6 +327,7 @@ export class Builder {
       this.resolutionConfigurationSets.clear()
       this.resolutionConfigurationBytes.clear()
       this.sourceScanCache.entries.clear()
+      this.sourceScanCache.resolvedTokenReferences.clear()
       this.extractionReadsByOwner.clear()
       this.recipeSurfaceByOwner.clear()
       // Nothing selective survives a config change, and a snapshot from before it describes a
@@ -719,6 +720,7 @@ export class Builder {
     const previousCandidates = this.resolutionCandidateSets.get(owner) ?? []
     const previousConfigurations = this.resolutionConfigurationSets.get(owner) ?? []
     const parserResult = ctx.parseFile(file)
+    recordResolvedTokenReferences(this.sourceScanCache, this.absOwner(ctx, file), parserResult)
     fileModifiedMap.set(file, meta.mtime)
 
     {

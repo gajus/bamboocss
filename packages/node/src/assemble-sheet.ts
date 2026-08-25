@@ -1,5 +1,6 @@
 import { prunesPreflight } from '@bamboocss/core'
 import type { Stylesheet } from '@bamboocss/core'
+import type { ParserResult } from '@bamboocss/parser'
 import type { BambooContext } from './create-context'
 import { collectSourceScans, keyframeNames, pruneTokensForBuild, type SourceScanCache } from './token-references'
 
@@ -8,6 +9,8 @@ export interface AssembleExtractedSheetOptions {
   sourceScanCache?: SourceScanCache
   mtimeOf?: (filePath: string) => number | undefined
   sourceInventory?: readonly string[]
+  /** Complete parser results for a one-shot build; watch builds retain lightweight facts instead. */
+  parserResults?: ParserResult[]
 }
 
 /**
@@ -18,7 +21,13 @@ export interface AssembleExtractedSheetOptions {
  */
 export const assembleExtractedSheet = (
   ctx: BambooContext,
-  { layerParams = false, sourceScanCache, mtimeOf, sourceInventory }: AssembleExtractedSheetOptions = {},
+  {
+    layerParams = false,
+    sourceScanCache,
+    mtimeOf,
+    sourceInventory,
+    parserResults = [],
+  }: AssembleExtractedSheetOptions = {},
 ): Stylesheet => {
   ctx.encoder.atomizeObservedRecipes()
 
@@ -43,7 +52,7 @@ export const assembleExtractedSheet = (
         sourceInventory,
       )
     : undefined
-  const reachableVars = pruneTokensForBuild(ctx, sheet, [], scans)
+  const reachableVars = pruneTokensForBuild(ctx, sheet, parserResults, scans)
 
   if (collectElements && scans) {
     ctx.prunePreflight(sheet, scans.elements)

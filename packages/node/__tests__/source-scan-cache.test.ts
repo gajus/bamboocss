@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, statSync, utimesSync, writeFileSync } f
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, test, vi } from 'vitest'
+import { assembleExtractedSheet } from '../src/assemble-sheet'
 import { Builder } from '../src/builder'
 import { collectSourceScans, createSourceScanCache } from '../src/token-references'
 
@@ -51,6 +52,89 @@ const build = async (builder: Builder, cwd: string) => {
   builder.extract()
   return builder.toCss({ layerParams: true })
 }
+
+const declares = (css: string, name: string) => new RegExp(`\\${name}\\s*:`).test(css)
+
+const createResolvedTokenProject = (extraSource = '') => {
+  const directory = mkdtempSync(join(tmpdir(), 'bamboo-resolved-token-cache-'))
+  temporaryDirectories.add(directory)
+  writeFileSync(
+    join(directory, 'bamboo.config.ts'),
+    `export default {\n` +
+      `  include: ['src/**/*.ts'],\n` +
+      `  outdir: 'styled-system',\n` +
+      `  prune: { tokens: true, unresolvedPath: 'error' },\n` +
+      `}\n`,
+  )
+  mkdirSync(join(directory, 'src'), { recursive: true })
+  const keyFile = join(directory, 'src/key.ts')
+  writeFileSync(keyFile, `export const KEY = 'colors.blue.500'\n`)
+  writeFileSync(
+    join(directory, 'src/consumer.ts'),
+    `import { token } from '../styled-system/tokens'\n` +
+      `import { KEY } from './key'\n` +
+      `export const brand = token(KEY)\n` +
+      extraSource,
+  )
+  return { directory, keyFile }
+}
+
+describe('extractor-resolved token references', () => {
+  test.each([
+    ['aliased', `import { token as t } from '../styled-system/tokens'`, 't(KEY)'],
+    ['namespaced', `import * as tokens from '../styled-system/tokens'`, 'tokens.token(KEY)'],
+    ['token.value', `import { token } from '../styled-system/tokens'`, 'token.value(KEY)'],
+  ])('matches the exact %s token binding range', async (_label, tokenImport, call) => {
+    const { directory } = createResolvedTokenProject()
+    writeFileSync(
+      join(directory, 'src/consumer.ts'),
+      `${tokenImport}\nimport { KEY } from './key'\nexport const brand = ${call}\n`,
+    )
+
+    const css = await build(new Builder(), directory)
+    expect(declares(css, '--colors-blue-500')).toBe(true)
+    expect(declares(css, '--colors-teal-500')).toBe(false)
+  })
+
+  test('one-shot assembly keeps token-only ParserResults', async () => {
+    const { directory } = createResolvedTokenProject()
+    const setup = new Builder()
+    await setup.setup({ cwd: directory })
+    await setup.emit()
+    const ctx = setup.context!
+    const parsed = ctx.parseFiles()
+
+    expect(parsed.results).toHaveLength(1)
+    const css = ctx.getCss(assembleExtractedSheet(ctx, { layerParams: true, parserResults: parsed.results }))
+    expect(declares(css, '--colors-blue-500')).toBe(true)
+    expect(declares(css, '--colors-teal-500')).toBe(false)
+  }, 120_000)
+
+  test('keeps only a constant-resolved token and reconciles an imported value change', async () => {
+    const { directory, keyFile } = createResolvedTokenProject()
+    const warm = new Builder()
+    const first = await build(warm, directory)
+
+    expect(declares(first, '--colors-blue-500')).toBe(true)
+    expect(declares(first, '--colors-teal-500')).toBe(false)
+
+    // Only the imported constant moves. The consumer's bytes and mtime stay unchanged, but its
+    // fresh ParserResult resolves a different path and must invalidate that file's cached scan.
+    writeFileSync(keyFile, `export const KEY = 'colors.teal.500'\n`)
+    const edited = await build(warm, directory)
+    const cold = await build(new Builder(), directory)
+
+    expect(edited).toBe(cold)
+    expect(declares(edited, '--colors-blue-500')).toBe(false)
+    expect(declares(edited, '--colors-teal-500')).toBe(true)
+  }, 120_000)
+
+  test('does not let one resolved call hide a different unresolved call', async () => {
+    const { directory } = createResolvedTokenProject(`export const dynamic = (key: string) => token(key)\n`)
+
+    await expect(build(new Builder(), directory)).rejects.toThrow(/could not be resolved/)
+  }, 120_000)
+})
 
 describe('extraction skip by recorded reads', () => {
   const CONFIG_RECIPES =

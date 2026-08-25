@@ -8,7 +8,6 @@ import { flex } from '@/styled-system/patterns'
 import { useClipboard } from '@ark-ui/react/clipboard'
 import { Menu } from '@ark-ui/react/menu'
 import { Portal } from '@ark-ui/react/portal'
-import NextLink from 'next/link'
 import { BsMarkdown } from 'react-icons/bs'
 import { LuCheck, LuChevronDown } from 'react-icons/lu'
 
@@ -115,9 +114,9 @@ const ActionMenu = (props: { doc: Docs }) => {
                   },
                 })}
               >
-                <NextLink href={item.href}>
+                <a href={item.href}>
                   <item.icon /> {item.label}
-                </NextLink>
+                </a>
               </Menu.Item>
             ))}
           </Menu.Content>

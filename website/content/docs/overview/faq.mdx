@@ -303,9 +303,7 @@ These compile unchanged and do something else, so they are worth checking on mig
 ### Less CSS
 
 - [`prune.tokens`](/docs/references/config#prune) drops token CSS variables nothing can reach. The token layer declares
-  every token in your theme while an app uses a fraction of them, so this is usually the largest single saving. On the
-  example apps here it is worth 36% to 78% of `styles.css` – the `next-js-app` sandbox goes from 18,032 to 3,959 bytes,
-  4,828 to 1,525 gzipped.
+  every token in your theme while an app uses a fraction of them, so this is usually the largest single saving.
 - [`prune.keyframes`](/docs/references/config#prune) does the same for `@keyframes` rules a preset declares and your app
   never animates.
 

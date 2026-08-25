@@ -2,7 +2,7 @@ import { docsNavigation, type NavItem } from '@/docs.config'
 import { ChevronRightIcon } from '@/icons'
 import { css } from '@/styled-system/css'
 import { flex } from '@/styled-system/patterns'
-import Link from 'next/link'
+import { Link } from 'react-router'
 
 interface PaginationItem {
   title: string
@@ -88,7 +88,7 @@ const PagationLink = (props: PagationLinkProps) => {
   const { item, type } = props
   return (
     <Link
-      href={`/docs/${item.url}`}
+      to={`/docs/${item.url}`}
       className={css({
         flex: '1',
         display: 'flex',

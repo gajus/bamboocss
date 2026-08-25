@@ -1,12 +1,11 @@
 import { css, cva } from '@/styled-system/css'
 import { flex } from '@/styled-system/patterns'
 import type { ResultItem } from '@bamboocss/types'
-import { useTheme } from 'next-themes'
+import { useTheme } from '../hooks/useTheme'
 import { useBamboo } from '../hooks/useBamboo'
 import * as React from 'react'
-import dynamic from 'next/dynamic'
 
-const ResultItemRowJson = dynamic(() => import('./ASTViewer-row'))
+const ResultItemRowJson = React.lazy(() => import('./ASTViewer-row'))
 
 export const ASTViewer = React.memo(function ASTViewer(props: {
   parserResult: ReturnType<typeof useBamboo>['parserResult']
@@ -15,7 +14,7 @@ export const ASTViewer = React.memo(function ASTViewer(props: {
 
   return (
     <div className={flex({ direction: 'column', gap: '8px', py: '4', h: 'full', overflow: 'auto' })}>
-      {Array.from(props.parserResult.toArray()).map((result, index) => {
+      {props.parserResult.toArray().map((result, index) => {
         return <ResultItemRow key={index} result={result} />
       })}
     </div>
@@ -34,14 +33,14 @@ const resultType = cva({
     type: {
       css: { bg: { base: 'gray.100', _dark: '#FFFFFF08' }, color: { base: 'gray.700', _dark: 'white' } },
       cva: { bg: { base: 'gray.300', _dark: '#FFFFFF12' }, color: { base: 'gray.700', _dark: 'white' } },
+      'cva-call': { bg: { base: 'gray.300', _dark: '#FFFFFF12' }, color: { base: 'gray.700', _dark: 'white' } },
       sva: { bg: { base: 'gray.300', _dark: '#FFFFFF12' }, color: { base: 'gray.700', _dark: 'white' } },
-      jsx: { bg: { base: 'blue.300', _dark: 'blue.500' } },
-      'jsx-factory': { bg: { base: 'blue.100', _dark: 'blue.300' }, color: { _dark: 'black' } },
       pattern: { bg: { base: 'indigo.400', _dark: 'indigo.500' }, color: 'white' },
-      'jsx-pattern': { bg: { base: 'indigo.400', _dark: 'indigo.500' }, color: 'white' },
       recipe: { bg: { base: 'yellow.300', _dark: 'yellow.500' }, color: { _dark: 'black' } },
       'jsx-recipe': { bg: { base: 'yellow.300', _dark: 'yellow.500' }, color: { _dark: 'black' } },
       token: { bg: { base: 'green.300', _dark: 'green.500' }, color: { _dark: 'black' } },
+      tokenValue: { bg: { base: 'green.300', _dark: 'green.500' }, color: { _dark: 'black' } },
+      viewTransition: { bg: { base: 'blue.300', _dark: 'blue.500' } },
     },
     name: {
       cva: { bg: { base: 'teal.500', _dark: 'teal.700' }, color: 'white' },
@@ -69,7 +68,9 @@ const ResultItemRow = (props: { result: ResultItem }) => {
         <span className={resultType({ name: result.name as 'cva' | 'css' })}>{result.name}</span>
         <span className={css({ ml: 'auto' })}>(l{getReportRange(result)})</span>
       </div>
-      <ResultItemRowJson theme={resolvedTheme} data={result.data} className={rowClassName} />
+      <React.Suspense fallback={null}>
+        <ResultItemRowJson theme={resolvedTheme} data={result.data} className={rowClassName} />
+      </React.Suspense>
     </div>
   )
 }

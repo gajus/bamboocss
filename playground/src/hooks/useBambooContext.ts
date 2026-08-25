@@ -1,4 +1,4 @@
-import { Config, StaticCssOptions, UserConfig } from '@bamboocss/types'
+import type { Config, LoadConfigResult, StaticCssOptions, UserConfig } from '@bamboocss/types'
 import { useMemo, useRef } from 'react'
 import { Generator } from '@bamboocss/generator'
 import { merge } from 'merge-anything'
@@ -12,21 +12,29 @@ const defaultConfig = resolveConfig({
   outdir: 'styled-system',
   preflight: true,
   staticCss: { recipes: { playgroundError: ['*'] } as StaticCssOptions['recipes'] },
-  jsxFramework: undefined,
 })!
 
 export const useBambooContext = (userConfig: Config | null): Generator & { error?: unknown } => {
   const previousContext = useRef<(Generator & { error?: unknown }) | null>(null)
 
-  const getDefaultContext = () =>
-    new Generator({
+  const createContext = (config: UserConfig) => {
+    const plugins = (config.plugins ?? []).map((plugin) =>
+      plugin.name.includes('lightningcss') ? pluginLightningcssWasm() : plugin,
+    )
+    const resolvedConfig = { ...config, plugins }
+    const result: LoadConfigResult = {
       dependencies: [],
       serialized: '',
-      deserialize: () => defaultConfig,
+      deserialize: () => resolvedConfig,
       path: '',
-      hooks: {},
-      config: defaultConfig as UserConfig,
-    })
+      hooks: mergeHooks(plugins),
+      config: resolvedConfig,
+    }
+
+    return new Generator(result)
+  }
+
+  const getDefaultContext = () => createContext(defaultConfig)
 
   // userConfig reference is stable (from useState in useConfig) —
   // only changes when user edits the config tab, not on source keystrokes
@@ -44,8 +52,6 @@ export const useBambooContext = (userConfig: Config | null): Generator & { error
         staticCss: merge(userConfig?.staticCss, {
           recipes: { playgroundError: ['*'] } as StaticCssOptions['recipes'],
         }),
-
-        jsxFramework: userConfig?.jsxFramework ? 'react' : undefined,
       })
     } catch (e) {
       config = defaultConfig
@@ -61,30 +67,7 @@ export const useBambooContext = (userConfig: Config | null): Generator & { error
 
     try {
       // in event of error (invalid token format), use previous generator
-      let hooks = config?.hooks ?? {}
-
-      // Swap in the WASM build when the config asks for lightningcss.
-      //
-      // Read off `plugins` rather than a `lightningcss: true` flag, which no longer exists —
-      // the flag's only job was to push `pluginLightningcss()` into this list, and naming the
-      // plugin statically is what made a native binary a dependency of every install. Matched
-      // by name because the real plugin cannot run here: it binds the native module, and the
-      // playground is a browser.
-      const wantsLightningcss = config?.plugins?.some((plugin) => plugin?.name?.includes('lightningcss'))
-
-      if (wantsLightningcss) {
-        const plugin = pluginLightningcssWasm()
-        hooks = mergeHooks([plugin, { name: '__resolved__', hooks }])
-      }
-
-      const context = new Generator({
-        dependencies: [],
-        serialized: '',
-        deserialize: () => config!,
-        path: '',
-        hooks,
-        config: config as any,
-      })
+      const context = createContext(config!)
       previousContext.current = context
       return context
     } catch {
@@ -95,7 +78,7 @@ export const useBambooContext = (userConfig: Config | null): Generator & { error
       // or use default config cause we always need a context
       previousContext.current = getDefaultContext()
 
-      return getDefaultContext()
+      return previousContext.current
     }
   }, [userConfig])
 }

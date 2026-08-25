@@ -76,6 +76,7 @@ const SFC_EXTENSIONS = /\.(?:vue|svelte|astro)$/i
  * folding the SFC uses parser:before offsets that do not match the file Vite emits.
  */
 const SFC_SCRIPT_QUERY = /[?&](?:type=script(?:&|$)|lang\.tsx?(?:&|$)|lang=tsx?(?:&|$)|lang\.jsx?(?:&|$))/i
+const SFC_JSX_QUERY = /[?&](?:lang\.tsx|lang=tsx|lang\.jsx|lang=jsx)(?:&|$)/i
 const SFC_SCRIPT_TAG = /<script[\s>/]/i
 const NODE_MODULES = /node_modules/
 const TRANSFORM_META_KEY = 'bamboocss:transform'
@@ -138,8 +139,8 @@ export const shouldTransform = (id: string) => {
  *
  * A `.vue` / `.svelte` / `.astro` id is either a raw SFC (skip — offsets would not match), a
  * `type=script` submodule, or the framework's compiled JS stored under the SFC path. The last
- * two are JavaScript: parsing them as the SFC would run `parser:before` and fold the wrong
- * bytes. A sibling path with a `.ts` suffix keeps ScriptKind TS and skips those hooks.
+ * two are JavaScript or TypeScript: parsing them as the SFC would run `parser:before` and fold
+ * the wrong bytes. A sibling `.ts`/`.tsx` path preserves JSX parsing and skips those hooks.
  *
  * Returns `null` when the module is still a raw SFC and must be left to the framework plugin.
  * Astro frontmatter is `---`, not `<script>`, so a tag check alone would parse the template.
@@ -148,7 +149,10 @@ export const compilerParsePath = (id: string, code: string): string | null => {
   const [filePath, query = ''] = id.split('?')
   if (!filePath) return null
   if (!SFC_EXTENSIONS.test(filePath)) return filePath
-  if (SFC_SCRIPT_QUERY.test(`?${query}`)) return `${filePath}.__bamboo__.ts`
+  const normalizedQuery = `?${query}`
+  if (SFC_SCRIPT_QUERY.test(normalizedQuery)) {
+    return `${filePath}.__bamboo__.${SFC_JSX_QUERY.test(normalizedQuery) ? 'tsx' : 'ts'}`
+  }
   const trimmed = code.trimStart()
   if (/\.astro$/i.test(filePath) && (trimmed.startsWith('---') || trimmed.startsWith('<'))) return null
   if (SFC_SCRIPT_TAG.test(code) || /<(?:template|style)[\s>/]/i.test(code)) return null

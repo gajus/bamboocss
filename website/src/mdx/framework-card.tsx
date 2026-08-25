@@ -10,7 +10,7 @@ import { ViteLogo } from '@/icons/vite'
 import { VueLogo } from '@/icons/vue'
 import { css } from '@/styled-system/css'
 import { center, flex, grid } from '@/styled-system/patterns'
-import Link from 'next/link'
+import { Link } from 'react-router'
 
 const logoMap = {
   solid: {
@@ -94,7 +94,7 @@ export const FrameworkCard = (props: Props) => {
       <div>
         <h4 className={css({ fontWeight: 'medium' })}>
           <Link
-            href={href}
+            to={href}
             className={css({
               _before: {
                 content: '""',

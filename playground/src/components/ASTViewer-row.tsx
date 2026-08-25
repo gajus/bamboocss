@@ -1,9 +1,6 @@
-'use client'
-
 import { JsonViewer } from '@textea/json-viewer'
 import { useEffect, useState } from 'react'
 
-// nextjs SSR throws if not doing these.. things
 const ResultItemRowJson = ({
   className,
   data,

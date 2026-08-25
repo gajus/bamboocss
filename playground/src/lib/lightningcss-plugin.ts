@@ -1,4 +1,5 @@
 import type { BambooPlugin } from '@bamboocss/types'
+import { Features, transform } from 'lightningcss-wasm'
 
 /**
  * Playground-specific lightningcss plugin that uses the WASM build.
@@ -15,8 +16,6 @@ export function pluginLightningcssWasm(): BambooPlugin {
     hooks: {
       'css:optimize': ({ css, minify }) => {
         try {
-          const { Features, transform } = require('lightningcss-wasm')
-
           const encoder = new TextEncoder()
           const decoder = new TextDecoder()
 

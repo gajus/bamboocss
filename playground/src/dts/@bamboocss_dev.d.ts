@@ -1,32 +1,12 @@
-import * as _bamboocss_types from '@bamboocss/types'
 import {
-  Config,
-  RecipeVariantRecord,
-  RecipeConfig,
-  SlotRecipeVariantRecord,
-  SlotRecipeConfig,
-  SystemStyleObject,
-  PatternConfig,
-  Preset,
-  CssKeyframes,
-  GlobalStyleObject,
-  GlobalFontface,
-  PropertyConfig,
   BambooPlugin,
-  ThemeVariant,
-  Tokens,
-  SemanticTokens,
-  CompositionStyles,
-  TextStyles,
-  LayerStyles,
-} from '@bamboocss/types'
-export {
   CompositionStyles,
   Config,
   CssKeyframes,
+  GlobalFontface,
   GlobalStyleObject,
   HooksApiInterface,
-  LayerStyles,
+  Mixins,
   PatternConfig,
   PatternProperties,
   Preset,
@@ -37,10 +17,11 @@ export {
   SlotRecipeConfig,
   SlotRecipeVariantRecord,
   SystemStyleObject,
-  TextStyles,
+  ThemeVariant,
   Tokens,
 } from '@bamboocss/types'
 
+//#region src/index.d.ts
 declare function defineConfig(config: Config): Config & {
   name: string
 }
@@ -61,25 +42,35 @@ declare function defineThemeContract<C extends Partial<Omit<ThemeVariant, 'selec
 ): <T extends C & ThemeVariant>(theme: T) => T
 type ProxyValue<T> = {
   <Value>(definition: Value extends T ? Value : T): Value
-} & {
-  [K in keyof Required<T>]: <Value>(definition: Value extends T[K] ? Value : T[K]) => Value
-}
+} & { [K in keyof Required<T>]: <Value>(definition: Value extends T[K] ? Value : T[K]) => Value }
 declare const defineTokens: ProxyValue<Tokens>
 declare const defineSemanticTokens: ProxyValue<SemanticTokens>
-declare function defineTextStyles(definition: CompositionStyles['textStyles']): TextStyles
-declare function defineLayerStyles(definition: CompositionStyles['layerStyles']): LayerStyles
+declare function defineMixins(definition: CompositionStyles['mixins']): Mixins
 declare function defineStyles(definition: SystemStyleObject): SystemStyleObject
-declare function defineAnimationStyles(
-  definition: CompositionStyles['animationStyles'],
-): _bamboocss_types.AnimationStyles
-
+//#endregion
 export {
-  defineAnimationStyles,
+  type CompositionStyles,
+  type Config,
+  type CssKeyframes,
+  type GlobalStyleObject,
+  type HooksApiInterface,
+  type Mixins,
+  type PatternConfig,
+  type PatternProperties,
+  type Preset,
+  type PropertyConfig,
+  type RecipeConfig,
+  type RecipeVariantRecord,
+  type SemanticTokens,
+  type SlotRecipeConfig,
+  type SlotRecipeVariantRecord,
+  type SystemStyleObject,
+  type Tokens,
   defineConfig,
   defineGlobalFontface,
   defineGlobalStyles,
   defineKeyframes,
-  defineLayerStyles,
+  defineMixins,
   definePattern,
   definePlugin,
   definePreset,
@@ -87,7 +78,6 @@ export {
   defineSemanticTokens,
   defineSlotRecipe,
   defineStyles,
-  defineTextStyles,
   defineThemeContract,
   defineThemeVariant,
   defineTokens,

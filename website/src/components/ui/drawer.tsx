@@ -1,8 +1,7 @@
 import { sva } from '@/styled-system/css'
-import { dialogAnatomy } from '@ark-ui/react/dialog'
 
 export const drawerSlotRecipe = sva({
-  slots: [...dialogAnatomy.keys(), 'body'],
+  slots: ['backdrop', 'positioner', 'content', 'body', 'closeTrigger'],
   className: 'chakra-drawer',
   base: {
     backdrop: {

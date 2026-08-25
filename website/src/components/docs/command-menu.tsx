@@ -10,8 +10,8 @@ import { Combobox } from '@ark-ui/react/combobox'
 import { Dialog } from '@ark-ui/react/dialog'
 import { useEnvironmentContext } from '@ark-ui/react/environment'
 import { Portal } from '@ark-ui/react/portal'
-import { useRouter } from 'next/navigation'
 import { useDeferredValue, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router'
 import { center, flex } from 'styled-system/patterns'
 
 interface Props {
@@ -38,7 +38,7 @@ export const CommandMenu = (props: Props) => {
 
   const filteredItems = useMemo(() => Object.values(matches).flat().slice(0, limit), [matches, limit])
 
-  const router = useRouter()
+  const navigate = useNavigate()
 
   const collection = useMemo(() => createListCollection({ items: filteredItems }), [filteredItems])
 
@@ -67,7 +67,7 @@ export const CommandMenu = (props: Props) => {
               collection={collection}
               composite={false}
               onValueChange={(e) => {
-                router.push(e.value[0])
+                navigate(e.value[0])
                 requestAnimationFrame(() => {
                   setOpen(false)
                 })

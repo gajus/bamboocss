@@ -11,7 +11,7 @@ export default defineConfig({
       hover: '&:is(:hover, [data-hover]):not(:disabled)',
     },
   },
-  include: ['./src/**/*.{tsx,jsx,ts}', './pages/**/*.{jsx,tsx,ts}'],
+  include: ['./src/**/*.{tsx,jsx,ts}'],
   exclude: [],
   outdir: 'styled-system',
   theme: {

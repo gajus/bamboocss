@@ -1,5 +1,4 @@
-# Cloudflare static-asset redirects. Replaces the `redirects()` and `rewrites()`
-# blocks in next.config.mjs, which `output: 'export'` does not apply.
+# Cloudflare static-asset redirects copied into React Router's client build.
 #
 # Syntax: [source] [destination] [code]. Codes 301/302/303/307/308 are supported;
 # these are real redirects, not meta-refresh stubs.
@@ -15,8 +14,8 @@
 /docs/theming/studio       /docs/theming/spec              301
 
 # Raw-markdown alias for agents: /docs/<path>.mdx -> /llms/<path>.mdx. The
-# target is emitted as a real asset by generateStaticParams in
-# app/llms/[...slug]/route.ts, so this resolves to a file rather than a 404.
+# target is included in react-router.config.ts's prerender paths, so this resolves
+# to a real asset rather than a 404.
 #
 # The agent-facing docs live under /llms/ rather than /llms.txt/ because the
 # llms.txt convention puts the index at /llms.txt -- a *file*, which cannot also

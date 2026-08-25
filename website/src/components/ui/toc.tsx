@@ -2,8 +2,8 @@
 
 import { Docs } from '.velite'
 import { sva } from '@/styled-system/css'
-import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router'
 import scrollIntoView from 'scroll-into-view-if-needed'
 
 interface HeadingState {
@@ -187,7 +187,7 @@ export const Toc = (props: TocProps) => {
         {data.map((item) => (
           <li key={item.id} className={classes.item}>
             <Link
-              href={`#${item.id}`}
+              to={`#${item.id}`}
               // 12px clears the rail; depth indents from there.
               style={{ paddingInlineStart: 12 + item.depth * 12 }}
               data-current={isCurrent(item.id) || undefined}

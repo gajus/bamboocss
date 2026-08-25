@@ -1,4 +1,4 @@
-import type { Config, Preset } from '@bamboocss/types'
+import type { Config, Preset, UserConfig } from '@bamboocss/types'
 import { mergeConfigs } from '@bamboocss/config/merge'
 import presetBase from '@bamboocss/preset-base'
 import presetBamboo from '@bamboocss/preset-bamboo'
@@ -11,26 +11,11 @@ type ExtendableConfig = Extendable<Config>
 export function resolveConfig(config?: Config) {
   if (!config) return
 
-  const presets = new Set<any>()
-
-  if (!config.eject) {
-    presets.add(presetBase)
-  }
-
-  if (config.presets) {
-    //
-    config.presets.forEach((preset: any) => {
-      presets.add(preset)
-    })
-  } else if (!config.eject) {
-    presets.add(presetBamboo)
-  }
-
-  presets.add(playgroundPreset)
-
-  config.presets = Array.from(presets)
-
-  const mergedConfig = getResolvedConfig(config)
+  const presets = config.presets ?? [presetBase, presetBamboo]
+  const mergedConfig = getResolvedConfig({
+    ...config,
+    presets: [...new Set([...presets, playgroundPreset])],
+  })
 
   if (!mergedConfig) return
 
@@ -42,7 +27,7 @@ export function resolveConfig(config?: Config) {
 
   // No config:resolved hook, cause we can't resolve async here
 
-  return mergedConfig
+  return mergedConfig as UserConfig
 }
 
 /**

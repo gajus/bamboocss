@@ -1,4 +1,3 @@
-'use client'
 import { UsePlayGroundProps, usePlayground } from '@/src/hooks/usePlayground'
 import { useConfig } from '@/src/hooks/useConfig'
 import { PlaygroundContent } from '@/src/components/PlaygroundContent'

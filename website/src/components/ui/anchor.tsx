@@ -1,6 +1,6 @@
 import { css } from '@/styled-system/css'
-import Link from 'next/link'
 import { forwardRef } from 'react'
+import { Link } from 'react-router'
 
 export interface AnchorProps extends Omit<React.ComponentProps<'a'>, 'ref'> {
   newWindow?: boolean
@@ -35,7 +35,7 @@ export const Anchor = forwardRef<HTMLAnchorElement, AnchorProps>(function Anchor
   }
 
   return (
-    <Link ref={ref} href={href} {...rest}>
+    <Link ref={ref} to={href} {...rest}>
       {children}
     </Link>
   )

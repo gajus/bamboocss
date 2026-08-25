@@ -4,13 +4,13 @@ import { BeforeMount, EditorProps, Monaco as MonacoType, OnChange, OnMount } fro
 import * as Monaco from 'monaco-editor'
 import { AutoTypings, LocalStorageCache } from 'monaco-editor-auto-typings/custom-editor'
 import { MonacoJsxSyntaxHighlight, getWorker } from 'monaco-jsx-syntax-highlight'
-import { useTheme } from 'next-themes'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'react-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocalStorage, useUpdateEffect } from 'usehooks-ts'
 import { configureAutoImports } from '../lib/auto-import'
 import { bambooTheme } from '../lib/gruvbox-theme'
 import { State } from './usePlayground'
+import { useTheme } from './useTheme'
 
 // @ts-ignore
 import bambooDevDts from '../dts/@bamboocss_dev.d.ts?raw'
@@ -88,8 +88,8 @@ export function useEditor(props: BambooEditorProps) {
 
   const { resolvedTheme } = useTheme()
 
-  const searchParams = useSearchParams()
-  const initialTab = searchParams?.get('tab') as Tab | null
+  const [searchParams] = useSearchParams()
+  const initialTab = searchParams.get('tab') as Tab | null
   const [activeTab, setActiveTab] = useState<Tab>(initialTab ?? 'code')
 
   const monacoEditorRef = useRef<Parameters<OnMount>[0] | undefined>(undefined)

@@ -22,6 +22,19 @@ export const globalCss = defineGlobalStyles({
     '--content-top': 'calc(var(--navbar-height) + 2rem)',
     scrollPaddingTop: 'calc(var(--navbar-height) + 1rem)',
   },
+  ':root': {
+    '--color-primary-50-hue': '97%',
+    '--color-primary-100-hue': '94%',
+    '--color-primary-200-hue': '86%',
+    '--color-primary-300-hue': '77%',
+    '--color-primary-400-hue': '66%',
+    '--color-primary-500-hue': '50%',
+    '--color-primary-600-hue': '45%',
+    '--color-primary-700-hue': '39%',
+    '--color-primary-750-hue': '35%',
+    '--color-primary-800-hue': '32%',
+    '--color-primary-900-hue': '24%',
+  },
   body: {
     bg: 'bg',
     color: 'fg',
@@ -114,6 +127,18 @@ export const globalCss = defineGlobalStyles({
         },
       },
     },
+  },
+  ':where(.shiki span:not(.highlighted))': {
+    color: 'var(--shiki-light)',
+    fontStyle: 'var(--shiki-light-font-style)',
+    fontWeight: 'var(--shiki-light-font-weight)',
+    textDecoration: 'var(--shiki-light-text-decoration)',
+  },
+  '.dark :where(.shiki span:not(.highlighted))': {
+    color: 'var(--shiki-dark)',
+    fontStyle: 'var(--shiki-dark-font-style)',
+    fontWeight: 'var(--shiki-dark-font-weight)',
+    textDecoration: 'var(--shiki-dark-text-decoration)',
   },
   pre: {
     '& code': {

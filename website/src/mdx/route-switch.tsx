@@ -2,9 +2,8 @@
 
 import { css, cva } from '@/styled-system/css'
 import { flex } from '@/styled-system/patterns'
-import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
 import { createContext, useContext, useId } from 'react'
+import { Link, useSearchParams } from 'react-router'
 
 /* -----------------------------------------------------------------------------
  * Context Setup
@@ -42,8 +41,8 @@ export interface RouteSwitchProps {
 export const RouteSwitch = (props: RouteSwitchProps) => {
   const { children, values } = props
   const rootId = useId()
-  const searchParams = useSearchParams()
-  const value = searchParams?.get('value') || values[0]
+  const [searchParams] = useSearchParams()
+  const value = searchParams.get('value') || values[0]
   return (
     <RouteSwitchProvider
       value={{
@@ -100,8 +99,8 @@ const RouteSwitchLink = (props: { value: string; children: React.ReactNode }) =>
 
   return (
     <Link
-      href={`?${params.toString()}`}
-      scroll={false}
+      to={`?${params.toString()}`}
+      preventScrollReset
       aria-selected={active ? true : undefined}
       role="tab"
       tabIndex={active ? 0 : -1}

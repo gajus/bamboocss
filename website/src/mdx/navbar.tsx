@@ -13,8 +13,8 @@ import { center } from '@/styled-system/patterns'
 import { navbar } from '@/styled-system/recipes'
 import { Icon } from '@/theme/icons'
 import { Dialog, useDialog } from '@ark-ui/react/dialog'
-import { usePathname } from 'next/navigation'
 import { useEffect } from 'react'
+import { useLocation } from 'react-router'
 
 const classes = {
   link: css({ mixin: 'sm' }),
@@ -28,7 +28,7 @@ const classes = {
 }
 
 export const Navbar = () => {
-  const pathname = usePathname()
+  const { pathname } = useLocation()
   const items = docsConfig.navigation
 
   return (
@@ -116,7 +116,7 @@ const MobileNavDrawer = (props: MobileNavDrawerProps) => {
   const { trigger, children } = props
   const dialog = useDialog()
   const classes = drawerSlotRecipe({ size: 'md', placement: 'start' })
-  const pathname = usePathname()
+  const { pathname } = useLocation()
 
   const isLgUp = useMatchMedia('(min-width: 1024px)')
 

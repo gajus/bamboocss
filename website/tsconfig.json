@@ -13,12 +13,9 @@
     "moduleResolution": "Bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve",
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
+    "jsx": "react-jsx",
+    "types": ["node", "vite/client"],
+    "rootDirs": [".", "./.react-router/types"],
     "strictNullChecks": true,
     "paths": {
       "@/*": ["./src/*"],
@@ -29,14 +26,6 @@
       "styles/*": ["./styles/*"]
     }
   },
-  "include": [
-    "styled-system",
-    "next-env.d.ts",
-    "global-css.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
-    ".next/types/**/*.ts",
-    ".velite"
-  ],
+  "include": ["styled-system", "global-css.d.ts", "**/*.ts", "**/*.tsx", ".react-router/types/**/*.ts", ".velite"],
   "exclude": ["node_modules"]
 }

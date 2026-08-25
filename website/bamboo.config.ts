@@ -13,6 +13,9 @@ export default defineConfig({
   include: ['./src/**/*.{tsx,ts,jsx}', './pages/**/*.{jsx,tsx}', './app/**/*.{jsx,tsx}'],
   exclude: [],
   outdir: 'styled-system',
+  prune: {
+    keyframes: false,
+  },
   conditions: {
     extend: {
       dark: '.dark &, [data-theme="dark"] &',

@@ -67,6 +67,18 @@ describe('plugin contract', () => {
       compilerParsePath('/app/src/Card.vue?vue&type=script&setup=true&lang.ts', 'const x = css({ color: "red.300" })'),
     ).toBe('/app/src/Card.vue.__bamboo__.ts')
     expect(
+      compilerParsePath(
+        '/app/src/Card.vue?vue&type=script&setup=true&lang.tsx',
+        'const x = <div className={css({ color: "red.300" })} />',
+      ),
+    ).toBe('/app/src/Card.vue.__bamboo__.tsx')
+    expect(
+      compilerParsePath(
+        '/app/src/Card.svelte?svelte&type=script&lang=jsx',
+        'const x = <div className={css({ color: "red.300" })} />',
+      ),
+    ).toBe('/app/src/Card.svelte.__bamboo__.tsx')
+    expect(
       compilerParsePath('/app/src/Card.svelte', 'export function Card() { return css({ color: "red.300" }) }'),
     ).toBe('/app/src/Card.svelte.__bamboo__.ts')
     expect(

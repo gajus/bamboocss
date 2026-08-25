@@ -1,4 +1,6 @@
 node_modules
+build
+.react-router
 .next
 ## Bamboo
 styled-system
@@ -8,3 +10,4 @@ styled-system-static
 
 ## Generated Open Graph cards
 public/og
+public/opengraph-image.png

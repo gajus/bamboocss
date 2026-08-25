@@ -1,7 +1,6 @@
 import { defaultKeyframes } from '@/components/token-docs/query'
 import { css } from '@/styled-system/css'
 import { center, flex, grid } from '@/styled-system/patterns'
-import { Token, token } from '@/styled-system/tokens'
 
 export const Keyframes = () => {
   return (
@@ -14,7 +13,7 @@ export const Keyframes = () => {
                 size: '12',
                 bg: 'pink.200',
               })}
-              style={{ animation: token(`animations.${keyframe}` as Token) }}
+              style={{ animationDuration: '1s', animationIterationCount: 'infinite', animationName: keyframe }}
             />
             <p className={css({ fontWeight: 'medium' })}>{keyframe}</p>
           </div>

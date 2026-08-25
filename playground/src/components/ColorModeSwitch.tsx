@@ -1,7 +1,7 @@
 import { Moon, Sun } from '@/src/components/icons'
+import { useTheme } from '@/src/hooks/useTheme'
 import { css, cx } from '@/styled-system/css'
 import { button } from '@/styled-system/recipes'
-import { useTheme } from 'next-themes'
 import { useEffect, useState } from 'react'
 
 export const ColorModeSwitch = () => {

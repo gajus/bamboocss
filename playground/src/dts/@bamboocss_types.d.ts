@@ -22,16 +22,9 @@ export type ArtifactId =
   | 'recipes-index'
   | 'patterns'
   | 'patterns-index'
-  | 'jsx-is-valid-prop'
-  | 'jsx-helpers'
-  | 'jsx-factory'
-  | 'jsx-patterns'
-  | 'jsx-create-style-context'
-  | 'jsx-patterns-index'
   | 'css-index'
   | 'themes'
   | 'package.json'
-  | 'types-jsx'
   | 'types-entry'
   | 'types-styles'
   | 'types-conditions'
@@ -6899,6 +6892,8 @@ export interface StandardShorthandProperties<TLength = (string & {}) | 0, TTime 
    */
   viewTimeline?: Property.ViewTimeline | undefined
 }
+export interface StandardProperties<TLength = (string & {}) | 0, TTime = string & {}>
+  extends StandardLonghandProperties<TLength, TTime>, StandardShorthandProperties<TLength, TTime> {}
 export interface VendorLonghandProperties<TLength = (string & {}) | 0, TTime = string & {}> {
   /**
    * This feature is well established and works across many devices and browser versions. It’s been available across browsers since September 2015.
@@ -8701,6 +8696,8 @@ export interface VendorShorthandProperties<TLength = (string & {}) | 0, TTime = 
    */
   WebkitTransition?: Property.Transition<TTime> | undefined
 }
+export interface VendorProperties<TLength = (string & {}) | 0, TTime = string & {}>
+  extends VendorLonghandProperties<TLength, TTime>, VendorShorthandProperties<TLength, TTime> {}
 export interface ObsoleteProperties<TLength = (string & {}) | 0, TTime = string & {}> {
   /**
    * The **`box-align`** CSS property specifies how an element aligns its contents across its layout in a perpendicular direction. The effect of the property is only visible if there is extra space in the box.
@@ -9803,34 +9800,12 @@ export interface SvgProperties<TLength = (string & {}) | 0, TTime = string & {}>
   wordSpacing?: Property.WordSpacing<TLength> | undefined
   writingMode?: Property.WritingMode | undefined
 }
-export type StandardLonghandPropertiesFallback<TLength = (string & {}) | 0, TTime = string & {}> = Fallback<
-  StandardLonghandProperties<TLength, TTime>
->
-export type StandardShorthandPropertiesFallback<TLength = (string & {}) | 0, TTime = string & {}> = Fallback<
-  StandardShorthandProperties<TLength, TTime>
->
-export interface StandardPropertiesFallback<TLength = (string & {}) | 0, TTime = string & {}>
-  extends StandardLonghandPropertiesFallback<TLength, TTime>, StandardShorthandPropertiesFallback<TLength, TTime> {}
-export type VendorLonghandPropertiesFallback<TLength = (string & {}) | 0, TTime = string & {}> = Fallback<
-  VendorLonghandProperties<TLength, TTime>
->
-export type VendorShorthandPropertiesFallback<TLength = (string & {}) | 0, TTime = string & {}> = Fallback<
-  VendorShorthandProperties<TLength, TTime>
->
-export interface VendorPropertiesFallback<TLength = (string & {}) | 0, TTime = string & {}>
-  extends VendorLonghandPropertiesFallback<TLength, TTime>, VendorShorthandPropertiesFallback<TLength, TTime> {}
-export type ObsoletePropertiesFallback<TLength = (string & {}) | 0, TTime = string & {}> = Fallback<
-  ObsoleteProperties<TLength, TTime>
->
-export type SvgPropertiesFallback<TLength = (string & {}) | 0, TTime = string & {}> = Fallback<
-  SvgProperties<TLength, TTime>
->
-export interface PropertiesFallback<TLength = (string & {}) | 0, TTime = string & {}>
+export interface Properties<TLength = (string & {}) | 0, TTime = string & {}>
   extends
-    StandardPropertiesFallback<TLength, TTime>,
-    VendorPropertiesFallback<TLength, TTime>,
-    ObsoletePropertiesFallback<TLength, TTime>,
-    SvgPropertiesFallback<TLength, TTime> {}
+    StandardProperties<TLength, TTime>,
+    VendorProperties<TLength, TTime>,
+    ObsoleteProperties<TLength, TTime>,
+    SvgProperties<TLength, TTime> {}
 export type AdvancedPseudos =
   | ':-moz-any()'
   | ':-moz-dir'
@@ -12314,8 +12289,14 @@ export type ParentSelector = `${DataAttributes | AriaAttributes} &`
 export type AtRuleType = 'media' | 'layer' | 'container' | 'supports' | 'page' | 'scope' | 'starting-style'
 export type AnySelector = `${string}&` | `&${string}` | `@${AtRuleType}${string}`
 export type Selectors = AttributeSelector | ParentSelector
-export type ConditionType = 'at-rule' | 'parent-nesting' | 'self-nesting' | 'combinator-nesting' | 'mixed'
-export type ConditionDetails = AtRuleCondition | SelectorCondition | MixedCondition
+export type ConditionType =
+  | 'at-rule'
+  | 'parent-nesting'
+  | 'self-nesting'
+  | 'combinator-nesting'
+  | 'mixed'
+  | 'multi-block'
+export type ConditionDetails = AtRuleCondition | SelectorCondition | MixedCondition | MultiBlockCondition
 export interface AtRuleCondition {
   type: 'at-rule'
   value: string
@@ -12333,10 +12314,15 @@ export interface MixedCondition {
   value: ConditionDetails[]
   raw: string[]
 }
-/* -----------------------------------------------------------------------------
- * Shadowed export (in CLI): DO NOT REMOVE
- * -----------------------------------------------------------------------------*/
-export type ConditionQuery = string | string[]
+export interface MultiBlockCondition {
+  type: 'multi-block'
+  value: MixedCondition[]
+  raw: Record<string, any>
+}
+export type ConditionObjectQuery = {
+  [key: string]: ConditionObjectQuery | '@slot'
+}
+export type ConditionQuery = string | string[] | ConditionObjectQuery
 export interface Conditions {
   [condition: string]: ConditionQuery
 }
@@ -12347,7 +12333,6 @@ export interface ExtendableConditions {
 export type Condition = string
 export type ConditionalValue<V> =
   | V
-  | Array<V | null>
   | {
       [K in keyof Conditions]?: ConditionalValue<V>
     }
@@ -12360,27 +12345,6 @@ export type Nested<P> =
   | {
       [K in Condition]?: Nested<P>
     }
-/* -----------------------------------------------------------------------------
- * Shadowed export (in CLI): DO NOT REMOVE
- * -----------------------------------------------------------------------------*/
-export interface PropertyTypes {}
-export type PropertyValue<K extends string> = K extends keyof PropertyTypes
-  ? ConditionalValue<PropertyTypes[K]>
-  : K extends keyof CssProperties$1
-    ? ConditionalValue<CssProperties$1[K]>
-    : never
-type String$1 = string & {}
-type Number$1 = number & {}
-/* -----------------------------------------------------------------------------
- * Shadowed export (in CLI): DO NOT REMOVE
- * -----------------------------------------------------------------------------*/
-export type CssProperties = PropertiesFallback<String$1 | Number$1>
-export type CssVarProperties = {
-  [key in `--${string}`]?: ConditionalValue<string | number>
-}
-export type SystemProperties = {
-  [K in keyof CssProperties]?: PropertyValue<K>
-}
 type String$1 = string & {}
 type Number$1 = number & {}
 export type Pretty<T> = {
@@ -12393,9 +12357,6 @@ export type DistributiveUnion<T, U> = {
 export type Assign<T, U> = {
   [K in keyof T]: K extends keyof U ? U[K] : T[K]
 } & U
-/* -----------------------------------------------------------------------------
- * Native css properties
- * -----------------------------------------------------------------------------*/
 export type CornerShapeValue = 'round' | 'square' | 'bevel' | 'scoop' | 'notch' | 'squircle' | `superellipse(${number})`
 export interface ModernCssProperties {
   /**
@@ -12431,24 +12392,31 @@ export interface ModernCssProperties {
     | `${CornerShapeValue} ${CornerShapeValue} ${CornerShapeValue} ${CornerShapeValue}`
     | String$1
 }
-export type CssProperty = keyof PropertiesFallback
-interface CssProperties$1 extends PropertiesFallback<String$1 | Number$1>, CssVarProperties, ModernCssProperties {}
+export type CssProperty = keyof Properties
+export interface CssProperties extends Properties<String$1 | Number$1>, CssVarProperties, ModernCssProperties {}
 export interface CssKeyframes {
   [name: string]: {
-    [time: string]: CssProperties$1
+    [time: string]: CssProperties
   }
 }
-/* -----------------------------------------------------------------------------
- * Conditional css properties
- * -----------------------------------------------------------------------------*/
 export interface GenericProperties {
   [key: string]: ConditionalValue<String$1 | Number$1 | boolean>
 }
-/* -----------------------------------------------------------------------------
- * Native css props
- * -----------------------------------------------------------------------------*/
-export type NestedCssProperties = Nested<CssProperties$1>
+export type NestedCssProperties = Nested<CssProperties>
 export type SystemStyleObject = Nested<(SystemProperties | GenericProperties) & CssVarProperties>
+/**
+ * The four `::view-transition-*` pseudo-elements a `viewTransition()` bag can style.
+ *
+ * `imagePair` is camelCase here and emitted as `::view-transition-image-pair`, matching
+ * how every other property in a style object is authored.
+ */
+export interface ViewTransitionStyleObject {
+  group?: SystemStyleObject
+  imagePair?: SystemStyleObject
+  old?: SystemStyleObject
+  new?: SystemStyleObject
+}
+export type ViewTransitionFn = (options: ViewTransitionStyleObject) => string
 export interface GlobalStyleObject {
   [selector: string]: SystemStyleObject
 }
@@ -12456,16 +12424,10 @@ export interface ExtendableGlobalStyleObject {
   [selector: string]: SystemStyleObject | undefined
   extend?: GlobalStyleObject | undefined
 }
-/* -----------------------------------------------------------------------------
- * Composition (text styles, layer styles)
- * -----------------------------------------------------------------------------*/
 export type FilterStyleObject<P extends string> = {
   [K in P]?: K extends keyof SystemStyleObject ? SystemStyleObject[K] : unknown
 }
 export type CompositionStyleObject<Property extends string> = Nested<FilterStyleObject<Property> & CssVarProperties>
-/* -----------------------------------------------------------------------------
- * Font face
- * -----------------------------------------------------------------------------*/
 export type GlobalFontfaceRule = Omit<AtRule.FontFaceFallback, 'src'> & Required<Pick<AtRule.FontFaceFallback, 'src'>>
 export type FontfaceRule = Omit<GlobalFontfaceRule, 'fontFamily'>
 export interface GlobalFontface {
@@ -12475,9 +12437,6 @@ export interface ExtendableGlobalFontface {
   [name: string]: FontfaceRule | FontfaceRule[] | GlobalFontface | undefined
   extend?: GlobalFontface | undefined
 }
-/* -----------------------------------------------------------------------------
- * Jsx style props
- * -----------------------------------------------------------------------------*/
 export interface WithCss {
   css?: SystemStyleObject | SystemStyleObject[]
 }
@@ -12494,6 +12453,29 @@ export type JsxHTMLProps<T extends Record<string, any>, P extends Record<string,
   WithHTMLProps<T>,
   P
 >
+/**
+ * Empty on purpose, and unreferenced on purpose. A generated project never sees this file:
+ * the CLI emits its own `styled-system/types/prop-type.d.ts` declaring `UtilityValues` and a
+ * `PropertyValue` resolved against it. This copy is what ships in the `@bamboocss/types`
+ * bundle, so nothing in this repo can consume it and knip cannot tell it apart from dead code.
+ *
+ * @public
+ */
+export interface PropertyTypes {}
+export type PropertyValue<K extends string> = K extends keyof PropertyTypes
+  ? ConditionalValue<PropertyTypes[K]>
+  : K extends keyof CssProperties
+    ? ConditionalValue<CssProperties[K]>
+    : never
+type String$1 = string & {}
+type Number$1 = number & {}
+type CssProperties$1 = Properties<String$1 | Number$1>
+export type CssVarProperties = {
+  [key in `--${string}`]?: ConditionalValue<string | number>
+}
+export type SystemProperties = {
+  [K in keyof CssProperties$1]?: PropertyValue<K>
+}
 export interface Token<T> {
   value: T
   description?: string
@@ -12501,204 +12483,31 @@ export interface Token<T> {
 export interface Recursive<T> {
   [key: string]: Recursive<T> | T
 }
-/* -----------------------------------------------------------------------------
- * Text styles
- * -----------------------------------------------------------------------------*/
-export type TextStyleProperty =
-  | 'color'
-  | 'direction'
-  | 'font'
-  | 'fontFamily'
-  | 'fontFeatureSettings'
-  | 'fontKerning'
-  | 'fontLanguageOverride'
-  | 'fontOpticalSizing'
-  | 'fontPalette'
-  | 'fontSize'
-  | 'fontSizeAdjust'
-  | 'fontStretch'
-  | 'fontStyle'
-  | 'fontSynthesis'
-  | 'fontVariant'
-  | 'fontVariantAlternates'
-  | 'fontVariantCaps'
-  | 'fontVariantLigatures'
-  | 'fontVariantNumeric'
-  | 'fontVariantPosition'
-  | 'fontVariationSettings'
-  | 'fontWeight'
-  | 'hangingPunctuation'
-  | 'hypens'
-  | 'hyphenateCharacter'
-  | 'hyphenateLimitChars'
-  | 'letterSpacing'
-  | 'lineBreak'
-  | 'lineHeight'
-  | 'quotes'
-  | 'overflowWrap'
-  | 'tabSize'
-  | 'textAlign'
-  | 'textAlignLast'
-  | 'textBox'
-  | 'textBoxEdge'
-  | 'textBoxTrim'
-  | 'textCombineUpright'
-  | 'textDecoration'
-  | 'textDecorationColor'
-  | 'textDecorationLine'
-  | 'textDecorationSkip'
-  | 'textDecorationSkipBox'
-  | 'textDecorationSkipInk'
-  | 'textDecorationSkipInset'
-  | 'textDecorationStyle'
-  | 'textDecorationThickness'
-  | 'textEmphasis'
-  | 'textEmphasisColor'
-  | 'textEmphasisPosition'
-  | 'textEmphasisStyle'
-  | 'textIndent'
-  | 'textJustify'
-  | 'textOrientation'
-  | 'textOverflow'
-  | 'textRendering'
-  | 'textShadow'
-  | 'textStroke'
-  | 'textStrokeColor'
-  | 'textStrokeWidth'
-  | 'textTransform'
-  | 'textUnderlineOffset'
-  | 'textUnderlinePosition'
-  | 'textWrap'
-  | 'textWrapMode'
-  | 'textWrapStyle'
-  | 'unicodeBidi'
-  | 'verticalAlign'
-  | 'whiteSpace'
-  | 'wordBreak'
-  | 'wordSpacing'
-  | 'writingMode'
-export type TextStyle = CompositionStyleObject<TextStyleProperty>
-export type TextStyles = Recursive<Token<TextStyle>>
-/* -----------------------------------------------------------------------------
- * Layer styles
- * -----------------------------------------------------------------------------*/
-export type LogicalPlacement = 'Inline' | 'Block' | 'InlineStart' | 'InlineEnd' | 'BlockStart' | 'BlockEnd'
-export type PhysicalPlacement = 'Top' | 'Right' | 'Bottom' | 'Left'
-export type Placement = PhysicalPlacement | LogicalPlacement
-export type Radius =
-  | `Top${'Right' | 'Left'}`
-  | `Bottom${'Right' | 'Left'}`
-  | `Start${'Start' | 'End'}`
-  | `End${'Start' | 'End'}`
-export type LayerStyleProperty =
-  | 'aspectRatio'
-  | 'background'
-  | 'backgroundColor'
-  | 'backgroundImage'
-  | 'border'
-  | 'borderColor'
-  | 'borderImage'
-  | 'borderImageOutset'
-  | 'borderImageRepeat'
-  | 'borderImageSlice'
-  | 'borderImageSource'
-  | 'borderImageWidth'
-  | 'borderRadius'
-  | 'borderStyle'
-  | 'borderWidth'
-  | `border${Placement}`
-  | `border${Placement}Color`
-  | `border${Placement}Style`
-  | `border${Placement}Width`
-  | 'borderRadius'
-  | `border${Radius}Radius`
-  | 'boxShadow'
-  | 'boxShadowColor'
-  | 'clipPath'
-  | 'color'
-  | 'contain'
-  | 'content'
-  | 'contentVisibility'
-  | 'cursor'
-  | 'display'
-  | 'filter'
-  | 'backdropFilter'
-  | 'height'
-  | 'width'
-  | 'minHeight'
-  | 'minWidth'
-  | 'maxHeight'
-  | 'maxWidth'
-  | `margin${Placement}`
-  | 'inset'
-  | `inset${LogicalPlacement}`
-  | Lowercase<PhysicalPlacement>
-  | 'isolation'
-  | 'mask'
-  | 'maskClip'
-  | 'maskComposite'
-  | 'maskImage'
-  | 'maskMode'
-  | 'maskOrigin'
-  | 'maskPosition'
-  | 'maskRepeat'
-  | 'maskSize'
-  | 'mixBlendMode'
-  | 'objectFit'
-  | 'objectPosition'
-  | 'opacity'
-  | 'outline'
-  | 'outlineColor'
-  | 'outlineOffset'
-  | 'outlineStyle'
-  | 'outlineWidth'
-  | 'overflow'
-  | 'overflowX'
-  | 'overflowY'
-  | 'padding'
-  | `padding${Placement}`
-  | 'pointerEvents'
-  | 'position'
-  | 'resize'
-  | 'transform'
-  | 'transition'
-  | 'visibility'
-  | 'willChange'
-  | 'zIndex'
-  | 'backgroundBlendMode'
-  | 'backgroundAttachment'
-  | 'backgroundClip'
-  | 'backgroundOrigin'
-  | 'backgroundPosition'
-  | 'backgroundRepeat'
-  | 'backgroundSize'
-export type LayerStyle = CompositionStyleObject<LayerStyleProperty>
-export type LayerStyles = Recursive<Token<LayerStyle>>
-/* -----------------------------------------------------------------------------
- * Motion styles
- * -----------------------------------------------------------------------------*/
-export type AnimationStyleProperty =
-  | 'animation'
-  | 'animationComposition'
-  | 'animationDelay'
-  | 'animationDirection'
-  | 'animationDuration'
-  | 'animationFillMode'
-  | 'animationIterationCount'
-  | 'animationName'
-  | 'animationPlayState'
-  | 'animationTimingFunction'
-  | 'animationRange'
-  | 'animationRangeStart'
-  | 'animationRangeEnd'
-  | 'animationTimeline'
-  | 'transformOrigin'
-export type AnimationStyle = CompositionStyleObject<AnimationStyleProperty>
-export type AnimationStyles = Recursive<Token<AnimationStyle>>
+/**
+ * A named bundle of declarations, applied by name through the `mixin` style property.
+ *
+ * This was three theme keys — `textStyles`, `layerStyles` and `animationStyles` — with three
+ * `define*` helpers, three spec artifacts and three style properties, all running through the
+ * same registration and differing only in which css properties the value was allowed to set.
+ *
+ * That partition was not a guard worth three concepts. It was arbitrary at the edges (`color`
+ * was legal in both a text style and a layer style, `transform` in a layer style but
+ * `transformOrigin` only in an animation style), and it cost something real in the middle: a
+ * bundle wanting a font *and* a border had to be split across two keys and applied twice,
+ * because neither key would accept the other's half.
+ *
+ * What the three allowlists did buy was rejecting a property that does not exist, and that is
+ * kept here rather than thrown away with them — which is why this is not simply
+ * `SystemStyleObject`. That type unions in an index signature so a style object can carry an
+ * arbitrary selector or at-rule, and an index signature accepts anything, including a typo.
+ * `TextStyleProperty` once listed `hypens` instead of `hyphens` and nothing could notice; under
+ * an index signature nothing would notice again. Conditions and nested selectors still work,
+ * because `Nested` supplies those keys itself.
+ */
+export type Mixin = Nested<SystemProperties & CssVarProperties>
+export type Mixins = Recursive<Token<Mixin>>
 export interface CompositionStyles {
-  textStyles: TextStyles
-  layerStyles: LayerStyles
-  animationStyles: AnimationStyles
+  mixins: Mixins
 }
 export interface ConditionOptions {
   /**
@@ -12774,12 +12583,9 @@ export type RecipeVariant<
 export type RecipeVariantMap<T extends RecipeVariantRecord> = {
   [K in keyof T]: Array<keyof T[K]>
 }
-/* -----------------------------------------------------------------------------
- * Recipe / Standard
- * -----------------------------------------------------------------------------*/
 export interface RecipeRuntimeFn<T extends RecipeVariantRecord> extends RecipeVariantFn<T> {
   __type: RecipeSelection<T>
-  variantKeys: (keyof T)[]
+  /** Each variant and the values it accepts. `Object.keys` it for the variant names. */
   variantMap: RecipeVariantMap<T>
   raw: (props?: RecipeSelection<T>) => SystemStyleObject
   config: RecipeConfig<T>
@@ -12801,6 +12607,16 @@ export interface RecipeDefinition<T extends RecipeVariantRecord = RecipeVariantR
    */
   base?: SystemStyleObject
   /**
+   * Semantic recipe name used by extraction-only integrations.
+   *
+   * Required for a recipe declared in `theme.recipes`, where it is the key it is declared
+   * under. Optional for an inline `cva`.
+   *
+   * The Vite compiler ignores this field when allocating declaration atoms: recipe identity
+   * is not style identity, so identical declarations share one class across recipes.
+   */
+  className?: string
+  /**
    * Whether the recipe is deprecated.
    */
   deprecated?: boolean | string
@@ -12820,10 +12636,6 @@ export interface RecipeDefinition<T extends RecipeVariantRecord = RecipeVariantR
 export type RecipeCreatorFn = <T extends RecipeVariantRecord>(config: RecipeDefinition<T>) => RecipeRuntimeFn<T>
 export interface RecipeConfigMeta {
   /**
-   * The class name of the recipe.
-   */
-  className: string
-  /**
    * The description of the recipe. This will be used in the JSDoc comment.
    */
   description?: string
@@ -12840,10 +12652,13 @@ export interface RecipeConfigMeta {
   staticCss?: RecipeRule[]
 }
 export interface RecipeConfig<T extends RecipeVariantRecord = RecipeVariantRecord>
-  extends RecipeDefinition<T>, RecipeConfigMeta {}
-/* -----------------------------------------------------------------------------
- * Recipe / Slot
- * -----------------------------------------------------------------------------*/
+  extends RecipeDefinition<T>, RecipeConfigMeta {
+  /**
+   * Required extraction metadata for a configured recipe: the key under which it is
+   * declared in `theme.recipes`. The Vite compiler does not use it as style identity.
+   */
+  className: string
+}
 export type SlotRecord<S extends string, T> = Partial<Record<S, T>>
 export type SlotRecipeVariantRecord<S extends string> = Record<any, Record<any, SlotRecord<S, SystemStyleObject>>>
 export type SlotRecipeVariantFn<S extends string, T extends RecipeVariantRecord> = (
@@ -12854,8 +12669,22 @@ export interface SlotRecipeRuntimeFn<
   T extends SlotRecipeVariantRecord<S>,
 > extends SlotRecipeVariantFn<S, T> {
   raw: (props?: RecipeSelection<T>) => Record<S, SystemStyleObject>
-  variantKeys: (keyof T)[]
+  /** Each variant and the values it accepts. `Object.keys` it for the variant names. */
   variantMap: RecipeVariantMap<T>
+  /** The config this recipe was created from. */
+  config: SlotRecipeDefinition<S, T>
+  /** Each slot's constant class, for targeting a slot in the DOM. */
+  classNameMap: Partial<Record<S, string>>
+  /**
+   * Which slots each variant writes styles for.
+   *
+   * A variant's styles reach a slot through a scope opened at an anchor, which covers every
+   * slot in that anchor's subtree. A slot under no anchor — moved out by a portal, with no
+   * second anchor named in `scopeRoots` — is not reached, and nothing at build time can
+   * detect that. This says which slots a variant has to get to, so whatever a scope cannot
+   * reach can be threaded by hand.
+   */
+  slotsAffectedBy: Record<keyof T, S[]>
   splitVariantProps<Props extends RecipeSelection<T>>(
     props: Props,
   ): [RecipeSelection<T>, Pretty<DistributiveOmit<Props, keyof T>>]
@@ -12869,7 +12698,13 @@ export interface SlotRecipeDefinition<
   T extends SlotRecipeVariantRecord<S> = SlotRecipeVariantRecord<S>,
 > {
   /**
-   * An optional class name that can be used to target slots in the DOM.
+   * Semantic recipe name used by extraction-only integrations.
+   *
+   * Required for a recipe declared in `theme.slotRecipes`, where it is the key it is
+   * declared under. Optional for an inline `sva`.
+   *
+   * The Vite compiler ignores this field when allocating declaration atoms: recipe and slot
+   * identity do not enter generated class names.
    */
   className?: string
   /**
@@ -12880,6 +12715,38 @@ export interface SlotRecipeDefinition<
    * The parts/slots of the recipe.
    */
   slots: S[] | Readonly<S[]>
+  /**
+   * The slots that enclose other slots in extraction-only named-rule output.
+   *
+   * The Vite compiler returns selected atoms directly for every slot and ignores this field.
+   * In extraction-only output, a slot recipe's variants are chosen once at the top, but the slots that react to them
+   * are authored by the consumer somewhere below. Naming the enclosing slots lets the build
+   * emit their variant styles as rules scoped by a class those slots already carry, so
+   * nothing has to be delivered to a slot at runtime and every other slot's class is a
+   * constant.
+   *
+   * A list, because a portal is a real discontinuity in the tree and no CSS mechanism
+   * crosses one. A `<Select>` occupies two disjoint subtrees — the trigger side under
+   * `root`, the listbox side under a portaled `positioner` — and a variant writes styles
+   * into both. One anchor can only ever reach one of them.
+   *
+   * ```ts
+   * scopeRoots: ['root', 'positioner']
+   * ```
+   *
+   * Each named slot takes variant props; every other slot's class is a constant. The build
+   * emits each non-anchor slot's variant rules under *every* anchor, and only the anchor
+   * that is genuinely an ancestor matches — so the DOM shape never has to be declared.
+   *
+   * Defaults to `['root']` when a slot by that name exists. Set `[]` to turn scoping off
+   * and give every slot a variant class of its own, which is what a recipe whose slots are
+   * siblings wants.
+   *
+   * A slot under *no* anchor is still unreachable, and nothing at build time can detect
+   * that — reachability is a fact about the DOM. `recipe.slotsAffectedBy` says which slots
+   * a variant writes to, for whatever still needs threading by hand.
+   */
+  scopeRoots?: S[] | Readonly<S[]>
   /**
    * The base styles of the recipe.
    */
@@ -12903,7 +12770,14 @@ export type SlotRecipeCreatorFn = <S extends string, T extends SlotRecipeVariant
 export type SlotRecipeConfig<
   S extends string = string,
   T extends SlotRecipeVariantRecord<S> = SlotRecipeVariantRecord<S>,
-> = SlotRecipeDefinition<S, T> & RecipeConfigMeta
+> = SlotRecipeDefinition<S, T> &
+  RecipeConfigMeta & {
+    /**
+     * Required extraction metadata for a configured recipe: the key under which it is
+     * declared in `theme.slotRecipes`. The Vite compiler does not use it as style identity.
+     */
+    className: string
+  }
 export interface StyleResultObject {
   [key: string]: any
 }
@@ -12926,6 +12800,14 @@ export interface AtomicStyleResult {
   className: string
   conditions?: ConditionDetails[]
   layer?: string
+  /**
+   * The rule selects through a `@scope` prelude rather than on `className`.
+   *
+   * A non-root slot's variant styles are reached from the class the *root* carries, so this
+   * result's own class names nothing. It still identifies the rule for bookkeeping, but
+   * reporting it would put a class on the element that no rule ever matches.
+   */
+  scoped?: boolean
 }
 export interface GroupedResult extends Pick<AtomicStyleResult, 'result' | 'className'> {
   hashSet: Set<string>
@@ -12937,6 +12819,17 @@ export interface RecipeBaseResult extends GroupedResult {
 }
 export interface GroupedStyleResultDetails extends Pick<AtomicStyleResult, 'hash' | 'entry' | 'conditions'> {
   result: StyleResultObject
+}
+export interface ViewTransitionResult {
+  className: string
+  /**
+   * Selector -> authored style object, the shape `globalCss` takes.
+   *
+   * Unlike every other result here this is *not* transformed yet: the bodies target
+   * `::view-transition-*` pseudo-elements, so they are serialized whole at emit rather
+   * than atomized into classes.
+   */
+  styles: StyleResultObject
 }
 export interface BaseRule {
   getClassNames: () => string[]
@@ -12970,7 +12863,6 @@ export interface HooksApiInterface {
    * The list of all the config dependencies (direct/transitive imports) filepaths
    */
   configDependencies: string[]
-  //
   /**
    * The processor can be used to generate atomic or recipe classes
    */
@@ -12982,7 +12874,7 @@ export interface HooksApiInterface {
   /**
    * Map that contains all the classNames found (and therefore generated) in the app code
    */
-  generatedClassNames: Map<string, AtomicStyleResult | RecipeBaseResult>
+  generatedClassNames: Map<string, AtomicStyleResult | RecipeBaseResult | GroupedResult>
 }
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'silent'
 export interface LogEntry {
@@ -12992,12 +12884,22 @@ export interface LogEntry {
 }
 export interface LoggerInterface {
   level: 'debug' | 'info' | 'warn' | 'error' | 'silent'
+  /**
+   * Comma-separated globs over the namespaced log type. Non-empty shows only matching types,
+   * at debug level, whatever `level` is set to.
+   */
+  filter: string
   print(data: any): void
   onLog?: (entry: LogEntry) => void
   warn: (type: string, data: any) => void
   info: (type: string, data: any) => void
   debug: (type: string, data: any) => void
   error: (type: string, data: any) => void
+  /**
+   * Log a caught error with context. Extracts the message for the error level,
+   * and logs the full stack at debug level.
+   */
+  caughtError: (type: string, context: string, error: unknown) => void
   log: (data: string) => void
   time: {
     info: (msg: string) => (_msg?: string) => void
@@ -13005,6 +12907,7 @@ export interface LoggerInterface {
   }
   isDebug: boolean
 }
+//#region src/box-factory.d.ts
 export interface WithNode {
   node: Node$1
   stack: Node$1[]
@@ -13096,6 +12999,32 @@ declare class BoxNodeLiteral extends BoxNodeType$1<LiteralType> {
 declare class BoxNodeMap extends BoxNodeType$1<MapType> {
   value: MapType['value']
   spreadConditions?: BoxNodeConditional[]
+  /**
+   * Spreads the extractor walked structurally, paired with what it walked them into.
+   *
+   * The map records what a spread *contributed*, so a spread that flattened and one that
+   * was silently skipped look identical once folded in — both simply add keys, or fail to.
+   * That ambiguity is why a consumer rewriting source would otherwise have to decline every
+   * spread rather than only the ones it cannot account for.
+   *
+   * The *walked* ones are listed rather than the skipped ones deliberately: a consumer asks
+   * "may I trust this spread", and a list of failures answers that only while it is
+   * exhaustive. A list of successes is safe to be incomplete — the worst an omission costs
+   * is a fold that does not happen.
+   *
+   * `box` is the map the spread flattened, and being here is **not** a promise that every
+   * one of its keys survived — the extractor omits what it cannot evaluate, at any depth. It
+   * is the handle a consumer needs to go and check for itself, which it cannot do from the
+   * flattened result. `node` is the spread's own expression, so the pair can be matched
+   * against the source being inspected.
+   *
+   * Deliberately kept off `value`, and therefore invisible to `unbox` — this describes the
+   * extraction, not the styles, and nothing that generates CSS should see it.
+   */
+  resolvedSpreads?: Array<{
+    node: Node$1
+    box: BoxNodeMap
+  }>
   constructor(definition: MapType)
   isRecipe: () => boolean
 }
@@ -13110,6 +13039,8 @@ declare class BoxNodeConditional extends BoxNodeType$1<ConditionalType> {
   constructor(definition: ConditionalType)
 }
 declare class BoxNodeEmptyInitializer extends BoxNodeType$1<EmptyInitializerType> {}
+//#endregion
+//#region src/types.d.ts
 export type PrimitiveType = string | number | boolean | null | undefined
 export interface LiteralObject {
   [key: string]: any
@@ -13127,16 +13058,46 @@ export interface Unboxed {
 export interface ResultItem {
   name?: string
   data: Array<Unboxed['raw']>
-  type?: 'css' | 'cva' | 'sva' | 'token' | 'pattern' | 'recipe' | 'jsx-factory' | 'jsx-pattern' | 'jsx-recipe' | 'jsx'
+  /**
+   * `token` is `token(path)`, the variable reference. `tokenValue` is `token.value(path)`, the
+   * literal — distinct because
+   * inlining one as the other swaps a themeable reference for a fixed value.
+   *
+   * Both live in `ParserResult.token`, since every consumer that reads a token *path* out of
+   * a result wants both.
+   */
+  type?:
+    | 'css'
+    | 'cva'
+    | 'sva'
+    | 'token'
+    | 'tokenValue'
+    | 'viewTransition'
+    | 'pattern'
+    | 'recipe'
+    | 'jsx-recipe'
+    | 'cva-call'
   box?: BoxNodeMap | BoxNodeLiteral | BoxNodeArray
+  /**
+   * For a `cva-call`, the module the recipe was declared in when that is not this one.
+   *
+   * Absent for a recipe the file declares itself, which is the case the name alone already
+   * identifies.
+   */
+  origin?: {
+    filePath: string
+    name: string
+  }
 }
 export interface ParserResultInterface {
   all: Array<ResultItem>
-  jsx: Set<ResultItem>
   css: Set<ResultItem>
   cva: Set<ResultItem>
+  /** Calls of a locally-bound inline recipe: `const b = cva(...)`, then `b({ ... })`. */
+  cvaCall: Set<ResultItem>
   sva: Set<ResultItem>
   token: Set<ResultItem>
+  viewTransition: Set<ResultItem>
   recipe: Map<string, Set<ResultItem>>
   pattern: Map<string, Set<ResultItem>>
   filePath: string | undefined
@@ -13146,8 +13107,8 @@ export interface ParserResultInterface {
   setCss: (result: ResultItem) => void
   setCva: (result: ResultItem) => void
   setSva: (result: ResultItem) => void
-  setToken: (result: ResultItem) => void
-  setJsx: (result: ResultItem) => void
+  setToken: (result: ResultItem, kind?: 'token' | 'tokenValue') => void
+  setViewTransition: (result: ResultItem) => void
   setPattern: (name: string, result: ResultItem) => void
   setRecipe: (name: string, result: ResultItem) => void
 }
@@ -13157,6 +13118,10 @@ export interface EncoderJson {
     atomic?: string[]
     recipes?: {
       [name: string]: string[]
+    }
+    /** Bag class -> the `::view-transition-*` slot styles behind it. */
+    viewTransitions?: {
+      [className: string]: Record<string, any>
     }
   }
 }
@@ -13194,10 +13159,6 @@ export interface BambooHooks {
    */
   'parser:before': (args: ParserResultBeforeHookArgs) => string | void
   /**
-   * @private USE IT ONLY IF YOU KNOW WHAT YOU ARE DOING
-   */
-  'parser:preprocess': JsxFactoryResultTransform['transform']
-  /**
    * Called after the file styles are extracted and processed into the resulting ParserResult object.
    * You can also use this hook to add your own extraction results from your custom parser to the ParserResult object.
    */
@@ -13225,9 +13186,6 @@ export interface BambooHooks {
   'css:optimize': (args: CssOptimizeHookArgs) => string | void
 }
 export type MaybeAsyncReturn<T = void> = Promise<T> | T
-/* -----------------------------------------------------------------------------
- * Token hooks
- * -----------------------------------------------------------------------------*/
 export interface TokenCssVarOptions {
   fallback?: string
   prefix?: string
@@ -13244,18 +13202,12 @@ export interface TokenConfigureOptions {
 export interface TokenCreatedHookArgs {
   configure(opts: TokenConfigureOptions): void
 }
-/* -----------------------------------------------------------------------------
- * Utility hooks
- * -----------------------------------------------------------------------------*/
 export interface UtilityConfigureOptions {
   toHash?(path: string[], toHash: (str: string) => string): string
 }
 export interface UtilityCreatedHookArgs {
   configure(opts: UtilityConfigureOptions): void
 }
-/* -----------------------------------------------------------------------------
- * Config hooks
- * -----------------------------------------------------------------------------*/
 export interface CallbackItem {
   value: any
   path: string
@@ -13293,11 +13245,9 @@ export interface PresetResolvedHookArgs {
   utils: ConfigResolvedHookUtils
   original?: LoadConfigResult['config']
 }
-/* -----------------------------------------------------------------------------
- * Parser hooks
- * -----------------------------------------------------------------------------*/
 export interface ParserResultConfigureOptions {
   matchTag?: (tag: string, isBambooComponent: boolean) => boolean
+  matchTagMode?: 'extend' | 'override'
   matchTagProp?: (tag: string, prop: string) => boolean
 }
 export interface ParserResultBeforeHookArgs {
@@ -13306,16 +13256,10 @@ export interface ParserResultBeforeHookArgs {
   configure: (opts: ParserResultConfigureOptions) => void
   original?: string
 }
-export interface JsxFactoryResultTransform {
-  transform: (result: { type: 'jsx-factory'; data: ResultItem['data'] }) => ResultItem['data']
-}
 export interface ParserResultAfterHookArgs {
   filePath: string
   result: ParserResultInterface | undefined
 }
-/* -----------------------------------------------------------------------------
- * Codegen hooks
- * -----------------------------------------------------------------------------*/
 export interface CodegenPrepareHookArgs {
   artifacts: Artifact[]
   /**
@@ -13327,9 +13271,6 @@ export interface CodegenPrepareHookArgs {
 export interface CodegenDoneHookArgs {
   changed: ArtifactId[] | undefined
 }
-/* -----------------------------------------------------------------------------
- * Cssgen hooks
- * -----------------------------------------------------------------------------*/
 export type CssgenArtifact = 'global' | 'static' | 'reset' | 'tokens' | 'keyframes' | 'styles.css'
 export interface CssgenDoneHookArgs {
   artifact: CssgenArtifact
@@ -13342,18 +13283,12 @@ export interface CssgenDoneHookArgs {
    */
   original?: string
 }
-/* -----------------------------------------------------------------------------
- * CSS optimize hooks
- * -----------------------------------------------------------------------------*/
 export interface CssOptimizeHookArgs {
   css: string
   minify?: boolean
   browserslist?: string[]
   original?: string
 }
-/* -----------------------------------------------------------------------------
- * Context hooks
- * -----------------------------------------------------------------------------*/
 export interface ContextCreatedHookArgs {
   ctx: HooksApiInterface
   logger: LoggerInterface
@@ -13403,9 +13338,6 @@ export type RecursiveToken<C extends string, V> =
 export interface SemanticToken<Value = string, Condition extends string = string> extends Token$1<
   RecursiveToken<Condition, Value>
 > {}
-/* -----------------------------------------------------------------------------
- * Token data types
- * -----------------------------------------------------------------------------*/
 export type BorderStyle =
   | 'dashed'
   | 'dotted'
@@ -13501,6 +13433,14 @@ export type PatternProperty =
     }
 export interface PatternHelpers {
   map: (value: any, fn: (value: string) => string | undefined) => any
+  /**
+   * The css variable reference for a token path, or `fallback` when the path names no token.
+   *
+   * `token('spacing.4', '4')` is `var(--spacing-4)` where that token exists and `'4'` where it
+   * does not — so a pattern can accept either a token name or a raw css value without knowing
+   * the theme.
+   */
+  token: (path: string, fallback?: string) => string | undefined
   isCssUnit: (value: any) => boolean
   isCssVar: (value: any) => boolean
   isCssFunction: (value: any) => boolean
@@ -13516,11 +13456,6 @@ export interface PatternConfig<T extends PatternProperties = PatternProperties> 
    * The description of the pattern. This will be used in the JSDoc comment.
    */
   description?: string
-  /**
-   * The JSX element rendered by the pattern
-   * @default 'div'
-   */
-  jsxElement?: string
   /**
    * The properties of the pattern.
    */
@@ -13538,26 +13473,28 @@ export interface PatternConfig<T extends PatternProperties = PatternProperties> 
    */
   deprecated?: boolean | string
   /**
-   * The jsx element name this pattern will generate.
-   */
-  jsxName?: string
-  /**
-   * The jsx elements to track for this pattern. Can be string or Regexp.
+   * Which css properties this pattern accepts alongside its own `properties`.
    *
-   * @default capitalize(pattern.name)
-   * @example ['Button', 'Link', /Button$/]
+   * - `all` accepts any css property.
+   * - `none` accepts only the pattern's declared `properties`.
+   * - `{ except }` accepts any css property but the ones listed.
+   *
+   * One option because these were two — `strict: true` for "none" and an `@experimental`
+   * `blocklist` for "all but these" — and the pair had an unrepresentable combination that
+   * silently did nothing: the blocklist is applied only to the type that lists css
+   * properties, which `strict: true` does not emit, so setting both dropped the blocklist.
+   *
+   * Types only. Nothing strips a blocked property at runtime — one passed anyway reaches
+   * `transform` and emits css.
+   *
+   * @default 'all'
    */
-  jsx?: Array<string | RegExp>
-  /**
-   * Whether to only generate types for the specified properties.
-   * This will disallow css properties
-   */
-  strict?: boolean
-  /**
-   * @experimental
-   * Disallow certain css properties for this pattern
-   */
-  blocklist?: LiteralUnion$1<CssProperty>[]
+  cssProps?:
+    | 'all'
+    | 'none'
+    | {
+        except: LiteralUnion$1<CssProperty>[]
+      }
 }
 export interface ColorPaletteOptions {
   /**
@@ -13594,17 +13531,9 @@ export interface Theme {
    */
   semanticTokens?: SemanticTokens
   /**
-   * The typography styles for your project.
+   * Named bundles of declarations, applied by name through the `mixin` style property.
    */
-  textStyles?: TextStyles
-  /**
-   * The layer styles for your project.
-   */
-  layerStyles?: LayerStyles
-  /**
-   * The animation styles for your project.
-   */
-  animationStyles?: AnimationStyles
+  mixins?: Mixins
   /**
    * Multi-variant style definitions for your project.
    * Useful for defining component styles.
@@ -13626,8 +13555,24 @@ export interface Theme {
    * The color palette configuration for your project.
    */
   colorPalette?: ColorPaletteOptions
+  /**
+   * Alternate token sets, selectable at runtime.
+   *
+   * Was a top-level `themes`, one character from `theme` and impossible for TypeScript to
+   * tell apart — both spellings were valid keys, so the typo resolved to a different
+   * feature rather than to an error. A variant is part of the theme, so it lives in it.
+   */
+  variants?: ThemeVariantsMap
 }
-export interface PartialTheme extends Omit<Theme, 'recipes' | 'slotRecipes'> {
+export interface ThemeVariant extends Pick<Theme, 'tokens' | 'semanticTokens'> {}
+export interface ThemeVariantsMap {
+  [name: string]: ThemeVariant
+}
+export interface ExtendableThemeVariantsMap {
+  [name: string]: ThemeVariantsMap | ThemeVariant | undefined
+  extend?: ThemeVariantsMap | undefined
+}
+export interface PartialTheme extends Omit<Theme, 'recipes' | 'slotRecipes' | 'variants'> {
   /**
    * Multi-variant style definitions for your project.
    * Useful for defining component styles.
@@ -13641,8 +13586,13 @@ export interface PartialTheme extends Omit<Theme, 'recipes' | 'slotRecipes'> {
    * The color palette configuration for your project.
    */
   colorPalette?: Partial<ColorPaletteOptions>
+  /**
+   * Alternate token sets, selectable at runtime.
+   */
+  variants?: ExtendableThemeVariantsMap
 }
-export interface ExtendableTheme extends Theme {
+export interface ExtendableTheme extends Omit<Theme, 'variants'> {
+  variants?: ExtendableThemeVariantsMap
   extend?: PartialTheme | undefined
 }
 export interface TokenFn {
@@ -13706,6 +13656,40 @@ export interface PropertyConfig {
    * Whether this utility is deprecated or not.
    */
   deprecated?: boolean
+  /**
+   * Custom properties this utility composes its value from, registered with `@property`.
+   *
+   * Several utilities build one declaration out of many variables — `filter` out of nine,
+   * `translate` out of its axes — while a sibling utility sets each variable on its own. The
+   * ones nobody set still have to resolve to something harmless, and they must not be
+   * inherited: a parent's `--blur` reaching its children is a leak, not a default.
+   *
+   * Declaring them here is what registers them, so the utility that reads a variable is the
+   * thing that guarantees it exists. Keeping the two together is deliberate — a default kept
+   * in a separate list drifts from the composition it serves, in both directions: it outlives
+   * the utility that needed it, and it is forgotten for the utility added later.
+   *
+   * Registration is merged across every configured utility, so more than one may name the
+   * same variable — the utility that writes it and the one that reads it will often both
+   * want to.
+   *
+   * ```ts
+   * filter: {
+   *   className: 'filter',
+   *   values: { auto: 'var(--blur, ) var(--brightness, )' },
+   *   customProperties: {
+   *     '--blur': { syntax: '*', inherits: false },
+   *     '--brightness': { syntax: '*', inherits: false },
+   *   },
+   * }
+   * ```
+   *
+   * Omitting `initialValue` gives the property the guaranteed-invalid value, which is what a
+   * `var(--x, )` reference expects — it falls back to its own empty value and composes to
+   * nothing. A variable read *without* a fallback needs one declared here instead, or the
+   * whole declaration is invalid at computed-value time.
+   */
+  customProperties?: Record<string, CssPropertyDefinition>
 }
 export type CssSemanticGroup =
   | 'Animation'
@@ -13751,6 +13735,38 @@ export type CascadeLayers = Record<CascadeLayer, string>
 export interface Patterns {
   [pattern: string]: PatternConfig
 }
+/**
+ * Everything emitted at the document level rather than against a class.
+ *
+ * These were four top-level keys — `globalCss`, `globalFontface`, `globalPositionTry` and
+ * `globalVars`. Grouping them is not only tidier: `globalVars` was the one of the four that
+ * `PresetCore` never listed, so it kept its `extend` wrapper in the *resolved* config while
+ * its three siblings lost theirs. One key cannot disagree with itself that way.
+ */
+export interface GlobalCore {
+  /**
+   * The global styles for your project.
+   */
+  css: GlobalStyleObject
+  /**
+   * The global fontface for your project.
+   */
+  fontface?: GlobalFontface
+  /**
+   * The global custom position try fallback option
+   */
+  positionTry?: GlobalPositionTry
+  /**
+   * The css variables for your project.
+   */
+  vars?: GlobalVarsDefinition
+}
+export interface ExtendableGlobal {
+  css?: ExtendableGlobalStyleObject
+  fontface?: ExtendableGlobalFontface
+  positionTry?: ExtendableGlobalPositionTry
+  vars?: ExtendableGlobalVars
+}
 export interface PresetCore {
   /**
    * The css selectors or media queries shortcuts.
@@ -13758,17 +13774,9 @@ export interface PresetCore {
    */
   conditions: Conditions
   /**
-   * The global styles for your project.
+   * Styles, fontfaces, position-try fallbacks and css variables emitted at the document level.
    */
-  globalCss: GlobalStyleObject
-  /**
-   * The global fontface for your project.
-   */
-  globalFontface?: GlobalFontface
-  /**
-   * The global custom position try fallback option
-   */
-  globalPositionTry?: GlobalPositionTry
+  global: GlobalCore
   /**
    * Used to generate css utility classes for your project.
    */
@@ -13785,10 +13793,6 @@ export interface PresetCore {
    * Common styling or layout patterns for your project.
    */
   patterns: Record<string, PatternConfig>
-  /**
-   * Multiple themes for your project.
-   */
-  themes?: ThemeVariantsMap
 }
 export interface ExtendablePatterns {
   [pattern: string]: PatternConfig | Patterns | undefined
@@ -13843,14 +13847,6 @@ export interface ExtendableGlobalPositionTry {
   [key: string]: SystemStyleObject | GlobalPositionTry | undefined
   extend?: GlobalPositionTry | undefined
 }
-export interface ThemeVariant extends Pick<Theme, 'tokens' | 'semanticTokens'> {}
-export interface ThemeVariantsMap {
-  [name: string]: ThemeVariant
-}
-export interface ExtendableThemeVariantsMap {
-  [name: string]: ThemeVariantsMap | ThemeVariant | undefined
-  extend?: ThemeVariantsMap | undefined
-}
 export interface ExtendableOptions {
   /**
    * The css selectors or media queries shortcuts.
@@ -13858,17 +13854,9 @@ export interface ExtendableOptions {
    */
   conditions?: ExtendableConditions
   /**
-   * The global styles for your project.
+   * Styles, fontfaces, position-try fallbacks and css variables emitted at the document level.
    */
-  globalCss?: ExtendableGlobalStyleObject
-  /**
-   * The global fontface for your project.
-   */
-  globalFontface?: ExtendableGlobalFontface
-  /**
-   * The global custom position try fallback option
-   */
-  globalPositionTry?: ExtendableGlobalPositionTry
+  global?: ExtendableGlobal
   /**
    * Used to generate css utility classes for your project.
    */
@@ -13885,27 +13873,17 @@ export interface ExtendableOptions {
    * Common styling or layout patterns for your project.
    */
   patterns?: ExtendablePatterns
-  /**
-   * The css variables for your project.
-   */
-  globalVars?: ExtendableGlobalVars
-  /**
-   * The theme variants for your project.
-   */
-  themes?: ExtendableThemeVariantsMap
 }
 export interface ImportMapInput {
   css?: string | string[]
   recipes?: string | string[]
   patterns?: string | string[]
-  jsx?: string | string[]
   tokens?: string | string[]
 }
 export interface ImportMapOutput<T = string> {
   css: T[]
   recipe: T[]
   pattern: T[]
-  jsx: T[]
   tokens: T[]
 }
 export type ImportMapOption = string | ImportMapInput
@@ -13928,7 +13906,7 @@ export interface FileSystemOptions {
    *    css: 'styled-system/css',
    *    recipes: 'styled-system/recipes',
    *    patterns: 'styled-system/patterns',
-   *    jsx: 'styled-system/jsx',
+   *    tokens: 'styled-system/tokens',
    * }
    * ```
    */
@@ -13970,59 +13948,78 @@ export interface FileSystemOptions {
    * @default 'info'
    */
   logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'silent'
+  /**
+   * Show only the log types matching this pattern, at debug level.
+   *
+   * Log types are namespaced — `vite:transform`, `tokens:unresolved`, `prune:tokens`,
+   * `config` — so `'prune:*'` follows one subsystem without raising `logLevel` and
+   * un-silencing everything else.
+   *
+   * The matcher already existed and was reachable only through the `BAMBOO_DEBUG`
+   * environment variable, which put it out of reach of a checked-in config.
+   *
+   * @example 'vite:*, prune:tokens'
+   */
+  logFilter?: string
 }
-export type JsxFramework = 'react' | 'solid' | 'preact' | 'vue' | 'qwik'
-export interface JsxOptions {
+export interface PreflightOptions {
   /**
-   * The framework to use for generating supercharged elements.
+   * A selector the reset is confined to, so it does not style the whole document.
    */
-  jsxFramework?: JsxFramework | (string & {})
+  scope?: string
   /**
-   * The factory name of the element
-   * @default 'styled'
-   *
-   * @example
-   * ```jsx
-   * <styled.button marginTop="40px">Click me</styled.button>
-   * ```
+   * Where the scope is written. `parent` gives `.app table`, `element` gives `table.app`.
+   * @default 'parent'
    */
-  jsxFactory?: string
+  level?: 'element' | 'parent'
   /**
-   * The style props allowed on generated JSX components
-   * - When set to 'all', all style props are allowed.
-   * - When set to 'minimal', only the `css` prop is allowed.
-   * - When set to 'none', no style props are allowed and therefore the jsxFactory will not be importable.
+   * Whether to drop the parts of the reset that style elements your source never renders.
    *
-   * @default 'all'
+   * Two thirds of the reset is bound to specific elements — 41 of them, covering `table`,
+   * `pre`, `kbd`, `optgroup` and the rest of the long tail. The reset is a fixed size, so it
+   * dominates a small stylesheet: a third of one sandbox's css here and four fifths of
+   * another's, of which 13% and 34% respectively is for elements those projects never render.
    *
-   * @example with 'all':
-   * ```jsx
-   * <styled.button marginTop="40px">Click me</styled.button>
-   * ```
+   * A selector list loses only the parts naming unrendered elements, so a rule shared between
+   * `button` and `::file-selector-button` keeps the half that still applies. `html` and `body`
+   * are never removed.
    *
-   * @example with 'minimal':
-   * ```jsx
-   * <styled.button css={{ marginTop: "40px" }}>Click me</styled.button>
-   * ```
+   * Off by default, and it cannot be made safe by default. Unlike the token and keyframe
+   * passes there is nothing to prove this against: an element rendered by a dependency's
+   * component, by `dangerouslySetInnerHTML`, or by markdown is invisible to a scan of your own
+   * source. What you get wrong is an element quietly losing its reset — no error, no warning.
+   * Reach for it when you control the markup and have measured that it pays.
    *
-   * @example with 'none':
-   * ```jsx
-   * <button className={css({ marginTop: "40px" })}>Click me</button>
-   * ```
+   * The blind spot to check first is your own entry template. The scan reads `include`, and
+   * `include` conventionally covers components rather than markup — a glob rooted at `./src`
+   * does not match `index.html`, so an element appearing only there is dropped. Add the
+   * template to `include` to cover it — the scan reads any file listed, not only ones the
+   * parser understands, and reads it from disk rather than from the build's parsed copy, so
+   * a single-file component's markup survives the transform to tsx.
+   *
+   * A scoped reset is handled: `preflight: { scope: '.app', prune: true }` writes `.app table`,
+   * and the scope is stripped before an element is read out. `bamboo cssgen preflight` prunes
+   * too.
+   *
+   * @default false
    */
-  jsxStyleProps?: 'all' | 'minimal' | 'none'
+  prune?: boolean
 }
 export interface CssgenOptions {
   /**
-   * Whether to include css reset styles in the generated css.
+   * Whether to include css reset styles in the generated css, and how.
+   *
+   * `true` is shorthand for `{}` — on, with the defaults. `false` is the only form that means
+   * off, so it has no object spelling.
+   *
+   * `prune` used to be `prune.preflight`, a second key of the same name one level away, so a
+   * config could ask for a reset in one place and reshape it in another. It lives here because
+   * everything it needs is here: pruning a scoped reset means stripping `scope` before an
+   * element can be read out of a selector.
+   *
    * @default false
    */
-  preflight?:
-    | boolean
-    | {
-        scope: string
-        level?: 'element' | 'parent'
-      }
+  preflight?: boolean | PreflightOptions
   /**
    * The namespace prefix for the generated css classes and css variables.
    * @default ''
@@ -14040,19 +14037,27 @@ export interface CssgenOptions {
   separator?: '_' | '=' | '-'
   /**
    * Whether to minify the generated css.
+   *
+   * Worth about 21% of the raw stylesheet and 5–7% gzipped on the example apps here. The
+   * gzip figure is the smaller one because compression has already collapsed the indentation
+   * before you get there — but unlike renaming what is emitted, it never comes out negative.
+   *
+   * Off by default so the generated stylesheet stays readable, and because most projects
+   * hand it to a bundler that minifies css in production anyway. Worth turning on if you
+   * ship `styled-system/styles.css` directly, or pass `--minify` to the CLI for one build.
+   *
    * @default false
    */
   minify?: boolean
   /**
+   * What to drop from the generated stylesheet. See `PruneOptions`.
+   */
+  prune?: PruneOptions
+  /**
    * The root selector for the css variables.
-   * @default ':where(:host, :root)'
+   * @default ':where(:root, :host)'
    */
   cssVarRoot?: string
-  /**
-   * Whether to use `lightningcss` instead of `postcss` for css optimization.
-   * @default false
-   */
-  lightningcss?: boolean
   /**
    * Browserslist query to target specific browsers.
    * @see https://www.npmjs.com/package/browserslist
@@ -14070,6 +14075,9 @@ export interface CssgenOptions {
    */
   polyfill?: boolean
 }
+export type UnresolvedTokenSeverity = 'off' | 'warn' | 'error'
+/** `'auto'` hashes in production and leaves names readable in development. */
+export type HashSetting = boolean | 'auto'
 export interface CodegenOptions {
   /**
    * Whether to only emit the `tokens` directory
@@ -14078,19 +14086,56 @@ export interface CodegenOptions {
   emitTokensOnly?: boolean
   /**
    * Whether to hash the generated class names / css variables.
-   * This is useful if want to shorten the class names or css variables.
+   *
+   * Readable names cost nothing for most of what a project writes — `fs_14px` and `c_accent`
+   * gzip to within a rounding error of a hash, because they repeat. What does cost is an
+   * *arbitrary* value, which is escaped into the name whole: one measured project carried a
+   * complete `linear-gradient(…)` as a 105-character class, and escaped names were 20% of all
+   * class-attribute bytes. Those do not compress away, because the redundancy is inside one long
+   * token rather than across repeated short ones.
+   *
+   * `'auto'` is the answer to both: readable while you are looking at them, hashed when nobody
+   * is. The mode comes from the integration — the Vite plugin's dev server is development and
+   * everything else is production — and is fixed for the life of a context, so the emitted CSS
+   * and the compiled class literals cannot disagree about a name.
+   *
    * @default false
    */
   hash?:
-    | boolean
+    | HashSetting
     | {
-        cssVar: boolean
-        className: boolean
+        cssVar?: HashSetting
+        className?: HashSetting
       }
   /**
-   * Change generated typescript definitions to be more strict for property having a token or utility.
+   * Whether this context is serving a development build.
+   *
+   * Set by the integration rather than by a project — the Vite plugin's dev server is the only
+   * thing that knows — and read by `hash: 'auto'`. It is deliberately not a mode switch for
+   * anything else: a class name that differs between dev and prod is one thing, and CSS that
+   * differs is another.
+   *
+   * @default false
    */
-  strictTokens?: boolean
+  dev?: boolean
+  /**
+   * Require every style value to be a token, so a raw CSS value has to be written `'[14px]'`.
+   *
+   * A design-system policy rather than a correctness check: it is how a team says "everything
+   * goes through the theme", and the brackets are what make reaching outside it visible in the
+   * source. On one otherwise-correct five-page app it reports 468 values, which is what makes
+   * it a day-one decision.
+   *
+   * A *keyword* is not a raw value. `display: 'flex'` is the only way to say that, so it is
+   * left alone — a distinction the type-level version of this could not draw, which is why it
+   * did not narrow `display` at all and let `display: 'abc'` through with it.
+   *
+   * Reported by the build, graded by `validation`, and it is not what catches a misspelled
+   * token — see `unresolvedToken`, which is on by default and needs no setting.
+   *
+   * @default false
+   */
+  strictValues?: boolean
   /**
    * Change generated typescript definitions to be more strict for built-in CSS properties to only allow valid CSS values.
    */
@@ -14111,51 +14156,310 @@ export interface CodegenOptions {
    */
   outExtension?: 'mjs' | 'js'
   /**
-   * Whether to force consistent type extensions for generated typescript .d.ts files.
-   * If set to `true` and `outExtension` is set to `mjs`, the generated typescript .d.ts files will have the extension `.d.mts`.
+   * Emit `.d.mts` declarations beside `.mjs`, and import them by their `.mjs` specifier.
+   *
+   * Off by default, which looks like the wrong default and is not. `moduleResolution:
+   * bundler` — Vite, Next, and most of what consumes this — resolves a directory import
+   * like `styled-system/css` by probing `index.ts`, `index.tsx`, `index.d.ts`, `index.js`.
+   * That list has no `.d.mts` in it, so turning this on makes every such import fail with
+   * `TS2307: Cannot find module`. It is for `node16`/`nodenext` consumers, who need the
+   * extensions to agree and who import by full specifier anyway.
+   *
+   * So this is a real fork in resolution behaviour rather than a flag with a correct
+   * setting, which is why it survived an attempt to delete it: making it unconditional
+   * broke every bundler-mode project in this repo.
+   *
+   * Only meaningful when `outExtension` is `mjs`.
+   *
    * @default false
    */
   forceConsistentTypeExtension?: boolean
 }
 export interface PresetOptions {
   /**
-   * Used to create reusable config presets for your project or team.
+   * The complete list of presets, in order. Reusable across a project or team.
+   *
+   * Authoritative: what you write is what is loaded. Import `defaultPresets` to keep the
+   * defaults alongside your own.
+   *
+   * ```ts
+   * import { defaultPresets } from '@bamboocss/dev/presets'
+   * presets: [...defaultPresets, myPreset]
+   * ```
+   *
+   * Leaving it unset loads `defaultPresets`. Setting it to `[]` loads nothing — which is
+   * what the removed `eject: true` meant. Previously neither was true of a config that
+   * merely *listed* a preset: doing so kept `@bamboocss/preset-base` and silently dropped
+   * `@bamboocss/preset-bamboo`, so `presets` was neither additive nor replacing.
    */
   presets?: (string | Preset | Promise<Preset>)[]
 }
-export interface HooksOptions {
-  hooks?: Partial<BambooHooks>
-}
-export interface BambooPlugin extends HooksOptions {
+/**
+ * A named set of hooks.
+ *
+ * The name is the point. Hooks used to be registrable two ways — here, and as a bare
+ * `hooks` key on the config — with the config's own set treated as a nameless plugin
+ * appended last. That gave one mechanism two spellings and an ordering rule you had to
+ * know, while every diagnostic about a hook had a name to print for one of them and not
+ * the other. Your own hooks are now a plugin like any other, so ordering is just the order
+ * of this array.
+ */
+export interface BambooPlugin {
   name: string
+  hooks?: Partial<BambooHooks>
 }
 export interface PluginsOptions {
   plugins?: BambooPlugin[]
 }
-export interface Config
-  extends
-    ExtendableOptions,
-    CssgenOptions,
-    CodegenOptions,
-    FileSystemOptions,
-    JsxOptions,
-    PresetOptions,
-    HooksOptions,
-    PluginsOptions {
+/**
+ * What to drop from the generated stylesheet, and how to account for it.
+ *
+ * These were three top-level options — `pruneUnusedTokens`, `pruneUnusedKeyframes` and
+ * `prunePreflight` — which disagreed with each other on all three of naming, default and
+ * value type. Grouping them is what makes one default reading of "prune" possible.
+ */
+export interface PruneOptions {
   /**
-   * Whether to opt-out of the defaults config presets: [`@bamboocss/preset-base`, `@bamboocss/preset-bamboo`]
-   * @default 'false'
+   * Whether to drop token css variables nothing asks for.
+   *
+   * The token layer declares every token in the theme, and an app typically uses a small
+   * fraction of them, so this is usually the largest single saving in render-blocking css.
+   *
+   * A variable is kept when the generated css references it, when a kept variable's own value
+   * references it, or when javascript under `include` names it — a `token()` or `token.value()`
+   * call, or a literal `var(--x)` written by hand. Paths are read through a constant or a
+   * template literal the extractor can follow, not only from a literal spelled at the call.
+   *
+   * A path the build cannot follow falls back to keeping every declaration rather than
+   * silently dropping one, because `token()` hands back a `var()` for every token and an
+   * unreadable path could name any of them. `unresolvedPath` decides whether that fallback is
+   * reported, and `keepTokens` replaces it with a bound you declare.
+   *
+   * A template literal is bounded rather than declined: `` token(`colors.${shade}`) `` cannot
+   * say which token it wants, but it says which it *cannot*, so the `colors` category is kept
+   * and nothing else. That covers the commonest dynamic read outright. What it does not cover
+   * is a path with no static head — `token(key)`, `token('colors.' + shade)` — and there
+   * `keepTokens` is the answer.
+   *
+   * A local binding named `token` is not the artifact and is not a reference: `token` is the
+   * obvious name for a token *object*, and `items.map((token) => token.value)` reads a
+   * parameter. Parameters, catch variables, function and class declarations, and a variable
+   * destructured off one of those are all resolved rather than matched by spelling.
+   *
+   * Three things stay invisible: a token named by a path assembled from a value that only
+   * exists at runtime, one referenced only from a stylesheet outside `include`, and one used
+   * by a separate package consuming the output as design tokens. The scan reads `include`,
+   * which scopes style extraction rather than everything that may import — so a script, a
+   * config, or a sibling workspace package that calls `token()` is not covered, nor is a
+   * binding renamed away from `token`, as in `const t = token`. Name them with `keepTokens`.
+   *
+   * A custom property declared by `global.css` or `global.vars` is not one of these cases:
+   * the declaration ships whether or not anything in the stylesheet reads it, so whatever it
+   * references is kept alongside it.
+   *
+   * This was three strategies — `'off' | 'reachable' | 'accounted'` — which conflated two
+   * separate questions: how hard to try, and what to say when it fails. `'reachable'` answered
+   * one cheap boolean ("does any javascript reach for a token") and threw away everything else
+   * it had read, so a single `token()` call anywhere kept all 468 declarations of the default
+   * preset. `'accounted'` did the work but was framed as an assertion, so it reported by
+   * default and had to be asked for. Doing the work is now the default and saying so is
+   * `unresolvedPath`; a file that never spells `token` is skipped, so the accounting costs
+   * nothing where there is nothing to account for.
+   *
+   * @default true
    */
-  eject?: boolean
+  tokens?: boolean
   /**
-   * The validation strictness to use when validating the config.
-   * - When set to 'none', no validation will be performed.
-   * - When set to 'warn', warnings will be logged when validation fails.
-   * - When set to 'error', errors will be thrown when validation fails.
+   * Token paths to keep whatever the build can see, as exact names or `*` patterns.
+   *
+   * ```ts
+   * prune: { keepTokens: ['colors.*'] }
+   * ```
+   *
+   * This is the bound the build could not infer, written by hand. It exists because the
+   * fallback is otherwise total: **one** reference the accounting cannot follow keeps every
+   * declaration in the project, so a codebase with a single `token(key)` in it gets the same
+   * stylesheet as one that never prunes — and the codebases that reach for `token()` most are
+   * exactly the ones that end up there. Naming the category those dynamic reads land in is a
+   * far smaller answer than keeping everything, and it is the same answer the build already
+   * derives for itself from a template literal's static head.
+   *
+   * So this does two things: it keeps what it matches, and it stands in for what could not be
+   * followed, in place of the blanket keep. Saying `keepTokens: ['colors.*']` is saying *the
+   * reads you cannot follow land in `colors`* — an assertion about your own code, which is why
+   * nothing infers it for you. Under `unresolvedPath: 'warn'` the declines are still printed, so
+   * you can see what you are covering; `'error'` fails, because asserting every path resolves and
+   * declaring a bound for the ones that do not are contradictory requests.
+   *
+   * With nothing to stand in for it is additive only, naming a token nothing in the stylesheet
+   * references and no javascript here reads — one consumed by a sibling package, or by css
+   * outside `include`. It is inert under `tokens: false`, which keeps everything already.
+   *
+   * Patterns match the dotted token *path*, anchored and case-sensitively, with `*` standing
+   * for any run of characters and a leading `!` excluding. `colors.*` keeps every colour,
+   * `colors.brand.*` one palette, `colors.red.300` one token, `['colors.*', '!colors.legacy.*']`
+   * every colour but one palette.
+   *
+   * The path, not the css variable: a token is `fontSizes.3xl` and its declaration is
+   * `--font-sizes-3xl`, so `font-sizes.*` — the natural thing to write after reading
+   * `styles.css` — matches nothing at all. A pattern matching no token is reported, and names
+   * the spelling that would have worked, because keeping nothing is otherwise silent in a build
+   * whose whole job here is dropping things.
+   *
+   * This replaces `staticCss` as the way to keep a category alive. `staticCss` emits utility
+   * *classes* — keeping the colours meant shipping a rule per colour to hold the declarations
+   * up, which is a larger stylesheet than the pruning saved.
+   */
+  keepTokens?: string[]
+  /**
+   * What to do about a token path the build cannot follow.
+   *
+   * A path spelled at the call resolves; one assembled at runtime does not. An unfollowable
+   * path is what forces the keep set back onto every declaration — unless `keepTokens` names
+   * the bound — so this decides whether that happens quietly, loudly, or not at all.
+   *
+   * - `off` falls back and says nothing.
+   * - `warn` falls back and reports what it could not follow.
+   * - `error` fails the build, so the fallback can never ship unnoticed.
+   *
+   * The keeps are identical across all three: this decides how loudly, and nothing else.
+   *
+   * It defaults to `off` because pruning is an inference the build makes on its own rather
+   * than a claim you asked it to check, and a default that reports has to be right about
+   * every project or it is just noise. Reach for `warn` when the token layer is larger than
+   * you expect — it names what is holding the keep set open — and `error` to assert that it
+   * never falls back at all.
+   *
+   * Inert under `tokens: false`, which keeps everything and runs no accounting pass.
+   *
+   * `error` and `keepTokens` do not combine: one asserts every path resolves, the other
+   * declares where the ones that do not will land. A project that cannot make the first
+   * assertion wants `warn`, which still prints every reference being covered.
+   *
+   * Named for what it checks rather than `strict`, which already means something unrelated
+   * here: `strictTokens` and `strictPropertyValues` narrow generated *typescript*, and
+   * neither implies nor is implied by this.
+   *
+   * @default 'off'
+   */
+  unresolvedPath?: 'off' | 'warn' | 'error'
+  /**
+   * Drop an `@property` registration the finished stylesheet neither declares nor reads.
+   *
+   * A preset registers what its utilities compose — filters, gradients, transforms,
+   * transitions — and ships the whole set regardless of what the app draws, so an app using
+   * none of them carries all of it for nothing.
+   *
+   * Its own flag rather than a side effect of `tokens`, which is what it used to be: the
+   * registrations were dropped even under the old `tokens: false`, so an option documented
+   * as keeping every token declaration quietly removed something else. These are not tokens
+   * — nothing hands one to javascript and none appear in the `token()` surface — so the
+   * reachability problem that makes `tokens` cautious does not apply to them.
+   *
+   * Registrations declared through `global.vars` are yours and are never removed.
+   *
+   * @default true
+   */
+  propertyRegistrations?: boolean
+  /**
+   * Drop `@keyframes` rules nothing can reach.
+   *
+   * A preset declares every animation it offers and an app uses a handful, so the rest
+   * are dead weight in the stylesheet that blocks first paint. Only keyframes the theme
+   * declares are ever removed — one emitted by `global.css` is left alone.
+   *
+   * A name is kept when any declaration in the generated css names it, when a token
+   * declaration that *survives* `tokens` names it, and when it appears anywhere under
+   * `include` — which covers an animation assembled at runtime or applied through an inline
+   * `style` rather than through bamboo. That textual fallback is deliberately
+   * over-inclusive: keeping an unused keyframe costs bytes, dropping a used one breaks the
+   * animation.
+   *
+   * The middle one is why this cannot be read off the stylesheet alone. `--animations-drawer:
+   * slide-in-right 400ms` reaches its keyframe only if something reaches the property, and a
+   * property can be reached from outside the css entirely — a `token()` call, a `keepTokens`
+   * pattern, a theme, a `globalCss` export. Those are exactly the tokens `tokens` keeps, so
+   * this defers to that pass rather than asking again: a keyframe is dropped only when the
+   * declarations naming it were dropped too. Under `tokens: false` nothing is removable, so
+   * every keyframe a declaration names is kept.
+   *
+   * @default true
+   */
+  keyframes?: boolean
+}
+export interface Config
+  extends ExtendableOptions, CssgenOptions, CodegenOptions, FileSystemOptions, PresetOptions, PluginsOptions {
+  /**
+   * What to do when the config does not validate.
+   *
+   * - `off` performs no validation.
+   * - `warn` logs what failed.
+   * - `error` throws.
+   *
+   * This grades opinions about a config that still builds. Two checks are not that, run
+   * ahead of it, and answer to nothing here: a retired token spelling, which is output that
+   * is already broken; and an option that has been removed, which is proof the config
+   * predates the version reading it. Both throw at any setting, including `off`.
+   *
+   * A removed option throws rather than warns because a warning is not a signal anything
+   * acts on. Removals ship in minor versions, so a warning is what an automated dependency
+   * upgrade merges without a person reading it — while the option itself is silent in every
+   * other way, reverting to the default and taking the assertion it asked for with it. An
+   * unknown key is a different case and still tolerated: it may be forward-compatible, a
+   * setting for a version not installed yet. A *removed* key can only be backward.
    *
    * @default 'warn'
    */
-  validation?: 'none' | 'warn' | 'error'
+  validation?: 'off' | 'warn' | 'error'
+  /**
+   * What to do about a style value shaped like a token path that resolves to no token.
+   *
+   * - `off` says nothing.
+   * - `warn` logs each one as it is transformed.
+   * - `error` fails the build, listing every one it found.
+   *
+   * Every branch of the resolver ends in `|| value`, so an unknown path is emitted as
+   * written: `background: 'accent.default'` ships as `background: accent.default`. That
+   * parses, so nothing downstream objects and the stylesheet is valid — the browser drops the
+   * declaration at compute time and the style is simply absent. It surfaces as "this colour
+   * never applied", a long way from the typo that caused it, and a build carrying one warns
+   * identically on every run until somebody happens to read the log.
+   *
+   * `warn` is the default because the test is a *shape*: a dotted value against the set of
+   * values the property enumerates. That is right about a mistyped token and cannot be sure
+   * about a literal, so escalating it is a choice a project makes once it knows its own
+   * source is clean. `[accent.default]` marks a value as literal and is never reported.
+   *
+   * Not to be confused with {@link PruneOptions.unresolvedPath}, which is about a `token()`
+   * *call* whose path the prune scan cannot follow statically — a question about pruning
+   * coverage, asked of a token that usually exists. This one is about a token that does not.
+   *
+   * A binding that does not exist is not graded here and always throws: that is read off an
+   * entrypoint's own export list rather than inferred, so there is no setting under which it
+   * is what someone meant.
+   *
+   * Two halves, graded apart, because they are not equally certain.
+   *
+   * A property that draws from a token category — `color` from `colors`, `top` from `spacing` —
+   * makes a name that is not a token bamboo's own bookkeeping, and there is no third party to be
+   * wrong about it. That half defaults to `'error'`.
+   *
+   * Everywhere else the judge is the CSS grammar, whose data lags the spec: `containerType:
+   * 'scroll-state'` is valid CSS that the grammar has not caught up with. Sweeping every keyword
+   * csstype enumerates through it found 8 such disagreements in 10,128 pairs — 0.08%, and all 8
+   * on properties with no token category. That half defaults to `'warn'`, so a build is never
+   * failed by how fresh a grammar is.
+   *
+   * A single severity applies to both.
+   *
+   * @default { token: 'error', grammar: 'warn' }
+   */
+  unresolvedToken?:
+    | UnresolvedTokenSeverity
+    | {
+        token?: UnresolvedTokenSeverity
+        grammar?: UnresolvedTokenSeverity
+      }
 }
 export interface Preset extends ExtendableOptions, PresetOptions {
   name: string
@@ -14194,24 +14498,16 @@ export interface PrefixOptions {
 }
 export type ReqConf = Required<UserConfig>
 export type ConfigPath = Exclude<
-  | Exclude<NonNullable<Keys<ReqConf>>, 'theme'>
+  | Exclude<NonNullable<Keys<ReqConf>>, 'theme' | 'global' | 'prune'>
   | PathIn<ReqConf, 'theme'>
+  | PathIn<ReqConf, 'global'>
+  | PathIn<ReqConf, 'prune'>
   | PathIn<ReqConf, 'patterns'>
   | PathIn<ReqConf, 'staticCss'>
   | (string & {}),
   undefined
 >
-export type ReportItemType =
-  | 'css'
-  | 'cva'
-  | 'sva'
-  | 'token'
-  | 'pattern'
-  | 'recipe'
-  | 'jsx-factory'
-  | 'jsx-pattern'
-  | 'jsx-recipe'
-  | 'jsx'
+export type ReportItemType = 'css' | 'cva' | 'sva' | 'token' | 'viewTransition' | 'pattern' | 'recipe' | 'jsx-recipe'
 export type ComponentKind = 'component' | 'function'
 export interface PropertyLocationRange {
   startPosition: number
@@ -14362,6 +14658,8 @@ export interface WatchOptions extends InputOptions {
 interface FileSystem$1 {
   readDirSync(dir: string): string[]
   existsSync(fileLike: string): boolean
+  /** False for a path that does not exist, so a caller never has to test twice. */
+  isDirSync(path: string): boolean
   glob(opts: InputOptions): string[]
   readFileSync(filePath: string): string
   rmDirSync(dirPath: string): void
@@ -14394,14 +14692,11 @@ export type SpecType =
   | 'conditions'
   | 'keyframes'
   | 'semantic-tokens'
-  | 'text-styles'
-  | 'layer-styles'
-  | 'animation-styles'
+  | 'mixins'
   | 'color-palette'
   | 'themes'
 export interface Examples {
   functionExamples: string[]
-  jsxExamples: string[]
 }
 export interface TokenValue {
   name: string
@@ -14459,7 +14754,6 @@ export interface PatternSpecDefinition extends Examples {
   name: string
   description?: string
   properties: PatternSpecProperty[]
-  jsx?: string
 }
 export interface PatternSpec {
   type: 'patterns'
@@ -14480,36 +14774,19 @@ export interface KeyframeSpec {
   type: 'keyframes'
   data: KeyframeSpecDefinition[]
 }
-export interface TextStyleSpecDefinition extends Examples {
+export interface MixinSpecDefinition extends Examples {
   name: string
   description?: string
 }
-export interface TextStyleSpec {
-  type: 'text-styles'
-  data: TextStyleSpecDefinition[]
-}
-export interface LayerStyleSpecDefinition extends Examples {
-  name: string
-  description?: string
-}
-export interface LayerStyleSpec {
-  type: 'layer-styles'
-  data: LayerStyleSpecDefinition[]
-}
-export interface AnimationStyleSpecDefinition extends Examples {
-  name: string
-  description?: string
-}
-export interface AnimationStyleSpec {
-  type: 'animation-styles'
-  data: AnimationStyleSpecDefinition[]
+export interface MixinSpec {
+  type: 'mixins'
+  data: MixinSpecDefinition[]
 }
 export interface ColorPaletteSpec {
   type: 'color-palette'
   data: {
     values: string[]
     functionExamples: string[]
-    jsxExamples: string[]
   }
 }
 export interface ThemeTokenValue {
@@ -14543,9 +14820,7 @@ export type SpecFile =
   | PatternSpec
   | ConditionSpec
   | KeyframeSpec
-  | TextStyleSpec
-  | LayerStyleSpec
-  | AnimationStyleSpec
+  | MixinSpec
   | ColorPaletteSpec
   | ThemesSpec
 export interface SpecTypeMap {
@@ -14555,21 +14830,11 @@ export interface SpecTypeMap {
   patterns: PatternSpec
   conditions: ConditionSpec
   keyframes: KeyframeSpec
-  'text-styles': TextStyleSpec
-  'layer-styles': LayerStyleSpec
-  'animation-styles': AnimationStyleSpec
+  mixins: MixinSpec
   'color-palette': ColorPaletteSpec
   themes: ThemesSpec
 }
 
-export {
-  CssProperties$1 as CssProperties,
-  FileSystem$1 as FileSystem,
-  LiteralUnion$1 as LiteralUnion,
-  Number$1 as Number,
-  Primitive$1 as Primitive,
-  String$1 as String,
-  TSConfig,
-}
+export { Recursive$1 as Recursive, TSConfig, Token$1 as Token }
 
 export {}

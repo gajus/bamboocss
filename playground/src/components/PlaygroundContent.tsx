@@ -1,4 +1,3 @@
-'use client'
 import { UseConfig } from '@/src/hooks/useConfig'
 import { useBamboo } from '@/src/hooks/useBamboo'
 import { UsePlayground } from '@/src/hooks/usePlayground'

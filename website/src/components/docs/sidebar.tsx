@@ -5,10 +5,9 @@ import { docsNavigation, type NavItem } from '@/docs.config'
 import { ChevronDownIcon, ChevronRightIcon } from '@/icons'
 import { css } from '@/styled-system/css'
 import { flex } from '@/styled-system/patterns'
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 import { LuArrowUpRight } from 'react-icons/lu'
+import { Link, useLocation } from 'react-router'
 
 interface SidebarItem {
   title: string
@@ -24,7 +23,7 @@ interface Props {
 }
 
 export function Sidebar({ slug: currentSlug }: Props) {
-  const pathname = usePathname()
+  const { pathname } = useLocation()
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set())
 
   // Use the sidebar structure from config
@@ -163,7 +162,7 @@ export function Sidebar({ slug: currentSlug }: Props) {
                   return (
                     <Link
                       key={item.slug}
-                      href={`/docs/${item.slug}`}
+                      to={`/docs/${item.slug}`}
                       data-current={isActive(item.slug) || undefined}
                       className={linkStyles}
                     >

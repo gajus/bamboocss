@@ -62,15 +62,16 @@ export function extract(code: string, config?: UserConfig) {
     ...staticCssArtifacts,
   ]
 
-  const css = cssArtifacts.map((a) => a.code ?? '').join('\n')
+  const css = cssArtifacts.map((artifact) => artifact.code ?? '').join('\n')
 
   console.log(parserResult)
 
   const jsArtifacts = context.getArtifacts() ?? []
-
-  const allJsFiles = jsArtifacts.flatMap((a) => a?.files.filter((f) => f.file.endsWith('.mjs')) ?? [])
+  const allJsFiles = jsArtifacts.flatMap(
+    (artifact) => artifact?.files.filter((file) => file.file.endsWith('.mjs')) ?? [],
+  )
   const js = allJsFiles
-    .map((f) => f.code?.replaceAll(/import .*/g, '').replaceAll(/export \* from '(.+?)';/g, ''))
+    .map((file) => file.code?.replaceAll(/import .*/g, '').replaceAll(/export \* from '(.+?)';/g, ''))
     ?.join('\n')
 
   return { css, js }

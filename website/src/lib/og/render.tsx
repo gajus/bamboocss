@@ -1,6 +1,7 @@
-import { ImageResponse } from 'next/og'
+import { Resvg } from '@resvg/resvg-js'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
+import satori from 'satori'
 import { Logo } from './logo'
 
 export const OG_SIZE = { width: 1200, height: 630 }
@@ -28,8 +29,8 @@ const getFontSize = (title: string) => {
 // a promise created in one request's I/O context cannot be awaited in another.
 const loadFont = () => readFile(path.join(process.cwd(), 'styles', 'Onest-Bold.ttf'))
 
-export const renderOgImage = async ({ title = DEFAULT_TITLE, description, category }: OgImageProps) =>
-  new ImageResponse(
+export const renderOgImage = async ({ title = DEFAULT_TITLE, description, category }: OgImageProps) => {
+  const svg = await satori(
     <div
       style={{
         display: 'flex',
@@ -129,3 +130,9 @@ export const renderOgImage = async ({ title = DEFAULT_TITLE, description, catego
       ],
     },
   )
+
+  const png = new Resvg(svg, { fitTo: { mode: 'width', value: OG_SIZE.width } }).render().asPng()
+  return new Response(Uint8Array.from(png), {
+    headers: { 'Content-Type': OG_CONTENT_TYPE },
+  })
+}

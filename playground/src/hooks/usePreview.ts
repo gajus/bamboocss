@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useTheme } from 'next-themes'
+import { useTheme } from './useTheme'
 
 export function usePreview() {
   const [contentRef, setContentRef] = useState<HTMLIFrameElement | null>(null)
@@ -49,14 +49,15 @@ export function usePreview() {
 
     sender()
 
-    const listener = window.addEventListener('message', function (event) {
+    const listener = (event: MessageEvent) => {
       if (event.data.action === 'getColorMode') {
         sender()
       }
-    })
+    }
+    window.addEventListener('message', listener)
 
     return () => {
-      window.removeEventListener('message', listener as any)
+      window.removeEventListener('message', listener)
     }
   }, [resolvedTheme, contentRef])
 

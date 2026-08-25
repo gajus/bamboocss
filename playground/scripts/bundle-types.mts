@@ -8,7 +8,7 @@ const tsconfigPath = path.join(__dirname, '../tsconfig.json')
 const dts = (relative: string) => path.join(__dirname, '../node_modules/' + relative)
 
 const dtsFiles = {
-  ['@bamboocss/dev']: dts('@bamboocss/dev/dist/index.d.ts'),
+  ['@bamboocss/dev']: dts('@bamboocss/dev/dist/index.d.mts'),
   ['react']: dts('@types/react/index.d.ts'),
 }
 

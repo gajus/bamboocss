@@ -5,6 +5,9 @@ packages:
   - 'playground'
   - 'website'
 
+overrides:
+  dts-bundle-generator>typescript: 5.9.3
+
 allowBuilds:
   '@parcel/watcher': true
   '@prisma/client': true

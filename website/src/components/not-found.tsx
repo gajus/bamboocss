@@ -1,10 +1,8 @@
 import { css } from '@/styled-system/css'
 import { container, flex } from '@/styled-system/patterns'
-import Link from 'next/link'
+import { Link } from 'react-router'
 
-export default function Page() {
-  // The background is yellow in both themes, so the text colour has to be pinned to match
-  // rather than following the theme's foreground.
+export function NotFound() {
   return (
     <div className={css({ bg: 'yellow.300', color: 'black', height: 'dvh' })}>
       <div className={container({ py: '20', textAlign: 'center' })}>
@@ -18,7 +16,7 @@ export default function Page() {
                 fontWeight: 'medium',
                 textDecoration: 'underline',
               })}
-              href="/docs"
+              to="/docs"
             >
               Back to docs
             </Link>

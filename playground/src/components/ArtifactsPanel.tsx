@@ -102,12 +102,10 @@ export const ArtifactsPanel = React.memo(function ArtifactsPanel(props: Artifact
             ))}
           </SegmentGroup.Root>
           <span
-            className={css({
-              expanded: open ? '' : undefined,
-              transform: { _expanded: 'rotate(180deg)' },
-              transition: 'all .2s ease',
-              color: { _expanded: { _dark: 'primary' } },
-            })}
+            className={cx(
+              css({ transition: 'all .2s ease' }),
+              open && css({ transform: 'rotate(180deg)', color: { _dark: 'primary' } }),
+            )}
           >
             <ChevronUpIcon />
           </span>

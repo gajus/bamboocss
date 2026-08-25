@@ -1,5 +1,11 @@
 # @bamboocss/plugin-vue
 
+## 1.48.5
+
+### Patch Changes
+
+- @bamboocss/types@1.48.5
+
 ## 1.48.4
 
 ### Patch Changes

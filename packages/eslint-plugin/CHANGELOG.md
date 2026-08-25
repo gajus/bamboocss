@@ -1,5 +1,13 @@
 # @bamboocss/eslint-plugin
 
+## 1.48.5
+
+### Patch Changes
+
+- @bamboocss/config@1.48.5
+- @bamboocss/generator@1.48.5
+- @bamboocss/shared@1.48.5
+
 ## 1.48.4
 
 ### Patch Changes

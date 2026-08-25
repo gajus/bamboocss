@@ -3,7 +3,7 @@ import { isStaticCompilerActive } from '@bamboocss/node/static-compiler'
 import { rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
 import { VIRTUAL_CSS_ID } from '../src/css'
 import { bamboocss, compilerParsePath, isGeneratedOutput, shouldTransform } from '../src/plugin'
 
@@ -308,6 +308,39 @@ describe('compiler', () => {
 
     return typeof result === 'object' && result !== null ? result.code : null
   }
+
+  test('commits fresh transform artifacts without the cached-metadata replay checks', async () => {
+    const plugin = plugins({ cwd, reportSummary: false }).fold
+    const buildStart = hookOf(plugin.buildStart)!
+    const transform = hookOf(plugin.transform)!
+    const id = join(cwd, 'src/__trusted-transform-artifact.tsx')
+    const context = {
+      addWatchFile() {},
+      environment: { name: 'client' },
+      getModuleInfo: () => null,
+    }
+
+    await buildStart.call(context as never, {} as never)
+    const structuredCloneSpy = vi.spyOn(globalThis, 'structuredClone')
+    try {
+      const result = await transform.call(context as never, SOURCE, id, {} as never)
+
+      expect(structuredCloneSpy).not.toHaveBeenCalled()
+      expect(result).toMatchObject({
+        meta: {
+          'bamboocss:transform': {
+            version: 3,
+            moduleId: id,
+            file: id,
+            classNames: ['c_red.300'],
+            integrity: expect.any(String),
+          },
+        },
+      })
+    } finally {
+      structuredCloneSpy.mockRestore()
+    }
+  })
 
   /**
    * No foreign recipe config outlives the edit that changed it, in any environment.

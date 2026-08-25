@@ -320,10 +320,22 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     createHmac('sha256', transformArtifactIntegrityKey)
       .update(serializeTransformArtifact(environment, artifact))
       .digest('base64url')
-  const sealTransformArtifact = (environment: string, artifact: TransformArtifactPayload): TransformArtifact => ({
-    ...artifact,
-    integrity: transformArtifactIntegrity(environment, artifact),
-  })
+  const sealTransformArtifact = (environment: string, artifact: TransformArtifactPayload): TransformArtifact => {
+    // Transform metadata becomes writable input to every later plugin. Detach its collections
+    // from the trusted contribution before exposing it so an in-place metadata mutation cannot
+    // rewrite the state already applied to this plugin instance. This controlled copy replaces
+    // the more expensive structured clone, schema walk and HMAC verification fresh artifacts
+    // previously paid on their way into trusted state.
+    const detached = {
+      ...artifact,
+      skipped: artifact.skipped.map(([reason, count]) => [reason, count] as [SkipReason, number]),
+      survivors: artifact.survivors.map((survivor) => ({ ...survivor })),
+      classNames: [...artifact.classNames],
+      dependencies: [...artifact.dependencies],
+      ...(artifact.signature ? { signature: { ...artifact.signature } } : {}),
+    }
+    return { ...detached, integrity: transformArtifactIntegrity(environment, detached) }
+  }
 
   const skipReasons = new Set<SkipReason>([
     'dynamic',
@@ -428,7 +440,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
    * plugin is allowed to hand Bamboo different code in each graph.
    */
   interface EnvironmentTransformState {
-    transformArtifactsByModule: Map<string, TransformArtifact>
+    transformArtifactsByModule: Map<string, TransformArtifactPayload>
     dependentsByDependency: Map<string, Set<string>>
     dependenciesByModule: Map<string, Set<string>>
     filesByModule: Map<string, string>
@@ -747,7 +759,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
   }
 
   /** Add one detached transform contribution to the global reachability projection. */
-  const applyStaticTransformContribution = (artifact: TransformArtifact) => {
+  const applyStaticTransformContribution = (artifact: TransformArtifactPayload) => {
     if (artifact.transformedFile) staticSession.transformedFiles.add(resolve(artifact.file))
     for (const className of artifact.classNames) staticSession.markClassUsed(className)
   }
@@ -1148,8 +1160,21 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     )
   }
 
-  /** Restore every per-build fact established by one successful transform. */
-  const applyTransformArtifact = (
+  /** Apply every per-build fact established by one trusted or validated transform artifact. */
+  const commitTransformArtifact = (state: EnvironmentTransformState, artifact: TransformArtifactPayload) => {
+    const { file, moduleId } = artifact
+    state.transformArtifactsByModule.set(moduleId, artifact)
+
+    recordFoldDependencies(state, moduleId, file, artifact.dependencies)
+    if (artifact.signature) state.foldSignatures.set(moduleId, artifact.signature)
+    else {
+      state.foldSignatures.delete(moduleId)
+      state.foldInputsByModule.delete(moduleId)
+    }
+  }
+
+  /** Snapshot and authenticate transform metadata owned by Rollup's external cache. */
+  const applyCachedTransformArtifact = (
     state: EnvironmentTransformState,
     value: unknown,
     expectedModuleId: string,
@@ -1173,8 +1198,6 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       )
     }
 
-    // Centralized here so neither fresh transforms nor cache replay can acquire a second,
-    // weaker mutation path as new semantic fields are added to the artifact.
     if (
       !isTransformArtifact(snapshot) ||
       snapshot.moduleId !== expectedModuleId ||
@@ -1183,16 +1206,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     ) {
       throw cachedArtifactError(expectedModuleId, environment, snapshot)
     }
-    const artifact = snapshot
-    const { file, moduleId } = artifact
-    state.transformArtifactsByModule.set(moduleId, artifact)
-
-    recordFoldDependencies(state, moduleId, file, artifact.dependencies)
-    if (artifact.signature) state.foldSignatures.set(moduleId, artifact.signature)
-    else {
-      state.foldSignatures.delete(moduleId)
-      state.foldInputsByModule.delete(moduleId)
-    }
+    commitTransformArtifact(state, snapshot)
   }
 
   /**
@@ -1229,7 +1243,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       // a present key is Bamboo claiming ownership and therefore must be safe to replay.
       if (!meta || !Object.prototype.hasOwnProperty.call(meta, TRANSFORM_META_KEY)) continue
       const artifact = meta[TRANSFORM_META_KEY]
-      applyTransformArtifact(state, artifact, id, environmentName(pluginContext))
+      applyCachedTransformArtifact(state, artifact, id, environmentName(pluginContext))
     }
   }
 
@@ -2400,7 +2414,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       // direction: fixing the *dependency* then re-transforms this module, which is how a
       // user gets out of the failure. Retracting would cost that, to save nothing.
       const previousDependencies = [...(state.dependenciesByModule.get(id) ?? [])]
-      const failedArtifact = sealTransformArtifact(environmentName(this), {
+      const failedArtifact: TransformArtifactPayload = {
         version: TRANSFORM_ARTIFACT_VERSION,
         moduleId: id,
         file: filePath,
@@ -2410,8 +2424,8 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
         transformedFile: false,
         classNames: [],
         dependencies: previousDependencies,
-      })
-      applyTransformArtifact(state, failedArtifact, id, environmentName(this))
+      }
+      commitTransformArtifact(state, failedArtifact)
       // The signature is not, for the reason the edges are. It is a claim about output this
       // pass did not produce, and acting on a stale one suppresses a real update.
       state.foldSignatures.delete(id)
@@ -2448,7 +2462,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       survivorsHere.push({ line: lineAt(code, entry.start), name: entry.name, reason: entry.reason })
     }
 
-    const artifact = sealTransformArtifact(environmentName(this), {
+    const artifact: TransformArtifactPayload = {
       version: TRANSFORM_ARTIFACT_VERSION,
       moduleId: id,
       file: filePath,
@@ -2461,11 +2475,11 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       ...(result.dependencies.length
         ? { signature: { input: (inputDigest ??= digest(code)), output: digest(result.code), path: filePath } }
         : {}),
-    })
-    // Applied through the same serializable boundary a cached rebuild replays below. Keeping
-    // one path for fresh and cached modules is what keeps new per-transform state from being
-    // added to one and silently omitted from the other.
-    applyTransformArtifact(state, artifact, id, environmentName(this))
+    }
+    // This payload was created from the fold result inside this plugin instance. Apply it
+    // directly; only artifacts replayed from writable transform metadata need the defensive
+    // snapshot, schema walk, ownership check and HMAC verification above.
+    commitTransformArtifact(state, artifact)
     // Retained when disk cannot answer what this module was compiled from: a dev server, or an
     // SFC submodule whose file holds template source. Deliberately keyed on what
     // `compilerParsePath` asked for and not on the lane `compilerSourcePath` chose — the lane
@@ -2498,7 +2512,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       throw createSurvivorError(artifact.survivors.map((survivor) => ({ file: filePath, ...survivor })))
     }
 
-    const meta = { [TRANSFORM_META_KEY]: artifact }
+    const meta = { [TRANSFORM_META_KEY]: sealTransformArtifact(environmentName(this), artifact) }
     if (!result.folded.length) {
       // A real bundler needs a transform result in order to retain metadata for this module,
       // including the zero-fold entry that makes coverage's file denominator accurate. Tiny

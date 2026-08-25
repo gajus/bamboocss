@@ -795,9 +795,9 @@ describe.sequential('vite plugin, real rebuild', () => {
     let transformCalls = 0
     let compiledCode = ''
 
-    // Read Bamboo's current artifact after its pre transform, then alter one semantic field
-    // without access to the instance-private key that sealed it. The first build uses Bamboo's
-    // already-applied private copy; Rollup caches these altered bytes and metadata for replay.
+    // Read Bamboo's current artifact after its pre transform, then mutate one nested semantic
+    // field without access to the instance-private key that sealed it. The first build uses
+    // Bamboo's already-applied private collections; Rollup caches the altered metadata for replay.
     const alteredMetadata: VitePlugin = {
       name: 'bamboocss:test-altered-transform-metadata',
       transform(code, id) {
@@ -815,17 +815,17 @@ describe.sequential('vite plugin, real rebuild', () => {
           integrity: expect.any(String),
         })
         const integrity = artifact.integrity
-        const alteredArtifact = {
-          ...artifact,
-          // Well-typed and current-schema, but no longer describes the compiled JS above.
-          classNames: [],
-        }
-        expect(alteredArtifact.integrity).toBe(integrity)
+        const classNames = artifact.classNames
+        if (!Array.isArray(classNames)) throw new Error('test fixture found malformed class metadata')
+        // Well-typed and current-schema, but no longer describes the compiled JS above. Mutating
+        // in place proves the public metadata does not share its array with trusted fresh state.
+        classNames.length = 0
+        expect(artifact.integrity).toBe(integrity)
         return {
           code,
           map: null,
           meta: {
-            'bamboocss:transform': alteredArtifact,
+            'bamboocss:transform': artifact,
           },
         }
       },

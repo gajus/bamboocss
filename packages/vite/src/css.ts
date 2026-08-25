@@ -1,7 +1,8 @@
 import { logger } from '@bamboocss/logger'
 import { esc, truncateList } from '@bamboocss/shared'
 import type { Plugin, ViteDevServer } from 'vite'
-import { createLazyBuilder, createRetryableLazy, loadConfigModule, loadCssOutputModule } from './lazy-modules'
+import { createCompilationHost, type CompilationBuilder, type CompilationHost } from './compilation-host'
+import { createRetryableLazy, loadConfigModule, loadCssOutputModule } from './lazy-modules'
 import { remainingEnvironments, type StaticCompilationSession } from './static-session'
 
 /**
@@ -63,6 +64,14 @@ interface BambooCssPluginOptions {
   loadCssOutput?: () => PromiseLike<CssOutputValidator>
   /** Internal state supplied by `bamboocss()`; the CSS emitter is not a standalone mode. */
   session: StaticCompilationSession
+  /**
+   * The Builder, context and shared AST this run compiles against, supplied by `bamboocss()`.
+   *
+   * Defaulted so this plugin remains drivable on its own in focused tests. In a real run it
+   * is the compiler's host as well, which is the point: the two used to hold separate
+   * contexts and separate ts-morph projects over the same files.
+   */
+  host?: CompilationHost
   /** See `BambooVitePluginOptions.pruneCss`. @default true */
   pruneCss?: boolean
 }
@@ -81,15 +90,16 @@ interface BambooCssPluginOptions {
  * process just wrote, which is a race on any watch rebuild.
  */
 export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
-  const { configPath, cwd, loadCssOutput = loadCssOutputModule, session, pruneCss = true } = options
+  const {
+    configPath,
+    cwd,
+    loadCssOutput = loadCssOutputModule,
+    session,
+    host = createCompilationHost({ configPath, cwd }),
+    pruneCss = true,
+  } = options
 
-  let builder: Awaited<ReturnType<ReturnType<typeof createLazyBuilder>>> | undefined
-  const loadBuilder = createLazyBuilder()
-  const ensureBuilder = async () => {
-    const loaded = await loadBuilder()
-    builder = loaded
-    return loaded
-  }
+  let builder: CompilationBuilder | undefined
   let server: ViteDevServer | undefined
   let command: 'build' | 'serve' = 'build'
   /** The run's own `build` options, for a bundler with no per-environment config. */
@@ -134,58 +144,67 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
   let pendingGeneration = -1
   let servedCss: { generation: number; css: string } | undefined
 
-  const build = async () => {
-    const builder = await ensureBuilder()
-    // `hash: 'auto'` reads this, and nothing else does — a class name may differ between dev
-    // and production, the CSS may not.
-    await builder.setup({ configPath, cwd, dev: command === 'serve' })
+  /**
+   * Held by the host for its whole length, rather than only around each mutation.
+   *
+   * Extraction fills the encoder this sheet is emitted from and `toCss` reads it back, with a
+   * deliberate macrotask between them. The compiler shares the AST both halves run against,
+   * so a transform folding a module in that window would re-prepare a source the extraction
+   * pass has already read and `toCss` has not finished reporting on. The host makes compiler
+   * work wait instead; a fold is a few milliseconds and this is the one place correctness
+   * depends on it.
+   */
+  const build = () =>
+    host.runCssPass(async (activeBuilder) => {
+      builder = activeBuilder
 
-    // Writes the `styled-system` artifacts, which is what lets this plugin be a project's only
-    // codegen. On the first pass it writes all of them; afterwards only what a config change
-    // affected. `buildStart` below is what makes the first pass early enough to count.
-    await builder.emit()
+      // Writes the `styled-system` artifacts, which is what lets this plugin be a project's
+      // only codegen. On the first pass it writes all of them; afterwards only what a config
+      // change affected. `buildStart` below is what makes the first pass early enough to count.
+      await activeBuilder.emit()
 
-    builder.extract()
+      activeBuilder.extract()
 
-    // A full macrotask yield, not just a microtask: extraction and stylesheet emission are the
-    // two largest synchronous blocks this plugin runs, and a dev server is answering module
-    // requests on the same loop. Splitting them caps how long any queued response waits at the
-    // longer single block instead of their sum. In a build the extra tick is noise.
-    await new Promise<void>((settle) => setImmediate(settle))
+      // A full macrotask yield, not just a microtask: extraction and stylesheet emission are
+      // the two largest synchronous blocks this plugin runs, and a dev server is answering
+      // module requests on the same loop. Splitting them caps how long any queued response
+      // waits at the longer single block instead of their sum. In a build the extra tick is
+      // noise.
+      await new Promise<void>((settle) => setImmediate(settle))
 
-    if (builder.context) {
-      session.utilityLayer = builder.context.config.layers?.utilities ?? 'utilities'
-      session.extractedFiles.clear()
-      for (const file of extractedSourceFiles()) session.extractedFiles.add(file)
-    }
-
-    let graphAtomHashes: Set<string> | undefined
-    if (builder.context) {
-      builder.context.encoder.atomizeObservedRecipes()
-      // Captured before baseline/staticCss generation. Graph atoms can be removed when no
-      // transformed module emits them; explicit staticCss atoms remain outside this set and
-      // continue to act as a safelist.
-      graphAtomHashes = new Set(builder.context.encoder.atomic)
-    }
-
-    // The whole stylesheet, so it carries the `@layer` order statement itself.
-    const css = builder.toCss({ layerParams: true })
-
-    session.prunableClasses.clear()
-    session.viewTransitionClasses.clear()
-    if (graphAtomHashes && builder.context) {
-      const decoder = builder.context.decoder.collect(builder.context.encoder)
-      for (const atom of decoder.atomic) {
-        if (graphAtomHashes.has(atom.hash)) session.prunableClasses.add(atom.className)
+      if (activeBuilder.context) {
+        session.utilityLayer = activeBuilder.context.config.layers?.utilities ?? 'utilities'
+        session.extractedFiles.clear()
+        for (const file of extractedSourceFiles()) session.extractedFiles.add(file)
       }
-      for (const transition of decoder.view_transitions) {
-        session.viewTransitionClasses.add(transition.className)
-        session.prunableClasses.add(esc(transition.className))
-      }
-    }
 
-    return css
-  }
+      let graphAtomHashes: Set<string> | undefined
+      if (activeBuilder.context) {
+        activeBuilder.context.encoder.atomizeObservedRecipes()
+        // Captured before baseline/staticCss generation. Graph atoms can be removed when no
+        // transformed module emits them; explicit staticCss atoms remain outside this set and
+        // continue to act as a safelist.
+        graphAtomHashes = new Set(activeBuilder.context.encoder.atomic)
+      }
+
+      // The whole stylesheet, so it carries the `@layer` order statement itself.
+      const css = activeBuilder.toCss({ layerParams: true })
+
+      session.prunableClasses.clear()
+      session.viewTransitionClasses.clear()
+      if (graphAtomHashes && activeBuilder.context) {
+        const decoder = activeBuilder.context.decoder.collect(activeBuilder.context.encoder)
+        for (const atom of decoder.atomic) {
+          if (graphAtomHashes.has(atom.hash)) session.prunableClasses.add(atom.className)
+        }
+        for (const transition of decoder.view_transitions) {
+          session.viewTransitionClasses.add(transition.className)
+          session.prunableClasses.add(esc(transition.className))
+        }
+      }
+
+      return css
+    })
 
   const generate = () => {
     // Two loads racing for the same generation — the client and SSR environments after one
@@ -288,6 +307,7 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
 
     async configResolved(config) {
       command = config.command
+      host.setCommand(config.command)
       session.sourcemap = config.build.sourcemap
       ssrBuildOptions = { ssr: config.build.ssr, ssrEmitAssets: config.build.ssrEmitAssets }
 
@@ -299,11 +319,12 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
        * edited all afternoon. Nothing watched it: `watch` is the CLI's own watcher, and a
        * project running `vite dev` never reaches it.
        *
-       * A restart rather than re-emitting the stylesheet, because this plugin and the compiler
-       * hold *separate* contexts and only this one reloads its config. A token *value* edit
-       * came out right on the next source change, and an edit that changes what compiles —
-       * adding a token, a condition, a utility — left the compiler naming classes from the old
-       * config against a sheet emitted from the new one. Half-updated is worse than stale.
+       * A restart rather than re-emitting the stylesheet. The two plugins share one context now,
+       * and the compiler re-derives everything it holds when `Builder.setup` replaces it — so the
+       * half-updated state this used to prevent, with the compiler naming classes from the old
+       * config against a sheet emitted from the new one, can no longer happen. What a restart
+       * still buys is the rest of the server: a changed `outdir`, a preset that adds an entry
+       * point, and every module Vite has already transformed against the previous config.
        *
        * Through Vite's own list rather than a watcher of ours. Vite adds these paths to the
        * files it watches, which is what reaches a config *outside* `root` — a monorepo with one

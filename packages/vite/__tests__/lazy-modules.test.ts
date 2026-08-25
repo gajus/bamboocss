@@ -1,7 +1,6 @@
 import { describe, expect, test, vi } from 'vitest'
 import {
   createLazyBuilder,
-  createLazyCompilerState,
   createLazyCssOutputModule,
   createLazyFoldModule,
   createRetryableLazy,
@@ -65,88 +64,6 @@ describe('lazy Vite dependencies', () => {
     expect(load).toHaveBeenCalledTimes(2)
     await expect(getValue()).resolves.toBe(value)
     expect(load).toHaveBeenCalledTimes(2)
-  })
-
-  test('loads and derives one complete compiler context for concurrent environments', async () => {
-    let finishContext!: (context: { id: string }) => void
-    const loadContext = vi.fn(
-      () =>
-        new Promise<{ id: string }>((resolve) => {
-          finishContext = resolve
-        }),
-    )
-    const foldSource = vi.fn()
-    const createRuntime = vi.fn((context: { id: string }) => ({ contextId: context.id }))
-    const createCompiler = vi.fn((context: { id: string }, runtime: { contextId: string }) => ({
-      contextId: context.id,
-      runtime,
-    }))
-    const loadFold = vi.fn(async () => ({
-      createRuntimeCss: createRuntime,
-      createStaticStyleSetCompiler: createCompiler,
-      foldSource,
-    }))
-    const getState = createLazyCompilerState(loadContext, loadFold)
-
-    const client = getState()
-    const ssr = getState()
-    await vi.waitFor(() => expect(loadContext).toHaveBeenCalledTimes(1))
-    finishContext({ id: 'shared' })
-
-    const [clientState, ssrState] = await Promise.all([client, ssr])
-    expect(clientState).toBe(ssrState)
-    expect(clientState).toEqual({
-      context: { id: 'shared' },
-      foldSource,
-      runtimeCss: { contextId: 'shared' },
-      styleCompiler: { contextId: 'shared', runtime: { contextId: 'shared' } },
-    })
-    expect(loadContext).toHaveBeenCalledTimes(1)
-    expect(loadFold).toHaveBeenCalledTimes(1)
-    expect(createRuntime).toHaveBeenCalledTimes(1)
-    expect(createCompiler).toHaveBeenCalledTimes(1)
-  })
-
-  test('publishes no derived compiler state from a failed fold load and retries atomically', async () => {
-    const failure = new Error('temporary fold chunk failure')
-    const context = { id: 'retained' }
-    const loadContext = vi.fn(async () => context)
-    const getContext = createRetryableLazy(loadContext)
-    const createRuntime = vi.fn((loaded: typeof context) => ({ contextId: loaded.id }))
-    const createCompiler = vi.fn((loaded: typeof context, runtime: { contextId: string }) => ({
-      contextId: loaded.id,
-      runtime,
-    }))
-    const foldSource = vi.fn()
-    const foldModule = {
-      createRuntimeCss: createRuntime,
-      createStaticStyleSetCompiler: createCompiler,
-      foldSource,
-    }
-    const loadFold = vi.fn().mockRejectedValueOnce(failure).mockResolvedValueOnce(foldModule)
-    const getState = createLazyCompilerState(getContext, loadFold)
-
-    const client = getState()
-    const ssr = getState()
-    await expect(Promise.allSettled([client, ssr])).resolves.toEqual([
-      expect.objectContaining({ status: 'rejected', reason: failure }),
-      expect.objectContaining({ status: 'rejected', reason: failure }),
-    ])
-    expect(loadContext).toHaveBeenCalledTimes(1)
-    expect(loadFold).toHaveBeenCalledTimes(1)
-    expect(createRuntime).not.toHaveBeenCalled()
-    expect(createCompiler).not.toHaveBeenCalled()
-
-    await expect(getState()).resolves.toEqual({
-      context,
-      foldSource,
-      runtimeCss: { contextId: 'retained' },
-      styleCompiler: { contextId: 'retained', runtime: { contextId: 'retained' } },
-    })
-    expect(loadContext).toHaveBeenCalledTimes(1)
-    expect(loadFold).toHaveBeenCalledTimes(2)
-    expect(createRuntime).toHaveBeenCalledTimes(1)
-    expect(createCompiler).toHaveBeenCalledTimes(1)
   })
 
   test('normalizes a synchronous loader throw into the retryable promise contract', async () => {

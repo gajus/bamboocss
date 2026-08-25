@@ -52,34 +52,14 @@ export const createLazyFoldModule = (
 /** One process-wide fold-module load shared by every plugin instance and Vite environment. */
 export const loadFoldModule = createLazyFoldModule()
 
-/** One Builder per CSS plugin instance, created only when a hook first needs it. */
+/**
+ * The one Builder a run compiles against, created only when a hook first needs it.
+ *
+ * Per host rather than per plugin instance: the compiler and the stylesheet share it now.
+ * @see `createCompilationHost`
+ */
 export const createLazyBuilder = (loadNode: () => Promise<Pick<NodeModule, 'Builder'>> = loadNodeModule) =>
   createRetryableLazy(async () => {
     const { Builder } = await loadNode()
     return new Builder()
-  })
-
-/** Build and publish one complete fold state; no caller can observe partial initialization. */
-export const createLazyCompilerState = <Context, RuntimeCss, StyleCompiler, FoldSource, VerifyReads>(
-  loadContext: () => Promise<Context>,
-  loadFold: () => PromiseLike<{
-    foldSource: FoldSource
-    verifyExportReads?: VerifyReads
-    createRuntimeCss: (context: NoInfer<Context>) => RuntimeCss
-    createStaticStyleSetCompiler: (context: NoInfer<Context>, runtimeCss: RuntimeCss) => StyleCompiler
-  }>,
-) =>
-  createRetryableLazy(async () => {
-    // Load both independent halves together. A fulfilled context can be retained by its own
-    // loader when the chunk fails, but no derived compiler value is published from this attempt.
-    const [context, fold] = await Promise.all([loadContext(), loadFold()])
-    const runtimeCss = fold.createRuntimeCss(context)
-    const styleCompiler = fold.createStaticStyleSetCompiler(context, runtimeCss)
-    return {
-      context,
-      foldSource: fold.foldSource,
-      verifyExportReads: fold.verifyExportReads,
-      runtimeCss,
-      styleCompiler,
-    }
   })

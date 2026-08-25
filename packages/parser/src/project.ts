@@ -138,6 +138,21 @@ export interface ResolutionFact {
   readonly ordinal: number
 }
 
+/** @internal How one explicitly supplied source relates to the checkout it is added to. */
+export interface AddSourceFileOptions {
+  /**
+   * This text belongs to a bundler transform rather than to the file at this path.
+   *
+   * @see `Project.auxiliarySources`
+   */
+  auxiliary?: boolean
+}
+
+/** @internal Logical identity for hooks when a bundler source needs a synthetic AST path. */
+export interface ParseSourceFileOptions {
+  hookFilePath?: string
+}
+
 /** @internal Exact semantic closure plus missing local paths which can redirect it. */
 export interface ResolutionReadSet {
   readonly dependencies: readonly string[]
@@ -497,6 +512,25 @@ export class Project {
   /** Paths explicitly removed through this wrapper, until an add/create observes them again. */
   private removedSourcePaths = new Set<string>()
 
+  /**
+   * Sources a bundler transform owns, rather than members of the checkout.
+   *
+   * A compiler which shares this Project has to park bundler-transformed text somewhere, and
+   * it cannot be the file's own path — that is the canonical source every other reader
+   * resolves through. It parses under a sibling path instead, and that parse resolves its
+   * imports like any other, so the ledger gains an importer no watcher will ever report a
+   * change for. Left in, those facts reach the incremental extraction pass: an auxiliary
+   * importer would be selected as a dependent of the file it shadows and ordered against
+   * inventory members that do not import it.
+   *
+   * Excluded from exactly the three queries that decide what a rebuild re-extracts —
+   * the ledger, the dependent walk and the unresolved-importer set — and from nothing else.
+   * Resolution itself is deliberately untouched: an auxiliary parse must still see the same
+   * modules the real one would, and its forward edges are what a bundler registers as watch
+   * files.
+   */
+  private auxiliarySources = new Set<string>()
+
   /** File-tree changes invalidate even successful resolutions (extension precedence can move). */
   #fileTreeRevision = 0
 
@@ -517,6 +551,7 @@ export class Project {
     this.resolutionsByImporter = new Map()
     this.sourcePreparations = new Map()
     this.removedSourcePaths = new Set()
+    this.auxiliarySources = new Set()
     this.resolutionWork = {
       moduleResolutionsAttempted: 0,
       sourceFilesAdded: 0,
@@ -527,7 +562,7 @@ export class Project {
   /** Files whose imports may resolve differently after a local file appears. */
   getUnresolvedImporters = (): string[] => {
     this.#assertNotLoading()
-    return [...this.unresolvedImporters].sort()
+    return [...this.unresolvedImporters].filter((importer) => !this.auxiliarySources.has(importer)).sort()
   }
 
   /** @internal Immutable resolution facts in importer/AST order. */
@@ -535,6 +570,7 @@ export class Project {
     this.#assertNotLoading()
     return Object.freeze(
       [...this.resolutionsByImporter.entries()]
+        .filter(([importer]) => !this.auxiliarySources.has(importer))
         .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
         .flatMap(([, entry]) => entry.facts),
     )
@@ -959,7 +995,11 @@ export class Project {
    * downstream edges the ledger records. The transaction is published only after the AST and
    * its facts agree. A failed or re-entered attempt restores the input AST and can be retried.
    */
-  private prepareEffectiveSource = (filePath: string, sourceFile: SourceFile): EffectiveSourcePreparation => {
+  private prepareEffectiveSource = (
+    filePath: string,
+    sourceFile: SourceFile,
+    hookFilePath = filePath,
+  ): EffectiveSourcePreparation => {
     this.#assertNotLoading()
     const sourcePath = this.normalizePath(sourceFile.getFilePath())
     const currentText = sourceFile.getFullText()
@@ -1012,7 +1052,7 @@ export class Project {
 
     try {
       const custom = this.options.hooks['parser:before']?.({
-        filePath,
+        filePath: hookFilePath,
         content: currentText,
         configure(next) {
           const { matchTag, matchTagMode, matchTagProp } = next
@@ -1023,7 +1063,7 @@ export class Project {
       })
       assertTransaction(currentText)
 
-      const transformed = custom ?? this.transformFile(filePath, currentText)
+      const transformed = custom ?? this.transformFile(hookFilePath, currentText)
       assertTransaction(currentText)
       if (currentText !== transformed) sourceFile.replaceWithText(transformed)
       assertTransaction(transformed)
@@ -1106,6 +1146,8 @@ export class Project {
       ])
       for (const importer of [...importers].sort()) {
         if (importer === start || seen.has(importer)) continue
+        // Nothing imports an auxiliary source, so declining to walk it loses no closure.
+        if (this.auxiliarySources.has(importer)) continue
         seen.add(importer)
         queue.push(importer)
       }
@@ -1311,7 +1353,7 @@ export class Project {
     }
   }
 
-  addSourceFile = (filePath: string, content: string): SourceFile => {
+  addSourceFile = (filePath: string, content: string, options: AddSourceFileOptions = {}): SourceFile => {
     this.#assertNotLoading()
     this.#ensureSourceFiles()
     // Path-qualified, because `getSourceFile` falls back to a suffix search for a bare
@@ -1342,17 +1384,30 @@ export class Project {
      * may have replaced this file's text through a `parser:before` hook. Such a file no longer
      * matches its own source, falls through, and is overwritten exactly as before.
      */
-    if (existing && existing.getFullText() === content) return existing
+    if (existing && existing.getFullText() === content) {
+      this.markAuxiliary(existing.getFilePath(), options.auxiliary)
+      return existing
+    }
 
     // Resolutions memoized against other files' nodes can now be out of date. The canonical
     // `getFilePath()` spelling is what dependency records carry — see `invalidate`.
     this.invalidateSourcePreparation(filePath, existing)
     this.removedSourcePaths.delete(this.normalizePath(filePath))
     this.invalidate(!existing, existing?.getFilePath())
-    return this.project.createSourceFile(filePath, content, {
+    const sourceFile = this.project.createSourceFile(filePath, content, {
       overwrite: true,
       scriptKind: scriptKindFor(filePath),
     })
+    // Keyed on the source file's own spelling, which is the one the ledger records.
+    this.markAuxiliary(sourceFile.getFilePath(), options.auxiliary)
+    return sourceFile
+  }
+
+  /** Claim or release compiler ownership of one source, in the ledger's own spelling. */
+  private markAuxiliary = (filePath: string, auxiliary: boolean | undefined) => {
+    const normalized = this.normalizePath(filePath)
+    if (auxiliary) this.auxiliarySources.add(normalized)
+    else this.auxiliarySources.delete(normalized)
   }
 
   removeSourceFile = (filePath: string): boolean => {
@@ -1368,6 +1423,7 @@ export class Project {
       // Same for the styles themselves. Nothing re-parses a file that is gone, so its rules
       // would otherwise outlive it for as long as the context does.
       this.options.parserOptions.encoder.releaseFile(sourceFile.getFilePath())
+      this.auxiliarySources.delete(this.normalizePath(sourceFile.getFilePath()))
       return this.project.removeSourceFile(sourceFile)
     }
     return false
@@ -1440,28 +1496,40 @@ export class Project {
     return this.options.getFiles
   }
 
-  parseJson = (filePath: string) => {
+  /**
+   * A dumped encoder is a parse result like any other, so it belongs to whichever encoder the
+   * caller named.
+   *
+   * Restoring into `parserOptions.encoder` regardless is the one place a supplied encoder was
+   * silently ignored, and it stops being a formality once a bundler transform and the
+   * extraction pass share one Project: the transform's parses go to a private clone precisely
+   * so they cannot add rules to the sheet, and a `.json` module in its graph would have
+   * pinned an entire safelist into the emitted encoder from a pass that emits nothing.
+   */
+  parseJson = (filePath: string, encoder?: ParserOptions['encoder']) => {
     this.#assertNotLoading()
     const { readFile, parserOptions } = this.options
 
+    const target = encoder ?? parserOptions.encoder
     const content = readFile(filePath)
-    parserOptions.encoder.fromJSON(JSON.parse(content))
+    target.fromJSON(JSON.parse(content))
 
-    const result = new ParserResult(parserOptions)
+    const result = new ParserResult(parserOptions, encoder)
     return result.setFilePath(filePath)
   }
 
-  parseSourceFile = (filePath: string, encoder?: ParserOptions['encoder']) => {
+  parseSourceFile = (filePath: string, encoder?: ParserOptions['encoder'], options: ParseSourceFileOptions = {}) => {
     this.#assertNotLoading()
     const { hooks } = this.options
+    const hookFilePath = options.hookFilePath ?? filePath
 
     if (filePath.endsWith('.json')) {
-      return this.parseJson(filePath)
+      return this.parseJson(filePath, encoder)
     }
 
     const sourceFile = this.project.getSourceFile(filePath)
     if (!sourceFile) return
-    const { options } = this.prepareEffectiveSource(filePath, sourceFile)
+    const { options: parserOptions } = this.prepareEffectiveSource(filePath, sourceFile, hookFilePath)
 
     // Attributed to this file, so a later reading of it replaces what this one encoded rather
     // than adding to it. Keyed off the source file's own path rather than the argument, which
@@ -1471,10 +1539,15 @@ export class Project {
     // claims the whole parse for `extract` instead.
     const target = encoder ?? this.options.parserOptions.encoder
     const result = target
-      .withOwner('parse', sourceFile.getFilePath(), () => this.parser(sourceFile, encoder, options, this.resolveModule))
+      .withOwner('parse', sourceFile.getFilePath(), () =>
+        this.parser(sourceFile, encoder, parserOptions, this.resolveModule),
+      )
+      // Keep dependency accounting on the AST's real identity. Only user hooks receive the
+      // logical path; making ParserResult physical would classify the synthetic AST as its
+      // own dependency and register it as a Vite watch file.
       ?.setFilePath(filePath)
 
-    hooks['parser:after']?.({ filePath, result })
+    hooks['parser:after']?.({ filePath: hookFilePath, result })
 
     return result
   }

@@ -309,7 +309,19 @@ describe('compiler', () => {
     return typeof result === 'object' && result !== null ? result.code : null
   }
 
-  test('foreign recipe caches are isolated between environment transforms', async () => {
+  /**
+   * No foreign recipe config outlives the edit that changed it, in any environment.
+   *
+   * The config of an imported recipe is parsed once per declaring module and cached, and both
+   * environments transform the same consumers off one shared ts-morph project. An entry that
+   * survived a change to its declaring module would leave the second environment folding the
+   * previous config while the first folded the new one — one bundle carrying a class the
+   * stylesheet no longer emits, with both halves internally consistent.
+   *
+   * Driven through `watchChange`, which is what a watch rebuild does between environments and
+   * the only point early enough: a consumer is transformed before the module it imports.
+   */
+  test('a changed recipe reaches both environments, with no cached config left behind', async () => {
     const recipePath = join(cwd, 'src/__environment-recipe.tsx')
     const consumerPath = join(cwd, 'src/__environment-recipe-consumer.tsx')
     const consumer = `import { badge } from './__environment-recipe'\n` + `export const className = badge()\n`
@@ -318,6 +330,7 @@ describe('compiler', () => {
     const plugin = plugins({ cwd, reportSummary: false }).fold
     const buildStart = hookOf(plugin.buildStart)!
     const transform = hookOf(plugin.transform)!
+    const watchChange = hookOf(plugin.watchChange)!
     const compile = async (environment: string, width: string) => {
       const context = { addWatchFile() {}, environment: { name: environment } }
       await buildStart.call(context as never, {} as never)
@@ -329,13 +342,61 @@ describe('compiler', () => {
     writeFileSync(consumerPath, consumer)
     try {
       const client = await compile('client', '70.101px')
+
+      writeFileSync(recipePath, recipe('70.202px'))
+      watchChange.call({} as never, recipePath, { event: 'update' } as never)
       const ssr = await compile('ssr', '70.202px')
+
       const clientCode = typeof client === 'string' ? client : client?.code
       const ssrCode = typeof ssr === 'string' ? ssr : ssr?.code
 
       expect(clientCode).toContain('w_[70.101px]')
       expect(ssrCode).toContain('w_[70.202px]')
       expect(ssrCode).not.toContain('w_[70.101px]')
+    } finally {
+      rmSync(recipePath, { force: true })
+      rmSync(consumerPath, { force: true })
+    }
+  })
+
+  /**
+   * A transform's text never becomes the checkout's, in the project both halves now share.
+   *
+   * The compiler folds what the bundler hands it — after Vite's load and every earlier `pre`
+   * plugin — while the stylesheet is extracted from the same ts-morph project, read off disk.
+   * Writing the bundler's text under the file's own path made the transform retroactively the
+   * canonical source: a `define`-style rewrite, or an environment-conditional `pre` plugin,
+   * would silently decide what CSS the next extraction pass emits, and a consumer folding that
+   * module would name a class the stylesheet has no rule for.
+   *
+   * So text that does not match goes to a sibling path, and the checkout still answers for the
+   * file. The consumer below is the observable half: it folds the recipe on disk, not the one
+   * the transform above was handed.
+   */
+  test('a transform whose text differs from disk does not displace the checkout', async () => {
+    const recipePath = join(cwd, 'src/__canonical-recipe.tsx')
+    const consumerPath = join(cwd, 'src/__canonical-recipe-consumer.tsx')
+    const consumer = `import { badge } from './__canonical-recipe'\n` + `export const className = badge()\n`
+    const recipe = (width: string) =>
+      `import { cva } from 'styled-system/css'\n` + `export const badge = cva({ base: { width: '[${width}]' } })\n`
+    const plugin = plugins({ cwd, reportSummary: false }).fold
+    const buildStart = hookOf(plugin.buildStart)!
+    const transform = hookOf(plugin.transform)!
+    const context = { addWatchFile() {}, environment: { name: 'client' } }
+
+    writeFileSync(recipePath, recipe('80.101px'))
+    writeFileSync(consumerPath, consumer)
+    try {
+      await buildStart.call(context as never, {} as never)
+
+      // What an earlier `pre` plugin handed the compiler for this module, which is not what
+      // the file holds.
+      await transform.call(context as never, recipe('80.202px'), recipePath, {} as never)
+
+      const folded = await transform.call(context as never, consumer, consumerPath, {} as never)
+      const foldedCode = typeof folded === 'string' ? folded : folded?.code
+      expect(foldedCode, 'the checkout is what the stylesheet was emitted from').toContain('w_[80.101px]')
+      expect(foldedCode).not.toContain('w_[80.202px]')
     } finally {
       rmSync(recipePath, { force: true })
       rmSync(consumerPath, { force: true })

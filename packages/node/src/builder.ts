@@ -18,6 +18,8 @@ interface FileChanges {
   hasFilesChanged: boolean
 }
 
+type ResolutionLedger = ReturnType<BambooContext['project']['getResolutionLedger']>
+
 export class Builder {
   /**
    * The current bamboo context
@@ -66,6 +68,38 @@ export class Builder {
   private resolutionAffectedThisPass = false
   /** Per-pass digests of re-read values, so N dependents of one edit digest each value once. */
   private readDigestMemo = new Map<string, string | undefined>()
+  /** Resolution ledger as it stood before this pass's first physical source mutation. */
+  private capturedLedger: ResolutionLedger | undefined
+
+  /**
+   * Reload one edited source, keeping the closure the next extraction pass has to select.
+   *
+   * An integration which shares this context has to refresh an edited module before anything
+   * folds against it — a consumer is transformed before the module it imports, so the fold
+   * would otherwise bake in the previous contents. Doing that through the Project directly
+   * loses the graph the rebuild needs: reloading retracts the file's own forward edges, and
+   * `invalidateChangedSources` reads them afterwards to find its dependents. So the mutation
+   * belongs here, behind a snapshot taken before the first of them.
+   *
+   * Once per pass, not once per file: the first mutation is the boundary, and every later one
+   * in the same event is already described by that snapshot. `refreshSourceState` consumes it.
+   */
+  reloadSource = (filePath: string) => {
+    const ctx = this.getContextOrThrow()
+    this.captureResolutionLedger(ctx)
+    return ctx.project.reloadSourceFile(filePath)
+  }
+
+  /** The deletion half of `reloadSource`, with the same snapshot obligation. */
+  removeSource = (filePath: string) => {
+    const ctx = this.getContextOrThrow()
+    this.captureResolutionLedger(ctx)
+    return ctx.project.removeSourceFile(filePath)
+  }
+
+  private captureResolutionLedger = (ctx: BambooContext) => {
+    this.capturedLedger ??= ctx.project.getResolutionLedger()
+  }
 
   /** @internal Current and missing resolver paths which can change the stylesheet. */
   getResolutionReadFiles = (): readonly string[] => {
@@ -190,6 +224,9 @@ export class Builder {
       this.sourceScanCache.entries.clear()
       this.extractionReadsByOwner.clear()
       this.recipeSurfaceByOwner.clear()
+      // Nothing selective survives a config change, and a snapshot from before it describes a
+      // graph this pass is about to re-read in full.
+      this.capturedLedger = undefined
       await ctx.hooks['config:change']?.({ config: ctx.config, changes: this.affecteds })
       this.snapshotConfigGraphMtimes(configPath)
       return
@@ -231,7 +268,11 @@ export class Builder {
     const changedResolutionConfigurations = this.changedResolutionConfigurations()
     const changedResolutionSet = new Set(changedResolutionConfigurations)
     const resolutionAffected = new Set<string>()
-    const resolutionLedger = changedResolutionConfigurations.length ? ctx.project.getResolutionLedger() : undefined
+    // The snapshot wins where there is one: it predates whatever an integration reloaded, and
+    // the live ledger no longer holds those importers' forward edges.
+    const resolutionLedger =
+      this.capturedLedger ?? (changedResolutionConfigurations.length ? ctx.project.getResolutionLedger() : undefined)
+    this.capturedLedger = undefined
     for (const [owner, configurations] of this.resolutionConfigurationSets) {
       if (configurations.some((file) => changedResolutionSet.has(file))) resolutionAffected.add(owner)
     }

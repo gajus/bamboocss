@@ -1,5 +1,21 @@
 # @bamboocss/vite
 
+## 1.48.1
+
+### Patch Changes
+
+- ae0a3f0: Make Vite development stylesheet rebuilds consume known dirty paths instead of globbing and statting every
+  source on each edit. Additions and deletions still reconcile the complete inventory, while cached metadata and watcher
+  coverage keep ordinary edits incremental.
+- Updated dependencies [ae0a3f0]
+  - @bamboocss/node@1.48.1
+  - @bamboocss/config@1.48.1
+  - @bamboocss/core@1.48.1
+  - @bamboocss/extractor@1.48.1
+  - @bamboocss/logger@1.48.1
+  - @bamboocss/shared@1.48.1
+  - @bamboocss/types@1.48.1
+
 ## 1.48.0
 
 ### Minor Changes

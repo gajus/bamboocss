@@ -1,5 +1,15 @@
 # @bamboocss/mcp
 
+## 1.48.1
+
+### Patch Changes
+
+- Updated dependencies [ae0a3f0]
+  - @bamboocss/node@1.48.1
+  - @bamboocss/logger@1.48.1
+  - @bamboocss/token-dictionary@1.48.1
+  - @bamboocss/types@1.48.1
+
 ## 1.48.0
 
 ### Patch Changes

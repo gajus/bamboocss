@@ -49,7 +49,7 @@ const build = async (builder: Builder, cwd: string) => {
   await builder.setup({ cwd, dev: true })
   await builder.emit()
   builder.extract()
-  return builder.toCss({ layerParams: true, includeRecipes: false })
+  return builder.toCss({ layerParams: true })
 }
 
 describe('extraction skip by recorded reads', () => {
@@ -130,14 +130,14 @@ describe('source-scan cache', () => {
     const ctx = builder.context!
 
     const reads = vi.spyOn(ctx.runtime.fs, 'readFileSync')
-    builder.toCss({ layerParams: true, includeRecipes: false })
+    builder.toCss({ layerParams: true })
     expect(reads.mock.calls.length, 'every per-file scan came from the cache').toBe(0)
 
     writeFileSync(fixture, contentsB)
     await builder.setup({ cwd: directory, dev: true })
     builder.extract()
     reads.mockClear()
-    builder.toCss({ layerParams: true, includeRecipes: false })
+    builder.toCss({ layerParams: true })
     const readFiles = [...new Set(reads.mock.calls.map((call) => String(call[0])))]
     expect(readFiles, 'only the edited file was re-scanned').toEqual([fixture])
     reads.mockRestore()

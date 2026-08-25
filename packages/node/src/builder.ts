@@ -1,39 +1,17 @@
-import { findConfig, getConfigDependencies } from '@bamboocss/config'
+import { findConfig } from '@bamboocss/config'
 import { logger } from '@bamboocss/logger'
 import { BambooError, uniq } from '@bamboocss/shared'
 import type { DiffConfigResult } from '@bamboocss/types'
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, statSync } from 'fs'
 import { normalize, resolve } from 'path'
-import type { Message, Root } from 'postcss'
 import { codegen } from './codegen'
 import { loadConfigAndCreateContext } from './config'
 import { BambooContext } from './create-context'
-import { parseDependency } from './parse-dependency'
 import { assembleExtractedSheet } from './assemble-sheet'
 import { createSourceScanCache } from './token-references'
 
 const fileModifiedMap = new Map<string, number>()
-
-/**
- * The declaration that says generated css is already present in a root.
- *
- * `generateGlobalCss` emits it unconditionally and `appendBaselineCss` always reaches that
- * artifact, so anything carrying it holds a copy of the sheet however it got there — written
- * by `write` on an earlier pass, or inlined from `styles.css` by `postcss-import`.
- *
- * A declaration rather than a comment because it has to survive the css being minified
- * between the copy landing and this check running, which a comment does not.
- */
-const GENERATED_SENTINEL = '--made-with-bamboo'
-
-function hasGeneratedCss(root: Root) {
-  let found = false
-  root.walkDecls(GENERATED_SENTINEL, () => {
-    found = true
-  })
-  return found
-}
 
 interface FileChanges {
   changes: Map<string, FileMeta>
@@ -51,7 +29,6 @@ export class Builder {
   private explicitDepsMeta: FileChanges | undefined
   private affecteds: DiffConfigResult | undefined
   private configDependencies: Set<string> = new Set()
-  private pendingConfigCrawl: SetupContextOptions | undefined
   /** Last complete included inventory, including members which have since been deleted. */
   private sourceInventory: string[] | undefined
   /** Existing included owners selected by the last resolution-ledger invalidation pass. */
@@ -132,41 +109,17 @@ export class Builder {
     }
   }
 
-  /**
-   * Remember what to crawl; do not crawl yet.
-   *
-   * The crawl walks the config's own import graph, and resolving a bare specifier there loads a
-   * whole TypeScript compiler. Only `registerDependency` reads the result, and only the PostCSS
-   * plugin calls that — the CLI and the Vite plugin (which crawls separately, when it watches)
-   * paid ~155ms of compiler load per build for a set neither of them ever read.
-   */
-  setConfigDependencies(options: SetupContextOptions) {
-    this.pendingConfigCrawl = options
-
-    const cwd = options?.cwd ?? this.context?.config.cwd ?? process.cwd()
-    for (const file of this.context?.conf.dependencies ?? []) this.configDependencies.add(resolve(cwd, file))
-  }
-
-  /** Crawl on first read, once per `setConfigDependencies`. */
-  private crawlConfigDependencies() {
-    const options = this.pendingConfigCrawl
-    if (!options) return
-    this.pendingConfigCrawl = undefined
-
-    const tsOptions = this.context?.conf.tsOptions ?? { baseUrl: undefined, pathMappings: [] }
-    const compilerOptions = this.context?.conf.tsconfig?.compilerOptions ?? {}
-    const { deps } = getConfigDependencies(options.configPath, tsOptions, compilerOptions)
-    deps.forEach((file) => this.configDependencies.add(file))
-
-    logger.debug('builder', 'Config dependencies')
-    logger.debug('builder', deps)
+  private recordConfigDependencies = (ctx: BambooContext, cwd?: string) => {
+    const root = cwd ?? ctx.config.cwd
+    for (const file of uniq([...ctx.conf.dependencies, ...ctx.explicitDeps])) {
+      this.configDependencies.add(resolve(root, file))
+    }
   }
 
   setup = async (options: { configPath?: string; cwd?: string; dev?: boolean } = {}) => {
     logger.debug('builder', '🚧 Setup')
 
     const configPath = options.configPath ?? findConfig({ cwd: options.cwd })
-    this.setConfigDependencies({ configPath, cwd: options.cwd })
 
     if (!this.context) {
       return this.setupContext({ configPath, cwd: options.cwd, dev: options.dev })
@@ -204,7 +157,9 @@ export class Builder {
     this.affecteds = await ctx.diff.reloadConfigAndRefreshContext((conf) => {
       this.context = new BambooContext(conf)
     })
-    this.tsconfigResolutionFiles = this.getContextOrThrow().diff.getResolutionConfigFiles()
+    const nextContext = this.getContextOrThrow()
+    this.recordConfigDependencies(nextContext, options.cwd)
+    this.tsconfigResolutionFiles = nextContext.diff.getResolutionConfigFiles()
 
     logger.debug('builder', this.affecteds)
 
@@ -464,11 +419,7 @@ export class Builder {
 
     const ctx = await loadConfigAndCreateContext({ configPath, cwd, dev })
 
-    const configDeps = uniq([...ctx.conf.dependencies, ...ctx.explicitDeps])
-
-    configDeps.forEach((file) => {
-      this.configDependencies.add(resolve(cwd || ctx.conf.config.cwd, file))
-    })
+    this.recordConfigDependencies(ctx, cwd)
 
     this.context = ctx
     this.tsconfigResolutionFiles = ctx.diff.getResolutionConfigFiles()
@@ -767,90 +718,23 @@ export class Builder {
     ctx.assertNoDeadCalls(files)
   }
 
-  isValidRoot = (root: Root) => {
-    const ctx = this.getContextOrThrow()
-    let valid = false
-
-    root.walkAtRules('layer', (rule) => {
-      if (ctx.isValidLayerParams(rule.params)) {
-        valid = true
-      }
-    })
-
-    return valid
-  }
-
-  write = (root: Root) => {
-    // A root that already holds generated css gets nothing further. `isValidRoot` only reads
-    // the `@layer` statement, and that statement is ordinary css -- listing every layer in
-    // order is what a project has to write once it has layers of its own beside bamboo's. So
-    // a file that both imports `styles.css` and declares the order satisfies the guard while
-    // already holding the sheet, and appending gives it a second copy on every build:
-    //
-    //     @import '#app/styled-system/styles.css';                    <- copy 1, inlined by
-    //     @layer reset, base, tokens, recipes, utilities, overrides;     postcss-import first
-    //
-    // Vite puts `postcss-import` at the front of the chain, so the artifact is already inlined
-    // by the time this runs. The duplication then hides: a minifier merges the two `@layer X{}`
-    // blocks and dedupes most of the collision, leaving a fraction of it behind -- 11% of one
-    // production stylesheet, which reads as a rounding error rather than as the whole sheet
-    // twice. Nothing else catches it either, since each copy is internally consistent and only
-    // duplicated against the other.
-    if (hasGeneratedCss(root)) {
-      logger.warn(
-        'postcss',
-        'Generated css is already present in this file, so nothing was injected. It is imported and generated here at once — keep the `@import` of `styles.css` or the `@layer` statement that the postcss plugin injects at, not both.',
-      )
-      return
-    }
-
-    // What this appends carries the sentinel, so a second pass over the same root takes the
-    // branch above rather than adding to it.
-    root.append(this.toCss())
-  }
-
   /**
    * The finished stylesheet, as a string.
    *
-   * The same sheet `write` injects into a postcss root, for callers that want the css
-   * rather than a mutated root -- the vite plugin serves it as a virtual module. Both go
-   * through here so a build cannot depend on which integration asked for it.
-   *
-   * `layerParams` is the one thing that differs between them, and it is not cosmetic: the
-   * `@layer a, b, c;` statement is what fixes layer *order*, and css layers are ordered by
-   * first appearance otherwise. `write` leaves it out because the root it appends to is a
-   * file that already declares it -- that declaration is what `isValidRoot` matches on. A
-   * virtual module is the whole stylesheet and has nothing to inherit it from.
+   * `layerParams` controls the `@layer a, b, c;` statement that fixes layer order. CSS layers
+   * are ordered by first appearance otherwise.
    *
    * `extract` has to have run first: this reads the encoder rather than filling it.
    */
-  toCss = ({
-    layerParams = false,
-    includeRecipes = false,
-  }: { layerParams?: boolean; includeRecipes?: boolean } = {}) => {
+  toCss = ({ layerParams = false }: { layerParams?: boolean } = {}) => {
     const ctx = this.getContextOrThrow()
     const sheet = assembleExtractedSheet(ctx, {
       layerParams,
-      includeRecipes,
       sourceScanCache: this.sourceScanCache,
       mtimeOf: (filePath) => this.filesMeta?.changes.get(filePath)?.mtime,
       sourceInventory: this.sourceInventory,
     })
     return ctx.getCss(sheet)
-  }
-
-  registerDependency = (fn: (dep: Message) => void) => {
-    const ctx = this.getContextOrThrow()
-    this.crawlConfigDependencies()
-
-    for (const fileOrGlob of ctx.config.include) {
-      const dependency = parseDependency(fileOrGlob)
-      if (dependency) fn(dependency)
-    }
-
-    for (const file of this.configDependencies) {
-      fn({ type: 'dependency', file: normalize(resolve(file)) })
-    }
   }
 }
 

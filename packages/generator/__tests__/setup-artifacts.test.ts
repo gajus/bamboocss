@@ -22,8 +22,6 @@ describe('setup-artifacts', () => {
     expect(generator.getArtifacts(['create-recipe', 'css-fn']).map(formatArtifact)).toMatchInlineSnapshot(`
       [
         [
-          "css/conditions.mjs",
-          "css/utilities.mjs",
           "css/merge-css.mjs",
           "css/merge-css.d.ts",
           "css/css.mjs",
@@ -152,8 +150,6 @@ describe('setup-artifacts', () => {
           "types/system-types.d.ts",
         ],
         [
-          "css/conditions.mjs",
-          "css/utilities.mjs",
           "css/merge-css.mjs",
           "css/merge-css.d.ts",
           "css/css.mjs",

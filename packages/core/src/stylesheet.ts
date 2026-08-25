@@ -83,53 +83,55 @@ export class Stylesheet {
     this.process({ styles, layer })
   }
 
-  processDecoder = (decoder: StyleDecoder) => {
+  processDecoder = (decoder: StyleDecoder, { includeRecipes = true }: { includeRecipes?: boolean } = {}) => {
     sortStyleRules([...decoder.atomic]).forEach((css) => {
       this.processCss(css.result, (css.layer as LayerName) ?? 'utilities')
     })
 
-    decoder.recipes.forEach((recipeSet) => {
-      // Merged per layer before processing, rather than one `processCss` per result.
-      //
-      // A scoped slot rule is keyed by its `@scope` prelude, and a recipe with more than
-      // one anchor emits every non-anchor slot under each of them — so the same prelude
-      // recurs across results with a different anchor's block in between, and identical
-      // at-rules only collapse when they are adjacent. Merging first makes the prelude an
-      // object key, which deduplicates it by construction. On a 15-slot two-anchor recipe
-      // that is 130 `@scope` blocks against 10.
-      //
-      // Order is preserved: `merge` keeps the target's existing keys in place and appends
-      // new ones, so results still emit in the order they were collected.
-      const scopedByLayer = new Map<LayerName, Dict>()
+    if (includeRecipes)
+      decoder.recipes.forEach((recipeSet) => {
+        // Merged per layer before processing, rather than one `processCss` per result.
+        //
+        // A scoped slot rule is keyed by its `@scope` prelude, and a recipe with more than
+        // one anchor emits every non-anchor slot under each of them — so the same prelude
+        // recurs across results with a different anchor's block in between, and identical
+        // at-rules only collapse when they are adjacent. Merging first makes the prelude an
+        // object key, which deduplicates it by construction. On a 15-slot two-anchor recipe
+        // that is 130 `@scope` blocks against 10.
+        //
+        // Order is preserved: `merge` keeps the target's existing keys in place and appends
+        // new ones, so results still emit in the order they were collected.
+        const scopedByLayer = new Map<LayerName, Dict>()
 
-      recipeSet.forEach((recipe) => {
-        const layer: LayerName = recipe.entry.slot ? 'recipes_slots' : 'recipes'
+        recipeSet.forEach((recipe) => {
+          const layer: LayerName = recipe.entry.slot ? 'recipes_slots' : 'recipes'
 
-        // Only the scoped ones are merged. Merging everything also collapses a variant's
-        // declarations — which arrive as one result per declaration — into a single rule,
-        // and that moves later declarations up to where the variant first appeared,
-        // reordering the layer. Unscoped results keep emitting exactly as they did.
-        if (!recipe.scoped) {
-          this.processCss(recipe.result, layer)
-          return
-        }
+          // Only the scoped ones are merged. Merging everything also collapses a variant's
+          // declarations — which arrive as one result per declaration — into a single rule,
+          // and that moves later declarations up to where the variant first appeared,
+          // reordering the layer. Unscoped results keep emitting exactly as they did.
+          if (!recipe.scoped) {
+            this.processCss(recipe.result, layer)
+            return
+          }
 
-        const target = scopedByLayer.get(layer) ?? {}
-        merge(target, recipe.result)
-        scopedByLayer.set(layer, target)
+          const target = scopedByLayer.get(layer) ?? {}
+          merge(target, recipe.result)
+          scopedByLayer.set(layer, target)
+        })
+
+        // After the unscoped rules. The two never select the same thing — an anchor's own
+        // variant class against a slot's constant class inside a scope — so nothing collides
+        // on the way past.
+        scopedByLayer.forEach((result, layer) => this.processCss(result, layer))
       })
 
-      // After the unscoped rules. The two never select the same thing — an anchor's own
-      // variant class against a slot's constant class inside a scope — so nothing collides
-      // on the way past.
-      scopedByLayer.forEach((result, layer) => this.processCss(result, layer))
-    })
-
-    decoder.recipes_base.forEach((recipeSet) => {
-      recipeSet.forEach((recipe) => {
-        this.processCss(recipe.result, recipe.slot ? 'recipes_slots_base' : 'recipes_base')
+    if (includeRecipes)
+      decoder.recipes_base.forEach((recipeSet) => {
+        recipeSet.forEach((recipe) => {
+          this.processCss(recipe.result, recipe.slot ? 'recipes_slots_base' : 'recipes_base')
+        })
       })
-    })
 
     decoder.view_transitions.forEach((viewTransition) => {
       this.processViewTransition(viewTransition)
@@ -148,29 +150,6 @@ export class Stylesheet {
     // Serialized rather than appended raw: the slot bodies are authored style objects, so
     // tokens, shorthands and conditions inside them resolve the same as anywhere else.
     this.process({ styles: this.serialize(viewTransition.styles), layer: 'utilities' })
-  }
-
-  /**
-   * Process only the styles for a specific recipe from the decoder
-   */
-  processDecoderForRecipe = (decoder: StyleDecoder, recipeName: string) => {
-    const recipeSet = decoder.recipes.get(recipeName)
-    if (recipeSet) {
-      recipeSet.forEach((recipe) => {
-        this.processCss(recipe.result, recipe.entry.slot ? 'recipes_slots' : 'recipes')
-      })
-    }
-
-    // Process recipe base styles (may include slot-specific keys like "button__root")
-    decoder.recipes_base.forEach((baseSet, recipeKey) => {
-      // recipeKey could be "button" or "button__root" for slot recipes
-      const [baseRecipeName] = recipeKey.split('__')
-      if (baseRecipeName === recipeName) {
-        baseSet.forEach((recipe) => {
-          this.processCss(recipe.result, recipe.slot ? 'recipes_slots_base' : 'recipes_base')
-        })
-      }
-    })
   }
 
   getLayerCss = (...layers: CascadeLayer[]) => {

@@ -294,7 +294,11 @@ export class StaticCss {
     return results
   }
 
-  process = (options: StaticCssOptions, stylesheet?: Stylesheet): StaticCssEngine => {
+  process = (
+    options: StaticCssOptions,
+    stylesheet?: Stylesheet,
+    { atomizeRecipes = false }: { atomizeRecipes?: boolean } = {},
+  ): StaticCssEngine => {
     const { context } = this
 
     const sheet = stylesheet ?? context.createSheet()
@@ -354,7 +358,8 @@ export class StaticCss {
       encoder.processAtomic(result)
     })
 
-    sheet.processDecoder(decoder.collect(encoder))
+    if (atomizeRecipes) encoder.atomizeObservedRecipes()
+    sheet.processDecoder(decoder.collect(encoder), { includeRecipes: !atomizeRecipes })
 
     return {
       results,

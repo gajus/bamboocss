@@ -11,7 +11,6 @@ export { generate } from './generate'
 export { generatePackageExports } from '@bamboocss/generator'
 export { setupGitIgnore } from './git-ignore'
 export { setLogStream } from './logstream'
-export { parseDependency } from './parse-dependency'
 export { setupConfig } from './setup-config'
 export { spec } from './spec'
 export {

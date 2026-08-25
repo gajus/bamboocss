@@ -47,10 +47,10 @@ export const cssgen = async (ctx: BambooContext, options: CssGenOptions) => {
 
     const done = logger.time.info(ctx.messages.buildComplete(files.length))
 
-    const sheet = assembleExtractedSheet(ctx, { layerParams: true, includeRecipes: false })
+    const sheet = assembleExtractedSheet(ctx, { layerParams: true })
 
     if (splitting) {
-      await ctx.writeSplitCss(sheet, { includeRecipes: false })
+      await ctx.writeSplitCss(sheet)
     } else if (outfile) {
       const css = ctx.getCss(sheet)
       logger.info('css', ctx.runtime.path.resolve(outfile))

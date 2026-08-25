@@ -70,7 +70,7 @@ describe('cssgen compiled sheet', () => {
     await builder.setup({ cwd })
     await builder.emit()
     builder.extract()
-    const fromVite = builder.toCss({ layerParams: true, includeRecipes: false })
+    const fromVite = builder.toCss({ layerParams: true })
 
     expect(fromCssgen).toBe(fromVite)
     expect(fromCssgen).toContain('.d_flex')

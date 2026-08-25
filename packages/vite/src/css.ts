@@ -169,7 +169,7 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
     }
 
     // The whole stylesheet, so it carries the `@layer` order statement itself.
-    const css = builder.toCss({ layerParams: true, includeRecipes: false })
+    const css = builder.toCss({ layerParams: true })
 
     session.prunableClasses.clear()
     session.viewTransitionClasses.clear()

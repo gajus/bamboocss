@@ -16,52 +16,24 @@ const createSplitCssContext = (staticCss: StaticCssOptions) => {
   const sheet = generator.createSheet()
 
   generator.appendLayerParams(sheet)
-  generator.appendBaselineCss(sheet)
+  generator.appendBaselineCss(sheet, { atomizeRecipes: true })
 
-  const artifacts = generator.getSplitCssArtifacts(sheet, { includeRecipes: true })
-
-  return {
-    generator,
-    sheet,
-    artifacts,
-    recipeKeys: generator.recipes.keys,
-    recipeNames: artifacts.recipes.map((r) => r.name),
-    recipeFiles: artifacts.recipes.map((r) => r.file),
-  }
+  return { sheet, artifacts: generator.getSplitCssArtifacts(sheet) }
 }
 
 describe('split CSS generation', () => {
-  test('staticCss recipes: "*" should include all recipes', () => {
-    const { recipeKeys, recipeNames } = createSplitCssContext({ recipes: '*' })
+  test('atomizes statically included recipes into utilities', () => {
+    const { sheet, artifacts } = createSplitCssContext({ recipes: '*' })
+    const utilities = artifacts.layers.find((artifact) => artifact.name === 'utilities')
 
-    for (const recipeName of recipeKeys) {
-      expect(recipeNames).toContain(recipeName)
-    }
+    expect(utilities?.code).toContain('.d_flex')
+    expect(sheet.getLayerCss('recipes').trim()).toBe('')
   })
 
-  test('should generate separate CSS files for each recipe', () => {
-    const { recipeKeys, recipeFiles, artifacts } = createSplitCssContext({ recipes: '*' })
+  test('omits the obsolete recipe layer from the split index', () => {
+    const { artifacts } = createSplitCssContext({ recipes: '*' })
 
-    // Number of recipe CSS files should match the number of recipe keys
-    expect(artifacts.recipes.length).toBe(recipeKeys.length)
-
-    // Verify all recipe file names
-    expect(recipeFiles.sort()).toMatchInlineSnapshot(`
-      [
-        "badge.css",
-        "button-style.css",
-        "card-style.css",
-        "checkbox.css",
-        "text-style.css",
-        "tooltip-style.css",
-      ]
-    `)
-
-    // Each recipe should have non-empty CSS
-    artifacts.recipes.forEach((recipe) => {
-      expect(recipe.code.trim().length).toBeGreaterThan(0)
-      expect(recipe.file).toMatch(/\.css$/)
-      expect(recipe.dir).toBe('recipes')
-    })
+    expect(artifacts.index).toContain('@layer reset, base, tokens, utilities;')
+    expect(artifacts.index).not.toContain('recipes')
   })
 })

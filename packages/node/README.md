@@ -18,8 +18,7 @@ Everything below is exported from `@bamboocss/node`.
 - `BambooContext` – the resolved config plus everything derived from it: tokens, utilities, conditions, recipes,
   patterns, the `ts-morph` project, the output engine and the diff engine.
 - `Builder` – the incremental driver the bundler plugins use. It owns context setup, tracks which files and config
-  dependencies changed, re-extracts only those, and hands back the stylesheet (`toCss`) or writes it into a PostCSS root
-  (`write`).
+  dependencies changed, re-extracts only those, and hands back the stylesheet (`toCss`).
 
 ### Commands
 
@@ -37,8 +36,6 @@ Each takes a `BambooContext`, and each backs the CLI command of the same name.
 
 - `setupConfig(cwd, options?)` – scaffold `bamboo.config.ts`.
 - `setupGitIgnore(ctx)` – add the outdir to `.gitignore`, unless `config.gitignore` is off.
-- `parseDependency(fileOrGlob)` – turn a `config.dependencies` entry into a PostCSS `dependency` or `dir-dependency`
-  message.
 - `setLogStream({ cwd, logfile })` – tee logs to a file.
 - `startProfiling(cwd, prefix, isWatching?)` – start a V8 CPU profile; the returned function stops it and writes
   `bamboo-{prefix}-{timestamp}.cpuprofile` into `cwd`.

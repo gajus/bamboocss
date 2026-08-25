@@ -1,9 +1,9 @@
 import type { Context } from '@bamboocss/core'
 import type { Stylesheet } from '@bamboocss/core'
 
-export const generateStaticCss = (ctx: Context, sheet?: Stylesheet) => {
+export const generateStaticCss = (ctx: Context, sheet?: Stylesheet, options?: { atomizeRecipes?: boolean }) => {
   const { config, staticCss } = ctx
-  const engine = staticCss.process(ctx.config.staticCss ?? {}, sheet)
+  const engine = staticCss.process(ctx.config.staticCss ?? {}, sheet, options)
 
   if (!sheet) {
     const { minify } = config

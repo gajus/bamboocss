@@ -438,15 +438,15 @@ export class BambooContext extends Generator {
     })
   }
 
-  writeSplitCss = async (sheet: Stylesheet, { includeRecipes = false }: { includeRecipes?: boolean } = {}) => {
+  writeSplitCss = async (sheet: Stylesheet) => {
     const { path: pathUtil, fs } = this.runtime
     const rootDir = this.paths.root
     const stylesDir = [...rootDir, 'styles']
 
-    const artifacts = this.getSplitCssArtifacts(sheet, { includeRecipes })
+    const artifacts = this.getSplitCssArtifacts(sheet)
 
     // Derive and create directories from artifacts
-    const subDirs = new Set([...artifacts.recipes, ...artifacts.themes].map((a) => a.dir).filter(Boolean))
+    const subDirs = new Set(artifacts.themes.map((a) => a.dir).filter(Boolean))
     fs.ensureDirSync(pathUtil.join(...stylesDir))
     subDirs.forEach((dir) => fs.ensureDirSync(pathUtil.join(...stylesDir, dir!)))
 
@@ -457,18 +457,6 @@ export class BambooContext extends Generator {
     for (const layer of artifacts.layers) {
       styleFiles.push({ file: layer.file, code: layer.code })
       logger.info('css', pathUtil.join(...stylesDir, layer.file))
-    }
-
-    // Recipe files
-    for (const recipe of artifacts.recipes) {
-      styleFiles.push({ file: `${recipe.dir}/${recipe.file}`, code: recipe.code })
-      logger.info('css', pathUtil.join(...stylesDir, recipe.dir!, recipe.file))
-    }
-
-    // Recipes index
-    if (artifacts.recipes.length) {
-      styleFiles.push({ file: 'recipes.css', code: artifacts.recipesIndex })
-      logger.info('css', pathUtil.join(...stylesDir, 'recipes.css'))
     }
 
     // Theme files
@@ -496,12 +484,10 @@ export class BambooContext extends Generator {
     // `styles/recipes/` on disk, and nothing else deletes it — codegen's prune skips `styles/`
     // on purpose. Drop the leftovers here so a rebuild cannot keep serving named recipe rules
     // beside the atom sheet.
-    if (!includeRecipes) {
-      const recipesIndex = pathUtil.join(...stylesDir, 'recipes.css')
-      const recipesDir = pathUtil.join(...stylesDir, 'recipes')
-      if (fs.existsSync(recipesIndex)) fs.rmFileSync(recipesIndex)
-      if (fs.existsSync(recipesDir)) fs.rmFileSync(recipesDir)
-    }
+    const recipesIndex = pathUtil.join(...stylesDir, 'recipes.css')
+    const recipesDir = pathUtil.join(...stylesDir, 'recipes')
+    if (fs.existsSync(recipesIndex)) fs.rmFileSync(recipesIndex)
+    if (fs.existsSync(recipesDir)) fs.rmFileSync(recipesDir)
   }
 
   watchConfig = (cb: (file: string) => void | Promise<void>, opts?: Omit<WatchOptions, 'include'>) => {

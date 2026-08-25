@@ -2332,10 +2332,8 @@ export class StyleEncoder {
    * Recipe identity is deliberately absent from the hashes written here, so a declaration
    * already reached through `css()` is reused rather than emitted again.
    *
-   * Kept explicit rather than run during normal extraction: PostCSS injection can still emit
-   * named recipe rules. Compiled emission (`assembleExtractedSheet` with `includeRecipes:
-   * false`) calls this once after extraction, then erases that layer — Vite, `cssgen`, and
-   * the CLI `bamboo` command all go through there.
+   * Kept explicit rather than run during normal extraction so every file can finish
+   * contributing to the observed recipe set before emission atomizes it.
    */
   atomizeObservedRecipes = () => {
     const atomize = (value: unknown) => {

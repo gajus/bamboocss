@@ -15,7 +15,7 @@ async function build(ctx: BambooContext, artifactIds?: ArtifactId[]) {
   const done = logger.time.info('')
 
   const parsed = ctx.parseFiles()
-  const sheet = assembleExtractedSheet(ctx, { layerParams: true, includeRecipes: false })
+  const sheet = assembleExtractedSheet(ctx, { layerParams: true })
 
   await ctx.writeCss(sheet)
   done(ctx.messages.buildComplete(parsed.files.length))
@@ -64,7 +64,7 @@ export async function generate(config: Config, configPath?: string) {
 
       const outfile = ctx.runtime.path.join(...ctx.paths.root, 'styles.css')
       const done = logger.time.info(ctx.messages.buildComplete(parsed))
-      const sheet = assembleExtractedSheet(ctx, { layerParams: true, includeRecipes: false })
+      const sheet = assembleExtractedSheet(ctx, { layerParams: true })
       const css = ctx.getCss(sheet)
       await ctx.runtime.fs.writeFile(outfile, css)
 

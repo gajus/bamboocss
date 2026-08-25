@@ -5,11 +5,6 @@ import { collectSourceScans, keyframeNames, pruneTokensForBuild, type SourceScan
 
 export interface AssembleExtractedSheetOptions {
   layerParams?: boolean
-  /**
-   * Named recipe rules. The compiled path (`false`) interns every observed recipe as shared
-   * utility atoms and omits the recipe layer, which is what the Vite compiler emits.
-   */
-  includeRecipes?: boolean
   sourceScanCache?: SourceScanCache
   mtimeOf?: (filePath: string) => number | undefined
   sourceInventory?: readonly string[]
@@ -23,38 +18,17 @@ export interface AssembleExtractedSheetOptions {
  */
 export const assembleExtractedSheet = (
   ctx: BambooContext,
-  {
-    layerParams = false,
-    includeRecipes = false,
-    sourceScanCache,
-    mtimeOf,
-    sourceInventory,
-  }: AssembleExtractedSheetOptions = {},
+  { layerParams = false, sourceScanCache, mtimeOf, sourceInventory }: AssembleExtractedSheetOptions = {},
 ): Stylesheet => {
-  if (!includeRecipes) {
-    ctx.encoder.atomizeObservedRecipes()
-  }
+  ctx.encoder.atomizeObservedRecipes()
 
   const sheet = ctx.createSheet()
   if (layerParams) {
-    if (includeRecipes) {
-      ctx.appendLayerParams(sheet)
-    } else {
-      const recipeLayer = ctx.config.layers?.recipes ?? 'recipes'
-      sheet.layers.root.prepend(`@layer ${sheet.layers.layerNames.filter((name) => name !== recipeLayer).join(', ')};`)
-    }
+    const recipeLayer = ctx.config.layers?.recipes ?? 'recipes'
+    sheet.layers.root.prepend(`@layer ${sheet.layers.layerNames.filter((name) => name !== recipeLayer).join(', ')};`)
   }
 
-  ctx.appendBaselineCss(sheet)
-
-  // Extraction is already in the shared encoder. `appendBaselineCss` dumps that encoder
-  // through static CSS generation, so a second `appendParserCss` would duplicate every rule.
-  if (!includeRecipes) {
-    sheet.layers.recipes.removeAll()
-    sheet.layers.recipes_base.removeAll()
-    sheet.layers.recipes_slots.removeAll()
-    sheet.layers.recipes_slots_base.removeAll()
-  }
+  ctx.appendBaselineCss(sheet, { atomizeRecipes: true })
 
   const collectElements = prunesPreflight(ctx.config.preflight)
   const pruneKeyframes = Boolean(ctx.config.prune?.keyframes)

@@ -30,7 +30,7 @@ import { generateThemesSpec } from './spec/themes'
 import { generateSemanticTokensSpec, generateTokensSpec } from './spec/tokens'
 
 export interface SplitCssArtifact {
-  type: 'layer' | 'recipe' | 'theme'
+  type: 'layer' | 'theme'
   name: string
   file: string
   code: string
@@ -41,12 +41,8 @@ export interface SplitCssArtifact {
 export interface SplitCssResult {
   /** Layer CSS files (reset, global, tokens, utilities) */
   layers: SplitCssArtifact[]
-  /** Recipe CSS files */
-  recipes: SplitCssArtifact[]
   /** Theme CSS files (not auto-imported) */
   themes: SplitCssArtifact[]
-  /** Content for recipes.css */
-  recipesIndex: string
   /** Content for main styles.css */
   index: string
 }
@@ -79,10 +75,10 @@ export class Generator extends Context {
     sheet.layers.root.prepend(sheet.layers.params)
   }
 
-  appendBaselineCss = (sheet: Stylesheet) => {
+  appendBaselineCss = (sheet: Stylesheet, { atomizeRecipes = false }: { atomizeRecipes?: boolean } = {}) => {
     if (this.config.preflight) this.appendCssOfType('preflight', sheet)
     if (!this.tokens.isEmpty) this.appendCssOfType('tokens', sheet)
-    this.appendCssOfType('static', sheet)
+    generateStaticCss(this, sheet, { atomizeRecipes })
     this.appendCssOfType('global', sheet)
     if (this.config.theme?.keyframes) this.appendCssOfType('keyframes', sheet)
   }
@@ -541,33 +537,11 @@ export class Generator extends Context {
   }
 
   /**
-   * Get CSS for a specific recipe
-   */
-  getRecipeCss = (recipeName: string) => {
-    const sheet = this.createSheet()
-    const decoder = this.decoder.collect(this.encoder)
-    sheet.processDecoderForRecipe(decoder, recipeName)
-    return sheet.getLayerCss('recipes')
-  }
-
-  /**
-   * Get all recipe names from the decoder
-   */
-  getRecipeNames = () => {
-    const decoder = this.decoder.collect(this.encoder)
-    return Array.from(decoder.recipes.keys())
-  }
-
-  /**
    * Get all split CSS artifacts for the stylesheet
    * Used when --splitting flag is enabled
    */
-  getSplitCssArtifacts = (
-    sheet: Stylesheet,
-    { includeRecipes = false }: { includeRecipes?: boolean } = {},
-  ): SplitCssResult => {
+  getSplitCssArtifacts = (sheet: Stylesheet): SplitCssResult => {
     const layerNames = this.config.layers as Record<string, string>
-    const decoder = this.decoder.collect(this.encoder)
 
     // Layer artifacts
     const layerDefs = [
@@ -586,25 +560,6 @@ export class Generator extends Context {
         code: l.css,
       }))
 
-    // Recipe artifacts. Compiled emission has no recipe layer; atoms live in utilities.
-    const recipes: SplitCssArtifact[] = []
-    if (includeRecipes) {
-      for (const recipeName of this.recipes.keys) {
-        const recipeSheet = this.createSheet()
-        recipeSheet.processDecoderForRecipe(decoder, recipeName)
-        const code = recipeSheet.getLayerCss('recipes')
-        if (code.trim()) {
-          recipes.push({
-            type: 'recipe',
-            name: recipeName,
-            file: `${dashCase(recipeName)}.css`,
-            code,
-            dir: 'recipes',
-          })
-        }
-      }
-    }
-
     // Theme artifacts (not auto-imported in styles.css)
     const themes: SplitCssArtifact[] = []
     if (this.config.theme?.variants) {
@@ -622,27 +577,16 @@ export class Generator extends Context {
       }
     }
 
-    // Build recipes.css content
-    const recipesIndex = recipes.map((r) => `@import './recipes/${r.file}';`).join('\n')
-
     // Build main styles.css content
-    const layerOrder = includeRecipes
-      ? [layerNames.reset, layerNames.base, layerNames.tokens, layerNames.recipes, layerNames.utilities]
-      : [layerNames.reset, layerNames.base, layerNames.tokens, layerNames.utilities]
+    const layerOrder = [layerNames.reset, layerNames.base, layerNames.tokens, layerNames.utilities]
     const imports = [`@layer ${layerOrder.join(', ')};`, '']
 
     for (const layer of layers) {
       imports.push(`@import './styles/${layer.file}';`)
     }
-    if (recipes.length) {
-      imports.push(`@import './styles/recipes.css';`)
-    }
-
     return {
       layers,
-      recipes,
       themes,
-      recipesIndex,
       index: imports.join('\n'),
     }
   }

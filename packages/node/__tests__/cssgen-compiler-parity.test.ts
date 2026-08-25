@@ -18,13 +18,14 @@ afterAll(() => {
   temporaryDirectories.clear()
 })
 
-const createProject = () => {
+const createProject = ({ polyfill = false }: { polyfill?: boolean } = {}) => {
   const directory = mkdtempSync(join(tmpdir(), 'bamboo-cssgen-compiler-'))
   temporaryDirectories.add(directory)
   writeFileSync(
     join(directory, 'bamboo.config.ts'),
     `export default {
   preflight: false,
+  polyfill: ${polyfill},
   include: ['src/**/*.ts'],
   outdir: 'styled-system',
   theme: {
@@ -88,6 +89,14 @@ describe('cssgen compiled sheet', () => {
     const fromGenerate = readFileSync(join(cwd, 'styled-system/styles.css'), 'utf8')
 
     expect(fromGenerate).toBe(fromCssgen)
+  })
+
+  test('rejects the cascade-layer polyfill for every compiled sheet caller', async () => {
+    const cwd = createProject({ polyfill: true })
+    const message = 'the cascade-layer polyfill is incompatible with compiled atomic styles'
+
+    await expect(emitCssgen(cwd)).rejects.toThrow(message)
+    await expect(generate({ cwd }, join(cwd, 'bamboo.config.ts'))).rejects.toThrow(message)
   })
 
   test('splitting omits the recipe layer and removes leftovers from a previous run', async () => {

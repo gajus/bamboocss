@@ -153,13 +153,6 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
     // longer single block instead of their sum. In a build the extra tick is noise.
     await new Promise<void>((settle) => setImmediate(settle))
 
-    if (builder.context?.config.polyfill) {
-      throw new Error(
-        'bamboocss: the cascade-layer polyfill is incompatible with compiled atomic styles. ' +
-          'The polyfill removes the utility-layer boundary required for safe atom reachability and renaming.',
-      )
-    }
-
     if (builder.context) {
       session.utilityLayer = builder.context.config.layers?.utilities ?? 'utilities'
       session.extractedFiles.clear()

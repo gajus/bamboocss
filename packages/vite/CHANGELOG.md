@@ -1,5 +1,19 @@
 # @bamboocss/vite
 
+## 1.48.3
+
+### Patch Changes
+
+- 6fc2a51: Skip cached-metadata cloning and validation for fresh transform artifacts while retaining authenticated
+  replay for cached metadata.
+  - @bamboocss/config@1.48.3
+  - @bamboocss/core@1.48.3
+  - @bamboocss/extractor@1.48.3
+  - @bamboocss/logger@1.48.3
+  - @bamboocss/node@1.48.3
+  - @bamboocss/shared@1.48.3
+  - @bamboocss/types@1.48.3
+
 ## 1.48.2
 
 ### Patch Changes

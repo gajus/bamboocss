@@ -1,13 +1,13 @@
-import { UsePlayGroundProps, usePlayground } from '@/src/hooks/usePlayground'
-import { useConfig } from '@/src/hooks/useConfig'
-import { PlaygroundContent } from '@/src/components/PlaygroundContent'
+import { Playground as ClientPlayground } from '@/src/components/Playground.client'
+import type { UsePlayGroundProps } from '@/src/hooks/usePlayground'
+import { useEffect, useState } from 'react'
 
 export const Playground = (props: UsePlayGroundProps) => {
-  const playground = usePlayground(props)
-  const _state = playground.diffState ?? playground.state
+  const [hydrated, setHydrated] = useState(false)
 
-  const config = useConfig(_state.config)
-  if (!config.config && !config.error) return null
+  useEffect(() => {
+    setHydrated(true)
+  }, [])
 
-  return <PlaygroundContent playground={playground} config={config} />
+  return hydrated ? <ClientPlayground {...props} /> : null
 }

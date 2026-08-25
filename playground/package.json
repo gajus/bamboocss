@@ -27,6 +27,7 @@
     "@bamboocss/preset-bamboo": "workspace:*",
     "@bamboocss/preset-base": "workspace:*",
     "@monaco-editor/react": "4.6.0",
+    "@noble/hashes": "^2.3.0",
     "@prisma/client": "5.9.1",
     "@react-router/node": "8.3.0",
     "@react-router/serve": "8.3.0",

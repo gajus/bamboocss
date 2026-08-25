@@ -1,5 +1,24 @@
 # @bamboocss/vite
 
+## 1.47.0
+
+### Minor Changes
+
+- df4a653: Require Vite as the styling integration. Vue, Svelte and Astro compile after the framework plugin; the
+  PostCSS package and CLI export are removed.
+
+### Patch Changes
+
+- Updated dependencies [74f06ce]
+- Updated dependencies [df4a653]
+  - @bamboocss/node@1.47.0
+  - @bamboocss/config@1.47.0
+  - @bamboocss/core@1.47.0
+  - @bamboocss/extractor@1.47.0
+  - @bamboocss/logger@1.47.0
+  - @bamboocss/shared@1.47.0
+  - @bamboocss/types@1.47.0
+
 ## 1.46.3
 
 ### Patch Changes

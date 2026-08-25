@@ -1,5 +1,30 @@
 # @bamboocss/generator
 
+## 1.47.0
+
+### Minor Changes
+
+- 74f06ce: `bamboo cssgen` (and the CLI `bamboo` command) emit the same compiled stylesheet Vite serves.
+
+  Observed recipes are interned as shared utility atoms and the recipe layer is omitted, so a `cva()` or config-recipe
+  selection has the same class names in a cssgen sheet as in a Vite build. The previous split is why a consumer had to
+  avoid `cva` when the sheet came from cssgen.
+
+  `cssgen --splitting` still writes per-layer files; it no longer writes per-recipe files, because those rules are not
+  in the compiled sheet. A later compiled run deletes `styles/recipes/` and `styles/recipes.css` left by an earlier one.
+
+- 960d098: Uncompiled `css()`, `cva()`, `sva()`, recipes, patterns, and `viewTransition()` throw. Class strings come
+  from the Vite compiler; `css.raw()` still returns a style object.
+
+### Patch Changes
+
+- @bamboocss/core@1.47.0
+- @bamboocss/is-valid-prop@1.47.0
+- @bamboocss/logger@1.47.0
+- @bamboocss/shared@1.47.0
+- @bamboocss/token-dictionary@1.47.0
+- @bamboocss/types@1.47.0
+
 ## 1.46.3
 
 ### Patch Changes

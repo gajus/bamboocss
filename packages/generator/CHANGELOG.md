@@ -1,5 +1,24 @@
 # @bamboocss/generator
 
+## 1.48.0
+
+### Minor Changes
+
+- 49839f1: Remove obsolete PostCSS injection APIs and generated runtime modules. Compiled stylesheet assembly now emits
+  recipe declarations directly as shared utility atoms instead of creating named recipe layers and deleting them
+  afterward.
+
+### Patch Changes
+
+- Updated dependencies [49839f1]
+- Updated dependencies [235397c]
+  - @bamboocss/core@1.48.0
+  - @bamboocss/shared@1.48.0
+  - @bamboocss/types@1.48.0
+  - @bamboocss/token-dictionary@1.48.0
+  - @bamboocss/logger@1.48.0
+  - @bamboocss/is-valid-prop@1.48.0
+
 ## 1.47.0
 
 ### Minor Changes

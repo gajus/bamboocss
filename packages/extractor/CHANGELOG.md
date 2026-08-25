@@ -1,5 +1,12 @@
 # @bamboocss/extractor
 
+## 1.48.0
+
+### Patch Changes
+
+- Updated dependencies [49839f1]
+  - @bamboocss/shared@1.48.0
+
 ## 1.47.0
 
 ### Patch Changes

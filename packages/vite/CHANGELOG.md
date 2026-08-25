@@ -1,5 +1,18 @@
 # @bamboocss/vite
 
+## 1.48.5
+
+### Patch Changes
+
+- 86130d3: Stabilize Vite watch lifecycle regression coverage across filesystem notification backends.
+  - @bamboocss/config@1.48.5
+  - @bamboocss/core@1.48.5
+  - @bamboocss/extractor@1.48.5
+  - @bamboocss/logger@1.48.5
+  - @bamboocss/node@1.48.5
+  - @bamboocss/shared@1.48.5
+  - @bamboocss/types@1.48.5
+
 ## 1.48.4
 
 ### Patch Changes

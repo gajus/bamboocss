@@ -1,5 +1,21 @@
 # @bamboocss/node
 
+## 1.48.5
+
+### Patch Changes
+
+- @bamboocss/config@1.48.5
+- @bamboocss/core@1.48.5
+- @bamboocss/generator@1.48.5
+- @bamboocss/logger@1.48.5
+- @bamboocss/parser@1.48.5
+- @bamboocss/plugin-svelte@1.48.5
+- @bamboocss/plugin-vue@1.48.5
+- @bamboocss/reporter@1.48.5
+- @bamboocss/shared@1.48.5
+- @bamboocss/token-dictionary@1.48.5
+- @bamboocss/types@1.48.5
+
 ## 1.48.4
 
 ### Patch Changes

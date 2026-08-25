@@ -1,5 +1,18 @@
 # @bamboocss/parser
 
+## 1.48.2
+
+### Patch Changes
+
+- 02c50be: Replace quadratic dependency queues and affected-file ordering with cursor walks, constant-time membership,
+  and a stable priority heap.
+  - @bamboocss/config@1.48.2
+  - @bamboocss/core@1.48.2
+  - @bamboocss/extractor@1.48.2
+  - @bamboocss/logger@1.48.2
+  - @bamboocss/shared@1.48.2
+  - @bamboocss/types@1.48.2
+
 ## 1.48.1
 
 ### Patch Changes

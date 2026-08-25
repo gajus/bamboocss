@@ -1,5 +1,24 @@
 # @bamboocss/node
 
+## 1.48.2
+
+### Patch Changes
+
+- 02c50be: Replace quadratic dependency queues and affected-file ordering with cursor walks, constant-time membership,
+  and a stable priority heap.
+- Updated dependencies [02c50be]
+  - @bamboocss/parser@1.48.2
+  - @bamboocss/config@1.48.2
+  - @bamboocss/core@1.48.2
+  - @bamboocss/generator@1.48.2
+  - @bamboocss/logger@1.48.2
+  - @bamboocss/plugin-svelte@1.48.2
+  - @bamboocss/plugin-vue@1.48.2
+  - @bamboocss/reporter@1.48.2
+  - @bamboocss/shared@1.48.2
+  - @bamboocss/token-dictionary@1.48.2
+  - @bamboocss/types@1.48.2
+
 ## 1.48.1
 
 ### Patch Changes

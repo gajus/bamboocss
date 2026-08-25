@@ -10,10 +10,11 @@ import { createCompilationHost, type CompilationBuilder } from '../src/compilati
  */
 const stubBuilder = () => {
   const newContext = () => ({ encoder: { clone: () => ({ owner: 'clone' }) } })
+  type SetupOptions = NonNullable<Parameters<CompilationBuilder['setup']>[0]>
 
   let context = newContext()
   let failNext: Error | undefined
-  const setups: Array<{ dev?: boolean }> = []
+  const setups: SetupOptions[] = []
   const reloaded: string[] = []
   const removed: string[] = []
 
@@ -22,7 +23,7 @@ const stubBuilder = () => {
       return context
     },
     getContextOrThrow: () => context,
-    setup: async (options: { dev?: boolean }) => {
+    setup: async (options: SetupOptions) => {
       setups.push(options)
       if (!failNext) return
       const thrown = failNext
@@ -109,7 +110,88 @@ describe('the compilation host', () => {
     host.setCommand('serve')
     await host.ensureGeneration()
 
-    expect(stub.setups).toEqual([expect.objectContaining({ dev: true })])
+    expect(stub.setups).toEqual([
+      expect.objectContaining({ dev: true, sourceChanges: { files: [], needsInventoryScan: false } }),
+    ])
+  })
+
+  test('coalesces dev events into one stable journal and flags membership changes', async () => {
+    const { host, stub } = hostOf()
+    host.setCommand('serve')
+
+    host.noteSourceChange('/app/src/z.ts', 'update')
+    host.noteSourceChange('/app/src/a.ts', 'update')
+    host.noteSourceChange('/app/src/z.ts', 'create', { needsConfigReload: true })
+    await host.ensureGeneration()
+
+    expect(stub.setups[0]?.sourceChanges).toEqual({
+      files: ['/app/src/a.ts', '/app/src/z.ts'],
+      needsConfigReload: true,
+      needsInventoryScan: true,
+    })
+  })
+
+  test('leaves create/delete membership classification to the dev filesystem watcher', async () => {
+    const { host, stub } = hostOf()
+    host.setCommand('serve')
+    await host.ensureGeneration()
+
+    host.reloadSource('/app/src/created.ts')
+    host.removeSource('/app/src/deleted.ts')
+    await host.runCssPass(async () => undefined)
+
+    expect(stub.setups[1]?.sourceChanges).toEqual({
+      files: ['/app/src/created.ts', '/app/src/deleted.ts'],
+      needsInventoryScan: false,
+    })
+  })
+
+  test('keeps events which arrive while setup is in flight for the following pass', async () => {
+    const { host, stub } = hostOf()
+    host.setCommand('serve')
+    const originalSetup = stub.builder.setup.bind(stub.builder)
+    let setupStarted!: () => void
+    let releaseSetup!: () => void
+    const started = new Promise<void>((resolve) => {
+      setupStarted = resolve
+    })
+    const blocked = new Promise<void>((resolve) => {
+      releaseSetup = resolve
+    })
+    stub.builder.setup = async (options) => {
+      setupStarted()
+      await blocked
+      return originalSetup(options)
+    }
+
+    host.noteSourceChange('/app/src/first.ts', 'update')
+    const first = host.ensureGeneration()
+    await started
+    host.noteSourceChange('/app/src/second.ts', 'update')
+    releaseSetup()
+    await first
+    await host.runCssPass(async () => undefined)
+
+    expect(stub.setups.map((setup) => setup.sourceChanges)).toEqual([
+      { files: ['/app/src/first.ts'], needsInventoryScan: false },
+      { files: ['/app/src/second.ts'], needsInventoryScan: false },
+    ])
+  })
+
+  test('restores a consumed dev journal when setup fails', async () => {
+    const { host, stub } = hostOf()
+    host.setCommand('serve')
+    const failure = new Error('setup failed')
+    stub.failNextSetup(failure)
+    host.noteSourceChange('/app/src/edited.ts', 'update')
+
+    await expect(host.ensureGeneration()).rejects.toBe(failure)
+    await host.ensureGeneration()
+
+    expect(stub.setups.map((setup) => setup.sourceChanges)).toEqual([
+      { files: ['/app/src/edited.ts'], needsInventoryScan: false },
+      { files: ['/app/src/edited.ts'], needsInventoryScan: false },
+    ])
   })
 
   test('retries a failed setup for the next hook, publishing nothing from the attempt', async () => {

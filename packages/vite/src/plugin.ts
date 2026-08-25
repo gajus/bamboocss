@@ -1955,14 +1955,20 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
         state.changedRun = 0
       }
 
-      if (!ctx) return
-      if (!shouldTransform(id)) return
-
       // Split the same way `transform` does. Nothing observed puts a query on a watch id,
       // but handing ts-morph a path the rest of the plugin spells differently is the kind
       // of asymmetry that only shows up as a fold that quietly stopped refreshing.
       const [filePath] = id.split('?')
       if (!filePath) return
+      // Updates never change glob membership, and included JSON/resolver configuration files
+      // affect extraction even though this compiler does not transform their bytes. Creation
+      // and deletion need relevance filtering, which the CSS plugin's configureServer watcher
+      // performs against the source inventory and resolution/config inputs. Compiler mutations
+      // below still dirty their exact path without claiming that glob membership changed.
+      if (change.event === 'update') host.noteSourceChange(filePath, change.event)
+
+      if (!ctx) return
+      if (!shouldTransform(id)) return
 
       // Whole-map rather than this file's entry: a config is cached under the module that
       // *declares* it, and an edit here can change what any other module re-exports. This

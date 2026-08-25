@@ -38,6 +38,13 @@ export interface CompilationHostOptions {
   loadBuilder?: () => Promise<Builder>
 }
 
+export type CompilationSourceChangeEvent = 'create' | 'update' | 'delete'
+
+export interface CompilationSourceChangeOptions {
+  /** A `config.dependencies` glob gained or lost this path. */
+  needsConfigReload?: boolean
+}
+
 /**
  * The single owner of Bamboo's build state inside one Vite run.
  *
@@ -82,6 +89,12 @@ export interface CompilationHost {
    * stylesheet pass between the last check and the call, because nothing else runs.
    */
   runCompilerWork<T>(run: () => T): Promise<T>
+  /** Record a filesystem event even when the changed file is not a compiler-transformable module. */
+  noteSourceChange(
+    filePath: string,
+    event: CompilationSourceChangeEvent,
+    options?: CompilationSourceChangeOptions,
+  ): void
   /** Refresh one edited source in the shared Project. @see `Builder.reloadSource` */
   reloadSource(filePath: string): void
   /** Drop one deleted source from the shared Project. @see `Builder.removeSource` */
@@ -109,6 +122,42 @@ export const createCompilationHost = (options: CompilationHostOptions = {}): Com
   let openSetup: Promise<CompilationGeneration> | undefined
   let openSetupStale = false
   let cssPass: Promise<void> | undefined
+  let changedSourceFiles = new Set<string>()
+  let needsInventoryScan = false
+  let needsConfigReload = false
+
+  const recordSourceChange = (
+    filePath: string,
+    event: CompilationSourceChangeEvent,
+    options?: CompilationSourceChangeOptions,
+  ) => {
+    changedSourceFiles.add(filePath)
+    if (event !== 'update') needsInventoryScan = true
+    needsConfigReload ||= options?.needsConfigReload === true
+    openSetupStale = true
+  }
+
+  const takeSourceChanges = () => {
+    const changes = {
+      files: [...changedSourceFiles].sort(),
+      needsInventoryScan,
+      ...(needsConfigReload ? { needsConfigReload: true } : {}),
+    }
+    changedSourceFiles = new Set()
+    needsInventoryScan = false
+    needsConfigReload = false
+    return changes
+  }
+
+  const restoreSourceChanges = (changes: {
+    files: readonly string[]
+    needsInventoryScan?: boolean
+    needsConfigReload?: boolean
+  }) => {
+    for (const file of changes.files) changedSourceFiles.add(file)
+    needsInventoryScan ||= changes.needsInventoryScan === true
+    needsConfigReload ||= changes.needsConfigReload === true
+  }
 
   const settled = async (attempt: Promise<unknown>) => {
     try {
@@ -128,10 +177,21 @@ export const createCompilationHost = (options: CompilationHostOptions = {}): Com
 
   const runSetup = async () => {
     builder ??= await loadBuilder()
+    const sourceChanges = takeSourceChanges()
     // `hash: 'auto'` reads `dev`, and nothing else does — a class name may differ between dev
     // and production, the CSS may not.
-    await builder.setup({ configPath, cwd, dev: command === 'serve' })
-    return publish()
+    try {
+      await builder.setup({
+        configPath,
+        cwd,
+        dev: command === 'serve',
+        ...(command === 'serve' ? { sourceChanges } : {}),
+      })
+      return publish()
+    } catch (error) {
+      if (command === 'serve') restoreSourceChanges(sourceChanges)
+      throw error
+    }
   }
 
   /**
@@ -202,13 +262,22 @@ export const createCompilationHost = (options: CompilationHostOptions = {}): Com
       return run()
     },
 
+    noteSourceChange(filePath, event, options) {
+      // Production watch retains Builder's filesystem discovery. The journal is authoritative
+      // only where configureServer installs the complementary add/delete watcher.
+      if (command === 'serve') recordSourceChange(filePath, event, options)
+    },
+
     reloadSource(filePath) {
-      openSetupStale = true
+      recordSourceChange(filePath, 'update')
       builder?.reloadSource(filePath)
     },
 
     removeSource(filePath) {
-      openSetupStale = true
+      // configureServer owns the membership verdict for add/delete events. Treat the compiler's
+      // Project mutation as an exact-path edit so an unrelated transformable deletion cannot
+      // force a full inventory scan; a relevant deletion is separately journaled as `delete`.
+      recordSourceChange(filePath, 'update')
       builder?.removeSource(filePath)
     },
   }

@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, test, vi } from 'vitest'
@@ -102,6 +102,133 @@ describe('extraction skip by recorded reads', () => {
 })
 
 describe('source-scan cache', () => {
+  test('dependency membership events re-expand config globs before the fast path', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'bamboo-config-membership-'))
+    temporaryDirectories.add(directory)
+    const sourceGlob = join(directory, 'src/**/*.ts').replaceAll('\\', '/')
+    const dependencyGlob = join(directory, 'inputs/*.json').replaceAll('\\', '/')
+    writeFileSync(
+      join(directory, 'bamboo.config.ts'),
+      `export default { include: [${JSON.stringify(sourceGlob)}], dependencies: [${JSON.stringify(dependencyGlob)}], outdir: 'styled-system' }\n`,
+    )
+    mkdirSync(join(directory, 'src'), { recursive: true })
+    writeFileSync(join(directory, 'src/styles.ts'), contentsA)
+
+    const builder = new Builder()
+    await build(builder, directory)
+    await builder.setup({ cwd: directory, dev: true, sourceChanges: { files: [] } })
+    builder.extract()
+    const configChange = vi.fn()
+    builder.context!.hooks['config:change'] = configChange
+
+    const dependency = join(directory, 'inputs/theme.json')
+    expect(builder.isPotentialSourceFile(join(directory, 'src/new.ts'))).toBe(true)
+    expect(builder.isPotentialConfigDependency(dependency)).toBe(true)
+    mkdirSync(join(directory, 'inputs'))
+    writeFileSync(dependency, `{ "color": "red" }\n`)
+    await builder.setup({
+      cwd: directory,
+      dev: true,
+      sourceChanges: {
+        files: [dependency],
+        needsConfigReload: true,
+        needsInventoryScan: true,
+      },
+    })
+    expect(builder.context!.explicitDeps).toContain(dependency)
+    expect(configChange).toHaveBeenCalledTimes(1)
+    builder.extract()
+
+    rmSync(dependency)
+    await builder.setup({
+      cwd: directory,
+      dev: true,
+      sourceChanges: {
+        files: [dependency],
+        needsConfigReload: true,
+        needsInventoryScan: true,
+      },
+    })
+    expect(builder.context!.explicitDeps).not.toContain(dependency)
+    expect(configChange).toHaveBeenCalledTimes(2)
+  }, 120_000)
+
+  test('a journaled same-mtime edit skips inventory and untouched-file stats', async () => {
+    const { directory, fixture } = createProject()
+    const untouched = join(directory, 'src/untouched.ts')
+    writeFileSync(untouched, contentsA.replace('one', 'untouched'))
+
+    const builder = new Builder()
+    await build(builder, directory)
+    // The first rebuild establishes the dev config-graph snapshot. The source inventory is
+    // already available, so an authoritative empty journal does not need to rediscover it.
+    await builder.setup({ cwd: directory, dev: true, sourceChanges: { files: [] } })
+    builder.extract()
+
+    const ctx = builder.context!
+    const inventory = vi.spyOn(ctx, 'getFiles')
+    const metadata = vi.spyOn(builder, 'getFileMeta')
+    const reads = vi.spyOn(ctx.runtime.fs, 'readFileSync')
+    const before = statSync(fixture)
+    writeFileSync(fixture, contentsB)
+    utimesSync(fixture, before.atime, before.mtime)
+    builder.reloadSource(fixture)
+
+    await builder.setup({ cwd: directory, dev: true, sourceChanges: { files: [fixture] } })
+    builder.extract()
+    reads.mockClear()
+    const css = builder.toCss({ layerParams: true })
+
+    expect(inventory, 'ordinary edits reuse the reconciled inventory').not.toHaveBeenCalled()
+    const stated = metadata.mock.calls.map(([file]) => file)
+    expect(stated).toContain(fixture)
+    expect(stated, 'the final snapshot reuses metadata for untouched files').not.toContain(untouched)
+    expect([...new Set(reads.mock.calls.map(([file]) => String(file)))]).toEqual([fixture])
+    expect(css).toContain('spin')
+
+    inventory.mockRestore()
+    metadata.mockRestore()
+    reads.mockRestore()
+  }, 120_000)
+
+  test('create and delete journals reconcile inventory once per pass', async () => {
+    const { directory } = createProject()
+    const added = join(directory, 'src/added.ts')
+    const builder = new Builder()
+    await build(builder, directory)
+    await builder.setup({ cwd: directory, dev: true, sourceChanges: { files: [] } })
+    builder.extract()
+
+    const ctx = builder.context!
+    const inventory = vi.spyOn(ctx, 'getFiles')
+    writeFileSync(
+      added,
+      `import { css } from '../styled-system/css'\nexport const added = css({ width: '[987.654px]' })\n`,
+    )
+    builder.reloadSource(added)
+    await builder.setup({
+      cwd: directory,
+      dev: true,
+      sourceChanges: { files: [added], needsInventoryScan: true },
+    })
+    builder.extract()
+    expect(inventory).toHaveBeenCalledTimes(1)
+    expect(builder.toCss({ layerParams: true })).toContain('987.654px')
+
+    inventory.mockClear()
+    rmSync(added)
+    builder.removeSource(added)
+    await builder.setup({
+      cwd: directory,
+      dev: true,
+      sourceChanges: { files: [added], needsInventoryScan: true },
+    })
+    builder.extract()
+    expect(inventory).toHaveBeenCalledTimes(1)
+    expect(builder.toCss({ layerParams: true })).not.toContain('987.654px')
+    inventory.mockRestore()
+  }, 120_000)
+
   test('cached rebuilds emit byte-identical css across an edit and its revert', async () => {
     const { directory, fixture } = createProject()
 

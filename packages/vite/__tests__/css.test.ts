@@ -79,23 +79,25 @@ describe('the virtual stylesheet', () => {
     const entry = join(fixtureDir, 'entry.tsx')
     const dependency = join(fixtureDir, 'dependency.ts')
     const unrelated = join(fixtureDir, 'unrelated.ts')
+    const explicitDependency = join(fixtureDir, 'theme-input.json')
     const configPath = join(cwd, '__css-resolution-watch.bamboo.config.ts')
     mkdirSync(fixtureDir, { recursive: true })
     writeFileSync(dependency, `export const shared = { color: 'red.300' }\n`)
     writeFileSync(unrelated, `export const runtime = Math.random()\n`)
+    writeFileSync(explicitDependency, `{ "theme": "red" }\n`)
     writeFileSync(
       entry,
       `import { css } from '../../styled-system/css'\nimport { shared } from './dependency'\nimport { runtime } from './unrelated'\nexport const className = css(shared)\nexport { runtime }\n`,
     )
     writeFileSync(
       configPath,
-      `import base from './bamboo.config'\nexport default { ...base, include: ['./src/__css-resolution-watch/**/*.tsx'] }\n`,
+      `import base from './bamboo.config'\nexport default { ...base, include: ['./src/__css-resolution-watch/**/*.tsx'], dependencies: ['./src/__css-resolution-watch/*.json'] }\n`,
     )
 
     const plugin = bamboocssCss({ cwd, configPath, session: createStaticCompilationSession() })
     const watched: string[] = []
     try {
-      await hookOf(plugin.configResolved)?.call({} as never, { command: 'build', build: { sourcemap: false } } as never)
+      await hookOf(plugin.configResolved)?.call({} as never, { command: 'serve', build: { sourcemap: false } } as never)
       const resolved = hookOf(plugin.resolveId)!.call({} as never, VIRTUAL_CSS_ID, undefined, {} as never) as string
       const css = await hookOf(plugin.load)!.call(
         { addWatchFile: (file: string) => watched.push(file) } as never,
@@ -106,6 +108,7 @@ describe('the virtual stylesheet', () => {
       expect(css).toContain('--colors-red-300')
       expect(watched).toContain(entry)
       expect(watched).toContain(dependency)
+      expect(watched).toContain(explicitDependency)
       expect(watched).not.toContain(unrelated)
 
       const listeners = new Map<string, (file: string) => void>()
@@ -125,6 +128,29 @@ describe('the virtual stylesheet', () => {
       )
       listeners.get('change')!(dependency)
       expect(reloaded, 'a resolver-read file with no Vite module still repaints').toEqual([resolved])
+
+      listeners.get('change')!(explicitDependency)
+      expect(reloaded, 'an explicit config dependency is part of the sheet watch set').toEqual([resolved, resolved])
+
+      const ignoredAddition = join(fixtureDir, 'notes.txt')
+      writeFileSync(ignoredAddition, `not an extraction input\n`)
+      listeners.get('add')!(ignoredAddition)
+      expect(reloaded, 'unrelated additions do not force an inventory scan').toEqual([resolved, resolved])
+
+      const addedDependency = join(fixtureDir, 'added-theme.json')
+      writeFileSync(addedDependency, `{ "theme": "blue" }\n`)
+      listeners.get('add')!(addedDependency)
+      expect(reloaded, 'a new config dependency forces glob re-expansion').toEqual([resolved, resolved, resolved])
+
+      const newlyIncluded = join(fixtureDir, 'new-entry.tsx')
+      writeFileSync(newlyIncluded, `export const added = true\n`)
+      listeners.get('add')!(newlyIncluded)
+      expect(reloaded, 'an add outside the old inventory forces membership reconciliation').toEqual([
+        resolved,
+        resolved,
+        resolved,
+        resolved,
+      ])
     } finally {
       rmSync(fixtureDir, { force: true, recursive: true })
       rmSync(configPath, { force: true })

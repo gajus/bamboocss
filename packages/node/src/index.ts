@@ -1,6 +1,6 @@
 export { analyze } from './analyze'
 export { buildInfo } from './build-info'
-export { Builder } from './builder'
+export { Builder, type BuilderSetupOptions, type BuilderSourceChanges } from './builder'
 export { codegen } from './codegen'
 export { loadConfigAndCreateContext } from './config'
 export { startProfiling } from './cpu-profile'

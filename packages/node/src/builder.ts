@@ -5,10 +5,12 @@ import type { DiffConfigResult } from '@bamboocss/types'
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, statSync } from 'fs'
 import { normalize, resolve } from 'path'
+import picomatch from 'picomatch'
 import { codegen } from './codegen'
 import { loadConfigAndCreateContext } from './config'
 import { BambooContext } from './create-context'
 import { assembleExtractedSheet } from './assemble-sheet'
+import { globIgnore } from './node-runtime'
 import { createSourceScanCache } from './token-references'
 
 const fileModifiedMap = new Map<string, number>()
@@ -19,6 +21,24 @@ interface FileChanges {
 }
 
 type ResolutionLedger = ReturnType<BambooContext['project']['getResolutionLedger']>
+
+/** Files a watcher knows moved since the previous setup. Omit this to retain filesystem discovery. */
+export interface BuilderSourceChanges {
+  /** Absolute or cwd-relative paths. An empty list authoritatively means no source moved. */
+  files: readonly string[]
+  /** Additions and deletions can change glob membership, so they still reconcile the inventory. */
+  needsInventoryScan?: boolean
+  /** A `dependencies` glob gained or lost a member and must be expanded before config diffing. */
+  needsConfigReload?: boolean
+}
+
+export interface BuilderSetupOptions {
+  configPath?: string
+  cwd?: string
+  dev?: boolean
+  /** A watcher-owned change journal. Without one, Builder performs its standalone filesystem scan. */
+  sourceChanges?: BuilderSourceChanges
+}
 
 export class Builder {
   /**
@@ -112,6 +132,31 @@ export class Builder {
     return Object.freeze([...files].sort())
   }
 
+  /** @internal The inventory reconciled by the most recent extraction pass. */
+  getSourceFiles = (): readonly string[] => Object.freeze([...(this.sourceInventory ?? [])])
+
+  /** @internal Whether creating this path can change source or explicit-dependency membership. */
+  isPotentialSourceFile = (filePath: string): boolean => {
+    const ctx = this.getContextOrThrow()
+    const absolutePath = this.absOwner(ctx, filePath)
+    const relativePath = this.sourcePath(ctx.runtime.path.relative(ctx.config.cwd, absolutePath))
+    const sourcePatterns = ctx.config.include ?? []
+    const sourceMatcher = sourcePatterns.length
+      ? picomatch(sourcePatterns, { ignore: globIgnore(ctx.config.exclude) })
+      : undefined
+    return sourceMatcher?.(relativePath) || sourceMatcher?.(absolutePath) || false
+  }
+
+  /** @internal Whether creating or deleting this path can change a `dependencies` glob. */
+  isPotentialConfigDependency = (filePath: string): boolean => {
+    const ctx = this.getContextOrThrow()
+    const absolutePath = this.absOwner(ctx, filePath)
+    const relativePath = this.sourcePath(ctx.runtime.path.relative(ctx.config.cwd, absolutePath))
+    const patterns = ctx.config.dependencies ?? []
+    const matcher = patterns.length ? picomatch(patterns) : undefined
+    return matcher?.(relativePath) || matcher?.(absolutePath) || false
+  }
+
   /** @internal Exact local package/tsconfig files which can change semantic resolution. */
   getResolutionConfigurationFiles = (): readonly string[] => {
     const files = new Set<string>()
@@ -130,9 +175,11 @@ export class Builder {
     }
   }
 
-  private changedResolutionConfigurations = (): string[] =>
+  private changedResolutionConfigurations = (knownChanges?: ReadonlySet<string>): string[] =>
     this.getResolutionConfigurationFiles().filter(
-      (file) => this.resolutionConfigurationBytes.get(file) !== this.readResolutionConfiguration(file),
+      (file) =>
+        (!knownChanges || knownChanges.has(this.sourcePath(file))) &&
+        this.resolutionConfigurationBytes.get(file) !== this.readResolutionConfiguration(file),
     )
 
   private snapshotResolutionConfigurations = () => {
@@ -150,7 +197,7 @@ export class Builder {
     }
   }
 
-  setup = async (options: { configPath?: string; cwd?: string; dev?: boolean } = {}) => {
+  setup = async (options: BuilderSetupOptions = {}) => {
     logger.debug('builder', '🚧 Setup')
 
     const configPath = options.configPath ?? findConfig({ cwd: options.cwd })
@@ -160,6 +207,7 @@ export class Builder {
     }
 
     const ctx = this.getContextOrThrow()
+    const previousExplicitDeps = [...ctx.explicitDeps]
     const previousTsconfigFiles = this.tsconfigResolutionFiles.length
       ? this.tsconfigResolutionFiles
       : ctx.diff.getResolutionConfigFiles()
@@ -181,10 +229,10 @@ export class Builder {
      * preset external to the config bundle — and a one-shot build keeps paying the reload
      * rather than trading that recovery for a latency only watch mode feels.
      */
-    if (options.dev && this.configGraphUnchanged(configPath)) {
+    if (options.dev && this.configGraphUnchanged(configPath, options.sourceChanges)) {
       this.affecteds = { artifacts: new Set(), hasConfigChanged: false, diffs: [] }
       this.explicitDepsMeta = this.checkFilesChanged(this.context.explicitDeps)
-      this.refreshSourceState(ctx, previousTsconfigFiles)
+      this.refreshSourceState(ctx, previousTsconfigFiles, options.sourceChanges)
       return
     }
 
@@ -192,13 +240,25 @@ export class Builder {
       this.context = new BambooContext(conf)
     })
     const nextContext = this.getContextOrThrow()
+    if (options.sourceChanges?.needsConfigReload) {
+      const { cwd: configCwd, dependencies } = nextContext.config
+      nextContext.explicitDeps = dependencies
+        ? nextContext.runtime.fs.glob({ include: dependencies, cwd: configCwd })
+        : []
+    }
     this.recordConfigDependencies(nextContext, options.cwd)
     this.tsconfigResolutionFiles = nextContext.diff.getResolutionConfigFiles()
 
     logger.debug('builder', this.affecteds)
 
     // explicit config dependencies change
-    this.explicitDepsMeta = this.checkFilesChanged(this.context.explicitDeps)
+    const explicitDeps = options.sourceChanges?.needsConfigReload
+      ? uniq([...previousExplicitDeps, ...this.context.explicitDeps])
+      : this.context.explicitDeps
+    const knownChanges = options.sourceChanges
+      ? new Set(options.sourceChanges.files.map((file) => this.absOwner(this.context!, file)))
+      : undefined
+    this.explicitDepsMeta = this.checkFilesChanged(explicitDeps, knownChanges)
 
     if (this.explicitDepsMeta.hasFilesChanged) {
       this.explicitDepsMeta.changes.forEach((meta, file) => {
@@ -232,7 +292,7 @@ export class Builder {
       return
     }
 
-    this.refreshSourceState(ctx, previousTsconfigFiles)
+    this.refreshSourceState(ctx, previousTsconfigFiles, options.sourceChanges)
     this.snapshotConfigGraphMtimes(configPath)
   }
 
@@ -247,10 +307,15 @@ export class Builder {
       ].map(normalize),
     )
 
-  private configGraphUnchanged = (configPath: string | undefined): boolean => {
+  private configGraphUnchanged = (configPath: string | undefined, sourceChanges?: BuilderSourceChanges): boolean => {
     const snapshot = this.configGraphMtimes
     if (!snapshot) return false
+    if (sourceChanges?.needsConfigReload) return false
+    const changed = sourceChanges
+      ? new Set(sourceChanges.files.map((file) => this.sourcePath(resolve(this.context?.config.cwd ?? '', file))))
+      : undefined
     for (const file of this.configGraphFiles(configPath)) {
+      if (changed?.has(this.sourcePath(resolve(this.context?.config.cwd ?? '', file)))) return false
       const recorded = snapshot.get(file)
       if (recorded === undefined || recorded !== this.getFileMeta(file).mtime) return false
     }
@@ -264,8 +329,15 @@ export class Builder {
   }
 
   /** The per-pass source bookkeeping every setup ends with, config reload or not. */
-  private refreshSourceState = (ctx: BambooContext, previousTsconfigFiles: readonly string[]) => {
-    const changedResolutionConfigurations = this.changedResolutionConfigurations()
+  private refreshSourceState = (
+    ctx: BambooContext,
+    previousTsconfigFiles: readonly string[],
+    sourceChanges?: BuilderSourceChanges,
+  ) => {
+    const knownChanges = sourceChanges
+      ? new Set(sourceChanges.files.map((file) => this.absOwner(ctx, file)))
+      : undefined
+    const changedResolutionConfigurations = this.changedResolutionConfigurations(knownChanges)
     const changedResolutionSet = new Set(changedResolutionConfigurations)
     const resolutionAffected = new Set<string>()
     // The snapshot wins where there is one: it predates whatever an integration reloaded, and
@@ -291,11 +363,22 @@ export class Builder {
     // Source edits are invalidated from the Project's exact resolution read-set. `include`
     // alone misses a plain-object helper outside the glob; the previous inventory alone misses
     // a newly added member; the current inventory alone misses a deletion.
-    const inventory = ctx.getFiles()
+    const needsInventoryScan = !sourceChanges || sourceChanges.needsInventoryScan || this.sourceInventory === undefined
+    const inventory = needsInventoryScan ? ctx.getFiles() : [...this.sourceInventory!]
     const previousInventory = this.sourceInventory ?? inventory
-    const tracked = uniq([...previousInventory, ...inventory, ...this.getResolutionReadFiles()])
-    this.filesMeta = this.checkFilesChanged(tracked)
-    if (this.filesMeta.hasFilesChanged) {
+    const allTracked = uniq([...previousInventory, ...inventory, ...this.getResolutionReadFiles()])
+    const trackedPaths = new Set(allTracked.map((file) => this.absOwner(ctx, file)))
+    const tracked =
+      knownChanges && !needsInventoryScan ? [...knownChanges].filter((file) => trackedPaths.has(file)) : allTracked
+    this.filesMeta = tracked.length
+      ? this.checkFilesChanged(tracked, knownChanges)
+      : changedResolutionConfigurations.length
+        ? { changes: new Map(), hasFilesChanged: false }
+        : undefined
+    for (const [file, meta] of this.filesMeta?.changes ?? []) {
+      if (!meta.isUnchanged) this.sourceScanCache.entries.delete(this.absOwner(ctx, file))
+    }
+    if (this.filesMeta?.hasFilesChanged) {
       logger.debug('builder', 'Files changed, invalidating them')
       this.invalidateChangedSources(ctx, inventory, resolutionAffected, resolutionLedger)
     } else if (changedResolutionConfigurations.length) {
@@ -542,13 +625,14 @@ export class Builder {
     return { mtime, isUnchanged }
   }
 
-  checkFilesChanged(files: string[]) {
+  checkFilesChanged(files: readonly string[], knownChanges?: ReadonlySet<string>) {
     const changes = new Map<string, FileMeta>()
 
     let hasFilesChanged = false
 
     for (const file of files) {
       const meta = this.getFileMeta(file)
+      if (knownChanges?.has(this.sourcePath(file))) meta.isUnchanged = false
       changes.set(file, meta)
       if (!meta.isUnchanged) {
         hasFilesChanged = true
@@ -746,7 +830,9 @@ export class Builder {
     // read by this pass, so remember the same mtimes as included owners and detect their next
     // edit without globbing the checkout.
     for (const file of uniq([...files, ...this.getResolutionReadFiles()])) {
-      fileModifiedMap.set(file, this.getFileMeta(file).mtime)
+      const mtime =
+        this.filesMeta?.changes.get(file)?.mtime ?? fileModifiedMap.get(file) ?? this.getFileMeta(file).mtime
+      fileModifiedMap.set(file, mtime)
     }
     this.snapshotResolutionConfigurations()
     this.affectedFiles = undefined
@@ -772,7 +858,7 @@ export class Builder {
     const sheet = assembleExtractedSheet(ctx, {
       layerParams,
       sourceScanCache: this.sourceScanCache,
-      mtimeOf: (filePath) => this.filesMeta?.changes.get(filePath)?.mtime,
+      mtimeOf: (filePath) => this.filesMeta?.changes.get(filePath)?.mtime ?? fileModifiedMap.get(filePath),
       sourceInventory: this.sourceInventory,
     })
     return ctx.getCss(sheet)

@@ -105,16 +105,19 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
   /** The run's own `build` options, for a bundler with no per-environment config. */
   let ssrBuildOptions: { ssr?: boolean | string; ssrEmitAssets?: boolean } | undefined
 
-  /** Included owners plus local modules their extraction actually resolved and read. */
+  /** Every source, resolver input and expanded config dependency which can change the sheet. */
   const extractedSourceFiles = () => {
     const activeBuilder = builder
     const context = activeBuilder?.context
     if (!context) return []
     return [
       ...new Set(
-        [...context.getFiles(), ...activeBuilder.getResolutionReadFiles()].map((file) =>
-          context.runtime.path.abs(context.config.cwd, file),
-        ),
+        [
+          ...activeBuilder.getSourceFiles(),
+          ...activeBuilder.getResolutionReadFiles(),
+          ...activeBuilder.getResolutionConfigurationFiles(),
+          ...context.explicitDeps,
+        ].map((file) => context.runtime.path.abs(context.config.cwd, file)),
       ),
     ]
   }
@@ -488,11 +491,22 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
 
       // The extractor's exact read-set decides what matters, rather than a second glob that
       // misses resolver-loaded values outside `include`.
-      const invalidate = (file: string) => {
-        const ctx = builder?.context
+      const invalidate = (file: string, event: 'create' | 'update' | 'delete') => {
+        const activeBuilder = builder
+        const ctx = activeBuilder?.context
         if (!ctx) return
         const absoluteFile = ctx.runtime.path.abs(ctx.config.cwd, file)
-        if (!session.extractedFiles.has(absoluteFile)) return
+        const wasExtracted = session.extractedFiles.has(absoluteFile)
+        const changesConfigMembership = event !== 'update' && activeBuilder.isPotentialConfigDependency(absoluteFile)
+        // An unknown update/delete cannot have contributed to the current sheet. An addition is
+        // different: it may be the first member of an include glob, so only reconciliation can
+        // decide. Recording it before invalidation lets the next setup perform that one glob.
+        if (
+          !wasExtracted &&
+          (event !== 'create' || (!activeBuilder.isPotentialSourceFile(absoluteFile) && !changesConfigMembership))
+        )
+          return
+        host.noteSourceChange(absoluteFile, event, { needsConfigReload: changesConfigMembership })
 
         // Whatever was built no longer reflects the world. Every path that can invalidate the
         // stylesheet module starts at this watcher and this guard, so the bump is complete.
@@ -511,16 +525,16 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
         // twice, 36 kB a copy on the app this was measured on. What is left for this watcher is
         // the case it exists for: a file the extractor reads that never became a module, where
         // Vite matches nothing and nothing would repaint at all.
-        if (clientGraph.getModulesByFile(absoluteFile)?.size) return
+        if (wasExtracted && clientGraph.getModulesByFile(absoluteFile)?.size) return
 
         server?.moduleGraph.invalidateModule(mod)
         void server?.reloadModule(mod)
         logger.debug('vite', `styles invalidated by ${absoluteFile}`)
       }
 
-      devServer.watcher.on('change', invalidate)
-      devServer.watcher.on('add', invalidate)
-      devServer.watcher.on('unlink', invalidate)
+      devServer.watcher.on('change', (file) => invalidate(file, 'update'))
+      devServer.watcher.on('add', (file) => invalidate(file, 'create'))
+      devServer.watcher.on('unlink', (file) => invalidate(file, 'delete'))
     },
 
     generateBundle: {

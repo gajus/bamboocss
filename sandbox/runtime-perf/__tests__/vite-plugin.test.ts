@@ -27,6 +27,16 @@ const writeIsolatedBambooConfig = (path: string, include: string[]) =>
     `import base from './bamboo.config'\n` + `export default { ...base, include: ${JSON.stringify(include)} }\n`,
   )
 
+/** Emit one filesystem change for watch tests instead of truncate-plus-write notifications. */
+const writeWatchTrigger = (path: string, value: string) => {
+  const body = value.trimEnd()
+  if (Buffer.byteLength(body) > 63) throw new Error(`Watch trigger is too long: ${body}`)
+  const contents = `${body.padEnd(63)}\n`
+  if (existsSync(path) && readFileSync(path).byteLength === Buffer.byteLength(contents)) {
+    writeFileSync(path, contents, { flag: 'r+' })
+  } else writeFileSync(path, contents)
+}
+
 const readOutputFiles = (directory: string, extension: string) =>
   existsSync(directory)
     ? readdirSync(directory)
@@ -1819,8 +1829,8 @@ const runRejectedOutputWatchRebuild = async (
       `export { generation } from './__output-transaction-sibling-${label}'\n` +
       `export const className = css({ width: '[${widths.sibling}]' })\n`,
   )
-  writeFileSync(clientTrigger, 'first\n')
-  writeFileSync(siblingTrigger, `export const generation = 'first'\n`)
+  writeWatchTrigger(clientTrigger, 'first')
+  writeWatchTrigger(siblingTrigger, `export const generation = 'first'`)
   writeIsolatedBambooConfig(configPath, [
     `./src/__output-transaction-client-${label}.tsx`,
     `./src/__output-transaction-sibling-${label}.tsx`,
@@ -1885,7 +1895,7 @@ const runRejectedOutputWatchRebuild = async (
     rejectClientOutput = true
     const rejectedBuild = nextEnvironmentWatchCycle(clientWatcher)
     await new Promise((settle) => setTimeout(settle, 800))
-    writeFileSync(clientTrigger, 'second\n')
+    writeWatchTrigger(clientTrigger, 'second')
     const rejectedError = await rejectedBuild
     rejectClientOutput = false
 
@@ -1906,7 +1916,7 @@ const runRejectedOutputWatchRebuild = async (
     rmSync(siblingOutDir, { force: true, recursive: true })
     const siblingBuild = nextEnvironmentWatchCycle(siblingWatcher)
     await new Promise((settle) => setTimeout(settle, 800))
-    writeFileSync(siblingTrigger, `export const generation = 'second'\n`)
+    writeWatchTrigger(siblingTrigger, `export const generation = 'second'`)
     expect(await siblingBuild).toBeUndefined()
     expect(calls.client, 'the sibling-only edit unexpectedly rebuilt the rejected client graph').toBe(
       clientCallsAfterFailure,
@@ -1924,7 +1934,7 @@ const runRejectedOutputWatchRebuild = async (
     rejectAfterWrite = true
     const failedAfterWrite = nextEnvironmentWatchCycle(clientWatcher)
     await new Promise((settle) => setTimeout(settle, 800))
-    writeFileSync(clientTrigger, 'third\n')
+    writeWatchTrigger(clientTrigger, 'third')
     const writeError = await failedAfterWrite
     rejectAfterWrite = false
     expect(writeError?.message).toContain(`test rejected after writing client output (${label})`)
@@ -1934,7 +1944,7 @@ const runRejectedOutputWatchRebuild = async (
     rmSync(siblingOutDir, { force: true, recursive: true })
     const siblingAfterWrite = nextEnvironmentWatchCycle(siblingWatcher)
     await new Promise((settle) => setTimeout(settle, 800))
-    writeFileSync(siblingTrigger, `export const generation = 'third'\n`)
+    writeWatchTrigger(siblingTrigger, `export const generation = 'third'`)
     expect(await siblingAfterWrite).toBeUndefined()
     expect(calls.client).toBe(clientCallsAfterWrite)
     const cssAfterWrite = readOutputFiles(siblingOutDir, '.css')
@@ -1949,7 +1959,7 @@ const runRejectedOutputWatchRebuild = async (
     rejectBeforeBambooWrite = true
     const failedBeforeBambooWrite = nextEnvironmentWatchCycle(clientWatcher)
     await new Promise((settle) => setTimeout(settle, 800))
-    writeFileSync(clientTrigger, 'first\n')
+    writeWatchTrigger(clientTrigger, 'first')
     const earlyWriteError = await failedBeforeBambooWrite
     rejectBeforeBambooWrite = false
     expect(earlyWriteError?.message).toContain(`test rejected before Bamboo's write observer (${label})`)
@@ -1959,7 +1969,7 @@ const runRejectedOutputWatchRebuild = async (
     rmSync(siblingOutDir, { force: true, recursive: true })
     const siblingAfterEarlyWrite = nextEnvironmentWatchCycle(siblingWatcher)
     await new Promise((settle) => setTimeout(settle, 800))
-    writeFileSync(siblingTrigger, `export const generation = 'fourth'\n`)
+    writeWatchTrigger(siblingTrigger, `export const generation = 'fourth'`)
     expect(await siblingAfterEarlyWrite).toBeUndefined()
     expect(calls.client).toBe(callsAfterEarlyWrite)
     const cssAfterEarlyWrite = readOutputFiles(siblingOutDir, '.css')
@@ -1974,7 +1984,7 @@ const runRejectedOutputWatchRebuild = async (
     await Promise.all([clientWatcher.close(), siblingWatcher.close()])
     clientWatcher = undefined
     siblingWatcher = undefined
-    writeFileSync(clientTrigger, 'first\n')
+    writeWatchTrigger(clientTrigger, 'first')
     const inMemoryBuilder = (await create({
       root: cwd,
       logLevel: 'silent',
@@ -2009,7 +2019,7 @@ const runRejectedOutputWatchRebuild = async (
     // `closeBundle` belongs to the input plugin driver in both Rollup and Rolldown; configured
     // output plugins never receive it. Bamboo's commit hook is therefore an ordered input hook.
     expect(configuredOutputCloseCalls).toBe(0)
-    writeFileSync(clientTrigger, 'second\n')
+    writeWatchTrigger(clientTrigger, 'second')
     const buildInMemorySibling = async () => {
       const built = await inMemoryBuilder.build(inMemoryBuilder.environments.sibling)
       return (Array.isArray(built) ? built : [built])
@@ -2195,8 +2205,8 @@ const runMixedOutputEpochWatchRebuild = async (
       `export { generation } from './__multi-output-sibling-trigger-${label}'\n` +
       `export const className = css({ width: '[${widths.sibling}]' })\n`,
   )
-  writeFileSync(clientTrigger, 'first\n')
-  writeFileSync(siblingTrigger, `export const generation = 'first'\n`)
+  writeWatchTrigger(clientTrigger, 'first')
+  writeWatchTrigger(siblingTrigger, `export const generation = 'first'`)
   writeIsolatedBambooConfig(configPath, [
     `./src/__multi-output-client-${label}.tsx`,
     `./src/__multi-output-sibling-${label}.tsx`,
@@ -2241,7 +2251,7 @@ const runMixedOutputEpochWatchRebuild = async (
     rmSync(siblingOutDir, { force: true, recursive: true })
     const built = nextEnvironmentWatchCycle(siblingWatcher!)
     await new Promise((settle) => setTimeout(settle, 800))
-    writeFileSync(siblingTrigger, `export const generation = '${++siblingGeneration}'\n`)
+    writeWatchTrigger(siblingTrigger, `export const generation = '${++siblingGeneration}'`)
     expect(await built).toBeUndefined()
     expect(calls.client, `${label}: sibling-only edit rebuilt the client graph`).toBe(callsBefore)
     return readOutputFiles(siblingOutDir, '.css')
@@ -2264,7 +2274,7 @@ const runMixedOutputEpochWatchRebuild = async (
     failureMode = 'before-write'
     const rejectedBeforeWrite = nextEnvironmentWatchCycle(clientWatcher)
     await new Promise((settle) => setTimeout(settle, 800))
-    writeFileSync(clientTrigger, 'before-write\n')
+    writeWatchTrigger(clientTrigger, 'before-write')
     expect((await rejectedBeforeWrite)?.message).toContain(`test rejected every output before write (${label})`)
     expect(readOutputFiles(firstOutDir, '.js')).toBe(initialFirstJs)
     expect(readOutputFiles(secondOutDir, '.js')).toBe(initialSecondJs)
@@ -2280,7 +2290,7 @@ const runMixedOutputEpochWatchRebuild = async (
     failureMode = 'after-first-write'
     const mixedBuild = nextEnvironmentWatchCycle(clientWatcher)
     await new Promise((settle) => setTimeout(settle, 800))
-    writeFileSync(clientTrigger, 'mixed\n')
+    writeWatchTrigger(clientTrigger, 'mixed')
     expect((await mixedBuild)?.message).toContain(`test rejected second configured output (${label})`)
     expect(rejectedSecondJs).toContain(`w_[${widths.candidate}]`)
     expect(readOutputFiles(firstOutDir, '.js')).toContain(`w_[${widths.candidate}]`)
@@ -2299,7 +2309,7 @@ const runMixedOutputEpochWatchRebuild = async (
     failureMode = 'after-first-write'
     const replacementMixedBuild = nextEnvironmentWatchCycle(clientWatcher)
     await new Promise((settle) => setTimeout(settle, 800))
-    writeFileSync(clientTrigger, 'replacement-mixed\n')
+    writeWatchTrigger(clientTrigger, 'replacement-mixed')
     expect((await replacementMixedBuild)?.message).toContain(`test rejected second configured output (${label})`)
     expect(readOutputFiles(firstOutDir, '.js')).toContain(`w_[${widths.replacement}]`)
     expect(readOutputFiles(firstOutDir, '.js')).not.toContain(`w_[${widths.candidate}]`)
@@ -2319,7 +2329,7 @@ const runMixedOutputEpochWatchRebuild = async (
     armSecondOutput()
     const alternatingBuild = nextEnvironmentWatchCycle(clientWatcher)
     await new Promise((settle) => setTimeout(settle, 800))
-    writeFileSync(clientTrigger, 'alternating\n')
+    writeWatchTrigger(clientTrigger, 'alternating')
     expect((await alternatingBuild)?.message).toContain(`test rejected first output before second wrote (${label})`)
     // Both hosts report the aggregate error before the still-running second output finishes.
     // Wait for its filesystem boundary so the assertions compare stable live slots to disk.
@@ -2338,7 +2348,7 @@ const runMixedOutputEpochWatchRebuild = async (
     armSecondOutput()
     const acceptedBuild = nextEnvironmentWatchCycle(clientWatcher)
     await new Promise((settle) => setTimeout(settle, 800))
-    writeFileSync(clientTrigger, 'accepted\n')
+    writeWatchTrigger(clientTrigger, 'accepted')
     expect(await acceptedBuild).toBeUndefined()
     await secondOutputWritten
     expect(readOutputFiles(firstOutDir, '.js')).toContain(`w_[${widths.replacement}]`)
@@ -2384,7 +2394,7 @@ const runMixedOutputEpochWatchRebuild = async (
 
     // In-memory multi-output builds expose nothing when the aggregate build rejects. A first
     // generated result must not become a live epoch merely because its own output hooks passed.
-    writeFileSync(clientTrigger, 'first\n')
+    writeWatchTrigger(clientTrigger, 'first')
     const memoryBuilder = (await create({
       root: cwd,
       logLevel: 'silent',
@@ -2409,7 +2419,7 @@ const runMixedOutputEpochWatchRebuild = async (
       },
     })) as TestEnvironmentBuilder
     await memoryBuilder.build(memoryBuilder.environments.client)
-    writeFileSync(clientTrigger, 'memory-candidate\n')
+    writeWatchTrigger(clientTrigger, 'memory-candidate')
     failureMode = 'memory-second'
     await expect(memoryBuilder.build(memoryBuilder.environments.client)).rejects.toThrow(
       `test rejected second configured output (${label})`,

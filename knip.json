@@ -81,7 +81,8 @@
     },
     "website": {
       "entry": [
-        "app/**/{page,layout,not-found,opengraph-image}.tsx",
+        "app/{root,routes}.tsx",
+        "app/routes/**/*.{ts,tsx}",
         "velite.config.ts",
         "bamboo.config.ts",
         "seo.config.ts",
@@ -94,7 +95,7 @@
       "project": ["src/**/*.ts"]
     }
   },
-  "ignoreWorkspaces": ["sandbox/*", "sandbox/component-lib/**", "playground"],
+  "ignoreWorkspaces": ["sandbox/*", "sandbox/component-lib/**"],
   "ignoreExportsUsedInFile": true,
   "ignore": ["**/__tests__/**", "bench/vite-cold-import-child.mjs"],
   "exclude": ["duplicates"]

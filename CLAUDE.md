@@ -36,8 +36,6 @@ with workspace support.
  /preact-ts/, /qwik-ts/,
   /storybook/, /component-lib/    # per-framework integration apps
 
-/playground/       # Interactive playground application
-
 /website/          # Documentation site
 ```
 

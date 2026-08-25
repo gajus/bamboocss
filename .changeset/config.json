@@ -7,5 +7,5 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": ["sandbox-*", "playground", "website"]
+  "ignore": ["sandbox-*", "website"]
 }

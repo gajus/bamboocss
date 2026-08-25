@@ -20,7 +20,6 @@ with distinct packages handling different aspects of the styling pipeline.
 bamboo/
 ├── packages/           # Core packages (published to npm)
 ├── sandbox/           # Framework integration examples
-├── playground/        # Development testing environment
 ├── website/           # Documentation site
 └── .changeset/        # Changeset-based versioning
 ```
@@ -609,7 +608,6 @@ Plugins can:
 pnpm install              # Install dependencies
 pnpm build-fast          # Quick build without types
 pnpm dev                 # Watch mode for packages
-pnpm playground          # Run playground examples
 ```
 
 ### Package Scripts

@@ -8,8 +8,6 @@
   "author": "Gajus Kuizinas <gajus@gajus.com>",
   "type": "module",
   "scripts": {
-    "playground": "pnpm --filter=./playground",
-    "build:playground": "pnpm --filter {./playground}... build",
     "prepare": "husky && pnpm build-fast",
     "dev": "pnpm --parallel --filter=./packages/** dev",
     "build-fast": "pnpm -r --parallel --filter=./packages/** build-fast",

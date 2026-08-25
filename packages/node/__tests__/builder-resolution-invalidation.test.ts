@@ -452,6 +452,40 @@ describe('Builder resolution-ledger invalidation', () => {
     expect(incremental).toBe(clean.toCss({ layerParams: true }))
   })
 
+  test('affected branches use stable inventory priority without violating dependency order', async () => {
+    const fixture = project({
+      'src/01-app.ts': `import { css } from '../styled-system/css'
+        import { right } from './02-right'
+        import { left } from './03-left'
+        export const className = css(right, left)`,
+      'src/02-right.ts': `import { css } from '../styled-system/css'
+        import { base } from './04-common'
+        export const right = css.raw({ ...base, padding: '1' })`,
+      'src/03-left.ts': `import { css } from '../styled-system/css'
+        import { base } from './04-common'
+        export const left = css.raw({ ...base, margin: '2' })`,
+      'src/04-common.ts': `export const base = { color: 'blue' }`,
+    })
+    const builder = await setup(fixture)
+    const context = builder.getContextOrThrow()
+    const parse = vi.spyOn(context, 'parseFile')
+    const common = fixture.file('04-common.ts')
+    writeFileSync(common, `export const base = { color: 'red' }`)
+    const later = new Date(Date.now() + 10_000)
+    utimesSync(common, later, later)
+
+    await builder.setup({ configPath: fixture.configPath, cwd: fixture.root })
+    builder.extract()
+
+    expect(parse.mock.calls.map(([file]) => basename(file))).toEqual([
+      '04-common.ts',
+      '02-right.ts',
+      '03-left.ts',
+      '01-app.ts',
+    ])
+    expect(builder.toCss({ layerParams: true })).toBe((await setup(fixture)).toCss({ layerParams: true }))
+  })
+
   test('add, delete, and recreate preserve clean-build inventory order and bytes', async () => {
     const fixture = project({
       'src/01-first.ts': `import { css } from '../styled-system/css'

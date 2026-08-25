@@ -1137,14 +1137,15 @@ export class Project {
     const start = resolved ? this.normalizePath(resolved) : (this.canonicalPaths.get(given) ?? given)
     const seen = new Set<string>()
     const queue = [start]
+    let cursor = 0
 
-    while (queue.length) {
-      const current = queue.shift()!
+    while (cursor < queue.length) {
+      const current = queue[cursor++]!
       const importers = new Set([
         ...(this.dependents.get(current) ?? []),
         ...(this.removedDependents.get(current) ?? []),
       ])
-      for (const importer of [...importers].sort()) {
+      for (const importer of importers) {
         if (importer === start || seen.has(importer)) continue
         // Nothing imports an auxiliary source, so declining to walk it loses no closure.
         if (this.auxiliarySources.has(importer)) continue
@@ -1172,10 +1173,11 @@ export class Project {
     const seen = new Set<string>()
     const importersByDependency = new Map<string, Set<string>>()
     const queue = [start]
+    let cursor = 0
 
-    while (queue.length) {
-      const current = queue.shift()!
-      for (const dependency of [...(this.dependencies.get(current) ?? [])].sort()) {
+    while (cursor < queue.length) {
+      const current = queue[cursor++]!
+      for (const dependency of this.dependencies.get(current) ?? []) {
         const importers = importersByDependency.get(dependency) ?? new Set<string>()
         importers.add(current)
         importersByDependency.set(dependency, importers)
@@ -1196,9 +1198,10 @@ export class Project {
       const source = this.project.getSourceFile(target)?.getFilePath()
       return source ? this.normalizePath(source) : (this.canonicalPaths.get(normalized) ?? normalized)
     }).filter((target) => seen.has(target))
+    let reverseCursor = 0
 
-    while (reverse.length) {
-      const dependency = reverse.shift()!
+    while (reverseCursor < reverse.length) {
+      const dependency = reverse[reverseCursor++]!
       if (selected.has(dependency)) continue
       selected.add(dependency)
       for (const importer of importersByDependency.get(dependency) ?? []) {

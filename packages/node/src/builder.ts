@@ -22,6 +22,51 @@ interface FileChanges {
 
 type ResolutionLedger = ReturnType<BambooContext['project']['getResolutionLedger']>
 
+/** Binary minimum heap; callers provide the stable semantic rank used for ties/order. */
+class MinPriorityQueue<T> {
+  private values: T[] = []
+
+  constructor(private compare: (left: T, right: T) => number) {}
+
+  get size() {
+    return this.values.length
+  }
+
+  push = (value: T) => {
+    let index = this.values.length
+    this.values.push(value)
+    while (index > 0) {
+      const parent = (index - 1) >> 1
+      const parentValue = this.values[parent]!
+      if (this.compare(value, parentValue) >= 0) break
+      this.values[index] = parentValue
+      index = parent
+    }
+    this.values[index] = value
+  }
+
+  pop = (): T | undefined => {
+    if (!this.values.length) return undefined
+    const first = this.values[0]!
+    const last = this.values.pop()!
+    if (!this.values.length) return first
+
+    let index = 0
+    while (true) {
+      const left = index * 2 + 1
+      if (left >= this.values.length) break
+      const right = left + 1
+      let next = left
+      if (right < this.values.length && this.compare(this.values[right]!, this.values[left]!) < 0) next = right
+      if (this.compare(last, this.values[next]!) <= 0) break
+      this.values[index] = this.values[next]!
+      index = next
+    }
+    this.values[index] = last
+    return first
+  }
+}
+
 /** Files a watcher knows moved since the previous setup. Omit this to retain filesystem discovery. */
 export interface BuilderSourceChanges {
   /** Absolute or cwd-relative paths. An empty list authoritatively means no source moved. */
@@ -484,27 +529,24 @@ export class Builder {
     for (const [target, importer] of syntheticEdges) addEdge(target, importer)
 
     const compare = (left: string, right: string) => (inventoryRank.get(left) ?? 0) - (inventoryRank.get(right) ?? 0)
-    const ready = [...indegree]
-      .filter(([, degree]) => degree === 0)
-      .map(([file]) => file)
-      .sort(compare)
+    const ready = new MinPriorityQueue(compare)
+    for (const [file, degree] of indegree) if (degree === 0) ready.push(file)
     const ordered: string[] = []
-    while (ready.length) {
-      const file = ready.shift()!
+    const emitted = new Set<string>()
+    while (ready.size) {
+      const file = ready.pop()!
       ordered.push(file)
-      for (const importer of [...(outgoing.get(file) ?? [])].sort(compare)) {
+      emitted.add(file)
+      for (const importer of outgoing.get(file) ?? []) {
         const next = (indegree.get(importer) ?? 0) - 1
         indegree.set(importer, next)
-        if (next === 0) {
-          ready.push(importer)
-          ready.sort(compare)
-        }
+        if (next === 0) ready.push(importer)
       }
     }
 
     // Cycles retain inventory order. Resolution/evaluation already handles their semantics;
     // this is only a deterministic staging order, not a second graph architecture.
-    for (const file of [...byPath.keys()].sort(compare)) if (!ordered.includes(file)) ordered.push(file)
+    for (const file of byPath.keys()) if (!emitted.has(file)) ordered.push(file)
     return ordered.map((file) => byPath.get(file)!)
   }
 

@@ -13,7 +13,7 @@ import type { ExportReadRecord, FoldResult, ForeignRecipes, SkipReason, SkippedC
 import { loadFoldModule } from './lazy-modules'
 import type { RuntimeCss } from './runtime-css'
 import type { StaticStyleSetCompiler } from './style-set'
-import { createStaticCompilationSession, remainingEnvironments } from './static-session'
+import { createStaticCompilationSession, remainingEnvironments, selectorClassName } from './static-session'
 
 export interface BambooVitePluginOptions {
   /** Path to `bamboo.config.ts`. Resolved the same way the CLI resolves it. */
@@ -441,6 +441,10 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
    */
   interface EnvironmentTransformState {
     transformArtifactsByModule: Map<string, TransformArtifactPayload>
+    /** Selector-form class tokens retained by at least one live module ID. */
+    usedClassCounts: Map<string, number>
+    /** Resolved source files with at least one transform artifact that emitted Bamboo classes. */
+    transformedFileCounts: Map<string, number>
     dependentsByDependency: Map<string, Set<string>>
     dependenciesByModule: Map<string, Set<string>>
     filesByModule: Map<string, string>
@@ -468,6 +472,11 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
   // The configured name is Vite's stable identity across hook contexts. Vite 5 has no
   // environment object and runs one graph, which deliberately shares the `default` state.
   const transformStateByEnvironment = new Map<string, EnvironmentTransformState>()
+  /** States currently materialized in the shared CSS session's reachability projection. */
+  const projectedTransformStates = new Set<EnvironmentTransformState>()
+  const projectedUsedClassCounts = new Map<string, number>()
+  const projectedTransformedFileCounts = new Map<string, number>()
+  let projectedCssLoadedCount = 0
 
   interface FoldMemoEntry {
     result: FoldResult
@@ -576,6 +585,8 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
   const environmentName = (context: unknown) => environmentOf(context)?.name ?? 'default'
   const newEnvironmentState = (): EnvironmentTransformState => ({
     transformArtifactsByModule: new Map(),
+    usedClassCounts: new Map(),
+    transformedFileCounts: new Map(),
     dependentsByDependency: new Map(),
     dependenciesByModule: new Map(),
     filesByModule: new Map(),
@@ -590,6 +601,8 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
   })
   const cloneEnvironmentState = (state: EnvironmentTransformState): EnvironmentTransformState => ({
     transformArtifactsByModule: new Map(state.transformArtifactsByModule),
+    usedClassCounts: new Map(state.usedClassCounts),
+    transformedFileCounts: new Map(state.transformedFileCounts),
     dependentsByDependency: new Map(
       [...state.dependentsByDependency].map(([dependency, dependents]) => [dependency, new Set(dependents)]),
     ),
@@ -758,10 +771,57 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     return digest(JSON.stringify(assets.sort()))
   }
 
-  /** Add one detached transform contribution to the global reachability projection. */
-  const applyStaticTransformContribution = (artifact: TransformArtifactPayload) => {
-    if (artifact.transformedFile) staticSession.transformedFiles.add(resolve(artifact.file))
-    for (const className of artifact.classNames) staticSession.markClassUsed(className)
+  const adjustContributionCount = (counts: Map<string, number>, value: string, delta: 1 | -1) => {
+    const next = (counts.get(value) ?? 0) + delta
+    if (next < 0) throw new Error(`bamboocss: internal contribution count underflow for ${JSON.stringify(value)}`)
+    if (next > 0) counts.set(value, next)
+    else counts.delete(value)
+    return next
+  }
+
+  /** Update the projection index for one module contribution without scanning its siblings. */
+  const adjustTransformContribution = (
+    state: EnvironmentTransformState,
+    artifact: TransformArtifactPayload,
+    delta: 1 | -1,
+  ) => {
+    if (artifact.transformedFile) {
+      adjustContributionCount(state.transformedFileCounts, resolve(artifact.file), delta)
+    }
+    for (const classNames of artifact.classNames) {
+      for (const token of classNames.split(' ')) {
+        if (token) adjustContributionCount(state.usedClassCounts, selectorClassName(token), delta)
+      }
+    }
+  }
+
+  const replaceTransformArtifact = (state: EnvironmentTransformState, artifact: TransformArtifactPayload) => {
+    const previous = state.transformArtifactsByModule.get(artifact.moduleId)
+    if (previous) adjustTransformContribution(state, previous, -1)
+    state.transformArtifactsByModule.set(artifact.moduleId, artifact)
+    adjustTransformContribution(state, artifact, 1)
+  }
+
+  const deleteTransformArtifact = (state: EnvironmentTransformState, moduleId: string) => {
+    const previous = state.transformArtifactsByModule.get(moduleId)
+    if (!previous) return false
+    adjustTransformContribution(state, previous, -1)
+    return state.transformArtifactsByModule.delete(moduleId)
+  }
+
+  const adjustProjectedTransformState = (state: EnvironmentTransformState, delta: 1 | -1) => {
+    for (const className of state.usedClassCounts.keys()) {
+      const next = adjustContributionCount(projectedUsedClassCounts, className, delta)
+      if (next === 1 && delta === 1) staticSession.usedClasses.add(className)
+      else if (next === 0) staticSession.usedClasses.delete(className)
+    }
+    for (const file of state.transformedFileCounts.keys()) {
+      const next = adjustContributionCount(projectedTransformedFileCounts, file, delta)
+      if (next === 1 && delta === 1) staticSession.transformedFiles.add(file)
+      else if (next === 0) staticSession.transformedFiles.delete(file)
+    }
+    if (state.cssLoaded) projectedCssLoadedCount += delta
+    if (projectedCssLoadedCount < 0) throw new Error('bamboocss: internal stylesheet contribution count underflow')
   }
 
   /**
@@ -800,16 +860,21 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     candidateEnvironment?: string,
     candidateState?: EnvironmentTransformState,
   ) => {
-    staticSession.transformedFiles.clear()
-    staticSession.usedClasses.clear()
-    staticSession.cssLoaded = false
-
-    for (const state of contributionStates(candidateEnvironment, candidateState)) {
-      if (state.cssLoaded) staticSession.cssLoaded = true
-      for (const artifact of state.transformArtifactsByModule.values()) {
-        applyStaticTransformContribution(artifact)
-      }
+    // Epoch states are detached and immutable. A candidate state enters this projection only
+    // synchronously after cache replay and every transform has finished, then leaves before the
+    // hook returns or becomes a detached epoch. Diffing identities is therefore sufficient:
+    // unchanged states require no aggregate reads, and only a replaced environment is removed
+    // and added when output projection temporarily swaps its candidate into the live union.
+    const nextStates = new Set(contributionStates(candidateEnvironment, candidateState))
+    for (const state of projectedTransformStates) {
+      if (!nextStates.has(state)) adjustProjectedTransformState(state, -1)
     }
+    for (const state of nextStates) {
+      if (!projectedTransformStates.has(state)) adjustProjectedTransformState(state, 1)
+    }
+    projectedTransformStates.clear()
+    for (const state of nextStates) projectedTransformStates.add(state)
+    staticSession.cssLoaded = projectedCssLoadedCount > 0
   }
 
   /**
@@ -822,14 +887,9 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
   const ownedClassesForState = (state: EnvironmentTransformState) => {
     const extracted = new Map([...staticSession.prunableClasses].map((className) => [bare(className), className]))
     const owned = new Set<string>()
-    for (const artifact of state.transformArtifactsByModule.values()) {
-      for (const reported of artifact.classNames) {
-        for (const token of reported.split(' ')) {
-          if (!token) continue
-          const extractedClass = extracted.get(bare(token))
-          if (extractedClass !== undefined) owned.add(extractedClass)
-        }
-      }
+    for (const className of state.usedClassCounts.keys()) {
+      const extractedClass = extracted.get(bare(className))
+      if (extractedClass !== undefined) owned.add(extractedClass)
     }
     return owned
   }
@@ -1163,7 +1223,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
   /** Apply every per-build fact established by one trusted or validated transform artifact. */
   const commitTransformArtifact = (state: EnvironmentTransformState, artifact: TransformArtifactPayload) => {
     const { file, moduleId } = artifact
-    state.transformArtifactsByModule.set(moduleId, artifact)
+    replaceTransformArtifact(state, artifact)
 
     recordFoldDependencies(state, moduleId, file, artifact.dependencies)
     if (artifact.signature) state.foldSignatures.set(moduleId, artifact.signature)
@@ -2006,7 +2066,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
             recordFoldDependencies(state, moduleId, moduleFile, [])
             state.foldSignatures.delete(moduleId)
             state.foldInputsByModule.delete(moduleId)
-            state.transformArtifactsByModule.delete(moduleId)
+            deleteTransformArtifact(state, moduleId)
             state.filesByModule.delete(moduleId)
           }
         }
@@ -2394,7 +2454,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
 
       if (!compiled) return null
       if ('unparsed' in compiled) {
-        state.transformArtifactsByModule.delete(id)
+        deleteTransformArtifact(state, id)
         recordFoldDependencies(state, id, filePath, [])
         state.foldSignatures.delete(id)
         state.foldInputsByModule.delete(id)

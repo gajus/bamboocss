@@ -1,5 +1,8 @@
 import { esc } from '@bamboocss/shared'
 
+/** Store one semantic class token in the selector spelling used by reachability sets. */
+export const selectorClassName = (token: string) => (token.includes('\\') ? token : esc(token))
+
 export interface StaticOutputProjection {
   /** Whether this environment's current graph imports the virtual stylesheet. */
   cssLoaded: boolean
@@ -113,7 +116,7 @@ export const createStaticCompilationSession = (): StaticCompilationSession => {
         //
         // A semantic atom name never contains a literal backslash, so one is an unambiguous
         // signal that this name is already in selector form and must be left alone.
-        session.usedClasses.add(token.includes('\\') ? token : esc(token))
+        session.usedClasses.add(selectorClassName(token))
       }
     },
   }

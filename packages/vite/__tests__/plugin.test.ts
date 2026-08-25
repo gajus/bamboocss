@@ -342,6 +342,73 @@ describe('compiler', () => {
     }
   })
 
+  test('keeps aggregate reachability exact when module contributions are replaced', async () => {
+    const entry = join(cwd, 'src/__aggregate-replacement.tsx')
+    const widths = { shared: '93.101px', stale: '93.202px', replacement: '93.303px' }
+    const source = (width: string) =>
+      `import { css } from 'styled-system/css'\n` + `export const className = css({ width: '[${width}]' })\n`
+    const { css, fold: compiler } = plugins({ cwd, reportSummary: false })
+    const config = { command: 'build', root: cwd, build: { sourcemap: false } }
+    const environment = { name: 'client', config: { build: { emitAssets: true } } }
+    const resolvedCss = hookOf(css.resolveId)!.call({} as never, VIRTUAL_CSS_ID, undefined, {} as never) as string
+    const ids = [entry + '?a', entry + '?b', entry + '?c', resolvedCss]
+    const context = {
+      addWatchFile() {},
+      environment,
+      getModuleIds: () => ids.values(),
+      getModuleInfo: () => null,
+    }
+
+    writeFileSync(
+      entry,
+      `import 'virtual:bamboo.css'\n` +
+        `import { css } from 'styled-system/css'\n` +
+        `export const inventory = [\n` +
+        `  css({ width: '[${widths.shared}]' }),\n` +
+        `  css({ width: '[${widths.stale}]' }),\n` +
+        `  css({ width: '[${widths.replacement}]' }),\n` +
+        `]\n`,
+    )
+    try {
+      await hookOf(css.configResolved)?.call({} as never, config as never)
+      await hookOf(compiler.configResolved)?.call({} as never, config as never)
+      await hookOf(css.buildStart)?.call(context as never, {} as never)
+      await hookOf(compiler.buildStart)?.call(context as never, {} as never)
+      const stylesheet = await hookOf(css.load)?.call(context as never, resolvedCss, {} as never)
+      const transform = hookOf(compiler.transform)!
+
+      // Two module IDs share one class. Replacing only one must retain that class; replacing
+      // the sole owner of another must retract it. Both replacement paths then share the new
+      // class, exercising increments and decrements on either side of one.
+      await transform.call(context as never, source(widths.shared), entry + '?a', {} as never)
+      await transform.call(context as never, source(widths.shared), entry + '?b', {} as never)
+      await transform.call(context as never, source(widths.stale), entry + '?c', {} as never)
+      await transform.call(context as never, source(widths.replacement), entry + '?a', {} as never)
+      await transform.call(context as never, source(widths.replacement), entry + '?c', {} as never)
+      await hookOf(compiler.buildEnd)?.call(context as never, undefined as never)
+
+      const bundle = {
+        'style.css': {
+          type: 'asset',
+          fileName: 'style.css',
+          names: [],
+          originalFileNames: [],
+          source: stylesheet,
+        },
+      }
+      await hookOf(css.generateBundle)?.call({ environment } as never, {} as never, bundle as never, false)
+      const emittedCss = Object.values(bundle)
+        .map((asset) => String(asset.source))
+        .join('\n')
+
+      expect(emittedCss).toContain(widths.shared)
+      expect(emittedCss).toContain(widths.replacement)
+      expect(emittedCss).not.toContain(widths.stale)
+    } finally {
+      rmSync(entry, { force: true })
+    }
+  }, 60_000)
+
   /**
    * No foreign recipe config outlives the edit that changed it, in any environment.
    *

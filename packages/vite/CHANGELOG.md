@@ -1,5 +1,19 @@
 # @bamboocss/vite
 
+## 1.48.4
+
+### Patch Changes
+
+- ff87017: Maintain reference-counted transform reachability so output projections no longer rescan every module
+  artifact.
+  - @bamboocss/config@1.48.4
+  - @bamboocss/core@1.48.4
+  - @bamboocss/extractor@1.48.4
+  - @bamboocss/logger@1.48.4
+  - @bamboocss/node@1.48.4
+  - @bamboocss/shared@1.48.4
+  - @bamboocss/types@1.48.4
+
 ## 1.48.3
 
 ### Patch Changes

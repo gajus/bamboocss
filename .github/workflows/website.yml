@@ -44,19 +44,18 @@ jobs:
         run: pnpm --filter=website check-links
 
       # `website` builds the workspace packages first (its own `prebuild`), then
-      # velite, then `next build`. With `output: 'export'` that writes `out/`.
+      # Velite, Open Graph images and the prerendered React Router site in `build/client`.
       #
-      # NEXT_PUBLIC_URL has to be set *here*, not at deploy time: the pages are
-      # prerendered during this step, so the value is baked into metadataBase,
-      # the og:image URLs and every link inside llms.txt. Without it they are all
-      # emitted as http://localhost:3000 and nothing fails loudly.
+      # VITE_PUBLIC_URL has to be set *here*, not at deploy time: the pages and text
+      # endpoints are prerendered during this step, so absolute URLs are baked into
+      # the output. Without it they use http://localhost:3000 and nothing fails loudly.
       - name: Build
         run: pnpm --filter=website build
         env:
-          NEXT_PUBLIC_URL: https://bamboocss.com
+          VITE_PUBLIC_URL: https://bamboocss.com
 
       # Assets-only deploy -- wrangler.jsonc declares no `main`, so this uploads
-      # `out/` to Cloudflare's asset store and runs no Worker code.
+      # `build/client` to Cloudflare's asset store and runs no Worker code.
       #
       # Invoked through `pnpm dlx` rather than cloudflare/wrangler-action. The action
       # shells out to `npm i wrangler` inside `workingDirectory`, and website/package.json

@@ -7,5 +7,6 @@
   // adapter and Worker entry point in addition to this assets binding.
   "assets": {
     "directory": "./build/client",
+    "not_found_handling": "single-page-application",
   },
 }

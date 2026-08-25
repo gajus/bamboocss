@@ -13,7 +13,7 @@ const categories = [
 ]
 
 export default {
-  ssr: true,
+  ssr: false,
   async prerender() {
     const { docs } = await import('./.velite/index.js')
     const docRoutes = docs.map((doc) => `/${doc.slug}`)
@@ -23,6 +23,7 @@ export default {
     })
 
     return [
+      '/docs',
       ...docRoutes,
       '/llms.txt',
       '/llms-full.txt',

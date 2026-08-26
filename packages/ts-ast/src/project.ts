@@ -138,7 +138,10 @@ export class Project {
    */
   addSourceFile(filePath: string, content: string): SourceFile | undefined {
     const path = this.#abs(filePath)
-    if (this.#overlay.get(path) === content) return this.getSourceFile(path)
+    // Identical text is a no-op only if the project already *holds* the file. Content written
+    // through the filesystem shim sits in the overlay unopened, waiting to be demanded, and
+    // returning early on it would leave it there for good.
+    if (this.#overlay.get(path) === content && this.#opened.has(path)) return this.getSourceFile(path)
 
     const existed = this.#overlay.has(path) || this.#onDisk(path)
     this.#overlay.set(path, content)
@@ -282,6 +285,10 @@ export class Project {
    * transformed.
    */
   readFile(filePath: string): string | undefined {
+    return this.#fileSystem.readFileSync(filePath) || this.#readFile(filePath)
+  }
+
+  #readFile(filePath: string): string | undefined {
     const held = this.#overlay.get(this.#abs(filePath))
     if (held !== undefined) return held
 
@@ -327,6 +334,10 @@ export class Project {
 
   /** The real path behind a symlink, or the path itself when it does not resolve. */
   realpath(filePath: string): string {
+    return this.#fileSystem.realpathSync(filePath)
+  }
+
+  #realpath(filePath: string): string {
     const delegated = this.#fs?.realpath?.(filePath)
     if (delegated !== undefined) return delegated
 
@@ -340,17 +351,33 @@ export class Project {
   /**
    * The filesystem, in the shape ts-morph's `getFileSystem()` returned.
    *
-   * A compatibility surface rather than an object this owns: every answer routes through the
-   * same overlay-then-delegate-then-disk order the compiler reads by, so a caller asking the
-   * "filesystem" for a file it has installed gets what it installed.
+   * One object, created once and returned by every call. That is not tidiness: ts-morph's
+   * filesystem was owned by the project, so a caller could replace a method on it — the watch
+   * and resolution tests spy on `realpathSync` to simulate a candidate that cannot be
+   * canonicalised — and handing back a fresh object each time would make such a spy take effect
+   * on nothing.
+   *
+   * `writeFileSync` is the other half. It puts content where the *resolver* will find it
+   * without making the file a member of the project, which is what an in-memory filesystem gave
+   * ts-morph for free: a module that exists on disk, outside the declared inventory, waiting to
+   * be demanded. `has()` stays false for it until something actually loads it.
    */
   getFileSystem() {
-    return {
-      getCurrentDirectory: () => this.#cwd,
-      readFileSync: (filePath: string) => this.readFile(filePath) ?? '',
-      realpathSync: (filePath: string) => this.realpath(filePath),
-      fileExists: (filePath: string) => this.readFile(filePath) !== undefined,
-    }
+    return this.#fileSystem
+  }
+
+  #fileSystem = {
+    getCurrentDirectory: () => this.#cwd,
+    readFileSync: (filePath: string) => this.#readFile(filePath) ?? '',
+    realpathSync: (filePath: string) => this.#realpath(filePath),
+    fileExists: (filePath: string) => this.#readFile(filePath) !== undefined,
+    writeFileSync: (filePath: string, content: string) => {
+      this.#overlay.set(this.#abs(filePath), content)
+    },
+    deleteSync: (filePath: string) => {
+      this.#overlay.delete(this.#abs(filePath))
+    },
+    mkdirSync: () => undefined,
   }
 
   /** The resolved compiler options, under the property spelling ts-morph exposed. */

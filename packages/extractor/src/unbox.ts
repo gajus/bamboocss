@@ -2,7 +2,7 @@ import { box } from './box'
 import type { BoxNode } from './box-factory'
 import type { LiteralObject, LiteralValue } from './types'
 import { isNotNullish, isTruthyOrZero } from './utils'
-import { Node } from 'ts-morph'
+import { Node } from '@bamboocss/ts-ast'
 
 const makeObjAt = (path: string[], value: unknown) => {
   if (!path.length) return value as LiteralObject

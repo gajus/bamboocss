@@ -1,4 +1,4 @@
-import type { SourceFile } from 'ts-morph'
+import type { SourceFile } from '@bamboocss/ts-ast'
 import type { BambooContext } from './create-context'
 
 /** One file, as it sits on disk and as the parser holds it. */

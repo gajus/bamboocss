@@ -13,7 +13,7 @@ import {
   Project as TsProject,
   ts,
   type ProjectOptions as TsProjectOptions,
-} from 'ts-morph'
+} from '@bamboocss/ts-ast'
 import { clearBoxNodeCache, invalidateDependencyPath } from '@bamboocss/extractor'
 import { classifyProject } from './classify'
 import { clearImportedRecipeCache } from './imported-recipes'
@@ -784,13 +784,7 @@ export class Project {
     }
 
     this.resolutionWork.moduleResolutionsAttempted++
-    const resolved = ts.resolveModuleName(
-      moduleName,
-      from.getFilePath(),
-      compilerOptions,
-      host,
-      this.#moduleResolutionCache,
-    )
+    const resolved = ts.resolveModuleName(moduleName, from.fileName, compilerOptions, host, this.#moduleResolutionCache)
     // TypeScript returns these concrete probes at runtime but intentionally omits them from
     // the public result type. They are the only evidence that an unresolved bare name was
     // redirected into this checkout rather than searched solely as an external package.
@@ -852,7 +846,7 @@ export class Project {
         scriptKind: scriptKindFor(name),
       })
       this.resolutionWork.sourceFilesAdded++
-      this.canonicalPaths.set(name, this.normalizePath(sourceFile.getFilePath()))
+      this.canonicalPaths.set(name, this.normalizePath(sourceFile.fileName))
       return { configurationFiles: [...configurationFiles].sort(), local: true, pendingCandidates, sourceFile }
     } catch (error) {
       if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') throw error
@@ -916,7 +910,7 @@ export class Project {
 
   private ensureResolutionFacts = (sourceFile: SourceFile): ImporterResolution => {
     this.#assertNotLoading()
-    const importer = this.normalizePath(sourceFile.getFilePath())
+    const importer = this.normalizePath(sourceFile.fileName)
     const text = sourceFile.getFullText()
     const cached = this.resolutionsByImporter.get(importer)
     if (cached?.sourceFile === sourceFile && cached.text === text && cached.treeRevision === this.#fileTreeRevision) {
@@ -941,7 +935,7 @@ export class Project {
       facts.push(
         Object.freeze({
           importer,
-          target: resolved.sourceFile ? this.normalizePath(resolved.sourceFile.getFilePath()) : null,
+          target: resolved.sourceFile ? this.normalizePath(resolved.sourceFile.fileName) : null,
           specifier,
           kind,
           ordinal,
@@ -967,20 +961,20 @@ export class Project {
 
     const sourceFile = this.project.getSourceFile(target)
     if (!sourceFile) return
-    this.prepareEffectiveSource(sourceFile.getFilePath(), sourceFile)
+    this.prepareEffectiveSource(sourceFile.fileName, sourceFile)
     return sourceFile
   }
 
   private trackDependencies = (filePath: string, sourceFile: SourceFile) => {
     this.#assertNotLoading()
-    const importer = this.normalizePath(sourceFile.getFilePath())
+    const importer = this.normalizePath(sourceFile.fileName)
     this.canonicalPaths.set(this.normalizePath(filePath), importer)
     this.canonicalPaths.set(importer, importer)
     this.ensureResolutionFacts(sourceFile)
   }
 
   private invalidateSourcePreparation = (filePath: string, sourceFile?: SourceFile) => {
-    const sourcePath = this.normalizePath(sourceFile?.getFilePath() ?? filePath)
+    const sourcePath = this.normalizePath(sourceFile?.fileName ?? filePath)
     const preparation = this.sourcePreparations.get(sourcePath)
     if (preparation?.state === 'preparing') preparation.invalidated = true
     this.sourcePreparations.delete(sourcePath)
@@ -1001,7 +995,7 @@ export class Project {
     hookFilePath = filePath,
   ): EffectiveSourcePreparation => {
     this.#assertNotLoading()
-    const sourcePath = this.normalizePath(sourceFile.getFilePath())
+    const sourcePath = this.normalizePath(sourceFile.fileName)
     const currentText = sourceFile.getFullText()
     const current = this.sourcePreparations.get(sourcePath)
 
@@ -1120,7 +1114,7 @@ export class Project {
     this.retractImporter(target)
     this.removedSourcePaths.add(target)
     this.canonicalPaths.set(target, target)
-    this.canonicalPaths.set(this.normalizePath(sourceFile.getFilePath()), target)
+    this.canonicalPaths.set(this.normalizePath(sourceFile.fileName), target)
   }
 
   /**
@@ -1133,7 +1127,7 @@ export class Project {
     // platform-specific. The graph is keyed on the source file's own path, so
     // resolve through the project first rather than string-matching.
     const given = this.normalizePath(filePath)
-    const resolved = this.project.getSourceFile(filePath)?.getFilePath()
+    const resolved = this.project.getSourceFile(filePath)?.fileName
     const start = resolved ? this.normalizePath(resolved) : (this.canonicalPaths.get(given) ?? given)
     const seen = new Set<string>()
     const queue = [start]
@@ -1168,7 +1162,7 @@ export class Project {
   getDependencies = (filePath: string, targets?: Iterable<string>): string[] => {
     this.#assertNotLoading()
     const given = this.normalizePath(filePath)
-    const resolved = this.project.getSourceFile(filePath)?.getFilePath()
+    const resolved = this.project.getSourceFile(filePath)?.fileName
     const start = resolved ? this.normalizePath(resolved) : (this.canonicalPaths.get(given) ?? given)
     const seen = new Set<string>()
     const importersByDependency = new Map<string, Set<string>>()
@@ -1195,7 +1189,7 @@ export class Project {
     const selected = new Set<string>()
     const reverse = Array.from(targets, (target) => {
       const normalized = this.normalizePath(target)
-      const source = this.project.getSourceFile(target)?.getFilePath()
+      const source = this.project.getSourceFile(target)?.fileName
       return source ? this.normalizePath(source) : (this.canonicalPaths.get(normalized) ?? normalized)
     }).filter((target) => seen.has(target))
     let reverseCursor = 0
@@ -1230,7 +1224,7 @@ export class Project {
     const selected = new Set(dependencies)
     const retained = new Set([...(previous?.dependencies ?? []), ...(previous?.pendingCandidates ?? [])])
     const given = this.normalizePath(filePath)
-    const resolved = this.project.getSourceFile(filePath)?.getFilePath()
+    const resolved = this.project.getSourceFile(filePath)?.fileName
     const start = resolved ? this.normalizePath(resolved) : (this.canonicalPaths.get(given) ?? given)
     const pendingCandidates = new Set<string>()
 
@@ -1287,7 +1281,7 @@ export class Project {
     const selected = new Set(dependencies)
     const retained = new Set(Array.from(previous, (file) => this.normalizePath(file)))
     const given = this.normalizePath(filePath)
-    const resolved = this.project.getSourceFile(filePath)?.getFilePath()
+    const resolved = this.project.getSourceFile(filePath)?.fileName
     const start = resolved ? this.normalizePath(resolved) : (this.canonicalPaths.get(given) ?? given)
     const files = new Set<string>()
     let hasSemanticFact = false
@@ -1388,7 +1382,7 @@ export class Project {
      * matches its own source, falls through, and is overwritten exactly as before.
      */
     if (existing && existing.getFullText() === content) {
-      this.markAuxiliary(existing.getFilePath(), options.auxiliary)
+      this.markAuxiliary(existing.fileName, options.auxiliary)
       return existing
     }
 
@@ -1396,13 +1390,13 @@ export class Project {
     // `getFilePath()` spelling is what dependency records carry — see `invalidate`.
     this.invalidateSourcePreparation(filePath, existing)
     this.removedSourcePaths.delete(this.normalizePath(filePath))
-    this.invalidate(!existing, existing?.getFilePath())
+    this.invalidate(!existing, existing?.fileName)
     const sourceFile = this.project.createSourceFile(filePath, content, {
       overwrite: true,
       scriptKind: scriptKindFor(filePath),
     })
     // Keyed on the source file's own spelling, which is the one the ledger records.
-    this.markAuxiliary(sourceFile.getFilePath(), options.auxiliary)
+    this.markAuxiliary(sourceFile.fileName, options.auxiliary)
     return sourceFile
   }
 
@@ -1422,11 +1416,11 @@ export class Project {
       // they would keep emitting styles from a file that no longer exists.
       this.invalidate()
       this.invalidateSourcePreparation(filePath, sourceFile)
-      this.markTargetRemoved(this.normalizePath(sourceFile.getFilePath()), sourceFile)
+      this.markTargetRemoved(this.normalizePath(sourceFile.fileName), sourceFile)
       // Same for the styles themselves. Nothing re-parses a file that is gone, so its rules
       // would otherwise outlive it for as long as the context does.
-      this.options.parserOptions.encoder.releaseFile(sourceFile.getFilePath())
-      this.auxiliarySources.delete(this.normalizePath(sourceFile.getFilePath()))
+      this.options.parserOptions.encoder.releaseFile(sourceFile.fileName)
+      this.auxiliarySources.delete(this.normalizePath(sourceFile.fileName))
       return this.project.removeSourceFile(sourceFile)
     }
     return false
@@ -1458,7 +1452,7 @@ export class Project {
     // selective invalidation must be keyed by; a file the project does not hold keeps the
     // unconditional clear this path always performed.
     const sourceFile = this.getSourceFile(filePath)
-    this.invalidate(false, sourceFile?.getFilePath())
+    this.invalidate(false, sourceFile?.fileName)
     if (!sourceFile) return
     this.invalidateSourcePreparation(filePath, sourceFile)
     return sourceFile.refreshFromFileSystemSync()
@@ -1542,7 +1536,7 @@ export class Project {
     // claims the whole parse for `extract` instead.
     const target = encoder ?? this.options.parserOptions.encoder
     const result = target
-      .withOwner('parse', sourceFile.getFilePath(), () =>
+      .withOwner('parse', sourceFile.fileName, () =>
         this.parser(sourceFile, encoder, parserOptions, this.resolveModule),
       )
       // Keep dependency accounting on the AST's real identity. Only user hooks receive the

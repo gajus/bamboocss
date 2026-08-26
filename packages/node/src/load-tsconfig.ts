@@ -2,7 +2,7 @@ import { convertTsPathsToRegexes } from '@bamboocss/config'
 import type { LoadConfigResult, LoadTsConfigResult } from '@bamboocss/types'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { ts } from 'ts-morph'
+import { ts } from '@bamboocss/ts-ast'
 import type { TsconfigResolutionProvenance } from './tsconfig-provenance'
 
 import {

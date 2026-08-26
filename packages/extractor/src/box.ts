@@ -1,4 +1,4 @@
-import type { Node } from 'ts-morph'
+import type { Node } from '@bamboocss/ts-ast'
 import { getTypeOfLiteral } from './get-typeof-literal'
 import { toBoxNode } from './to-box-node'
 import {

@@ -1,4 +1,4 @@
-import type { CallExpression, Node } from 'ts-morph'
+import type { CallExpression, Node } from '@bamboocss/ts-ast'
 import { box } from './box'
 import { maybeBoxNode } from './maybe-box-node'
 import type { BoxContext, MatchFnArgs, MatchFnArguments, MatchFnPropArgs } from './types'
@@ -14,8 +14,8 @@ export const extractCallExpressionArguments = (
   matchProp: MatchProp = trueFn,
   matchArg: MatchArg = trueFn,
 ) => {
-  const fnArguments = node.getArguments()
-  const fnName = node.getExpression().getText()
+  const fnArguments = node.arguments
+  const fnName = node.expression.getText()
 
   if (fnArguments.length === 0) {
     return box.array([], node, [])

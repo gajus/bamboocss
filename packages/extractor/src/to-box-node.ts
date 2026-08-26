@@ -1,4 +1,4 @@
-import type { Node } from 'ts-morph'
+import type { Node } from '@bamboocss/ts-ast'
 import type { EvaluatedObjectResult, LiteralValue, PrimitiveType } from './types'
 import { isArray, isNullish, isObject, isPrimitiveType } from './utils'
 import { box } from './box'

@@ -1,6 +1,6 @@
 import { type BoxContext, type BoxNode, box, maybeBoxNode } from '@bamboocss/extractor'
-import { type SourceFile, ts, VariableDeclarationKind } from 'ts-morph'
-import { type BinaryExpression, type ConditionalExpression, type Expression, Node, SyntaxKind } from 'ts-morph'
+import { type SourceFile, ts, VariableDeclarationKind, literalValueOf } from '@bamboocss/ts-ast'
+import { type BinaryExpression, type ConditionalExpression, type Expression, Node, SyntaxKind } from '@bamboocss/ts-ast'
 
 /**
  * Nodes that *compose* a value out of their children rather than computing one.
@@ -64,9 +64,9 @@ const isBindingElementDefault = (node: Node | undefined): boolean => {
 
   let current = node
   while (current) {
-    const parent: Node | undefined = current.getParent()
+    const parent: Node | undefined = current.parent
     if (!parent) return false
-    if (Node.isBindingElement(parent)) return parent.getInitializer() === current
+    if (Node.isBindingElement(parent)) return parent.initializer === current
     if (!composesValue(parent)) return false
     current = parent
   }
@@ -95,7 +95,7 @@ const isFromBindingDefault = (node: BoxNode): boolean => {
   if (isBindingElementDefault(own)) return true
 
   for (const entry of node.getStack?.() ?? []) {
-    if (!Node.isBindingElement(entry) || !entry.getInitializer()) continue
+    if (!Node.isBindingElement(entry) || !entry.initializer) continue
 
     // Only when the value was resolved *through* this binding rather than written inside it.
     // The stack carries a binding element either way, so `({ cls = css({ color: 'red.300' }) })`
@@ -182,7 +182,7 @@ const unwrapExpression = (node: Node): Node =>
   Node.isNonNullExpression(node) ||
   Node.isTypeAssertion(node) ||
   Node.isSatisfiesExpression(node)
-    ? unwrapExpression(node.getExpression())
+    ? unwrapExpression(node.expression)
     : node
 
 /**
@@ -239,9 +239,9 @@ const isWrittenHere = (node: Node): boolean => {
     Node.isArrayLiteralExpression(inner) ||
     Node.isTrueLiteral(inner) ||
     Node.isFalseLiteral(inner) ||
-    inner.getKind() === SyntaxKind.NullKeyword ||
+    inner.kind === SyntaxKind.NullKeyword ||
     // `-1`, which the parser gives as an operator over a numeric literal.
-    (Node.isPrefixUnaryExpression(inner) && Node.isNumericLiteral(inner.getOperand()))
+    (Node.isPrefixUnaryExpression(inner) && Node.isNumericLiteral(inner.operand))
   )
 }
 
@@ -264,10 +264,10 @@ const isTruthy = (boxNode: BoxNode): boolean =>
  */
 const decidedAtBuildTime = (node: ConditionalExpression | BinaryExpression): boolean => {
   if (Node.isConditionalExpression(node)) {
-    return resolvesExactly(node.getWhenTrue()) && resolvesExactly(node.getWhenFalse())
+    return resolvesExactly(node.whenTrue) && resolvesExactly(node.whenFalse)
   }
 
-  const operator = node.getOperatorToken().getKind()
+  const operator = node.operatorToken.kind
 
   // A comparison's value is a boolean, and the extractor never computes one: it routes
   // `===` and the rest through the same collapse as a choice and answers with an operand.
@@ -277,9 +277,9 @@ const decidedAtBuildTime = (node: ConditionalExpression | BinaryExpression): boo
 
   // The left has to be written here. A box reached through a name records the declaration
   // rather than the value, and truthiness is exactly what that distinction changes.
-  if (!isWrittenHere(node.getLeft())) return false
+  if (!isWrittenHere(node.left)) return false
 
-  const left = rebox(node.getLeft())
+  const left = rebox(node.left)
   if (!left) return false
 
   // `||` and `??` answer with the left, so once the left wins the right is dead code and
@@ -289,7 +289,7 @@ const decidedAtBuildTime = (node: ConditionalExpression | BinaryExpression): boo
 
   // `&&` with a falsy left also yields the left, which is what the extractor returned.
   // With a truthy left the result is the right, so that is what has to resolve.
-  return isTruthy(left) ? resolvesExactly(node.getRight()) : true
+  return isTruthy(left) ? resolvesExactly(node.right) : true
 }
 
 const SHORT_CIRCUIT = [SyntaxKind.AmpersandAmpersandToken, SyntaxKind.BarBarToken, SyntaxKind.QuestionQuestionToken]
@@ -317,7 +317,7 @@ const COLLAPSED_BINARY = new Set([
 ])
 
 const isCollapsedBinary = (node: Node): node is BinaryExpression =>
-  Node.isBinaryExpression(node) && COLLAPSED_BINARY.has(node.getOperatorToken().getKind())
+  Node.isBinaryExpression(node) && COLLAPSED_BINARY.has(node.operatorToken.kind)
 
 /**
  * Does the extracted box account for every property the source declares?
@@ -347,9 +347,9 @@ const isCollapsedBinary = (node: Node): node is BinaryExpression =>
  */
 const valueOf = (property: Node): Node | undefined =>
   Node.isPropertyAssignment(property)
-    ? property.getInitializer()
+    ? property.initializer
     : Node.isShorthandPropertyAssignment(property)
-      ? property.getNameNode()
+      ? property.name
       : undefined
 
 export const accountsForSource = (node: Node | undefined, boxNode: BoxNode | undefined): boolean => {
@@ -369,7 +369,7 @@ export const accountsForSource = (node: Node | undefined, boxNode: BoxNode | und
 
   if (Node.isArrayLiteralExpression(unwrapped)) {
     if (!box.isArray(boxNode)) return false
-    const elements = unwrapped.getElements()
+    const elements = unwrapped.elements
     if (elements.length !== boxNode.value.length) return false
     return elements.every((element, index) => accountsForSource(element, boxNode.value[index]))
   }
@@ -388,9 +388,9 @@ export const accountsForSource = (node: Node | undefined, boxNode: BoxNode | und
   // An object literal in source must have produced a map.
   if (!box.isMap(boxNode)) return false
 
-  for (const property of unwrapped.getProperties()) {
+  for (const property of unwrapped.properties) {
     if (Node.isSpreadAssignment(property)) {
-      const expression = unwrapExpression(property.getExpression())
+      const expression = unwrapExpression(property.expression)
 
       // An inline object literal is self-evidently accounted for: its keys are right there.
       if (Node.isObjectLiteralExpression(expression)) continue
@@ -423,12 +423,12 @@ export const accountsForSource = (node: Node | undefined, boxNode: BoxNode | und
       return false
     }
 
-    const nameNode = property.getNameNode()
+    const nameNode = property.name
     if (Node.isComputedPropertyName(nameNode)) return false
 
     const key =
       Node.isStringLiteral(nameNode) || Node.isNumericLiteral(nameNode)
-        ? String(nameNode.getLiteralValue())
+        ? String(literalValueOf(nameNode))
         : nameNode.getText()
 
     const value = valueOf(property)
@@ -497,8 +497,8 @@ const collectModuleScopeNames = (sourceFile: SourceFile): Set<string> => {
 
     // `const { a, b: c } = …` and `const [a, b] = …` bind their elements, not themselves.
     if (Node.isObjectBindingPattern(node) || Node.isArrayBindingPattern(node)) {
-      for (const element of node.getElements()) {
-        if (Node.isBindingElement(element)) addBinding(element.getNameNode())
+      for (const element of node.elements) {
+        if (Node.isBindingElement(element)) addBinding(element.name)
       }
       return
     }
@@ -508,11 +508,11 @@ const collectModuleScopeNames = (sourceFile: SourceFile): Set<string> => {
 
   const addDeclarations = (list: Node) => {
     if (Node.isVariableStatement(list)) {
-      for (const declaration of list.getDeclarations()) addBinding(declaration.getNameNode())
+      for (const declaration of list.declarations) addBinding(declaration.name)
       return
     }
     if (Node.isVariableDeclarationList(list)) {
-      for (const declaration of list.getDeclarations()) addBinding(declaration.getNameNode())
+      for (const declaration of list.declarations) addBinding(declaration.name)
     }
   }
 
@@ -535,32 +535,32 @@ const collectModuleScopeNames = (sourceFile: SourceFile): Set<string> => {
     }
 
     if (Node.isBlock(node)) {
-      for (const statement of node.getStatements()) addHoistedVars(statement)
+      for (const statement of node.statements) addHoistedVars(statement)
       return
     }
     if (Node.isIfStatement(node)) {
-      addHoistedVars(node.getThenStatement())
-      const otherwise = node.getElseStatement()
+      addHoistedVars(node.thenStatement)
+      const otherwise = node.elseStatement
       if (otherwise) addHoistedVars(otherwise)
       return
     }
     if (Node.isForStatement(node)) {
-      const initializer = node.getInitializer()
+      const initializer = node.initializer
       if (initializer) addHoistedVars(initializer)
-      addHoistedVars(node.getStatement())
+      addHoistedVars(node.statement)
       return
     }
     if (Node.isForInStatement(node) || Node.isForOfStatement(node)) {
-      addHoistedVars(node.getInitializer())
-      addHoistedVars(node.getStatement())
+      addHoistedVars(node.initializer)
+      addHoistedVars(node.statement)
       return
     }
     if (Node.isWhileStatement(node) || Node.isDoStatement(node) || Node.isWithStatement(node)) {
-      addHoistedVars(node.getStatement())
+      addHoistedVars(node.statement)
       return
     }
     if (Node.isLabeledStatement(node)) {
-      addHoistedVars(node.getStatement())
+      addHoistedVars(node.statement)
       return
     }
     if (Node.isTryStatement(node)) {
@@ -573,12 +573,12 @@ const collectModuleScopeNames = (sourceFile: SourceFile): Set<string> => {
     }
     if (Node.isSwitchStatement(node)) {
       for (const clause of node.getCaseBlock().getClauses()) {
-        for (const statement of clause.getStatements()) addHoistedVars(statement)
+        for (const statement of clause.statements) addHoistedVars(statement)
       }
     }
   }
 
-  for (const statement of sourceFile.getStatements()) {
+  for (const statement of sourceFile.statements) {
     if (Node.isVariableStatement(statement)) {
       addDeclarations(statement)
       continue
@@ -587,14 +587,14 @@ const collectModuleScopeNames = (sourceFile: SourceFile): Set<string> => {
     if (Node.isImportDeclaration(statement)) {
       addBinding(statement.getDefaultImport())
       addBinding(statement.getNamespaceImport())
-      for (const named of statement.getNamedImports()) addBinding(named.getAliasNode() ?? named.getNameNode())
+      for (const named of statement.getNamedImports()) addBinding(named.getAliasNode() ?? named.name)
       continue
     }
 
     // `import x = require('…')`, which is its own statement kind rather than an import
     // declaration, so the branch above never sees it.
     if (Node.isImportEqualsDeclaration(statement)) {
-      addBinding(statement.getNameNode())
+      addBinding(statement.name)
       continue
     }
 
@@ -606,7 +606,7 @@ const collectModuleScopeNames = (sourceFile: SourceFile): Set<string> => {
       Node.isTypeAliasDeclaration(statement) ||
       Node.isInterfaceDeclaration(statement)
     ) {
-      addBinding(statement.getNameNode())
+      addBinding(statement.name)
       continue
     }
 
@@ -721,25 +721,25 @@ export const localReferencesTo = (index: IdentifierIndex, name: string, declarat
     // and would otherwise read as a surviving reference in every consumer.
     if (identifier === declaration) continue
 
-    const parent = identifier.getParent()
+    const parent = identifier.parent
     if (!parent) continue
 
     // `x.name` names a property, not this binding. Shorthand `{ name }` is a read and is
     // deliberately not excluded here.
-    if (Node.isPropertyAccessExpression(parent) && parent.getNameNode() === identifier) continue
-    if (Node.isPropertyAssignment(parent) && parent.getNameNode() === identifier) continue
-    if (Node.isBindingElement(parent) && parent.getPropertyNameNode() === identifier) continue
+    if (Node.isPropertyAccessExpression(parent) && parent.name === identifier) continue
+    if (Node.isPropertyAssignment(parent) && parent.name === identifier) continue
+    if (Node.isBindingElement(parent) && parent.propertyName === identifier) continue
 
     // A JSX tag is an intrinsic element or a component, never this binding — and a recipe
     // named after an element it styles (`button`, `input`) is the common case, not an edge
     // one. `<button className={button(...)} />` must not read as a reference to itself.
     if (
       (Node.isJsxOpeningElement(parent) || Node.isJsxSelfClosingElement(parent) || Node.isJsxClosingElement(parent)) &&
-      parent.getTagNameNode() === identifier
+      parent.tagName === identifier
     ) {
       continue
     }
-    if (Node.isJsxAttribute(parent) && parent.getNameNode() === identifier) continue
+    if (Node.isJsxAttribute(parent) && parent.name === identifier) continue
 
     // A member's *name* is not a read of a module binding, however it is spelled.
     if (
@@ -750,7 +750,7 @@ export const localReferencesTo = (index: IdentifierIndex, name: string, declarat
         Node.isMethodSignature(parent) ||
         Node.isPropertySignature(parent) ||
         Node.isEnumMember(parent)) &&
-      parent.getNameNode() === identifier
+      parent.name === identifier
     ) {
       continue
     }
@@ -762,14 +762,14 @@ export const localReferencesTo = (index: IdentifierIndex, name: string, declarat
         Node.isFunctionDeclaration(parent) ||
         Node.isClassDeclaration(parent) ||
         Node.isBindingElement(parent)) &&
-      parent.getNameNode() === identifier
+      parent.name === identifier
     ) {
       continue
     }
     // A declaration of the same name elsewhere — including the import specifier's own
     // `propertyName` in `import { name as other }` — is not a read either.
     if (Node.isImportSpecifier(parent) || Node.isExportSpecifier(parent)) {
-      if (parent.getNameNode() !== identifier) continue
+      if (parent.name !== identifier) continue
       // `export { name }` re-exports the binding, which is a read that escapes the module.
       if (Node.isExportSpecifier(parent)) {
         references.push(identifier)

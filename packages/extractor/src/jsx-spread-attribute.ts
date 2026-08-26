@@ -1,4 +1,4 @@
-import type { JsxSpreadAttribute, Node } from 'ts-morph'
+import type { JsxSpreadAttribute, Node } from '@bamboocss/ts-ast'
 import { maybeBoxNode } from './maybe-box-node'
 import type { BoxContext, MatchFnPropArgs, MatchPropArgs } from './types'
 import { unwrapExpression } from './utils'
@@ -6,7 +6,7 @@ import { unwrapExpression } from './utils'
 export type MatchProp = (prop: MatchFnPropArgs | MatchPropArgs) => boolean
 
 export const extractJsxSpreadAttributeValues = (node: JsxSpreadAttribute, ctx: BoxContext, matchProp: MatchProp) => {
-  const expr = unwrapExpression(node.getExpression())
+  const expr = unwrapExpression(node.expression)
   const stack: Node[] = []
   return maybeBoxNode(expr, stack, ctx, matchProp)
 }

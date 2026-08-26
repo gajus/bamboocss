@@ -1,5 +1,5 @@
 import type { ParserResultInterface, ResultItem } from '@bamboocss/types'
-import { Node, SyntaxKind } from 'ts-morph'
+import { Node, SyntaxKind, literalValueOf } from '@bamboocss/ts-ast'
 import { declaredAtModuleScope } from './fold-analysis'
 import type { StaticStyleSetCompiler, StyleSetRecipeConfig } from './style-set'
 
@@ -60,7 +60,7 @@ export const collectRecipeConfigs = (parserResult: ParserResultInterface): Map<s
 
     const call = Node.isCallExpression(node) ? node : node.getFirstAncestorByKind(SyntaxKind.CallExpression)
     const declaration = call?.getFirstAncestorByKind(SyntaxKind.VariableDeclaration)
-    const nameNode = declaration?.getNameNode()
+    const nameNode = declaration?.name
     if (!nameNode || !Node.isIdentifier(nameNode)) continue
 
     // One resolution only. `cva(dark ? A : B)` yields a candidate per branch, and folding
@@ -119,11 +119,11 @@ const LITERAL_KINDS = new Set([
  * string missing the variant — the element renders, wrongly, with no report.
  */
 const literalValue = (node: Node | undefined): string | number | boolean | undefined => {
-  if (!node || !LITERAL_KINDS.has(node.getKind())) return undefined
-  if (Node.isStringLiteral(node) || Node.isNoSubstitutionTemplateLiteral(node)) return node.getLiteralValue()
-  if (Node.isNumericLiteral(node)) return node.getLiteralValue()
-  if (node.getKind() === SyntaxKind.TrueKeyword) return true
-  if (node.getKind() === SyntaxKind.FalseKeyword) return false
+  if (!node || !LITERAL_KINDS.has(node.kind)) return undefined
+  if (Node.isStringLiteral(node) || Node.isNoSubstitutionTemplateLiteral(node)) return literalValueOf(node)
+  if (Node.isNumericLiteral(node)) return literalValueOf(node)
+  if (node.kind === SyntaxKind.TrueKeyword) return true
+  if (node.kind === SyntaxKind.FalseKeyword) return false
   return undefined
 }
 
@@ -138,9 +138,9 @@ const literalValue = (node: Node | undefined): string | number | boolean | undef
 const propertyKey = (nameNode: Node): string | undefined => {
   if (Node.isIdentifier(nameNode)) return nameNode.getText()
   if (Node.isStringLiteral(nameNode) || Node.isNoSubstitutionTemplateLiteral(nameNode)) {
-    return nameNode.getLiteralValue()
+    return literalValueOf(nameNode)
   }
-  if (Node.isNumericLiteral(nameNode)) return String(nameNode.getLiteralValue())
+  if (Node.isNumericLiteral(nameNode)) return String(literalValueOf(nameNode))
   return undefined
 }
 
@@ -191,10 +191,10 @@ export const ensureRecipeHelperImport = (
     for (const named of declaration.getNamedImports()) {
       if (named.isTypeOnly()) continue
 
-      if (named.getNameNode().getText() === imported) {
+      if (named.name.getText() === imported) {
         // Somebody else's helper, or one shadowed here, is not the one this calls.
         if (!isBambooCssModule(mod)) return undefined
-        const local = (named.getAliasNode() ?? named.getNameNode()).getText()
+        const local = (named.getAliasNode() ?? named.name).getText()
         return isShadowed(call, local) ? undefined : { name: local }
       }
     }
@@ -312,7 +312,7 @@ export const lowerRecipeCall = (
   }
   if (!Node.isCallExpression(call)) return { kind: 'decline', reason: 'unsupported-shape' }
 
-  const args = call.getArguments()
+  const args = call.arguments
   // `cvaFn` takes one selection. A second argument is a shape this does not model.
   if (args.length > 1) return { kind: 'decline', reason: 'unsupported-shape' }
 
@@ -354,7 +354,7 @@ export const lowerRecipeCall = (
     } else if (!Node.isObjectLiteralExpression(arg)) {
       return { kind: 'decline', reason: 'dynamic' }
     } else {
-      for (const property of arg.getProperties()) {
+      for (const property of arg.properties) {
         // A spread contributes keys the build cannot enumerate, and a computed key is one it
         // cannot name — neither leaves a knowable set of classes.
         if (Node.isSpreadAssignment(property)) return { kind: 'decline', reason: 'dynamic' }
@@ -369,13 +369,13 @@ export const lowerRecipeCall = (
 
         if (!Node.isPropertyAssignment(property)) return { kind: 'decline', reason: 'dynamic' }
 
-        const nameNode = property.getNameNode()
+        const nameNode = property.name
         if (Node.isComputedPropertyName(nameNode)) return { kind: 'decline', reason: 'dynamic' }
 
         const key = propertyKey(nameNode)
         if (key === undefined) return { kind: 'decline', reason: 'dynamic' }
 
-        const initializer = property.getInitializer()
+        const initializer = property.initializer
 
         // An expression that could run something has to survive into the output, so it takes
         // the runtime path whatever its value resolves to. Folding it to a literal would delete

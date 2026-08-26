@@ -1,4 +1,4 @@
-import type { Node } from 'ts-morph'
+import type { Node } from '@bamboocss/ts-ast'
 import { box } from './box'
 import {
   BoxNodeConditional,

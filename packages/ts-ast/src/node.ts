@@ -83,6 +83,23 @@ export const getFirstAncestor = (node: Node, matches: (ancestor: Node) => boolea
   return undefined
 }
 
+/**
+ * A literal's value, with the type ts-morph gave it.
+ *
+ * Not a rename of `getLiteralValue()` to `.text`, which is what the shape of the two APIs
+ * invites. `.text` is a string for every literal kind, while ts-morph returned a number for a
+ * numeric literal and a boolean for `true`/`false` — so the tempting sed turns
+ * `<Box color={123} />` into the string `"123"` and `truncate={true}` into `undefined`. Both
+ * reach `box.literal()`, which is a style value, which is emitted CSS. Three of the twenty call
+ * sites are the non-string kinds.
+ */
+export const literalValueOf = (node: Node): string | number | boolean | undefined => {
+  if (predicates.isNumericLiteral(node)) return Number(node.text)
+  if (predicates.isTrueLiteral(node)) return true
+  if (predicates.isFalseLiteral(node)) return false
+  return (node as { text?: string }).text
+}
+
 /** The import declarations of a source file, without walking past the top level. */
 export const getImportDeclarations = (sourceFile: SourceFile): ImportDeclaration[] =>
   sourceFile.statements.filter((statement) => predicates.isImportDeclaration(statement))

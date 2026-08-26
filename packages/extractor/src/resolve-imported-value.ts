@@ -1,5 +1,5 @@
-import type { Expression, Node as TsMorphNode, SourceFile } from 'ts-morph'
-import { Node, SyntaxKind } from 'ts-morph'
+import type { Expression, Node as TsMorphNode, SourceFile } from '@bamboocss/ts-ast'
+import { Node, SyntaxKind } from '@bamboocss/ts-ast'
 import { getExportedVarDeclarationWithName, getModuleSpecifierSourceFile } from './maybe-box-node'
 import type { BoxContext } from './types'
 import { beginDependencyCapture, replayDependencyCache, type DependencyCacheEntry } from './dependency-cache'
@@ -59,8 +59,8 @@ const importBindingsFor = (sourceFile: SourceFile) => {
     for (const specifier of declaration.getNamedImports()) {
       // `getAliasNode()` is the local binding and `getNameNode()` the exported name, so
       // `import { focusRing as ring }` is keyed on `ring` and looked up as `focusRing`.
-      const local = (specifier.getAliasNode() ?? specifier.getNameNode()).getText()
-      bindings.set(local, { declaration, exportedName: specifier.getNameNode().getText() })
+      const local = (specifier.getAliasNode() ?? specifier.name).getText()
+      bindings.set(local, { declaration, exportedName: specifier.name.getText() })
     }
 
     const defaultImport = declaration.getDefaultImport()
@@ -94,7 +94,7 @@ const valueForBinding = (
     if (replayed.hit) return { value: replayed.value }
   }
 
-  const initializer = declaration.getInitializer()
+  const initializer = declaration.initializer
   if (!initializer) return
 
   const capture = beginDependencyCapture(ctx)

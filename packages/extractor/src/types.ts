@@ -10,7 +10,7 @@ import type {
   PropertyAssignment,
   ShorthandPropertyAssignment,
   SourceFile,
-} from 'ts-morph'
+} from '@bamboocss/ts-ast'
 import type { BoxNode, BoxNodeArray, BoxNodeMap } from './box-factory'
 
 export type PrimitiveType = string | number | boolean | null | undefined

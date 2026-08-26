@@ -1,4 +1,4 @@
-import { JsxOpeningElement, JsxSelfClosingElement, Node } from 'ts-morph'
+import { JsxOpeningElement, JsxSelfClosingElement, Node } from '@bamboocss/ts-ast'
 import type { PrimitiveType } from './types'
 
 type Nullable<T> = T | null | undefined
@@ -20,34 +20,34 @@ export const isPrimitiveType = (value: unknown): value is PrimitiveType => {
 export const unwrapExpression = (node: Node): Node => {
   // Object as any => Object
   if (Node.isAsExpression(node)) {
-    return unwrapExpression(node.getExpression())
+    return unwrapExpression(node.expression)
   }
 
   // (Object) => Object
   if (Node.isParenthesizedExpression(node)) {
-    return unwrapExpression(node.getExpression())
+    return unwrapExpression(node.expression)
   }
 
   // "red"! => "red"
   if (Node.isNonNullExpression(node)) {
-    return unwrapExpression(node.getExpression())
+    return unwrapExpression(node.expression)
   }
 
   // <T>Object => Object
   if (Node.isTypeAssertion(node)) {
-    return unwrapExpression(node.getExpression())
+    return unwrapExpression(node.expression)
   }
 
   // xxx satisfies yyy -> xxx
   if (Node.isSatisfiesExpression(node)) {
-    return unwrapExpression(node.getExpression())
+    return unwrapExpression(node.expression)
   }
 
   return node
 }
 
 export const getComponentName = (node: JsxOpeningElement | JsxSelfClosingElement) => {
-  return node.getTagNameNode().getText()
+  return node.tagName.getText()
 }
 
 const whitespaceRegex = /\s+/g

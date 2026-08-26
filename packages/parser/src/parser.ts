@@ -3,8 +3,8 @@ import { BoxNodeMap, box, extract, unbox, type EvaluateOptions, type Unboxed } f
 import type { Generator } from '@bamboocss/generator'
 import { logger } from '@bamboocss/logger'
 import type { ParserResultConfigureOptions } from '@bamboocss/types'
-import type { SourceFile } from 'ts-morph'
-import { Node, ts } from 'ts-morph'
+import type { SourceFile } from '@bamboocss/ts-ast'
+import { Node, ts } from '@bamboocss/ts-ast'
 import { match } from 'ts-pattern'
 import { getImportDeclarations } from './get-import-declarations'
 import { importedRecipeBindings, type RecipeOrigin, type ResolveModule } from './imported-recipes'
@@ -19,8 +19,8 @@ const combineResult = (unboxed: Unboxed) => {
 const tokenCalleeRange = (call: Node) => {
   if (!Node.isCallExpression(call)) return undefined
 
-  let current: Node = call.getExpression()
-  while (Node.isPropertyAccessExpression(current)) current = current.getExpression()
+  let current: Node = call.expression
+  while (Node.isPropertyAccessExpression(current)) current = current.expression
   if (!Node.isIdentifier(current)) return undefined
 
   return { start: current.getStart(), end: current.getEnd() }
@@ -69,7 +69,7 @@ export function createParser(context: ParserOptions) {
 
     const file = imports.file(importDeclarations)
 
-    const filePath = sourceFile.getFilePath()
+    const filePath = sourceFile.fileName
 
     logger.debug(
       'ast:import',
@@ -215,7 +215,7 @@ export function createParser(context: ParserOptions) {
       },
       getEvaluateOptions: (node) => {
         if (!Node.isCallExpression(node)) return evaluateOptions
-        const propAccessExpr = node.getExpression()
+        const propAccessExpr = node.expression
 
         // `fallback(...)`, under whatever name it was imported as.
         if (Node.isIdentifier(propAccessExpr)) {

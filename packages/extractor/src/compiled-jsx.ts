@@ -1,5 +1,5 @@
-import type { CallExpression, Identifier, Node, SourceFile } from 'ts-morph'
-import { Node as MorphNode, SyntaxKind } from 'ts-morph'
+import type { CallExpression, Identifier, Node, SourceFile } from '@bamboocss/ts-ast'
+import { Node as MorphNode, SyntaxKind, literalValueOf } from '@bamboocss/ts-ast'
 import { unwrapExpression } from './utils'
 
 type ImportEntry = {
@@ -159,7 +159,7 @@ const collectImports = (sourceFile: SourceFile): CompiledJsxImportMap => {
     const expression = unwrapExpression(node)
 
     if (MorphNode.isCallExpression(expression)) {
-      const callee = unwrapExpression(expression.getExpression())
+      const callee = unwrapExpression(expression.expression)
       if (!MorphNode.isIdentifier(callee)) return
 
       const calleeName = callee.getText()
@@ -182,21 +182,21 @@ const collectImports = (sourceFile: SourceFile): CompiledJsxImportMap => {
   const bundledCandidates = mayHoldBundledOutput(sourceFile.getFullText())
 
   ;(bundledCandidates ? sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression) : []).forEach((callExpression) => {
-    const callee = unwrapExpression(callExpression.getExpression())
+    const callee = unwrapExpression(callExpression.expression)
     if (!MorphNode.isIdentifier(callee) || callee.getText() !== 'parcelRegister') return
 
-    const [idArg, factoryArg] = callExpression.getArguments()
+    const [idArg, factoryArg] = callExpression.arguments
     if (!MorphNode.isStringLiteral(idArg)) return
     if (!MorphNode.isArrowFunction(factoryArg) && !MorphNode.isFunctionExpression(factoryArg)) return
 
-    const factoryText = factoryArg.getBody().getText()
+    const factoryText = factoryArg.body.getText()
     if (
       factoryText.includes('"Fragment"') &&
       factoryText.includes('"jsx"') &&
       factoryText.includes('"jsxs"') &&
       factoryText.includes('module.exports')
     ) {
-      parcelRuntimeModuleIds.set(idArg.getLiteralValue(), 'react/jsx-runtime')
+      parcelRuntimeModuleIds.set(literalValueOf(idArg), 'react/jsx-runtime')
     }
   })
 
@@ -215,17 +215,17 @@ const collectImports = (sourceFile: SourceFile): CompiledJsxImportMap => {
     }
 
     declaration.getNamedImports().forEach((specifier) => {
-      const importedName = specifier.getNameNode().getText()
+      const importedName = specifier.name.getText()
       const alias = specifier.getAliasNode()?.getText() || importedName
       named.set(alias, { importedName, mod })
     })
   })
 
   sourceFile.getVariableDeclarations().forEach((declaration) => {
-    if (!MorphNode.isIdentifier(declaration.getNameNode())) return
+    if (!MorphNode.isIdentifier(declaration.name)) return
 
     const variableName = declaration.getName()
-    const initializer = declaration.getInitializer()
+    const initializer = declaration.initializer
     const bundledImport = resolveBundledHelperImport(variableName, initializer)
 
     if (bundledImport) {
@@ -235,22 +235,21 @@ const collectImports = (sourceFile: SourceFile): CompiledJsxImportMap => {
     let mod = getBundledRuntimeModFromName(variableName) ?? resolveBundledNamespaceMod(initializer)
 
     if (!mod && initializer && MorphNode.isCallExpression(initializer)) {
-      const callee = unwrapExpression(initializer.getExpression())
-      const [firstArg] = initializer.getArguments()
+      const callee = unwrapExpression(initializer.expression)
+      const [firstArg] = initializer.arguments
 
       if (
         MorphNode.isIdentifier(callee) &&
         callee.getText() === 'parcelRequire' &&
         MorphNode.isStringLiteral(firstArg)
       ) {
-        mod = parcelRuntimeModuleIds.get(firstArg.getLiteralValue())
+        mod = parcelRuntimeModuleIds.get(literalValueOf(firstArg))
       }
     }
 
     if (!mod && initializer && MorphNode.isObjectLiteralExpression(initializer)) {
       const propertyNames = new Set(
-        initializer
-          .getProperties()
+        initializer.properties
           .map((property) => {
             if (MorphNode.isPropertyAssignment(property)) {
               return property.getName()
@@ -285,19 +284,19 @@ const collectImports = (sourceFile: SourceFile): CompiledJsxImportMap => {
     }
 
     if (MorphNode.isConditionalExpression(expression)) {
-      return resolveBundledAliasImport(expression.getWhenTrue()) ?? resolveBundledAliasImport(expression.getWhenFalse())
+      return resolveBundledAliasImport(expression.whenTrue) ?? resolveBundledAliasImport(expression.whenFalse)
     }
 
-    if (MorphNode.isBinaryExpression(expression) && expression.getOperatorToken().getKind() === SyntaxKind.CommaToken) {
-      return resolveBundledAliasImport(expression.getRight())
+    if (MorphNode.isBinaryExpression(expression) && expression.operatorToken.kind === SyntaxKind.CommaToken) {
+      return resolveBundledAliasImport(expression.right)
     }
   }
 
   sourceFile.getVariableDeclarations().forEach((declaration) => {
-    if (!MorphNode.isIdentifier(declaration.getNameNode())) return
+    if (!MorphNode.isIdentifier(declaration.name)) return
     if (bundledNamed.has(declaration.getName())) return
 
-    const bundledAlias = resolveBundledAliasImport(declaration.getInitializer())
+    const bundledAlias = resolveBundledAliasImport(declaration.initializer)
     if (!bundledAlias) return
 
     bundledNamed.set(declaration.getName(), bundledAlias)
@@ -320,7 +319,7 @@ const getTagName = (node: Node | undefined) => {
 
   const expression = unwrapExpression(node)
   if (MorphNode.isStringLiteral(expression) || MorphNode.isNoSubstitutionTemplateLiteral(expression)) {
-    return expression.getLiteralValue()
+    return literalValueOf(expression)
   }
 
   if (
@@ -402,7 +401,7 @@ const runtimeProfiles: RuntimeProfile[] = [
 const findLocalDeclaration = (identifier: Identifier) => {
   const name = identifier.getText()
 
-  for (let scope: Node | undefined = identifier.getParent(); scope; scope = scope.getParent()) {
+  for (let scope: Node | undefined = identifier.parent; scope; scope = scope.parent) {
     if (!MorphNode.isStatemented(scope)) continue
 
     const variable = scope.getVariableDeclaration(name)
@@ -419,8 +418,8 @@ export const createCompiledJsxContext = (sourceFile: SourceFile): CompiledJsxCon
   const normalizeCallee = (node: Node): Node => {
     const expression = unwrapExpression(node)
 
-    if (MorphNode.isBinaryExpression(expression) && expression.getOperatorToken().getKind() === SyntaxKind.CommaToken) {
-      return normalizeCallee(expression.getRight())
+    if (MorphNode.isBinaryExpression(expression) && expression.operatorToken.kind === SyntaxKind.CommaToken) {
+      return normalizeCallee(expression.right)
     }
 
     return expression
@@ -451,14 +450,11 @@ export const createCompiledJsxContext = (sourceFile: SourceFile): CompiledJsxCon
       }
 
       if (MorphNode.isConditionalExpression(expression)) {
-        return resolveLocalAlias(expression.getWhenTrue()) ?? resolveLocalAlias(expression.getWhenFalse())
+        return resolveLocalAlias(expression.whenTrue) ?? resolveLocalAlias(expression.whenFalse)
       }
 
-      if (
-        MorphNode.isBinaryExpression(expression) &&
-        expression.getOperatorToken().getKind() === SyntaxKind.CommaToken
-      ) {
-        return resolveLocalAlias(expression.getRight())
+      if (MorphNode.isBinaryExpression(expression) && expression.operatorToken.kind === SyntaxKind.CommaToken) {
+        return resolveLocalAlias(expression.right)
       }
     }
 
@@ -474,10 +470,10 @@ export const createCompiledJsxContext = (sourceFile: SourceFile): CompiledJsxCon
       return resolved
     }
 
-    const directImport = resolveBundledHelperImport(declaration.getName(), declaration.getInitializer())
+    const directImport = resolveBundledHelperImport(declaration.getName(), declaration.initializer)
     const aliasImport = directImport
       ? { mod: directImport.mod, importedName: directImport.importedName }
-      : resolveLocalAlias(declaration.getInitializer())
+      : resolveLocalAlias(declaration.initializer)
 
     if (!aliasImport) return
 
@@ -498,7 +494,7 @@ export const createCompiledJsxContext = (sourceFile: SourceFile): CompiledJsxCon
     }
 
     if (MorphNode.isPropertyAccessExpression(expression)) {
-      const target = normalizeCallee(expression.getExpression())
+      const target = normalizeCallee(expression.expression)
       if (!MorphNode.isIdentifier(target)) return
 
       const targetName = target.getText()
@@ -513,17 +509,17 @@ export const createCompiledJsxContext = (sourceFile: SourceFile): CompiledJsxCon
   const isMergePropsCall = (node: Node) => {
     if (!MorphNode.isCallExpression(node)) return false
 
-    const resolved = resolveCallee(node.getExpression())
+    const resolved = resolveCallee(node.expression)
     if (!resolved) return false
 
     return resolved.importedName === 'mergeProps' && (solidMods.has(resolved.mod) || vueMods.has(resolved.mod))
   }
 
   const getCallInfo = (node: CallExpression): CompiledJsxCallInfo | undefined => {
-    const resolved = resolveCallee(node.getExpression())
+    const resolved = resolveCallee(node.expression)
     if (!resolved) return
 
-    const args = node.getArguments().map((arg) => unwrapExpression(arg))
+    const args = node.arguments.map((arg) => unwrapExpression(arg))
     const tagName = getTagName(args[0])
     if (!tagName) return
 

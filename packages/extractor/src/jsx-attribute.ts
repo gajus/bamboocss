@@ -1,5 +1,5 @@
-import type { JsxAttribute } from 'ts-morph'
-import { Node } from 'ts-morph'
+import type { JsxAttribute } from '@bamboocss/ts-ast'
+import { Node } from '@bamboocss/ts-ast'
 import { box } from './box'
 import { maybeBoxNode } from './maybe-box-node'
 import type { BoxContext } from './types'
@@ -11,11 +11,11 @@ import { trimWhitespace, unwrapExpression } from './utils'
 // parent = `color="red.200"` (and then backgroundColor="blackAlpha.100")
 
 export const extractJsxAttribute = (jsxAttribute: JsxAttribute, ctx: BoxContext) => {
-  const initializer = jsxAttribute.getInitializer()
+  const initializer = jsxAttribute.initializer
   const stack = [jsxAttribute, initializer] as Node[]
 
   if (!initializer) {
-    const nameNode = jsxAttribute.getNameNode()
+    const nameNode = jsxAttribute.name
     return box.emptyInitializer(nameNode, stack)
   }
 
@@ -27,7 +27,7 @@ export const extractJsxAttribute = (jsxAttribute: JsxAttribute, ctx: BoxContext)
 
   // <ColorBox color={xxx} />
   if (Node.isJsxExpression(initializer)) {
-    const expr = initializer.getExpression()
+    const expr = initializer.expression
     if (!expr) return
 
     const expression = unwrapExpression(expr)

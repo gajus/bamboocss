@@ -1,4 +1,4 @@
-import { CallExpression, JsxOpeningElement, JsxSelfClosingElement, Node } from 'ts-morph'
+import { CallExpression, JsxOpeningElement, JsxSelfClosingElement, Node } from '@bamboocss/ts-ast'
 import { box } from './box'
 import { BoxNodeMap, BoxNodeObject, type BoxNode, type MapTypeValue, BoxNodeConditional } from './box-factory'
 import { extractCallExpressionArguments } from './call-expression'
@@ -127,7 +127,7 @@ export const extract = ({ ast, ...ctx }: ExtractOptions) => {
     }
 
     if (Node.isCallExpression(expression) && compiledJsx.isMergePropsCall(expression)) {
-      expression.getArguments().forEach((arg) => {
+      expression.arguments.forEach((arg) => {
         processCompiledPropSource(componentNode, component, boxByProp, arg, matchProp)
       })
       return
@@ -198,7 +198,7 @@ export const extract = ({ ast, ...ctx }: ExtractOptions) => {
         const componentName = getComponentName(componentNode)
         const boxByProp = (byName.get(componentName)! as ExtractedComponentResult).nodesByProp
 
-        const propName = node.getNameNode().getText()
+        const propName = node.name.getText()
         if (!components.matchProp({ tagNode: componentNode, tagName: componentName, propName, propNode: node })) {
           return
         }
@@ -229,8 +229,8 @@ export const extract = ({ ast, ...ctx }: ExtractOptions) => {
     }
 
     if (functions && Node.isCallExpression(node)) {
-      const expr = node.getExpression()
-      const fnName = Node.isCallExpression(expr) ? expr.getExpression().getText() : expr.getText()
+      const expr = node.expression
+      const fnName = Node.isCallExpression(expr) ? expr.expression.getText() : expr.getText()
       if (!functions.matchFn({ fnNode: node, fnName })) return
 
       const matchProp = ({ propName, propNode }: MatchFnPropArgs) =>

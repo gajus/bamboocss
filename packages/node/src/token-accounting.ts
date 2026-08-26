@@ -1,5 +1,5 @@
 import { resolveTsPathPattern } from '@bamboocss/config/ts-path'
-import { type Identifier, Node, type SourceFile, SyntaxKind, ts } from 'ts-morph'
+import { type Identifier, Node, type SourceFile, SyntaxKind, ts, literalValueOf } from '@bamboocss/ts-ast'
 import type { BambooContext } from './create-context'
 import { type SourceSnapshot, sourceSnapshots } from './source-snapshots'
 
@@ -241,7 +241,7 @@ function accountFile(
   /** Local names bound to the artifact: the `token` export, and any namespace of it. */
   const bindings = new Set<string>()
 
-  for (const statement of sourceFile.getStatements()) {
+  for (const statement of sourceFile.statements) {
     // `export { token } from './tokens'` hands the binding to a module this pass may never
     // visit, so what reaches it cannot be accounted for here. `export * from` likewise.
     if (Node.isExportDeclaration(statement)) {
@@ -255,7 +255,7 @@ function accountFile(
     const specifier = statement.getModuleSpecifierValue()
     if (!specifier) continue
 
-    const clause = statement.getImportClause()
+    const clause = statement.importClause
     if (!clause || statement.isTypeOnly()) continue
 
     if (!isTokensEntrypoint(ctx, specifier)) {
@@ -264,7 +264,7 @@ function accountFile(
       // `t(key)` has no artifact specifier and no `token(`-shaped call, so keying on either
       // would miss it. Keying on the *imported name* catches it.
       for (const named of clause.getNamedImports()) {
-        if (!named.isTypeOnly() && nameOf(named.getNameNode()) === 'token') decline(named, 'unclassified-import')
+        if (!named.isTypeOnly() && nameOf(named.name) === 'token') decline(named, 'unclassified-import')
       }
 
       const foreignDefault = clause.getDefaultImport()
@@ -296,12 +296,12 @@ function accountFile(
       // and re-export `token` under another name, which a call of that name would then reach.
       // So the question is whether the binding is used as a *value* anywhere, not what it is
       // called.
-      if (nameOf(named.getNameNode()) !== 'token') {
-        const local = (named.getAliasNode() ?? named.getNameNode()).getText()
+      if (nameOf(named.name) !== 'token') {
+        const local = (named.getAliasNode() ?? named.name).getText()
         if (usedAsValue(sourceFile, local, named)) decline(named, 'unsupported-import')
         continue
       }
-      bindings.add((named.getAliasNode() ?? named.getNameNode()).getText())
+      bindings.add((named.getAliasNode() ?? named.name).getText())
     }
   }
 
@@ -316,16 +316,16 @@ function accountFile(
   // `require('./tokens')` and `await import('./tokens')` bind by destructuring rather than by
   // an import clause, so the bindings above do not cover them.
   for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const callee = call.getExpression()
+    const callee = call.expression
     const isRequire = Node.isIdentifier(callee) && callee.getText() === 'require'
-    const isDynamicImport = callee.getKind() === SyntaxKind.ImportKeyword
+    const isDynamicImport = callee.kind === SyntaxKind.ImportKeyword
     if (!isRequire && !isDynamicImport) continue
 
-    const argument = call.getArguments()[0]
+    const argument = call.arguments[0]
     // A template or a concatenation is not a specifier this can read, and one that is could
     // still be the artifact.
     if (!argument) continue
-    if (Node.isStringLiteral(argument) ? isTokensEntrypoint(ctx, argument.getLiteralValue()) : true) {
+    if (Node.isStringLiteral(argument) ? isTokensEntrypoint(ctx, literalValueOf(argument)) : true) {
       decline(call, isRequire ? 'require' : 'dynamic-import')
     }
   }
@@ -339,7 +339,7 @@ function accountFile(
   // direction.
   for (const identifier of identifiersNamed(sourceFile, (name) => bindings.has(name) || name === 'token')) {
     const text = nameOf(identifier)
-    const parent = identifier.getParent()
+    const parent = identifier.parent
 
     // `export { token }` hands the binding to a module this pass may never visit, exactly as
     // `export { token } from './tokens'` does. The statement walk only sees the spelling that
@@ -349,7 +349,7 @@ function accountFile(
     // declaration the build had deleted.
     if (Node.isExportSpecifier(parent)) {
       const declaration = parent.getFirstAncestorByKind(SyntaxKind.ExportDeclaration)
-      if (declaration && !declaration.getModuleSpecifier()) decline(identifier, 're-exported')
+      if (declaration && !declaration.moduleSpecifier) decline(identifier, 're-exported')
       continue
     }
 
@@ -362,8 +362,8 @@ function accountFile(
     //
     // Reading it off a binding this pass *did* collect is fine — `accountedPath` handles
     // `ns.token(...)` from the namespace identifier itself, which is visited separately.
-    if (Node.isPropertyAccessExpression(parent) && parent.getNameNode() === identifier) {
-      const object = parent.getExpression()
+    if (Node.isPropertyAccessExpression(parent) && parent.name === identifier) {
+      const object = parent.expression
       const objectName = Node.isIdentifier(object) ? object.getText() : undefined
       if (objectName && bindings.has(objectName)) continue
 
@@ -405,14 +405,14 @@ function accountFile(
 function usesTokenMember(sourceFile: SourceFile, namespace: string) {
   const properties = sourceFile
     .getDescendantsOfKind(SyntaxKind.PropertyAccessExpression)
-    .some((access) => access.getExpression().getText() === namespace && nameOf(access.getNameNode()) === 'token')
+    .some((access) => access.expression.getText() === namespace && nameOf(access.name) === 'token')
 
   if (properties) return true
 
   return sourceFile.getDescendantsOfKind(SyntaxKind.ElementAccessExpression).some((access) => {
-    if (access.getExpression().getText() !== namespace) return false
-    const argument = access.getArgumentExpression()
-    return argument != null && (!Node.isStringLiteral(argument) || argument.getLiteralValue() === 'token')
+    if (access.expression.getText() !== namespace) return false
+    const argument = access.argumentExpression
+    return argument != null && (!Node.isStringLiteral(argument) || literalValueOf(argument) === 'token')
   })
 }
 
@@ -478,8 +478,8 @@ function boundNames(name: Node | undefined, bound: (name: string) => void) {
 
   if (!Node.isObjectBindingPattern(name) && !Node.isArrayBindingPattern(name)) return
 
-  for (const element of name.getElements()) {
-    if (Node.isBindingElement(element)) boundNames(element.getNameNode(), bound)
+  for (const element of name.elements) {
+    if (Node.isBindingElement(element)) boundNames(element.name, bound)
   }
 }
 
@@ -525,26 +525,26 @@ function shadowedScopes(sourceFile: SourceFile) {
   sourceFile.forEachDescendant((node) => {
     // A parameter is scoped to the function it belongs to, destructuring included.
     if (Node.isParameterDeclaration(node)) {
-      const scope = node.getParent()
-      boundNames(node.getNameNode(), (name) => add(name, scope))
+      const scope = node.parent
+      boundNames(node.name, (name) => add(name, scope))
       return
     }
 
     if (Node.isCatchClause(node)) {
-      boundNames(node.getVariableDeclaration()?.getNameNode(), (name) => add(name, node))
+      boundNames(node.variableDeclaration?.name, (name) => add(name, node))
       return
     }
 
     // A declaration's name is bound in the scope that *contains* it.
     if (Node.isFunctionDeclaration(node) || Node.isClassDeclaration(node)) {
-      const name = node.getNameNode()
-      if (name) add(nameOf(name), node.getParent())
+      const name = node.name
+      if (name) add(nameOf(name), node.parent)
       return
     }
 
     // A named function or class *expression* binds its own name inside itself and nowhere else.
     if (Node.isFunctionExpression(node) || Node.isClassExpression(node)) {
-      const name = node.getNameNode()
+      const name = node.name
       if (name) add(nameOf(name), node)
       return
     }
@@ -557,7 +557,7 @@ function shadowedScopes(sourceFile: SourceFile) {
   for (const declaration of variables) {
     if (!Node.isVariableDeclaration(declaration)) continue
 
-    const root = rootIdentifier(declaration.getInitializer())
+    const root = rootIdentifier(declaration.initializer)
     if (!root || !isShadowed(root, scopes.get(nameOf(root)))) continue
 
     const scope = declaration.getFirstAncestor(
@@ -572,7 +572,7 @@ function shadowedScopes(sourceFile: SourceFile) {
         Node.isForInStatement(ancestor),
     )
 
-    boundNames(declaration.getNameNode(), (name) => add(name, scope))
+    boundNames(declaration.name, (name) => add(name, scope))
   }
 
   return scopes
@@ -588,7 +588,7 @@ function rootIdentifier(expression: Node | undefined): Node | undefined {
   let current = expression
 
   while (current && (Node.isPropertyAccessExpression(current) || Node.isElementAccessExpression(current))) {
-    current = current.getExpression()
+    current = current.expression
   }
 
   return current && Node.isIdentifier(current) ? current : undefined
@@ -614,7 +614,7 @@ function isDeclarationName(identifier: Node, parent: Node) {
     Node.isMethodDeclaration(parent) ||
     Node.isEnumMember(parent)
   ) {
-    return parent.getNameNode() === identifier
+    return parent.name === identifier
   }
 
   return false
@@ -650,7 +650,7 @@ type ResolvedReference = { kind: 'path' | 'prefix'; value: string } | { kind: 'b
  * (`useMemo(() => token)`), spread, or enumerated.
  */
 function accountedPath(identifier: Node): ResolvedReference | undefined {
-  const parent = identifier.getParent()
+  const parent = identifier.parent
   if (!parent) return undefined
 
   // A binding site rather than a use. `ExportSpecifier` belongs here too: `export { token }
@@ -666,15 +666,15 @@ function accountedPath(identifier: Node): ResolvedReference | undefined {
     return { kind: 'binding' }
   }
 
-  if (Node.isCallExpression(parent) && parent.getExpression() === identifier) return literalPath(parent)
+  if (Node.isCallExpression(parent) && parent.expression === identifier) return literalPath(parent)
 
-  if (!Node.isPropertyAccessExpression(parent) || parent.getExpression() !== identifier) return undefined
+  if (!Node.isPropertyAccessExpression(parent) || parent.expression !== identifier) return undefined
 
-  const property = parent.getNameNode().getText()
-  const grandParent = parent.getParent()
+  const property = parent.name.getText()
+  const grandParent = parent.parent
 
   if (property === 'value') {
-    return Node.isCallExpression(grandParent) && grandParent.getExpression() === parent
+    return Node.isCallExpression(grandParent) && grandParent.expression === parent
       ? literalPath(grandParent)
       : undefined
   }
@@ -682,15 +682,15 @@ function accountedPath(identifier: Node): ResolvedReference | undefined {
   if (property !== 'token') return undefined
 
   // `ns.token('x')`
-  if (Node.isCallExpression(grandParent) && grandParent.getExpression() === parent) return literalPath(grandParent)
+  if (Node.isCallExpression(grandParent) && grandParent.expression === parent) return literalPath(grandParent)
 
   // `ns.token.value('x')`
-  if (Node.isPropertyAccessExpression(grandParent) && grandParent.getExpression() === parent) {
-    const method = grandParent.getNameNode().getText()
+  if (Node.isPropertyAccessExpression(grandParent) && grandParent.expression === parent) {
+    const method = grandParent.name.getText()
     if (method !== 'value') return undefined
 
-    const call = grandParent.getParent()
-    return Node.isCallExpression(call) && call.getExpression() === grandParent ? literalPath(call) : undefined
+    const call = grandParent.parent
+    return Node.isCallExpression(call) && call.expression === grandParent ? literalPath(call) : undefined
   }
 
   return undefined
@@ -712,15 +712,15 @@ function accountedPath(identifier: Node): ResolvedReference | undefined {
  */
 function literalPath(call: Node): ResolvedReference | undefined {
   if (!Node.isCallExpression(call)) return undefined
-  const argument = unwrapAssertions(call.getArguments()[0])
+  const argument = unwrapAssertions(call.arguments[0])
   if (!argument) return undefined
 
-  if (Node.isStringLiteral(argument)) return { kind: 'path', value: argument.getLiteralValue() }
+  if (Node.isStringLiteral(argument)) return { kind: 'path', value: literalValueOf(argument) }
   // A template with no substitutions is a literal in every way that matters here.
-  if (Node.isNoSubstitutionTemplateLiteral(argument)) return { kind: 'path', value: argument.getLiteralValue() }
+  if (Node.isNoSubstitutionTemplateLiteral(argument)) return { kind: 'path', value: literalValueOf(argument) }
 
   if (Node.isTemplateExpression(argument)) {
-    const head = argument.getHead().getLiteralText()
+    const head = argument.head.getLiteralText()
     return head ? { kind: 'prefix', value: head } : undefined
   }
 
@@ -768,7 +768,7 @@ function unwrapAssertions(node: Node | undefined): Node | undefined {
       Node.isParenthesizedExpression(current) ||
       Node.isTypeAssertion(current))
   ) {
-    current = current.getExpression()
+    current = current.expression
   }
 
   return current

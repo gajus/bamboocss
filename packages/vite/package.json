@@ -49,6 +49,7 @@
     "@bamboocss/logger": "workspace:*",
     "@bamboocss/node": "workspace:*",
     "@bamboocss/shared": "workspace:*",
+    "@bamboocss/ts-ast": "workspace:*",
     "@bamboocss/types": "workspace:*",
     "magic-string": "0.30.21",
     "postcss": "8.5.26",

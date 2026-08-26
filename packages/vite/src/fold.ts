@@ -6,7 +6,14 @@ import { viewTransitionClassName } from '@bamboocss/shared'
 import type { Dict, ParserResultInterface, ResultItem } from '@bamboocss/types'
 import MagicString from 'magic-string'
 import { dirname, relative, resolve as resolvePath } from 'node:path'
-import { type CallExpression, type ImportEqualsDeclaration, Node, type SourceFile, SyntaxKind } from 'ts-morph'
+import {
+  type CallExpression,
+  type ImportEqualsDeclaration,
+  Node,
+  type SourceFile,
+  SyntaxKind,
+  literalValueOf,
+} from '@bamboocss/ts-ast'
 import {
   AMBIGUOUS,
   collectRecipeConfigs,
@@ -324,7 +331,7 @@ const RECIPE_CALL_TYPE = 'cva-call'
  * A type position is excluded for a different reason: it is erased, and with it the import.
  */
 const isValueReference = (identifier: Node): boolean => {
-  const parent = identifier.getParent()
+  const parent = identifier.parent
   if (!parent) return false
 
   // The declaration naming it, not a use of it.
@@ -333,12 +340,12 @@ const isValueReference = (identifier: Node): boolean => {
 
   // `o.css` and `a.b.css` name a member. The left of either is a read and reaches here as its
   // own identifier.
-  if (Node.isPropertyAccessExpression(parent) && parent.getNameNode() === identifier) return false
-  if (Node.isQualifiedName(parent) && parent.getRight() === identifier) return false
+  if (Node.isPropertyAccessExpression(parent) && parent.name === identifier) return false
+  if (Node.isQualifiedName(parent) && parent.right === identifier) return false
 
   // `{ css: 1 }` is a key. `{ css }` is a ShorthandPropertyAssignment and *is* a read, so it
   // is deliberately not matched here.
-  if (Node.isPropertyAssignment(parent) && parent.getNameNode() === identifier) return false
+  if (Node.isPropertyAssignment(parent) && parent.name === identifier) return false
   if (
     Node.isMethodDeclaration(parent) ||
     Node.isPropertyDeclaration(parent) ||
@@ -348,7 +355,7 @@ const isValueReference = (identifier: Node): boolean => {
     Node.isPropertySignature(parent) ||
     Node.isEnumMember(parent)
   ) {
-    if (parent.getNameNode() === identifier) return false
+    if (parent.name === identifier) return false
   }
 
   // `label: for (…) break label` names a target, not a value.
@@ -361,14 +368,14 @@ const isValueReference = (identifier: Node): boolean => {
   // component tag has to count. The case of the first character is the whole distinction JSX
   // draws, and it is what TypeScript resolves on too.
   if (Node.isJsxOpeningElement(parent) || Node.isJsxSelfClosingElement(parent) || Node.isJsxClosingElement(parent)) {
-    const tag = parent.getTagNameNode()
+    const tag = parent.tagName
     if (tag === identifier) return identifier.getText()[0] === identifier.getText()[0]?.toUpperCase()
   }
   if (Node.isJsxAttribute(parent)) return false
 
   // `({ css: local }) => …` — the key is the *property* read off the argument, not the
   // imported binding. Only `getNameNode` is the local one, so both have to be asked.
-  if (Node.isBindingElement(parent) && parent.getPropertyNameNode() === identifier) return false
+  if (Node.isBindingElement(parent) && parent.propertyName === identifier) return false
 
   // A binding of the name shadows the import rather than reading it.
   if (
@@ -377,7 +384,7 @@ const isValueReference = (identifier: Node): boolean => {
       Node.isBindingElement(parent) ||
       Node.isFunctionDeclaration(parent) ||
       Node.isClassDeclaration(parent)) &&
-    parent.getNameNode() === identifier
+    parent.name === identifier
   ) {
     return false
   }
@@ -446,9 +453,9 @@ const isInertArgument = (node: Node): boolean =>
   Node.isStringLiteral(node) ||
   Node.isNumericLiteral(node) ||
   Node.isNoSubstitutionTemplateLiteral(node) ||
-  node.getKind() === SyntaxKind.TrueKeyword ||
-  node.getKind() === SyntaxKind.FalseKeyword ||
-  node.getKind() === SyntaxKind.NullKeyword ||
+  node.kind === SyntaxKind.TrueKeyword ||
+  node.kind === SyntaxKind.FalseKeyword ||
+  node.kind === SyntaxKind.NullKeyword ||
   (Node.isIdentifier(node) && node.getText() === 'undefined')
 
 /**
@@ -485,7 +492,7 @@ export const isInertExpression = (node: Node): boolean => {
     Node.isTypeAssertion(node) ||
     Node.isParenthesizedExpression(node)
   ) {
-    return isInertExpression(node.getExpression())
+    return isInertExpression(node.expression)
   }
 
   // A function is inert to *define*; only calling one runs anything, and nothing here does.
@@ -493,42 +500,42 @@ export const isInertExpression = (node: Node): boolean => {
   if (Node.isRegularExpressionLiteral(node) || Node.isBigIntLiteral(node)) return true
 
   if (Node.isPrefixUnaryExpression(node)) {
-    const operator = node.getOperatorToken()
+    const operator = node.operatorToken
     return (
       (operator === SyntaxKind.MinusToken ||
         operator === SyntaxKind.PlusToken ||
         operator === SyntaxKind.ExclamationToken ||
         operator === SyntaxKind.TildeToken) &&
-      isInertExpression(node.getOperand())
+      isInertExpression(node.operand)
     )
   }
 
   // `??`, `||` and `&&` only ever evaluate their operands. Arithmetic and comparison are
   // excluded because they coerce, which can reach `valueOf`/`Symbol.toPrimitive`.
   if (Node.isBinaryExpression(node)) {
-    const operator = node.getOperatorToken().getKind()
+    const operator = node.operatorToken.kind
     return (
       (operator === SyntaxKind.QuestionQuestionToken ||
         operator === SyntaxKind.BarBarToken ||
         operator === SyntaxKind.AmpersandAmpersandToken) &&
-      isInertExpression(node.getLeft()) &&
-      isInertExpression(node.getRight())
+      isInertExpression(node.left) &&
+      isInertExpression(node.right)
     )
   }
 
   if (Node.isObjectLiteralExpression(node)) {
-    return node.getProperties().every((property) => {
+    return node.properties.every((property) => {
       // A shorthand `{ size }` is a variable read, which is inert.
       if (Node.isShorthandPropertyAssignment(property)) return true
       if (!Node.isPropertyAssignment(property)) return false
-      if (Node.isComputedPropertyName(property.getNameNode())) return false
+      if (Node.isComputedPropertyName(property.name)) return false
 
-      const initializer = property.getInitializer()
+      const initializer = property.initializer
       return initializer !== undefined && isInertExpression(initializer)
     })
   }
 
-  if (Node.isArrayLiteralExpression(node)) return node.getElements().every(isInertExpression)
+  if (Node.isArrayLiteralExpression(node)) return node.elements.every(isInertExpression)
 
   return false
 }
@@ -581,7 +588,7 @@ const createDependencyScan = (ownFile: SourceFile): DependencyScan => {
 
       let path = paths.get(sourceFile)
       if (path === undefined) {
-        path = sourceFile.getFilePath()
+        path = sourceFile.fileName
         paths.set(sourceFile, path)
       }
       if (path) results.add(path)
@@ -610,7 +617,7 @@ const findCallExpression = (node: BoxNode): Node | undefined => {
   let current: Node | undefined = own
   for (let depth = 0; current && depth < 3; depth++) {
     if (Node.isCallExpression(current)) return current
-    current = current.getParent()
+    current = current.parent
   }
 
   return undefined
@@ -623,7 +630,7 @@ const findCallExpression = (node: BoxNode): Node | undefined => {
  */
 const isRawCall = (call: Node): boolean => {
   if (!Node.isCallExpression(call)) return false
-  const callee = call.getExpression().getText()
+  const callee = call.expression.getText()
   return callee === 'raw' || callee.endsWith('.raw')
 }
 
@@ -631,9 +638,9 @@ const isRawCall = (call: Node): boolean => {
 const calleeRootName = (call: Node): string | undefined => {
   if (!Node.isCallExpression(call)) return undefined
 
-  let current: Node = call.getExpression()
+  let current: Node = call.expression
   while (Node.isPropertyAccessExpression(current)) {
-    current = current.getExpression()
+    current = current.expression
   }
 
   return Node.isIdentifier(current) ? current.getText() : undefined
@@ -661,7 +668,7 @@ const bambooImportedNames = (sourceFile: SourceFile, ctx: Context): Set<string> 
     const mod = declaration.getModuleSpecifierValue()
 
     for (const named of declaration.getNamedImports()) {
-      const name = named.getNameNode().getText()
+      const name = named.name.getText()
       const alias = named.getAliasNode()?.getText() ?? name
       if (ctx.imports.match({ mod, name, alias })) names.add(alias)
     }
@@ -686,7 +693,7 @@ const bambooImportedNames = (sourceFile: SourceFile, ctx: Context): Set<string> 
  * attributes, which match neither and cost nothing.
  */
 const isShadowed = (call: Node, name: string): boolean => {
-  for (let node: Node | undefined = call.getParent(); node; node = node.getParent()) {
+  for (let node: Node | undefined = call.parent; node; node = node.parent) {
     if (Node.isSourceFile(node)) return false
     if (bindsName(node, name)) return true
   }
@@ -706,9 +713,7 @@ const bindingIntroduces = (nameNode: Node | undefined, name: string): boolean =>
   if (Node.isIdentifier(nameNode)) return nameNode.getText() === name
 
   if (Node.isObjectBindingPattern(nameNode) || Node.isArrayBindingPattern(nameNode)) {
-    return nameNode
-      .getElements()
-      .some((element) => Node.isBindingElement(element) && bindingIntroduces(element.getNameNode(), name))
+    return nameNode.elements.some((element) => Node.isBindingElement(element) && bindingIntroduces(element.name, name))
   }
 
   return false
@@ -716,11 +721,11 @@ const bindingIntroduces = (nameNode: Node | undefined, name: string): boolean =>
 
 const declarationsBind = (list: Node | undefined, name: string): boolean =>
   Node.isVariableDeclarationList(list) &&
-  list.getDeclarations().some((declaration) => bindingIntroduces(declaration.getNameNode(), name))
+  list.declarations.some((declaration) => bindingIntroduces(declaration.name, name))
 
 const bindsName = (scope: Node, name: string): boolean => {
   if (Node.isBlock(scope)) {
-    return scope.getStatements().some((statement) => statementBinds(statement, name))
+    return scope.statements.some((statement) => statementBinds(statement, name))
   }
 
   if (
@@ -729,17 +734,17 @@ const bindsName = (scope: Node, name: string): boolean => {
     Node.isFunctionExpression(scope) ||
     Node.isMethodDeclaration(scope)
   ) {
-    return scope.getParameters().some((parameter) => bindingIntroduces(parameter.getNameNode(), name))
+    return scope.getParameters().some((parameter) => bindingIntroduces(parameter.name, name))
   }
 
   // `catch` and the three `for` heads bind in their own scope rather than in the
   // block they enclose, so walking blocks alone never sees them.
   if (Node.isCatchClause(scope)) {
-    return bindingIntroduces(scope.getVariableDeclaration()?.getNameNode(), name)
+    return bindingIntroduces(scope.variableDeclaration?.name, name)
   }
 
   if (Node.isForStatement(scope) || Node.isForOfStatement(scope) || Node.isForInStatement(scope)) {
-    return declarationsBind(scope.getInitializer(), name)
+    return declarationsBind(scope.initializer, name)
   }
 
   return false
@@ -747,11 +752,11 @@ const bindsName = (scope: Node, name: string): boolean => {
 
 const statementBinds = (statement: Node, name: string): boolean => {
   if (Node.isVariableStatement(statement)) {
-    return statement.getDeclarations().some((declaration) => bindingIntroduces(declaration.getNameNode(), name))
+    return statement.declarations.some((declaration) => bindingIntroduces(declaration.name, name))
   }
 
   if (Node.isFunctionDeclaration(statement) || Node.isClassDeclaration(statement)) {
-    return statement.getNameNode()?.getText() === name
+    return statement.name?.getText() === name
   }
 
   return false
@@ -768,7 +773,7 @@ const hasStyles = (data: ResultItem['data']): data is Dict[] =>
 const argumentsAccountedFor = (call: Node, boxNode: BoxNode): boolean => {
   if (!Node.isCallExpression(call)) return false
 
-  const args = call.getArguments()
+  const args = call.arguments
   // Nothing written is nothing to account for. `buttonStyle()` means every default, which is
   // exactly what the extractor recorded — declining it left a call that folds when spelled
   // `buttonStyle({})` and does not when spelled `buttonStyle()`.
@@ -920,7 +925,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       if (declaration.isTypeOnly()) continue
       const namesBinding = declaration.getNamedImports().some((named) => {
         if (named.isTypeOnly()) return false
-        return (named.getAliasNode() ?? named.getNameNode()).getText() === binding
+        return (named.getAliasNode() ?? named.name).getText() === binding
       })
       if (!namesBinding) continue
 
@@ -1011,7 +1016,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       // Declared here after all — the local pass owns it, and parsing this module again
       // from inside its own fold would recurse.
       const consuming = call.getSourceFile()
-      if (origin.filePath === consuming.getFilePath()) return undefined
+      if (origin.filePath === consuming.fileName) return undefined
 
       let foreign = configsByModule.get(origin.filePath)
 
@@ -1051,9 +1056,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
 
       helperModules.set(
         name,
-        foreign.cssSpecifier
-          ? rebaseSpecifier(foreign.cssSpecifier, origin.filePath, consuming.getFilePath())
-          : undefined,
+        foreign.cssSpecifier ? rebaseSpecifier(foreign.cssSpecifier, origin.filePath, consuming.fileName) : undefined,
       )
       return entry
     }
@@ -1194,8 +1197,8 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       // Only a property access can name a half at all, so only one is asked. A bare callee
       // is whatever the file bound the import to, which `token as t` makes some name the
       // matcher has never heard of.
-      const callee = Node.isCallExpression(call) ? call.getExpression() : undefined
-      const propertyName = Node.isPropertyAccessExpression(callee) ? callee.getNameNode().getText() : undefined
+      const callee = Node.isCallExpression(call) ? call.expression : undefined
+      const propertyName = Node.isPropertyAccessExpression(callee) ? callee.name.getText() : undefined
       const wantsValue = type === 'tokenValue'
 
       if (wantsValue !== (propertyName === 'value')) {
@@ -1232,7 +1235,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
 
       // Everything after the path is dead once the token resolves, but only inert
       // arguments are provably free to delete — see `isInertArgument`.
-      const extraArguments = Node.isCallExpression(call) ? call.getArguments().slice(1) : []
+      const extraArguments = Node.isCallExpression(call) ? call.arguments.slice(1) : []
       if (!extraArguments.every(isInertArgument)) {
         skipped.push({ name, reason: 'dynamic', start, end })
         continue
@@ -1318,18 +1321,18 @@ export const foldSource = (options: FoldOptions): FoldResult => {
           let inlineSlot: string | undefined
           let inlineEnd = end
           if (Array.isArray(entry?.config.slots)) {
-            const parent = call.getParent()
-            if (Node.isPropertyAccessExpression(parent) && parent.getExpression() === call) {
+            const parent = call.parent
+            if (Node.isPropertyAccessExpression(parent) && parent.expression === call) {
               const accessed = parent.getName()
               if (entry.config.slots.includes(accessed)) {
                 inlineSlot = accessed
                 inlineEnd = parent.getEnd()
               }
-            } else if (Node.isElementAccessExpression(parent) && parent.getExpression() === call) {
-              const argument = parent.getArgumentExpression()
+            } else if (Node.isElementAccessExpression(parent) && parent.expression === call) {
+              const argument = parent.argumentExpression
               const accessed =
                 argument && (Node.isStringLiteral(argument) || Node.isNoSubstitutionTemplateLiteral(argument))
-                  ? argument.getLiteralValue()
+                  ? literalValueOf(argument)
                   : undefined
               if (typeof accessed === 'string' && entry.config.slots.includes(accessed)) {
                 inlineSlot = accessed
@@ -1465,12 +1468,12 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     // wrong class. So this fires only for a `recipe` whose accessed property names a slot
     // the recipe declares — `.raw`, `.length` and a misspelled slot all leave the range at
     // the call, where they fold exactly as they did before.
-    const memberParent = call.getParent()
+    const memberParent = call.parent
     const accessed =
-      type === 'recipe' && Node.isPropertyAccessExpression(memberParent) && memberParent.getExpression() === call
+      type === 'recipe' && Node.isPropertyAccessExpression(memberParent) && memberParent.expression === call
         ? memberParent
         : undefined
-    const accessedName = accessed?.getNameNode().getText()
+    const accessedName = accessed?.name.getText()
     const declaredSlots = accessed
       ? ((ctx.recipes.getConfig(name) as { slots?: string[] } | undefined)?.slots ?? [])
       : []
@@ -1507,7 +1510,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     // A call written with no arguments has no argument box to be static about: the parser
     // stores a fallback, which `isStaticBox` rejects. The selection is still fully known —
     // it is every default — so `buttonStyle()` folds like the `buttonStyle({})` it means.
-    const noArguments = Node.isCallExpression(call) && call.getArguments().length === 0 && item.data.length === 1
+    const noArguments = Node.isCallExpression(call) && call.arguments.length === 0 && item.data.length === 1
 
     if ((!noArguments && !isStaticBox(item.box)) || !hasStyles(item.data) || !argumentsAccountedFor(call, item.box)) {
       skipped.push({ name, reason: 'dynamic', start, end })
@@ -1560,8 +1563,8 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       for (const declaration of sourceFile.getImportDeclarations()) {
         if (declaration.isTypeOnly() || !isBambooCssModule(declaration.getModuleSpecifierValue())) continue
         for (const named of declaration.getNamedImports()) {
-          if (named.isTypeOnly() || named.getNameNode().getText() !== 'cx') continue
-          cxBindings.add((named.getAliasNode() ?? named.getNameNode()).getText())
+          if (named.isTypeOnly() || named.name.getText() !== 'cx') continue
+          cxBindings.add((named.getAliasNode() ?? named.name).getText())
         }
       }
 
@@ -1572,7 +1575,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       // `cxBindings.has(...)` that is false every time. The same reasoning defers the identifier
       // index in `reportRuntimeBindings`; this walk simply never had the guard.
       for (const call of cxBindings.size ? sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression) : []) {
-        const callee = call.getExpression()
+        const callee = call.expression
         if (!Node.isIdentifier(callee) || !cxBindings.has(callee.getText()) || isShadowed(call, callee.getText())) {
           continue
         }
@@ -1606,12 +1609,12 @@ export const foldSource = (options: FoldOptions): FoldResult => {
           }
 
           if (Node.isStringLiteral(arg) || Node.isNoSubstitutionTemplateLiteral(arg)) {
-            parts.push({ kind: 'class', value: arg.getLiteralValue() })
+            parts.push({ kind: 'class', value: literalValueOf(arg) })
             return true
           }
 
           if (Node.isArrayLiteralExpression(arg)) {
-            for (const element of arg.getElements()) {
+            for (const element of arg.elements) {
               if (Node.isSpreadElement(element) || !take(element)) return false
             }
             return true
@@ -1619,10 +1622,10 @@ export const foldSource = (options: FoldOptions): FoldResult => {
 
           // Values the runtime `cx` ignores and whose evaluation is inert.
           if (
-            arg.getKind() === SyntaxKind.FalseKeyword ||
-            arg.getKind() === SyntaxKind.TrueKeyword ||
+            arg.kind === SyntaxKind.FalseKeyword ||
+            arg.kind === SyntaxKind.TrueKeyword ||
             Node.isNumericLiteral(arg) ||
-            arg.getKind() === SyntaxKind.NullKeyword ||
+            arg.kind === SyntaxKind.NullKeyword ||
             (Node.isIdentifier(arg) && arg.getText() === 'undefined')
           ) {
             return true
@@ -1631,7 +1634,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
           return false
         }
 
-        for (const arg of call.getArguments()) {
+        for (const arg of call.arguments) {
           if (take(arg)) continue
           supported = false
           break
@@ -1936,7 +1939,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     for (const access of recipeSourceFile.getDescendantsOfKind(SyntaxKind.PropertyAccessExpression)) {
       if (access.getName() !== 'splitVariantProps') continue
 
-      const target = access.getExpression()
+      const target = access.expression
       if (!Node.isIdentifier(target)) continue
       if (isShadowed(access, target.getText())) continue
 
@@ -1957,10 +1960,10 @@ export const foldSource = (options: FoldOptions): FoldResult => {
 
       if (!entry) continue
 
-      const call = access.getParent()
-      if (!Node.isCallExpression(call) || call.getExpression() !== access) continue
+      const call = access.parent
+      if (!Node.isCallExpression(call) || call.expression !== access) continue
 
-      const args = call.getArguments()
+      const args = call.arguments
       if (args.length !== 1) continue
 
       const start = call.getStart()
@@ -2020,8 +2023,8 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       if (declaration.isTypeOnly()) continue
       for (const named of declaration.getNamedImports()) {
         if (named.isTypeOnly()) continue
-        if ((named.getAliasNode() ?? named.getNameNode()).getText() === binding) {
-          return named.getAliasNode() ?? named.getNameNode()
+        if ((named.getAliasNode() ?? named.name).getText() === binding) {
+          return named.getAliasNode() ?? named.name
         }
       }
     }
@@ -2078,7 +2081,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       const definition = entry?.box?.getNode?.()
       const declaredHere = definition?.getSourceFile() === sourceFile
       const nameNode = declaredHere
-        ? definition?.getFirstAncestorByKind(SyntaxKind.VariableDeclaration)?.getNameNode()
+        ? definition?.getFirstAncestorByKind(SyntaxKind.VariableDeclaration)?.name
         : importSpecifierFor(sourceFile, binding)
 
       if (!nameNode || !Node.isIdentifier(nameNode)) continue
@@ -2131,14 +2134,14 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     })
 
     for (const call of runtimeCalls) {
-      const callee = call.getExpression()
-      const argument = call.getArguments()[0]
+      const callee = call.expression
+      const argument = call.arguments[0]
       if (!argument || (!Node.isStringLiteral(argument) && !Node.isNoSubstitutionTemplateLiteral(argument))) {
         continue
       }
-      if (!matchesModule(argument.getLiteralValue(), bambooModules)) continue
+      if (!matchesModule(literalValueOf(argument), bambooModules)) continue
 
-      const isDynamicImport = callee.getKind() === SyntaxKind.ImportKeyword
+      const isDynamicImport = callee.kind === SyntaxKind.ImportKeyword
       const isRequire = Node.isIdentifier(callee) && callee.getText() === 'require' && !isShadowed(call, 'require')
       if (!isDynamicImport && !isRequire) continue
 
@@ -2154,11 +2157,11 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       if (declaration.isTypeOnly()) continue
       const reference = declaration.getModuleReference()
       if (!Node.isExternalModuleReference(reference)) continue
-      const expression = reference.getExpression()
+      const expression = reference.expression
       if (
         !expression ||
         !Node.isStringLiteral(expression) ||
-        !matchesModule(expression.getLiteralValue(), bambooModules)
+        !matchesModule(literalValueOf(expression), bambooModules)
       ) {
         continue
       }
@@ -2179,9 +2182,9 @@ export const foldSource = (options: FoldOptions): FoldResult => {
 
       for (const named of declaration.getNamedImports()) {
         if (named.isTypeOnly()) continue
-        const imported = named.getNameNode().getText()
+        const imported = named.name.getText()
         if (PERMITTED_BINDINGS.has(imported)) continue
-        watched.set((named.getAliasNode() ?? named.getNameNode()).getText(), imported)
+        watched.set((named.getAliasNode() ?? named.name).getText(), imported)
       }
 
       const namespace = declaration.getNamespaceImport()
@@ -2212,7 +2215,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
 
       for (const named of declaration.getNamedExports()) {
         if (named.isTypeOnly()) continue
-        const imported = named.getNameNode().getText()
+        const imported = named.name.getText()
         if (PERMITTED_BINDINGS.has(imported)) continue
 
         skipped.push({ name: imported, reason: 'runtime-binding', start: named.getStart(), end: named.getEnd() })
@@ -2224,12 +2227,12 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     // The identifier walk cannot see it: an export specifier is excluded there to keep the
     // single-statement form above from being counted twice.
     for (const declaration of sourceFile.getExportDeclarations()) {
-      if (declaration.isTypeOnly() || declaration.getModuleSpecifier()) continue
+      if (declaration.isTypeOnly() || declaration.moduleSpecifier) continue
 
       for (const named of declaration.getNamedExports()) {
         if (named.isTypeOnly()) continue
 
-        const imported = watched.get(named.getNameNode().getText())
+        const imported = watched.get(named.name.getText())
         if (imported === undefined) continue
 
         skipped.push({ name: imported, reason: 'runtime-binding', start: named.getStart(), end: named.getEnd() })

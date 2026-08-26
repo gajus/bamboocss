@@ -17,8 +17,8 @@ import type {
   TypeLiteralNode,
   TypeNode,
   VariableDeclaration,
-} from 'ts-morph'
-import { Node, ts } from 'ts-morph'
+} from '@bamboocss/ts-ast'
+import { Node, ts, literalValueOf } from '@bamboocss/ts-ast'
 import { box } from './box'
 import { clearEvaluateNodeCache, safeEvaluateNode } from './evaluate-node'
 import { findIdentifierValueDeclaration } from './find-identifier-value-declaration'
@@ -121,7 +121,7 @@ function maybeBoxNodeUncached(
 
   // <Box color="xxx" /> or <Box color={`xxx`} />
   if (Node.isStringLiteral(node) || Node.isNoSubstitutionTemplateLiteral(node)) {
-    const value = trimWhitespace(node.getLiteralValue())
+    const value = trimWhitespace(literalValueOf(node))
     return cache(box.literal(value, node, stack))
   }
 
@@ -131,13 +131,13 @@ function maybeBoxNodeUncached(
 
   // <Box truncate={true} /> or <Box truncate={false} />
   if (Node.isTrueLiteral(node) || Node.isFalseLiteral(node)) {
-    const value = node.getLiteralValue()
+    const value = literalValueOf(node)
     return cache(box.literal(value, node, stack))
   }
 
   // <Box color={123} />
   if (Node.isNumericLiteral(node)) {
-    const value = node.getLiteralValue()
+    const value = literalValueOf(node)
     return cache(box.literal(value, node, stack))
   }
 
@@ -148,8 +148,8 @@ function maybeBoxNodeUncached(
 
   // <Box mt={-12} />
   if (Node.isPrefixUnaryExpression(node)) {
-    const operand = node.getOperand()
-    const operator = node.getOperatorToken()
+    const operand = node.operand
+    const operator = node.operatorToken
     const boxNode = maybeBoxNode(operand, stack, ctx)
     if (!box.isNumberLiteral(boxNode)) return
     return cache(operator === ts.SyntaxKind.MinusToken ? box.literal(-Number(boxNode.value), node, stack) : boxNode)
@@ -157,7 +157,7 @@ function maybeBoxNodeUncached(
 
   // <ColorBox color={['red.300', 'green.400']} />
   if (Node.isArrayLiteralExpression(node)) {
-    const boxNodes = node.getElements().map((element) => {
+    const boxNodes = node.elements.map((element) => {
       return maybeBoxNode(element, stack, ctx) ?? cache(box.unresolvable(element, stack))
     }) as BoxNode[]
 
@@ -203,7 +203,7 @@ function maybeBoxNodeUncached(
       return cache(box.unresolvable(node, stack))
     }
 
-    const condExpr = unwrapExpression(node.getCondition())
+    const condExpr = unwrapExpression(node.condition)
 
     const condBoxNode =
       (Node.isIdentifier(condExpr)
@@ -215,19 +215,19 @@ function maybeBoxNodeUncached(
 
     const isFromDefaultBinding = condValue.getStack().some((node) => Node.isBindingElement(node))
     if (box.isUnresolvable(condValue) || box.isConditional(condValue) || isFromDefaultBinding) {
-      const whenTrueExpr = unwrapExpression(node.getWhenTrue())
-      const whenFalseExpr = unwrapExpression(node.getWhenFalse())
+      const whenTrueExpr = unwrapExpression(node.whenTrue)
+      const whenFalseExpr = unwrapExpression(node.whenFalse)
       return cache(maybeResolveConditionalExpression({ whenTrueExpr, whenFalseExpr, node, stack }, ctx))
     }
 
     if (condValue.value) {
-      const whenTrueExpr = unwrapExpression(node.getWhenTrue())
+      const whenTrueExpr = unwrapExpression(node.whenTrue)
       const innerStack = [...stack] as Node[]
       const maybeValue = maybeBoxNode(whenTrueExpr, innerStack, ctx)
       return cache(maybeValue ?? box.unresolvable(whenTrueExpr, stack))
     }
 
-    const whenFalseExpr = unwrapExpression(node.getWhenFalse())
+    const whenFalseExpr = unwrapExpression(node.whenFalse)
     const innerStack = [...stack] as Node[]
 
     const maybeValue = maybeBoxNode(whenFalseExpr, innerStack, ctx)
@@ -239,7 +239,7 @@ function maybeBoxNodeUncached(
   if (Node.isCallExpression(node)) {
     // Check if this is a token() call and resolve it to the actual token value
     if (ctx.tokens) {
-      const expr = node.getExpression()
+      const expr = node.expression
       // The callee up to but not including the method: `token`, an alias like `t`, or the
       // namespaced `ns.token`. Taking only the innermost identifier missed that last one —
       // `ns.token('x')` asked whether `ns` was a token function, which it never is, so a
@@ -256,7 +256,7 @@ function maybeBoxNodeUncached(
 
         if (propertyName === 'value') {
           isValueMethod = true
-          fnName = expr.getExpression().getText()
+          fnName = expr.expression.getText()
         } else {
           fnName = expr.getText()
         }
@@ -266,7 +266,7 @@ function maybeBoxNodeUncached(
       const isTokenFunction = ctx.tokens.isTokenFn ? ctx.tokens.isTokenFn(fnName) : fnName === 'token'
 
       if (isTokenFunction) {
-        const args = node.getArguments()
+        const args = node.arguments
         const tokenPathArg = args[0]
 
         // Resolved through the same machinery as any other value, rather than required to be
@@ -299,7 +299,7 @@ function maybeBoxNodeUncached(
 
   // <ColorBox color={isFocused && "red.400"} />
   if (Node.isBinaryExpression(node)) {
-    const operatorKind = node.getOperatorToken().getKind()
+    const operatorKind = node.operatorToken.kind
 
     if (isPlusSyntax(operatorKind)) {
       const value =
@@ -321,8 +321,8 @@ function maybeBoxNodeUncached(
     }
 
     if (isLogicalSyntax(operatorKind)) {
-      const whenTrueExpr = unwrapExpression(node.getLeft())
-      const whenFalseExpr = unwrapExpression(node.getRight())
+      const whenTrueExpr = unwrapExpression(node.left)
+      const whenFalseExpr = unwrapExpression(node.right)
       const exprObject = {
         whenTrueExpr,
         whenFalseExpr,
@@ -348,7 +348,7 @@ function maybeBoxNodeUncached(
  * Returning `undefined` leaves the call unresolved, exactly as before.
  */
 function literalStringOf(node: Node, stack: Node[], ctx: BoxContext): string | undefined {
-  if (Node.isStringLiteral(node)) return node.getLiteralValue()
+  if (Node.isStringLiteral(node)) return literalValueOf(node)
 
   const resolved = onlyStringLiteral(maybeBoxNode(node, stack, ctx))
   return resolved && typeof resolved.value === 'string' ? resolved.value : undefined
@@ -414,7 +414,7 @@ const maybeResolveConditionalExpression = (
   // whenFalseValue === "never.100"
   if (
     Node.isBinaryExpression(node) &&
-    node.getOperatorToken().getKind() === ts.SyntaxKind.AmpersandAmpersandToken &&
+    node.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken &&
     whenTrueValue &&
     whenFalseValue &&
     box.isLiteral(whenTrueValue) &&
@@ -454,7 +454,7 @@ const findProperty = (node: ObjectLiteralElementLike, propName: string, _stack: 
   const stack = [..._stack]
 
   if (Node.isPropertyAssignment(node)) {
-    const name = node.getNameNode()
+    const name = node.name
 
     if (Node.isIdentifier(name) && name.getText() === propName) {
       stack.push(name)
@@ -467,7 +467,7 @@ const findProperty = (node: ObjectLiteralElementLike, propName: string, _stack: 
     }
 
     if (Node.isComputedPropertyName(name)) {
-      const expression = unwrapExpression(name.getExpression())
+      const expression = unwrapExpression(name.expression)
       const computedPropNameBox = maybePropName(expression, stack, ctx)
       if (!computedPropNameBox) return
 
@@ -479,7 +479,7 @@ const findProperty = (node: ObjectLiteralElementLike, propName: string, _stack: 
   }
 
   if (Node.isShorthandPropertyAssignment(node)) {
-    const name = node.getNameNode()
+    const name = node.name
 
     if (Node.isIdentifier(name) && name.getText() === propName) {
       stack.push(name)
@@ -497,13 +497,13 @@ const getObjectLiteralPropValue = (
   const stack = [..._stack]
   const propName = accessList.pop()!
   const property =
-    initializer.getProperty(propName) ?? initializer.getProperties().find((p) => findProperty(p, propName, stack, ctx))
+    initializer.getProperty(propName) ?? initializer.properties.find((p) => findProperty(p, propName, stack, ctx))
 
   if (!property) return
   stack.push(property)
 
   if (Node.isPropertyAssignment(property)) {
-    const propInit = property.getInitializer()
+    const propInit = property.initializer
     if (!propInit) return
 
     if (Node.isObjectLiteralExpression(propInit)) {
@@ -521,7 +521,7 @@ const getObjectLiteralPropValue = (
   }
 
   if (Node.isShorthandPropertyAssignment(property)) {
-    const identifier = property.getNameNode()
+    const identifier = property.name
 
     if (accessList.length > 0) {
       return maybePropIdentifierValue(identifier, accessList, stack, ctx)
@@ -535,18 +535,18 @@ const getObjectLiteralPropValue = (
 }
 
 const maybeTemplateStringValue = (template: TemplateExpression, stack: Node[], ctx: BoxContext) => {
-  const head = template.getHead()
-  const tail = template.getTemplateSpans()
+  const head = template.head
+  const tail = template.templateSpans
 
   const headValue = maybeStringLiteral(head, stack, ctx)
   if (!headValue) return
 
   const tailValues = tail.map((t) => {
-    const expression = t.getExpression()
+    const expression = t.expression
     const propBox = maybePropName(expression, stack, ctx)
     if (!propBox) return
 
-    const literal = t.getLiteral()
+    const literal = t.literal
     return propBox.value + literal.getLiteralText()
   })
 
@@ -556,11 +556,11 @@ const maybeTemplateStringValue = (template: TemplateExpression, stack: Node[], c
 }
 
 const maybeBindingElementValue = (def: BindingElement, stack: Node[], propName: string, ctx: BoxContext) => {
-  const parent = def.getParent()
+  const parent = def.parent
 
   if (!parent) return
 
-  const grandParent = parent.getParent()
+  const grandParent = parent.parent
   if (!grandParent) return
 
   if (Node.isArrayBindingPattern(parent)) {
@@ -568,13 +568,13 @@ const maybeBindingElementValue = (def: BindingElement, stack: Node[], propName: 
     if (Number.isNaN(index)) return
 
     if (Node.isVariableDeclaration(grandParent)) {
-      const init = grandParent.getInitializer()
+      const init = grandParent.initializer
       if (!init) return
 
       const initializer = unwrapExpression(init)
       if (!Node.isArrayLiteralExpression(initializer)) return
 
-      const element = initializer.getElements()[index + 1]
+      const element = initializer.elements[index + 1]
       if (!element) return
 
       const innerStack = [...stack, initializer, element]
@@ -608,10 +608,10 @@ function maybePropDefinitionValue(def: Node, accessList: string[], _stack: Node[
   const propName = accessList.at(-1)!
 
   if (Node.isVariableDeclaration(def)) {
-    const init = def.getInitializer()
+    const init = def.initializer
 
     if (!init) {
-      const type = def.getTypeNode()
+      const type = def.type
       if (!type) return
 
       if (Node.isTypeLiteral(type)) {
@@ -621,13 +621,13 @@ function maybePropDefinitionValue(def: Node, accessList: string[], _stack: Node[
 
           let propName = accessList.pop()!
           let typeProp = type.getProperty(propName)
-          let typeLiteral = typeProp?.getTypeNode()
+          let typeLiteral = typeProp?.type
 
           while (typeProp && accessList.length > 0 && typeLiteral && Node.isTypeLiteral(typeLiteral)) {
             stack.push(typeProp, typeLiteral)
             propName = accessList.pop()!
             typeProp = typeLiteral.getProperty(propName)
-            typeLiteral = typeProp?.getTypeNode()
+            typeLiteral = typeProp?.type
           }
 
           if (!typeLiteral) return
@@ -659,7 +659,7 @@ function maybePropDefinitionValue(def: Node, accessList: string[], _stack: Node[
       const index = Number(propName)
       if (Number.isNaN(index)) return
 
-      const element = initializer.getElements()[index]
+      const element = initializer.elements[index]
       if (!element) return
 
       _stack.push(initializer)
@@ -683,7 +683,7 @@ function maybePropDefinitionValue(def: Node, accessList: string[], _stack: Node[
     const member = def.getMember(propName)
     if (!member) return
 
-    const initializer = member.getInitializer()
+    const initializer = member.initializer
     if (!initializer) return
 
     const innerStack = [..._stack, initializer]
@@ -728,11 +728,11 @@ const getTypeLiteralNodePropValue = (
     }
   }
 
-  const members = type.getMembers()
+  const members = type.members
   const prop = members.find((member) => Node.isPropertySignature(member) && member.getName() === propName)
 
   if (Node.isPropertySignature(prop) && prop.isReadonly()) {
-    const propType = prop.getTypeNode()
+    const propType = prop.type
     if (!propType) {
       typeLiteralCache.set(type, null)
 
@@ -767,7 +767,7 @@ const getTypeNodeValue = (type: TypeNode, stack: Node[], ctx: BoxContext): Liter
   }
 
   if (Node.isLiteralTypeNode(type)) {
-    const literal = type.getLiteral()
+    const literal = type.literal
     if (Node.isStringLiteral(literal)) {
       const result = literal.getLiteralText()
       typeNodeCache.set(type, result)
@@ -777,12 +777,12 @@ const getTypeNodeValue = (type: TypeNode, stack: Node[], ctx: BoxContext): Liter
   }
 
   if (Node.isTypeLiteral(type)) {
-    const members = type.getMembers()
+    const members = type.members
     if (!members.some((member) => !Node.isPropertySignature(member) || !member.isReadonly())) {
       const props = members as PropertySignature[]
       const entries = props
         .map((member) => {
-          const nameNode = member.getNameNode()
+          const nameNode = member.name
           const nameText = nameNode.getText()
           const name = getNameLiteral(nameNode)
           if (!name) return
@@ -804,16 +804,16 @@ const getTypeNodeValue = (type: TypeNode, stack: Node[], ctx: BoxContext): Liter
 
 const maybeDefinitionValue = (def: Node, stack: Node[], ctx: BoxContext): BoxNode | undefined => {
   if (Node.isShorthandPropertyAssignment(def)) {
-    const propNameNode = def.getNameNode()
+    const propNameNode = def.name
     return maybePropIdentifierValue(propNameNode, [propNameNode.getText()], stack, ctx)
   }
 
   // const staticColor =
   if (Node.isVariableDeclaration(def)) {
-    const init = def.getInitializer()
+    const init = def.initializer
 
     if (!init) {
-      const type = def.getTypeNode()
+      const type = def.type
       if (!type) return
 
       if (Node.isTypeLiteral(type)) {
@@ -834,9 +834,9 @@ const maybeDefinitionValue = (def: Node, stack: Node[], ctx: BoxContext): BoxNod
   }
 
   if (Node.isBindingElement(def)) {
-    const init = def.getInitializer()
+    const init = def.initializer
     if (!init) {
-      const nameNode = def.getPropertyNameNode() ?? def.getNameNode()
+      const nameNode = def.propertyName ?? def.name
       const propName = nameNode.getText()
       const innerStack = [...stack, nameNode]
 
@@ -877,10 +877,10 @@ export const getExportedVarDeclarationWithName = (
   // Every hop of a cross-file value resolution, recorded so a later edit can be verified
   // against exactly what was read — including re-export hops, whose re-resolution is what
   // catches a barrel re-routing a name without the final declaration changing.
-  ctx.recordExportRead?.(sourceFile.getFilePath(), varName)
+  ctx.recordExportRead?.(sourceFile.fileName, varName)
   // Guard the entry rather than the recursive call, so a file re-exporting itself
   // is caught on the way in.
-  const key = `${sourceFile.getFilePath()}:${varName}`
+  const key = `${sourceFile.fileName}:${varName}`
   if (visited.has(key)) return
   visited.add(key)
 
@@ -912,10 +912,10 @@ const resolveExportedName = (name: string, exportDeclaration: ExportDeclaration)
 
   for (const namedExport of namedExports) {
     const alias = namedExport.getAliasNode()
-    const exposedName = (alias ?? namedExport.getNameNode()).getText()
+    const exposedName = (alias ?? namedExport.name).getText()
 
     if (exposedName === name) {
-      return namedExport.getNameNode().getText()
+      return namedExport.name.getText()
     }
   }
 
@@ -936,7 +936,7 @@ export const getModuleSpecifierSourceFile = (declaration: ExportDeclaration | Im
 
   if (!moduleName) return
   const sourceFile = ctx.resolveModule?.(moduleName, declaration.getSourceFile())
-  if (sourceFile) recordModuleDependency(ctx, sourceFile.getFilePath())
+  if (sourceFile) recordModuleDependency(ctx, sourceFile.fileName)
   return sourceFile
 }
 
@@ -991,8 +991,8 @@ export const maybeIdentifierValue = (identifier: Identifier, _stack: Node[], ctx
 }
 
 const tryComputingPlusTokenBinaryExpressionToString = (node: BinaryExpression, stack: Node[], ctx: BoxContext) => {
-  const left = unwrapExpression(node.getLeft())
-  const right = unwrapExpression(node.getRight())
+  const left = unwrapExpression(node.left)
+  const right = unwrapExpression(node.right)
 
   const leftValue = maybePropName(left, stack, ctx)
   const rightValue = maybePropName(right, stack, ctx)
@@ -1008,8 +1008,8 @@ const getElementAccessedExpressionValue = (
   _stack: Node[],
   ctx: BoxContext,
 ): MaybeBoxNodeReturn => {
-  const elementAccessed = unwrapExpression(expression.getExpression())
-  const argExpr = expression.getArgumentExpression()
+  const elementAccessed = unwrapExpression(expression.expression)
+  const argExpr = expression.argumentExpression
   if (!argExpr) return
 
   const arg = unwrapExpression(argExpr)
@@ -1025,7 +1025,7 @@ const getElementAccessedExpressionValue = (
 
   // <ColorBox color={xxx[yyy + "zzz"]} />
   if (Node.isBinaryExpression(arg)) {
-    if (arg.getOperatorToken().getKind() !== ts.SyntaxKind.PlusToken) return
+    if (arg.operatorToken.kind !== ts.SyntaxKind.PlusToken) return
 
     const propName = tryComputingPlusTokenBinaryExpressionToString(arg, stack, ctx) ?? maybePropName(arg, stack, ctx)
 
@@ -1128,8 +1128,8 @@ const getElementAccessedExpressionValue = (
       }
     }
 
-    const whenTrueExpr = unwrapExpression(arg.getWhenTrue())
-    const whenFalseExpr = unwrapExpression(arg.getWhenFalse())
+    const whenTrueExpr = unwrapExpression(arg.whenTrue)
+    const whenFalseExpr = unwrapExpression(arg.whenFalse)
 
     const whenTrueValue = maybePropName(whenTrueExpr, stack, ctx)
     const whenFalseValue = maybePropName(whenFalseExpr, stack, ctx)
@@ -1162,7 +1162,7 @@ const getElementAccessedExpressionValue = (
 }
 
 const getArrayElementValueAtIndex = (array: ArrayLiteralExpression, index: number, stack: Node[], ctx: BoxContext) => {
-  const element = array.getElements()[index]
+  const element = array.elements[index]
   if (!element) return
 
   const value = maybeBoxNode(element, stack, ctx)
@@ -1179,7 +1179,7 @@ const getPropertyAccessedExpressionValue = (
   ctx: BoxContext,
 ): BoxNode | undefined => {
   const propName = expression.getName()
-  const elementAccessed = unwrapExpression(expression.getExpression())
+  const elementAccessed = unwrapExpression(expression.expression)
   const accessList = _accessList.concat(propName)
 
   stack.push(elementAccessed)

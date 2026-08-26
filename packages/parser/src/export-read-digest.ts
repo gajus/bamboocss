@@ -1,6 +1,6 @@
 import { getExportedVarDeclarationWithName, maybeBoxNode, unbox, type BoxContext } from '@bamboocss/extractor'
 import { createHash } from 'node:crypto'
-import type { SourceFile } from 'ts-morph'
+import type { SourceFile } from '@bamboocss/ts-ast'
 
 /**
  * A digest of what one exported name resolves to right now, or `undefined` when the answer

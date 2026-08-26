@@ -1,5 +1,5 @@
-import type { ObjectLiteralElementLike } from 'ts-morph'
-import { Node } from 'ts-morph'
+import type { ObjectLiteralElementLike } from '@bamboocss/ts-ast'
+import { Node } from '@bamboocss/ts-ast'
 import { box } from './box'
 import { maybePropName } from './maybe-box-node'
 import type { BoxContext } from './types'
@@ -9,14 +9,14 @@ export const getPropertyName = (property: ObjectLiteralElementLike, stack: Node[
   if (!property) return
 
   if (Node.isPropertyAssignment(property)) {
-    const node = unwrapExpression(property.getNameNode())
+    const node = unwrapExpression(property.name)
 
     // { propName: "value" }
     if (Node.isIdentifier(node)) return box.from(node.getText(), node, stack)
 
     // { [computed]: "value" }
     if (Node.isComputedPropertyName(node)) {
-      const expression = node.getExpression()
+      const expression = node.expression
       stack.push(expression)
       return maybePropName(expression, stack, ctx)
     }
@@ -31,12 +31,12 @@ export const getPropertyName = (property: ObjectLiteralElementLike, stack: Node[
   }
 
   if (Node.isGetAccessorDeclaration(property)) {
-    const node = unwrapExpression(property.getNameNode())
+    const node = unwrapExpression(property.name)
 
     if (Node.isIdentifier(node)) return box.from(node.getText(), node, stack)
 
     if (Node.isComputedPropertyName(node)) {
-      const expression = node.getExpression()
+      const expression = node.expression
       stack.push(expression)
       return maybePropName(expression, stack, ctx)
     }

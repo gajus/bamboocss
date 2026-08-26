@@ -61,6 +61,7 @@
     "@bamboocss/reporter": "workspace:*",
     "@bamboocss/shared": "workspace:*",
     "@bamboocss/token-dictionary": "workspace:*",
+    "@bamboocss/ts-ast": "workspace:*",
     "@bamboocss/types": "workspace:*",
     "chokidar": "5.0.0",
     "fast-glob": "3.3.3",

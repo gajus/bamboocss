@@ -1,4 +1,4 @@
-import type { ExportDeclaration, ImportDeclaration } from 'ts-morph'
+import type { ExportDeclaration, ImportDeclaration } from '@bamboocss/ts-ast'
 
 /**
  * Both declaration kinds carry a specifier, and `export { x } from './m'` is how a barrel

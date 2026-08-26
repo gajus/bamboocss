@@ -1,6 +1,6 @@
 import { type BoxNode, box, unwrapExpression } from '@bamboocss/extractor'
 import type { ResultItem } from '@bamboocss/types'
-import { Node } from 'ts-morph'
+import { Node } from '@bamboocss/ts-ast'
 
 export interface UnresolvedStyle {
   /**
@@ -121,7 +121,7 @@ const writtenProps = (node: Node | undefined): WrittenProps | undefined => {
   // the result.
   let literal = node
   if (literal && Node.isCallExpression(literal)) {
-    const args = literal.getArguments()
+    const args = literal.arguments
     if (args.length !== 1) return undefined
     literal = args[0]
   }
@@ -131,7 +131,7 @@ const writtenProps = (node: Node | undefined): WrittenProps | undefined => {
   const names: string[] = []
   let uncertain = false
 
-  for (const property of literal.getProperties()) {
+  for (const property of literal.properties) {
     if (Node.isPropertyAssignment(property) || Node.isShorthandPropertyAssignment(property)) {
       const name = property.getName()
       // A computed or quoted-dynamic key is not comparable against a resolved key.
@@ -179,7 +179,7 @@ const findUnresolvedInValue = (
   if (!value) return
 
   if (Node.isArrayLiteralExpression(value)) {
-    value.getElements().forEach((element, index) => {
+    value.elements.forEach((element, index) => {
       const at = path ? `${path}.${index}` : String(index)
       // A spread the extractor could not resolve leaves a hole rather than an absence, so
       // the element count still lines up. `slots: [...anatomy.keys(), 'body']` is the shape.
@@ -195,7 +195,7 @@ const findUnresolvedInValue = (
 
   if (!Node.isObjectLiteralExpression(value)) return
 
-  const properties = value.getProperties()
+  const properties = value.properties
   const written: string[] = []
   let uncertain = false
 
@@ -205,9 +205,9 @@ const findUnresolvedInValue = (
       // count as written rather than as something that might have gone missing. Without
       // this, `...{}` and a spread every key of which is overridden beside it both look
       // exactly like a spread the extractor could not resolve.
-      const spread = unwrapExpression(property.getExpression())
+      const spread = unwrapExpression(property.expression)
       if (Node.isObjectLiteralExpression(spread)) {
-        for (const inner of spread.getProperties()) {
+        for (const inner of spread.properties) {
           if (!Node.isPropertyAssignment(inner) && !Node.isShorthandPropertyAssignment(inner)) continue
           const innerName = inner.getName()
           if (!innerName.startsWith('[')) written.push(innerName.replace(/^['"]|['"]$/g, ''))
@@ -249,7 +249,7 @@ const findUnresolvedInValue = (
     const name = property.getName().replace(/^['"]|['"]$/g, '')
     if (name.startsWith('[')) continue
     findUnresolvedInValue(
-      property.getInitializer(),
+      property.initializer,
       (resolved as Record<string, unknown> | undefined)?.[name],
       path ? `${path}.${name}` : name,
       out,
@@ -266,7 +266,7 @@ export const findUnresolvedRecipeStyles = (item: ResultItem): UnresolvedStyle[] 
 
   let argument: Node | undefined = node
   if (Node.isCallExpression(argument)) {
-    const args = argument.getArguments()
+    const args = argument.arguments
     if (args.length !== 1) return []
     argument = args[0]
   }
@@ -286,7 +286,7 @@ export const findUnresolvedRecipeStyles = (item: ResultItem): UnresolvedStyle[] 
   if (!losses.length) return []
 
   const { line, column } = sourceFile.getLineAndColumnAtPos(node.getStart())
-  return losses.map((loss) => ({ column, filePath: sourceFile.getFilePath(), kind: 'recipe' as const, line, ...loss }))
+  return losses.map((loss) => ({ column, filePath: sourceFile.fileName, kind: 'recipe' as const, line, ...loss }))
 }
 
 export const findUnresolvedStyles = (item: ResultItem, kind: 'atomic'): UnresolvedStyle[] => {
@@ -338,7 +338,7 @@ export const findUnresolvedStyles = (item: ResultItem, kind: 'atomic'): Unresolv
   // top of the file, and this now runs for every JSX element and pattern call a grouped
   // build sees — where the answer is almost always that nothing was lost.
   const { line, column } = sourceFile.getLineAndColumnAtPos(node.getStart())
-  const at = { filePath: sourceFile.getFilePath(), line, column }
+  const at = { filePath: sourceFile.fileName, line, column }
 
   return losses.map((loss) => ({ ...at, kind, ...loss }))
 }

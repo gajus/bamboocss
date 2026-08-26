@@ -7,7 +7,7 @@ import {
   ParameterDeclaration,
   VariableDeclaration,
   ts,
-} from 'ts-morph'
+} from '@bamboocss/ts-ast'
 import { getExportedVarDeclarationWithName, getModuleSpecifierSourceFile } from './maybe-box-node'
 import type { BoxContext } from './types'
 
@@ -27,7 +27,7 @@ export function getDeclarationFor(
   stack: Node[],
   ctx: BoxContext,
 ): VariableDeclaration | ParameterDeclaration | FunctionDeclaration | EnumDeclaration | BindingElement | undefined {
-  const parent = node.getParent()
+  const parent = node.parent
   if (!parent) return
 
   const declarationStack = [] as Node[]
@@ -40,13 +40,13 @@ export function getDeclarationFor(
       Node.isFunctionDeclaration(parent) ||
       Node.isEnumDeclaration(parent) ||
       Node.isBindingElement(parent)) &&
-    parent.getNameNode() == node
+    parent.name == node
   ) {
     declarationStack.push(parent)
     declaration = parent
     // `getNameNode()` is the exported name and `getAliasNode()` the local binding,
     // so `import { button as btn }` reaches here as the alias node.
-  } else if (Node.isImportSpecifier(parent) && (parent.getNameNode() == node || parent.getAliasNode() == node)) {
+  } else if (Node.isImportSpecifier(parent) && (parent.name == node || parent.getAliasNode() == node)) {
     if (ctx.flags?.skipTraverseFiles) return
 
     const sourceFile = getModuleSpecifierSourceFile(parent.getImportDeclaration(), ctx)
@@ -54,7 +54,7 @@ export function getDeclarationFor(
     if (sourceFile) {
       const exportStack = [parent, sourceFile] as Node[]
       // Always look up the *exported* name, which differs from the local one when aliased.
-      const exportedName = parent.getNameNode().getText()
+      const exportedName = parent.name.getText()
       const maybeVar = getExportedVarDeclarationWithName(exportedName, sourceFile, exportStack, ctx)
 
       if (maybeVar) {
@@ -72,9 +72,9 @@ export function getDeclarationFor(
 }
 
 const getInnermostScope = (from: Node) => {
-  let scope = from.getParent()
+  let scope = from.parent
   while (scope && !isScope(scope)) {
-    scope = scope.getParent()
+    scope = scope.parent
   }
 
   return scope
@@ -110,9 +110,9 @@ const isDeclarationName = (node: Identifier, parent: Node): boolean => {
     Node.isEnumDeclaration(parent) ||
     Node.isBindingElement(parent)
   ) {
-    return parent.getNameNode() == node
+    return parent.name == node
   }
-  return Node.isImportSpecifier(parent) && (parent.getNameNode() == node || parent.getAliasNode() == node)
+  return Node.isImportSpecifier(parent) && (parent.name == node || parent.getAliasNode() == node)
 }
 
 /**
@@ -130,7 +130,7 @@ const declarationIndexFor = (scope: Node): DeclarationIndex => {
   const index: DeclarationIndex = new Map()
   scope.forEachDescendant((node) => {
     if (!Node.isIdentifier(node)) return
-    const parent = node.getParent()
+    const parent = node.parent
     if (!parent || !isDeclarationName(node, parent)) return
     const name = node.getText()
     const declared = index.get(name)
@@ -172,8 +172,8 @@ export function findIdentifierValueDeclaration(
       if (!maybeDeclaration) continue
 
       if (Node.isParameterDeclaration(maybeDeclaration)) {
-        const initializer = maybeDeclaration.getInitializer()
-        const typeNode = maybeDeclaration.getTypeNode()
+        const initializer = maybeDeclaration.initializer
+        const typeNode = maybeDeclaration.type
         if (initializer) {
           innerStack.push(...declarationStack.concat(initializer))
         } else if (typeNode && Node.isTypeLiteral(typeNode)) {

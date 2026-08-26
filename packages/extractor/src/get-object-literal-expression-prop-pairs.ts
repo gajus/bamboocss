@@ -1,5 +1,5 @@
-import type { ObjectLiteralExpression } from 'ts-morph'
-import { Node } from 'ts-morph'
+import type { ObjectLiteralExpression } from '@bamboocss/ts-ast'
+import { Node } from '@bamboocss/ts-ast'
 import { box } from './box'
 import { BoxNodeConditional, type BoxNode, type BoxNodeMap } from './box-factory'
 import { getPropertyName } from './get-property-name'
@@ -13,7 +13,7 @@ export const getObjectLiteralExpressionPropPairs = (
   ctx: BoxContext,
   matchProp?: (prop: MatchFnPropArgs) => boolean,
 ) => {
-  const properties = expression.getProperties()
+  const properties = expression.properties
 
   if (properties.length === 0) {
     return box.emptyObject(expression, expressionStack)
@@ -46,7 +46,7 @@ export const getObjectLiteralExpressionPropPairs = (
       }
 
       if (Node.isShorthandPropertyAssignment(property)) {
-        const initializer = property.getNameNode()
+        const initializer = property.name
         stack.push(initializer)
 
         const maybeValue = maybeBoxNode(initializer, stack, ctx)
@@ -58,14 +58,14 @@ export const getObjectLiteralExpressionPropPairs = (
 
       let init: Node | undefined
       if (Node.isGetAccessorDeclaration(property)) {
-        const body = property.getBody()
-        init = Node.isBlock(body) ? body.getStatements().at(-1) : undefined
+        const body = property.body
+        init = Node.isBlock(body) ? body.statements.at(-1) : undefined
       } else {
-        init = property.getInitializer()
+        init = property.initializer
       }
       if (!init) return
 
-      const returnExpression = Node.isReturnStatement(init) ? init.getExpression() : undefined
+      const returnExpression = Node.isReturnStatement(init) ? init.expression : undefined
       const initializer = unwrapExpression(returnExpression ?? init)
       stack.push(initializer)
 
@@ -78,7 +78,7 @@ export const getObjectLiteralExpressionPropPairs = (
     }
 
     if (Node.isSpreadAssignment(property)) {
-      const initializer = unwrapExpression(property.getExpression())
+      const initializer = unwrapExpression(property.expression)
       stack.push(initializer)
 
       const maybeObject = maybeBoxNode(initializer, stack, ctx, matchProp)

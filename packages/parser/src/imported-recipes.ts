@@ -1,6 +1,6 @@
 import type { ImportMap } from '@bamboocss/core'
 import type { ResolveModule } from '@bamboocss/extractor'
-import { ts, type SourceFile } from 'ts-morph'
+import { ts, type SourceFile } from '@bamboocss/ts-ast'
 import { getModuleSpecifierValue } from './get-module-specifier-value'
 
 /**
@@ -66,7 +66,7 @@ const recipeFactoryAliases = (sourceFile: SourceFile, imports: ImportMap): Set<s
     for (const specifier of declaration.getNamedImports()) {
       if (specifier.isTypeOnly()) continue
 
-      const name = specifier.getNameNode().getText()
+      const name = specifier.name.getText()
       if (name !== 'cva' && name !== 'sva') continue
 
       const alias = specifier.getAliasNode()?.getText() || name
@@ -86,7 +86,7 @@ const declaredRecipes = (sourceFile: SourceFile, imports: ImportMap) => {
   const factories = recipeFactoryAliases(sourceFile, imports)
   if (factories.size === 0) return { declared, exported }
 
-  const filePath = sourceFile.getFilePath()
+  const filePath = sourceFile.fileName
 
   for (const statement of sourceFile.compilerNode.statements) {
     if (!ts.isVariableStatement(statement)) continue
@@ -199,7 +199,7 @@ const walkExports = (
     for (const exportSpecifier of declaration.getNamedExports()) {
       if (exportSpecifier.isTypeOnly()) continue
 
-      const name = exportSpecifier.getNameNode().getText()
+      const name = exportSpecifier.name.getText()
       const origin = source.get(name)
       if (origin) names.set(exportSpecifier.getAliasNode()?.getText() || name, origin)
     }
@@ -251,10 +251,10 @@ const walkImports = (
     for (const importSpecifier of named) {
       if (importSpecifier.isTypeOnly()) continue
 
-      const origin = names.get(importSpecifier.getNameNode().getText())
+      const origin = names.get(importSpecifier.name.getText())
       if (!origin) continue
 
-      bindings.set(importSpecifier.getAliasNode()?.getText() || importSpecifier.getNameNode().getText(), origin)
+      bindings.set(importSpecifier.getAliasNode()?.getText() || importSpecifier.name.getText(), origin)
     }
   }
 

@@ -127,6 +127,9 @@ importers:
       '@bamboocss/shared':
         specifier: workspace:*
         version: link:../shared
+      '@bamboocss/ts-ast':
+        specifier: workspace:*
+        version: link:../ts-ast
       '@bamboocss/types':
         specifier: workspace:*
         version: link:../types
@@ -335,6 +338,9 @@ importers:
       '@bamboocss/shared':
         specifier: workspace:*
         version: link:../shared
+      '@bamboocss/ts-ast':
+        specifier: workspace:*
+        version: link:../ts-ast
       ts-evaluator:
         specifier: 2.0.0
         version: 2.0.0(jsdom@27.2.0)(typescript@7.1.0-dev.20260826.1)
@@ -487,6 +493,9 @@ importers:
       '@bamboocss/token-dictionary':
         specifier: workspace:*
         version: link:../token-dictionary
+      '@bamboocss/ts-ast':
+        specifier: workspace:*
+        version: link:../ts-ast
       '@bamboocss/types':
         specifier: workspace:*
         version: link:../types
@@ -566,6 +575,9 @@ importers:
       '@bamboocss/shared':
         specifier: workspace:*
         version: link:../shared
+      '@bamboocss/ts-ast':
+        specifier: workspace:*
+        version: link:../ts-ast
       '@bamboocss/types':
         specifier: workspace:*
         version: link:../types
@@ -779,6 +791,9 @@ importers:
       '@bamboocss/shared':
         specifier: workspace:*
         version: link:../shared
+      '@bamboocss/ts-ast':
+        specifier: workspace:*
+        version: link:../ts-ast
       '@bamboocss/types':
         specifier: workspace:*
         version: link:../types

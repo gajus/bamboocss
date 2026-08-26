@@ -240,13 +240,13 @@ const collectImports = (sourceFile: SourceFile): CompiledJsxImportMap => {
 
     const variableName = getName(declaration)
     const initializer = declaration.initializer
-    const bundledImport = resolveBundledHelperImport(variableName, initializer)
+    const bundledImport = resolveBundledHelperImport(variableName ?? '', initializer)
 
     if (bundledImport) {
-      bundledNamed.set(variableName, bundledImport)
+      bundledNamed.set(variableName ?? '', bundledImport)
     }
 
-    let mod = getBundledRuntimeModFromName(variableName) ?? resolveBundledNamespaceMod(initializer)
+    let mod = getBundledRuntimeModFromName(variableName ?? '') ?? resolveBundledNamespaceMod(initializer)
 
     if (!mod && initializer && MorphNode.isCallExpression(initializer)) {
       const callee = unwrapExpression(initializer.expression)
@@ -279,7 +279,7 @@ const collectImports = (sourceFile: SourceFile): CompiledJsxImportMap => {
 
     if (!mod) return
 
-    bundledNamespace.set(variableName, mod)
+    bundledNamespace.set(variableName ?? '', mod)
   })
 
   ;(bundledCandidates ? getDescendantsOfKind(sourceFile, SyntaxKind.FunctionDeclaration) : []).forEach(
@@ -310,12 +310,12 @@ const collectImports = (sourceFile: SourceFile): CompiledJsxImportMap => {
 
   sourceFile.getVariableDeclarations().forEach((declaration) => {
     if (!MorphNode.isIdentifier(declaration.name)) return
-    if (bundledNamed.has(getName(declaration))) return
+    if (bundledNamed.has(getName(declaration) ?? '')) return
 
     const bundledAlias = resolveBundledAliasImport(declaration.initializer)
     if (!bundledAlias) return
 
-    bundledNamed.set(getName(declaration), bundledAlias)
+    bundledNamed.set(getName(declaration) ?? '', bundledAlias)
   })
 
   return { named, default: defaultImports, namespace, bundledNamed, bundledNamespace }
@@ -486,7 +486,7 @@ export const createCompiledJsxContext = (sourceFile: SourceFile): CompiledJsxCon
       return resolved
     }
 
-    const directImport = resolveBundledHelperImport(getName(declaration), declaration.initializer)
+    const directImport = resolveBundledHelperImport(getName(declaration) ?? '', declaration.initializer)
     const aliasImport = directImport
       ? { mod: directImport.mod, importedName: directImport.importedName }
       : resolveLocalAlias(declaration.initializer)

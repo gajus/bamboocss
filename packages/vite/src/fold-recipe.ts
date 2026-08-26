@@ -206,14 +206,14 @@ export const ensureRecipeHelperImport = (
 
       if (nameNodeOf(named).getText() === imported) {
         // Somebody else's helper, or one shadowed here, is not the one this calls.
-        if (!isBambooCssModule(mod)) return undefined
+        if (!isBambooCssModule(mod ?? '')) return undefined
         const local = (getAliasNode(named) ?? nameNodeOf(named)).getText()
         return isShadowed(call, local) ? undefined : { name: local }
       }
     }
 
-    if (!host && isGeneratedCssModule(mod) && getNamedImports(declaration).length > 0) host = declaration
-    if (!subpathModule) subpathModule = helperModuleFromSubpath?.(mod)
+    if (!host && isGeneratedCssModule(mod ?? '') && getNamedImports(declaration).length > 0) host = declaration
+    if (!subpathModule) subpathModule = helperModuleFromSubpath?.(mod ?? '')
   }
 
   // A subpath spelling is only reached for when there is no barrel to extend, so a file that
@@ -375,7 +375,7 @@ export const lowerRecipeCall = (
         // `{ tone }`, the idiomatic spelling. The name is the expression.
         if (Node.isShorthandPropertyAssignment(property)) {
           // Last write wins, as the object literal itself would evaluate.
-          dynamicAxes.set(getName(property), getName(property))
+          dynamicAxes.set(getName(property) ?? '', getName(property))
           delete selection[getName(property)]
           continue
         }

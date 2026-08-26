@@ -1217,7 +1217,7 @@ const getPropertyAccessedExpressionValue = (
     }
 
     if (box.isMap(leftElementAccessed)) {
-      const propValue = leftElementAccessed.value.get(propName)
+      const propValue = leftElementAccessed.value.get(propName ?? '')
       return box.from(propValue, expression, stack)
     }
   }

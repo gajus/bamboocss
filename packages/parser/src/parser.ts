@@ -389,7 +389,7 @@ export function createParser(context: ParserOptions) {
           .when(file.isValidPattern, (name) => {
             result.queryList.forEach((query) => {
               if (query.kind === 'call-expression') {
-                parserResult.setPattern(name, {
+                parserResult.setPattern(name ?? '', {
                   name,
                   box: (query.box.value[0] as BoxNodeMap) ?? box.fallback(query.box),
                   data: combineResult(unbox(query.box.value[0])),
@@ -401,7 +401,7 @@ export function createParser(context: ParserOptions) {
           .when(file.isValidRecipe, (name) => {
             result.queryList.forEach((query) => {
               if (query.kind === 'call-expression') {
-                parserResult.setRecipe(name, {
+                parserResult.setRecipe(name ?? '', {
                   name,
                   box: (query.box.value[0] as BoxNodeMap) ?? box.fallback(query.box),
                   data: combineResult(unbox(query.box.value[0])),
@@ -436,9 +436,9 @@ export function createParser(context: ParserOptions) {
           const data = combineResult(unbox(query.box))
 
           for (const tag of [name, alias]) {
-            if (!jsx.isJsxTagRecipe(tag)) continue
+            if (!jsx.isJsxTagRecipe(tag ?? '')) continue
 
-            recipes.filter(tag).forEach((recipe) => {
+            recipes.filter(tag ?? '').forEach((recipe) => {
               parserResult.setRecipe(recipe.baseName, { type: 'jsx-recipe', name: tag, box: query.box, data })
             })
             break

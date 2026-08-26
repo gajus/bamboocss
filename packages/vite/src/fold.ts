@@ -976,7 +976,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       if (isTypeOnly(declaration)) continue
 
       const mod = getModuleSpecifierValue(declaration)
-      if (isGeneratedCssModule(mod)) return mod
+      if (isGeneratedCssModule(mod ?? '')) return mod
     }
 
     return undefined
@@ -1583,7 +1583,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     if (sourceFile) {
       const cxBindings = new Set<string>()
       for (const declaration of getImportDeclarations(sourceFile)) {
-        if (isTypeOnly(declaration) || !isBambooCssModule(getModuleSpecifierValue(declaration))) continue
+        if (isTypeOnly(declaration) || !isBambooCssModule(getModuleSpecifierValue(declaration) ?? '')) continue
         for (const named of getNamedImports(declaration)) {
           if (isTypeOnly(named) || nameNodeOf(named).getText() !== 'cx') continue
           cxBindings.add((getAliasNode(named) ?? nameNodeOf(named)).getText())
@@ -2200,7 +2200,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
 
     for (const declaration of getImportDeclarations(sourceFile)) {
       if (isTypeOnly(declaration)) continue
-      if (!matchesModule(getModuleSpecifierValue(declaration), bambooModules)) continue
+      if (!matchesModule(getModuleSpecifierValue(declaration) ?? '', bambooModules)) continue
 
       for (const named of getNamedImports(declaration)) {
         if (isTypeOnly(named)) continue

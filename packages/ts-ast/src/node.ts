@@ -195,3 +195,17 @@ export const getNamedExports = (declaration: Node): Node[] => {
  * node with no name, exactly as the old call did.
  */
 export const nameNodeOf = (node: Node): Node | undefined => (node as { name?: Node }).name
+
+/**
+ * A named child of a node, without narrowing to the kind that declares it.
+ *
+ * The generalisation of `nameNodeOf`, for the same reason: ts-morph declared `getExpression()`,
+ * `getArguments()` and the rest broadly enough to call off any node, while TypeScript 7 puts
+ * each accessor only on the kinds that have it. Narrowing at every such site would mean
+ * inventing a claim about which kinds are expected there — a claim the old code never made and
+ * that would silently drop a node it did not anticipate.
+ *
+ * Returns `undefined` for a node without that child, exactly as the old call did.
+ */
+export const childOf = <T = Node>(node: Node, key: string): T | undefined =>
+  (node as unknown as Record<string, T | undefined>)[key]

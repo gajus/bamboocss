@@ -7,7 +7,6 @@ import type {
   Runtime,
 } from '@bamboocss/types'
 import {
-  FileSystemRefreshResult,
   Project,
   Project as TsProject,
   ProjectOptions as TsProjectOptions,
@@ -1448,7 +1447,7 @@ export class Project {
     return digestExportValue(this.getSourceFile(filePath), exportedName, this.resolveModule, onCrossing)
   }
 
-  reloadSourceFile = (filePath: string): FileSystemRefreshResult | undefined => {
+  reloadSourceFile = (filePath: string): SourceFile | undefined => {
     this.#assertNotLoading()
     this.#ensureSourceFiles()
     // Same reason as `addSourceFile`: this is the watch-mode entry point for an
@@ -1461,7 +1460,10 @@ export class Project {
     this.invalidate(false, sourceFile?.fileName)
     if (!sourceFile) return
     this.invalidateSourcePreparation(filePath, sourceFile)
-    return sourceFile.refreshFromFileSystemSync()
+    // The re-read belongs to the project now: the compiler holds the tree in another process,
+    // so a file refreshes by telling it the bytes moved rather than by asking a node to reload
+    // itself.
+    return this.project.reloadSourceFile(filePath)
   }
 
   reloadSourceFiles = () => {
@@ -1477,7 +1479,7 @@ export class Project {
       const source = this.getSourceFile(file)
       if (source) {
         this.invalidateSourcePreparation(file, source)
-        source.refreshFromFileSystemSync()
+        this.project.reloadSourceFile(file)
       } else {
         this.invalidateSourcePreparation(file)
         this.removedSourcePaths.delete(this.normalizePath(file))

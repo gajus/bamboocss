@@ -1,6 +1,7 @@
 export {
   forEachDescendant,
   getDescendantsOfKind,
+  childOf,
   getDefaultImport,
   getExportDeclarations,
   getFirstAncestor,
@@ -38,3 +39,12 @@ export { NodeFlags, ScriptKind, ScriptTarget, SyntaxKind } from '@typescript/api
  * need editing every time a call site narrows to a kind it did not before.
  */
 export type * from '@typescript/api/unstable/ast'
+
+/**
+ * Types that live on the API surface rather than the AST one.
+ *
+ * `CompilerOptions` describes a project, not a tree, so TypeScript 7 keeps it with the client
+ * rather than with the syntax — but bamboo imports it from the same place it imports nodes,
+ * exactly as it did from ts-morph.
+ */
+export type { CompilerOptions } from '@typescript/api/unstable/sync'

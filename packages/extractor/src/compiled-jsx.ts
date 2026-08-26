@@ -2,6 +2,7 @@ import type { CallExpression, Identifier, Node, SourceFile } from '@bamboocss/ts
 import {
   Node as MorphNode,
   SyntaxKind,
+  childOf,
   getAliasNode,
   getDefaultImport,
   getDescendantsOfKind,
@@ -195,10 +196,10 @@ const collectImports = (sourceFile: SourceFile): CompiledJsxImportMap => {
   const bundledCandidates = mayHoldBundledOutput(sourceFile.getFullText())
 
   ;(bundledCandidates ? getDescendantsOfKind(sourceFile, SyntaxKind.CallExpression) : []).forEach((callExpression) => {
-    const callee = unwrapExpression(callExpression.expression)
+    const callee = unwrapExpression(childOf(callExpression, 'expression'))
     if (!MorphNode.isIdentifier(callee) || callee.getText() !== 'parcelRegister') return
 
-    const [idArg, factoryArg] = callExpression.arguments
+    const [idArg, factoryArg] = childOf(callExpression, 'arguments')
     if (!MorphNode.isStringLiteral(idArg)) return
     if (!MorphNode.isArrowFunction(factoryArg) && !MorphNode.isFunctionExpression(factoryArg)) return
 

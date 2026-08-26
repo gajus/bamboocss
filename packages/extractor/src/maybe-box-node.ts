@@ -10,7 +10,7 @@ import type {
   ObjectLiteralElementLike,
   ObjectLiteralExpression,
   PropertyAccessExpression,
-  PropertySignature,
+  PropertySignatureDeclaration,
   SourceFile,
   SyntaxKind,
   TemplateExpression,
@@ -790,7 +790,7 @@ const getTypeNodeValue = (type: TypeNode, stack: Node[], ctx: BoxContext): Liter
   if (Node.isTypeLiteral(type)) {
     const members = type.members
     if (!members.some((member) => !Node.isPropertySignature(member) || !member.isReadonly())) {
-      const props = members as PropertySignature[]
+      const props = members as PropertySignatureDeclaration[]
       const entries = props
         .map((member) => {
           const nameNode = member.name

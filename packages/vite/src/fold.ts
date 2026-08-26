@@ -9,6 +9,7 @@ import { dirname, relative, resolve as resolvePath } from 'node:path'
 import {
   Node,
   SyntaxKind,
+  childOf,
   forEachDescendant,
   getAliasNode,
   getDefaultImport,
@@ -1596,7 +1597,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       // `cxBindings.has(...)` that is false every time. The same reasoning defers the identifier
       // index in `reportRuntimeBindings`; this walk simply never had the guard.
       for (const call of cxBindings.size ? getDescendantsOfKind(sourceFile, SyntaxKind.CallExpression) : []) {
-        const callee = call.expression
+        const callee = childOf(call, 'expression')
         if (!Node.isIdentifier(callee) || !cxBindings.has(callee.getText()) || isShadowed(call, callee.getText())) {
           continue
         }
@@ -1655,7 +1656,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
           return false
         }
 
-        for (const arg of call.arguments) {
+        for (const arg of childOf(call, 'arguments')) {
           if (take(arg)) continue
           supported = false
           break
@@ -1960,7 +1961,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     for (const access of getDescendantsOfKind(recipeSourceFile, SyntaxKind.PropertyAccessExpression)) {
       if (getName(access) !== 'splitVariantProps') continue
 
-      const target = access.expression
+      const target = childOf(access, 'expression')
       if (!Node.isIdentifier(target)) continue
       if (isShadowed(access, target.getText())) continue
 
@@ -2248,7 +2249,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     // The identifier walk cannot see it: an export specifier is excluded there to keep the
     // single-statement form above from being counted twice.
     for (const declaration of getExportDeclarations(sourceFile)) {
-      if (isTypeOnly(declaration) || declaration.moduleSpecifier) continue
+      if (isTypeOnly(declaration) || childOf(declaration, 'moduleSpecifier')) continue
 
       for (const named of getNamedExports(declaration)) {
         if (isTypeOnly(named)) continue

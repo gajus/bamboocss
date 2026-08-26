@@ -2,6 +2,7 @@ import { resolveTsPathPattern } from '@bamboocss/config/ts-path'
 import {
   Node,
   SyntaxKind,
+  childOf,
   forEachDescendant,
   getAliasNode,
   getDefaultImport,
@@ -336,12 +337,12 @@ function accountFile(
   // `require('./tokens')` and `await import('./tokens')` bind by destructuring rather than by
   // an import clause, so the bindings above do not cover them.
   for (const call of getDescendantsOfKind(sourceFile, SyntaxKind.CallExpression)) {
-    const callee = call.expression
+    const callee = childOf(call, 'expression')
     const isRequire = Node.isIdentifier(callee) && callee.getText() === 'require'
     const isDynamicImport = callee.kind === SyntaxKind.ImportKeyword
     if (!isRequire && !isDynamicImport) continue
 
-    const argument = call.arguments[0]
+    const argument = childOf(call, 'arguments')[0]
     // A template or a concatenation is not a specifier this can read, and one that is could
     // still be the artifact.
     if (!argument) continue
@@ -369,7 +370,7 @@ function accountFile(
     // declaration the build had deleted.
     if (Node.isExportSpecifier(parent)) {
       const declaration = getFirstAncestorByKind(parent, SyntaxKind.ExportDeclaration)
-      if (declaration && !declaration.moduleSpecifier) decline(identifier, 're-exported')
+      if (declaration && !childOf(declaration, 'moduleSpecifier')) decline(identifier, 're-exported')
       continue
     }
 
@@ -430,7 +431,7 @@ function usesTokenMember(sourceFile: SourceFile, namespace: string) {
   if (properties) return true
 
   return getDescendantsOfKind(sourceFile, SyntaxKind.ElementAccessExpression).some((access) => {
-    if (access.expression.getText() !== namespace) return false
+    if (childOf(access, 'expression').getText() !== namespace) return false
     const argument = access.argumentExpression
     return argument != null && (!Node.isStringLiteral(argument) || literalValueOf(argument) === 'token')
   })

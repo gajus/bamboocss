@@ -665,29 +665,28 @@ export interface IdentifierIndex {
  *
  * `SyntaxKind.Identifier` sorts *below* `SyntaxKind.FirstNode`, which is what ts-morph tests to
  * decide whether it may search the parse tree. For a kind below that line it falls back to
- * materialising the whole **token** tree — every brace, comma and keyword becomes a ts-morph node
+ * materialising the whole **token** tree — every brace, comma and keyword became a ts-morph node
  * on the way to collecting the identifiers. On 55 KB of real tsx that measured 22ms against
- * 0.22ms for the same collection over compiler nodes, and the node cache does not help: a second
+ * 0.22ms for the same collection over compiler nodes, and the node cache did not help: a second
  * call cost the same 22ms.
  *
- * Wrapping is what costs, so only the buckets a caller actually reads are wrapped, on the first
- * read and cached after. Nothing enumerates this index — both callers ask for one name — so the
- * rest is never built. `_getNodeFromCompilerNode` is ts-morph's own memoized wrapper factory, so
- * a node handed back here is the very object `getDescendantsOfKind` would have returned, which
- * `localReferencesTo` depends on: it compares against the declaration by identity.
+ * That cost was ts-morph's wrapper objects, and TypeScript 7 has none — the walk below yields
+ * the compiler's own nodes, which is exactly what `getDescendantsOfKind` would return. So the
+ * lazy per-bucket wrapping this used to do has nothing left to defer, and the buckets are handed
+ * back as collected. `localReferencesTo` still depends on the identity of what comes out, since
+ * it compares each reference against the declaration.
  *
  * JSDoc is walked explicitly. `ts.forEachChild` does not descend into it, while the token path
  * this replaces does, so a name mentioned only in a `@type` annotation was previously found and
  * would otherwise stop being — a silent narrowing of what counts as a surviving reference.
- * Keyed on `escapedText` because that is what ts-morph's `Identifier.getText()` returns: the name
- * as the compiler resolves it, so `\u0062adge` and `badge` share a bucket exactly as before.
+ * Keyed on the identifier's `text` because that is the name as the compiler resolves it, so
+ * `\u0062adge` and `badge` share a bucket exactly as before.
  *
  * Deliberately *not* memoized across passes, unlike the module-scope names beside it. That
- * cache holds strings, which outlive anything; this one holds nodes, and a node does not
- * survive its source file being replaced — `addSourceFile` overwrites, which forgets every
- * node previously taken from it. Keying on the source text does not help, because identical
- * text re-parsed is a fresh tree: the cache hits and returns nodes that throw
- * `Attempted to get information from a node that was removed or forgotten` on the next read.
+ * cache holds strings, which outlive anything; this one holds nodes, and a node belongs to the
+ * tree it was taken from. Keying on the source text does not help, because identical text
+ * re-parsed is a fresh tree: the cache would hit and hand back nodes from a previous snapshot,
+ * which no longer match anything the current pass compares them against.
  */
 export const identifierIndex = (sourceFile: SourceFile): IdentifierIndex => {
   const compilerNodes = new Map<string, Node[]>()
@@ -708,19 +707,7 @@ export const identifierIndex = (sourceFile: SourceFile): IdentifierIndex => {
 
   ts.forEachChild(sourceFile, collect)
 
-  const wrapped = new Map<string, Node[]>()
-  const wrap = sourceFile as unknown as { _getNodeFromCompilerNode: (node: Node) => Node }
-
-  return {
-    get: (name) => {
-      const known = wrapped.get(name)
-      if (known) return known
-
-      const nodes = (compilerNodes.get(name) ?? []).map((node) => wrap._getNodeFromCompilerNode(node))
-      wrapped.set(name, nodes)
-      return nodes
-    },
-  }
+  return { get: (name) => compilerNodes.get(name) ?? [] }
 }
 
 export const localReferencesTo = (index: IdentifierIndex, name: string, declaration: Node): Node[] => {

@@ -1,8 +1,16 @@
-import { Reporter, formatRecipeReport, formatTokenReport, type ReportFormat } from '@bamboocss/reporter'
+import type { ReportFormat } from '@bamboocss/reporter'
 import type { AnalysisOptions } from '@bamboocss/types'
 import type { BambooContext } from './create-context'
 
-export function analyze(ctx: BambooContext, options: AnalysisOptions = {}) {
+/**
+ * `analyze` is one CLI command, but this module is reachable from `@bamboocss/node`'s index,
+ * so a static import made every consumer of that index — the CLI on any command, and the Vite
+ * plugin on every build — load the reporter and its table formatters to run neither. Loading
+ * it here keeps that off the path of everything that is not the `analyze` command.
+ */
+export async function analyze(ctx: BambooContext, options: AnalysisOptions = {}) {
+  const { Reporter, formatRecipeReport, formatTokenReport } = await import('@bamboocss/reporter')
+
   const reporter = new Reporter(ctx, {
     project: ctx.project,
     getRelativePath: ctx.runtime.path.relative,

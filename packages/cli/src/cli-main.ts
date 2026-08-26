@@ -21,7 +21,6 @@ import type { Config, CssArtifactType } from '@bamboocss/types'
 import { cac } from 'cac'
 import { join, resolve } from 'path'
 import { version } from '../package.json'
-import { interactive } from './interactive'
 import type {
   AnalyzeCommandFlags,
   CodegenCommandFlags,
@@ -91,6 +90,10 @@ export async function main() {
       let options: Partial<InitCommandFlags> = {}
 
       if (initFlags.interactive) {
+        // Imported here so `@clack/prompts` stays out of every non-interactive run. `init -i` is
+        // the only path that prompts, and this entry is bundled — a static import put the whole
+        // prompt library in the chunk that `codegen` and the default build command parse.
+        const { interactive } = await import('./interactive')
         options = await interactive({ cwd: resolve(initFlags.cwd ?? '') })
       }
 
@@ -379,7 +382,7 @@ export async function main() {
         configPath,
       })
 
-      const result = analyze(ctx)
+      const result = await analyze(ctx)
 
       if (flags?.outfile && typeof flags.outfile === 'string') {
         await result.writeReport(flags.outfile)

@@ -136,7 +136,7 @@ export function createMcpServer(options: CreateMcpServerOptions) {
       },
     },
     async ({ scope }) => {
-      const result = analyze(ctx)
+      const result = await analyze(ctx)
       const includeTokens = !scope || scope === 'all' || scope === 'token'
       const includeRecipes = !scope || scope === 'all' || scope === 'recipe'
 

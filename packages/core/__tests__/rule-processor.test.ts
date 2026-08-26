@@ -1007,8 +1007,8 @@ describe('rule processor', () => {
       }
 
       @layer utilities {
-        .trs_all_\\.3s_ease-in-out {
-          transition: all .3s ease-in-out;
+        .trs_all_0\\.3s_ease-in-out {
+          transition: all 0.3s ease-in-out;
       }
 
         .d_none {
@@ -1029,8 +1029,8 @@ describe('rule processor', () => {
           background-image: linear-gradient(var(--gradient-stops));
       }
 
-        .grad-from_rgb\\(200_200_200_\\/_\\.4\\) {
-          --gradient-from: rgb(200 200 200 / .4);
+        .grad-from_rgb\\(200_200_200_\\/_0\\.4\\) {
+          --gradient-from: rgb(200 200 200 / 0.4);
       }
 
         .h_100\\% {

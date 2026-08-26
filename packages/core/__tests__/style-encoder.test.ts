@@ -522,12 +522,12 @@ describe('style encoder', () => {
     expect(result.toCss()).toMatchInlineSnapshot(`
       "@layer recipes {
         .navbar[data-part="blur"] {
-          box-shadow: 0 2px 4px rgba(0,0,0,.02),0 1px 0 rgba(0,0,0,.06);
+          box-shadow: 0 2px 4px rgba(0,0,0,0.02),0 1px 0 rgba(0,0,0,0.06);
       }
 
         [data-theme=dark] .navbar[data-part="blur"],.dark .navbar[data-part="blur"],.navbar[data-part="blur"].dark,.navbar[data-part="blur"][data-theme=dark] {
           background: dark;
-          box-shadow: 0 -1px 0 rgba(255,255,255,.1) inset;
+          box-shadow: 0 -1px 0 rgba(255,255,255,0.1) inset;
       }
 
         @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
@@ -538,7 +538,7 @@ describe('style encoder', () => {
       }
 
           [data-theme=dark] .navbar[data-part="blur"],.dark .navbar[data-part="blur"],.navbar[data-part="blur"].dark,.navbar[data-part="blur"][data-theme=dark] {
-            background-color: hsla(0,0%,7%,.8) !important;
+            background-color: hsla(0,0%,7%,0.8) !important;
       }
       }
       }"

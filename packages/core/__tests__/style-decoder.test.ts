@@ -1605,7 +1605,7 @@ describe('style decoder', () => {
       {
         "atomic": Set {
           {
-            "className": "trs_all_\\.3s_ease-in-out",
+            "className": "trs_all_0\\.3s_ease-in-out",
             "conditions": undefined,
             "entry": {
               "prop": "transition",
@@ -1614,8 +1614,8 @@ describe('style decoder', () => {
             "hash": "transition]___[value:all .3s ease-in-out",
             "layer": undefined,
             "result": {
-              ".trs_all_\\.3s_ease-in-out": {
-                "transition": "all .3s ease-in-out",
+              ".trs_all_0\\.3s_ease-in-out": {
+                "transition": "all 0.3s ease-in-out",
               },
             },
             "scoped": false,
@@ -1687,7 +1687,7 @@ describe('style decoder', () => {
             "scoped": false,
           },
           {
-            "className": "grad-from_rgb\\(200_200_200_\\/_\\.4\\)",
+            "className": "grad-from_rgb\\(200_200_200_\\/_0\\.4\\)",
             "conditions": undefined,
             "entry": {
               "prop": "gradientFrom",
@@ -1696,8 +1696,8 @@ describe('style decoder', () => {
             "hash": "gradientFrom]___[value:rgb(200 200 200 / .4)",
             "layer": undefined,
             "result": {
-              ".grad-from_rgb\\(200_200_200_\\/_\\.4\\)": {
-                "--gradient-from": "rgb(200 200 200 / .4)",
+              ".grad-from_rgb\\(200_200_200_\\/_0\\.4\\)": {
+                "--gradient-from": "rgb(200 200 200 / 0.4)",
               },
             },
             "scoped": false,

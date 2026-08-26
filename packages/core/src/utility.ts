@@ -28,6 +28,7 @@ import type {
   UnresolvedTokenSeverity,
   UtilityConfig,
 } from '@bamboocss/types'
+import { canonicalValue } from './canonical-value'
 import type { TransformResult } from './types'
 import { colorMix } from './color-mix'
 import { withCssUnit } from './stringify'
@@ -1087,6 +1088,15 @@ export class Utility {
     // Numbers reach here too, despite the signature.
     if (isString(value) && value.includes(FALLBACK_SEPARATOR)) {
       value = value.replaceAll(FALLBACK_SEPARATOR, '')
+    }
+
+    // One spelling per value, decided here because this is where the class name and the styles
+    // are paired. They are derived from `value` by different routes — `withoutSpace` for the
+    // name, `resolveStyleValue` for the declaration — so folding it after this point would let
+    // the two disagree. Two spellings of one value used to mint two atoms that only became
+    // identical once the optimizer had run, long after the names were compiled into the bundle.
+    if (isString(value)) {
+      value = canonicalValue(value)
     }
 
     const key = this.resolveShorthand(prop)

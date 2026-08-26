@@ -293,15 +293,28 @@ export const getChildIndex = (node: Node): number => {
   return index
 }
 
-/** Every variable declaration in a file, across all its `var`/`let`/`const` statements. */
-export const getVariableDeclarations = (sourceFile: SourceFile): Node[] =>
-  sourceFile.statements
+/**
+ * Every variable declaration directly inside a node, across its `var`/`let`/`const` statements.
+ *
+ * Takes any node that holds statements, not only a source file. ts-morph put this on
+ * `StatementedNode` — a block, a module block and a case clause answered it as readily as a
+ * file — and the scope walk in `compiled-jsx` depends on that: it climbs from an identifier
+ * through every enclosing statement asking each what it declares, so the innermost binding
+ * wins. Narrowing this to source files would answer only at the top of the walk, which is the
+ * one scope a shadowed binding is *not* in.
+ */
+export const getVariableDeclarations = (node: Node | SourceFile): Node[] => {
+  const statements = (node as { statements?: readonly Node[] }).statements
+  if (!statements) return []
+
+  return statements
     .filter((statement) => predicates.isVariableStatement(statement))
     .flatMap((statement) => [...(childOf<{ declarations?: Node[] }>(statement, 'declarationList')?.declarations ?? [])])
+}
 
 /** One variable declaration by name, or `undefined`. */
-export const getVariableDeclaration = (sourceFile: SourceFile, name: string): Node | undefined =>
-  getVariableDeclarations(sourceFile).find((declaration) => getName(declaration) === name)
+export const getVariableDeclaration = (node: Node | SourceFile, name: string): Node | undefined =>
+  getVariableDeclarations(node).find((declaration) => getName(declaration) === name)
 
 /** The `* as ns` clause of an export, or `undefined`. */
 export const getNamespaceExport = (declaration: Node): Node | undefined => {

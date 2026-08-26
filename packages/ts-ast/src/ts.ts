@@ -58,6 +58,16 @@ const isDeclaration = (node: Node): boolean =>
   predicates.isExportAssignment(node) ||
   predicates.isJsxAttribute(node)
 
+/**
+ * An elided slot in an array binding pattern — the gap in `([, value]) => value`.
+ *
+ * TypeScript 6 gave that slot its own node, `OmittedExpression`. TypeScript 7 keeps it as a
+ * `BindingElement` with no `name`, and a `BindingElement` without a name is exactly and only a
+ * hole, since `name` is required for every element that binds anything.
+ */
+const isHole = (node: Node): boolean =>
+  predicates.isBindingElement(node) && (node as { name?: Node }).name === undefined
+
 /** Kinds that may carry a decorator, as TypeScript's `canHaveDecorators` lists them. */
 const canHaveDecorators = (node: Node): boolean =>
   predicates.isParameterDeclaration(node) ||
@@ -79,6 +89,31 @@ const compat = {
 
   isDeclaration,
   canHaveDecorators,
+
+  /**
+   * A hole in an array binding pattern — the elided slot in `([, value]) => value`.
+   *
+   * TypeScript 6 gave that slot its own node, `OmittedExpression`, and ts-evaluator tests for
+   * it to know there is nothing to bind. TypeScript 7 keeps the slot as a `BindingElement` with
+   * no `name` instead, so the 6-era test answers `false` and the evaluator tries to bind a
+   * nameless element — the whole call then fails to evaluate, and a `clsx`-style helper that
+   * filters entries with `([, value]) => …` silently contributes no classes.
+   *
+   * A `BindingElement` without a name is exactly and only a hole: `name` is required for every
+   * element that binds anything.
+   */
+  isOmittedExpression: (node: Node): boolean => predicates.isOmittedExpression(node) || isHole(node),
+
+  /**
+   * A hole is not a binding element, which is the half that actually matters.
+   *
+   * ts-evaluator dispatches on `isBindingElement` *before* `isOmittedExpression`, so leaving
+   * this alone sends every hole into the binding path, where it reads `node.name.text` off an
+   * element that has no name. Declining here is what lets the hole reach the branch written
+   * for it — and it is faithful, not a workaround: in the tree ts-evaluator was written
+   * against, a hole was never a `BindingElement` in the first place.
+   */
+  isBindingElement: (node: Node): boolean => predicates.isBindingElement(node) && !isHole(node),
 
   /**
    * A statement that is not also a declaration.

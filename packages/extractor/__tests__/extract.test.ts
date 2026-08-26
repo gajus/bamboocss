@@ -1,5 +1,4 @@
-import { SourceFile } from 'ts-morph'
-import { afterEach, expect, it } from 'vitest'
+import { expect, it } from 'vitest'
 import type { ComponentMatchers, ExtractOptions } from '../src/types'
 import { createProject, getTestExtract } from './create-project'
 import { unbox } from '../src/unbox'
@@ -7,14 +6,6 @@ import { unbox } from '../src/unbox'
 import { default as ExtractSample } from './samples/ExtractSample?raw'
 
 const project = createProject()
-
-let sourceFile: SourceFile | undefined
-afterEach(() => {
-  if (!sourceFile) return
-
-  if (sourceFile.wasForgotten()) return
-  project.removeSourceFile(sourceFile)
-})
 
 const config: Record<string, string[]> = {
   ColorBox: ['color', 'backgroundColor', 'zIndex', 'fontSize', 'display', 'mobile', 'tablet', 'desktop', 'css'],

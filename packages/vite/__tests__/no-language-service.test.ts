@@ -1,49 +1,59 @@
-import { describe, expect, test } from 'vitest'
+import { LanguageService, Program } from '@typescript/api/unstable/sync'
+import { afterEach, describe, expect, test } from 'vitest'
 import { createFoldFixture } from './fixture'
 
 /**
- * The compiler must never issue a TypeScript language-service query.
+ * The compiler must never ask a question that forces a type checker.
  *
- * The first one forces `synchronizeHostData` -> `createProgram`, which resolves, parses and
- * binds the whole transitive `.d.ts` closure of the project. `createTsProject` sets
- * `skipAddingFilesFromTsConfig`, `skipFileDependencyResolution` and `skipLoadingLibFiles`
- * precisely to avoid that, and none of them govern `createProgram` — so a single query
- * undoes all three. The note on `resolveDeclaration` in `@bamboocss/extractor` spells this
- * out and predicts the failure it causes inside a bundler: "a slow build and then an OOM".
+ * The first such query resolves, parses and binds the whole transitive `.d.ts` closure of the
+ * project. That is not hypothetical: a `findReferencesAsNodes` call in the survivor scan put a
+ * 2,278-file app at 24,081 source-file instances and 4.4 GB of AST and symbols — 80% of the
+ * heap — and the build OOMed at a 6 GB cap. The retained strings were `googleapis`,
+ * `typescript` and `@vue/compiler-sfc`, none of which can contain a reference to a Bamboo
+ * recipe binding.
  *
- * That is not hypothetical. A `findReferencesAsNodes` call in the survivor scan put a
- * 2,278-file app at 24,081 `SourceFileObject` instances and 4.4 GB of AST and symbols —
- * 80% of the heap — and the build OOMed at a 6 GB cap. The retained strings were
- * `googleapis`, `typescript` and `@vue/compiler-sfc`, none of which can contain a reference
- * to a Bamboo recipe binding.
+ * Under ts-morph the query surface was a language service hanging off the project, and this
+ * spied on it directly. TypeScript 7 puts both halves behind the API: `LanguageService` for
+ * reference and completion queries, and the checker-backed diagnostics on `Program`. The
+ * cheap ones are excluded deliberately — `getSyntacticDiagnostics` is a parse-level question
+ * the token accounting relies on, and answering it binds nothing.
  *
- * So this asserts the invariant directly rather than any particular call site. A future
- * `getDefinitions`, `getType` or `findReferences` anywhere in the compile path fails here
- * first, which is where the cost is cheapest to see.
+ * So this still asserts the invariant rather than any particular call site. A future
+ * `getReferencedSymbolsForNode`, `getSemanticDiagnostics` or completion query anywhere in the
+ * compile path fails here first, which is where the cost is cheapest to see.
  */
 describe('the compile path never touches the language service', () => {
-  const QUERIES = [
-    'findReferencesAsNodes',
-    'findReferences',
-    'getDefinitions',
-    'getDefinitionsAtPosition',
-    'getImplementations',
-    'getProgram',
-  ] as const
+  /** Every entry point that binds the program, and none that merely reads the parse. */
+  const QUERIES: Array<[object, string]> = [
+    [LanguageService.prototype, 'getReferencedSymbolsForNode'],
+    [LanguageService.prototype, 'getSignatureUsage'],
+    [LanguageService.prototype, 'getCompletionsAtPosition'],
+    [Program.prototype, 'getBindDiagnostics'],
+    [Program.prototype, 'getSemanticDiagnostics'],
+    [Program.prototype, 'getSuggestionDiagnostics'],
+    [Program.prototype, 'getDeclarationDiagnostics'],
+    [Program.prototype, 'getGlobalDiagnostics'],
+  ]
 
-  const countQueries = (fixture: ReturnType<typeof createFoldFixture>) => {
-    const context = (fixture.ctx.project as unknown as { project: { _context: Record<string, unknown> } }).project
-      ._context
-    const service = context.languageService as Record<string, unknown>
+  const restore: Array<() => void> = []
+  afterEach(() => {
+    for (const undo of restore.splice(0)) undo()
+  })
+
+  const countQueries = () => {
     const seen: string[] = []
 
-    for (const name of QUERIES) {
-      const original = service[name]
+    for (const [target, name] of QUERIES) {
+      const holder = target as Record<string, unknown>
+      const original = holder[name]
       if (typeof original !== 'function') continue
-      service[name] = function (this: unknown, ...args: unknown[]) {
+      holder[name] = function (this: unknown, ...args: unknown[]) {
         seen.push(name)
         return (original as (...a: unknown[]) => unknown).apply(this, args)
       }
+      restore.push(() => {
+        holder[name] = original
+      })
     }
 
     return seen
@@ -65,7 +75,7 @@ describe('the compile path never touches the language service', () => {
 
   test.each(cases)('%s', (_label, body) => {
     const fixture = createFoldFixture()
-    const seen = countQueries(fixture)
+    const seen = countQueries()
 
     fixture.fold(`import { cva } from 'styled-system/css'\n${body}`, 'app/probe.tsx', true)
 
@@ -75,7 +85,7 @@ describe('the compile path never touches the language service', () => {
   test('a consumer importing a recipe from another module', () => {
     const fixture = createFoldFixture()
     fixture.addFiles({ 'app/styles.ts': `import { cva } from 'styled-system/css'\nexport const b = ${RECIPE}\n` })
-    const seen = countQueries(fixture)
+    const seen = countQueries()
 
     fixture.fold(`import { b } from './styles'\nexport const c = (t) => b({ tone: t })\n`, 'app/consumer.tsx', true)
 

@@ -816,6 +816,9 @@ importers:
       '@jridgewell/trace-mapping':
         specifier: ^0.3.31
         version: 0.3.31
+      '@typescript/api':
+        specifier: npm:typescript@7.1.0-dev.20260826.1
+        version: typescript@7.1.0-dev.20260826.1
       vite:
         specifier: 7.2.6
         version: 7.2.6(@types/node@24.10.1)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0)

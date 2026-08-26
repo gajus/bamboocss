@@ -59,6 +59,7 @@
   "devDependencies": {
     "@bamboocss/fixture": "workspace:*",
     "@jridgewell/trace-mapping": "^0.3.31",
+    "@typescript/api": "npm:typescript@7.1.0-dev.20260826.1",
     "vite": "7.2.6"
   },
   "peerDependencies": {

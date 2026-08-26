@@ -112,3 +112,75 @@ export const getImportDeclarations = (sourceFile: SourceFile): ImportDeclaration
  */
 export const getModuleSpecifierValue = (declaration: ImportDeclaration): string | undefined =>
   predicates.isStringLiteral(declaration.moduleSpecifier) ? declaration.moduleSpecifier.text : undefined
+
+/** The export declarations of a source file, without walking past the top level. */
+export const getExportDeclarations = (sourceFile: SourceFile): Node[] =>
+  sourceFile.statements.filter((statement) => predicates.isExportDeclaration(statement))
+
+/** The nearest ancestor of a kind, or `undefined`. */
+export const getFirstAncestorByKind = (node: Node, kind: number): Node | undefined =>
+  getFirstAncestor(node, (ancestor) => ancestor.kind === kind)
+
+/**
+ * A declaration's name, as text.
+ *
+ * ts-morph's `getName()` answered for every named node by walking to whatever held the name;
+ * here the name is a child node, so this reads its text and leaves the caller to decide what an
+ * absent name means. Computed and string-literal names answer with their own text, which is what
+ * a property key needs.
+ */
+export const getName = (node: Node): string | undefined => {
+  const name = (node as { name?: Node }).name
+  if (!name) return undefined
+  if (predicates.isIdentifier(name) || predicates.isStringLiteral(name) || predicates.isNumericLiteral(name)) {
+    return name.text
+  }
+  return name.getText()
+}
+
+/**
+ * A literal's source text, quotes and escapes included.
+ *
+ * The counterpart to `literalValueOf`: that one answers what the literal *means*, this one what
+ * was written. `'a\\nb'` is two characters to the first and six to the second, and a caller that
+ * confuses them either loses an escape or invents one.
+ */
+export const getLiteralText = (node: Node): string => node.getText()
+
+/** 1-based line and column for an offset, for a diagnostic that names a place in a file. */
+export const getLineAndColumnAtPos = (sourceFile: SourceFile, pos: number): { line: number; column: number } => {
+  const upto = sourceFile.text.slice(0, pos)
+  const lastBreak = upto.lastIndexOf('\n')
+  return { line: upto.split('\n').length, column: pos - lastBreak }
+}
+
+/** The named bindings of an import — `import { a, b } from 'x'`. */
+export const getNamedImports = (declaration: Node): Node[] => {
+  const bindings = (declaration as { importClause?: { namedBindings?: Node } }).importClause?.namedBindings
+  return bindings && predicates.isNamedImports(bindings) ? [...bindings.elements] : []
+}
+
+/** The default binding of an import — `import a from 'x'` — or `undefined`. */
+export const getDefaultImport = (declaration: Node): Node | undefined =>
+  (declaration as { importClause?: { name?: Node } }).importClause?.name
+
+/** The namespace binding of an import — `import * as a from 'x'` — or `undefined`. */
+export const getNamespaceImport = (declaration: Node): Node | undefined => {
+  const bindings = (declaration as { importClause?: { namedBindings?: Node } }).importClause?.namedBindings
+  return bindings && predicates.isNamespaceImport(bindings) ? (bindings as { name?: Node }).name : undefined
+}
+
+/** Whether an import or export specifier is `type`-only — `import { type A }`. */
+export const isTypeOnly = (specifier: Node): boolean => (specifier as { isTypeOnly?: boolean }).isTypeOnly === true
+
+/** The local alias of a specifier — the `b` in `import { a as b }` — or `undefined`. */
+export const getAliasNode = (specifier: Node): Node | undefined => {
+  const propertyName = (specifier as { propertyName?: Node }).propertyName
+  return propertyName ? (specifier as { name?: Node }).name : undefined
+}
+
+/** The named specifiers of an export — `export { a, b }`. */
+export const getNamedExports = (declaration: Node): Node[] => {
+  const clause = (declaration as { exportClause?: Node }).exportClause
+  return clause && predicates.isNamedExports(clause) ? [...(clause as { elements: Node[] }).elements] : []
+}

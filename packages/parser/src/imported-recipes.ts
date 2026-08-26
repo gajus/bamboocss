@@ -1,6 +1,16 @@
 import type { ImportMap } from '@bamboocss/core'
 import type { ResolveModule } from '@bamboocss/extractor'
-import { ts, type SourceFile } from '@bamboocss/ts-ast'
+import {
+  SourceFile,
+  getAliasNode,
+  getExportDeclarations,
+  getImportDeclarations,
+  getModuleSpecifierValue,
+  getNamedExports,
+  getNamedImports,
+  isTypeOnly,
+  ts,
+} from '@bamboocss/ts-ast'
 import { getModuleSpecifierValue } from './get-module-specifier-value'
 
 /**
@@ -57,19 +67,19 @@ interface Walk {
 const recipeFactoryAliases = (sourceFile: SourceFile, imports: ImportMap): Set<string> => {
   const aliases = new Set<string>()
 
-  for (const declaration of sourceFile.getImportDeclarations()) {
-    if (declaration.isTypeOnly()) continue
+  for (const declaration of getImportDeclarations(sourceFile)) {
+    if (isTypeOnly(declaration)) continue
 
     const mod = getModuleSpecifierValue(declaration)
     if (!mod) continue
 
-    for (const specifier of declaration.getNamedImports()) {
-      if (specifier.isTypeOnly()) continue
+    for (const specifier of getNamedImports(declaration)) {
+      if (isTypeOnly(specifier)) continue
 
       const name = specifier.name.getText()
       if (name !== 'cva' && name !== 'sva') continue
 
-      const alias = specifier.getAliasNode()?.getText() || name
+      const alias = getAliasNode(specifier)?.getText() || name
       if (!imports.match({ name, alias, mod, kind: 'named' })) continue
 
       aliases.add(alias)
@@ -88,7 +98,7 @@ const declaredRecipes = (sourceFile: SourceFile, imports: ImportMap) => {
 
   const filePath = sourceFile.fileName
 
-  for (const statement of sourceFile.compilerNode.statements) {
+  for (const statement of sourceFile.statements) {
     if (!ts.isVariableStatement(statement)) continue
     // `const` only, for the reason the in-file pre-pass says: a `let` can be reassigned to
     // something that is not a recipe, and a name is registered for the whole file.
@@ -159,8 +169,8 @@ const walkExports = (
     if (!local.has(alias)) local.set(alias, origin)
   }
 
-  for (const declaration of sourceFile.getExportDeclarations()) {
-    if (declaration.isTypeOnly()) continue
+  for (const declaration of getExportDeclarations(sourceFile)) {
+    if (isTypeOnly(declaration)) continue
 
     const specifier = getModuleSpecifierValue(declaration)
     const target = specifier ? resolveModule(specifier, sourceFile) : undefined
@@ -196,12 +206,12 @@ const walkExports = (
       source = walk.names
     }
 
-    for (const exportSpecifier of declaration.getNamedExports()) {
-      if (exportSpecifier.isTypeOnly()) continue
+    for (const exportSpecifier of getNamedExports(declaration)) {
+      if (isTypeOnly(exportSpecifier)) continue
 
       const name = exportSpecifier.name.getText()
       const origin = source.get(name)
-      if (origin) names.set(exportSpecifier.getAliasNode()?.getText() || name, origin)
+      if (origin) names.set(getAliasNode(exportSpecifier)?.getText() || name, origin)
     }
   }
 
@@ -231,10 +241,10 @@ const walkImports = (
   const bindings = new Map<string, RecipeOrigin>()
   let complete = true
 
-  for (const declaration of sourceFile.getImportDeclarations()) {
-    if (declaration.isTypeOnly()) continue
+  for (const declaration of getImportDeclarations(sourceFile)) {
+    if (isTypeOnly(declaration)) continue
 
-    const named = declaration.getNamedImports()
+    const named = getNamedImports(declaration)
     if (named.length === 0) continue
 
     const specifier = getModuleSpecifierValue(declaration)
@@ -249,12 +259,12 @@ const walkImports = (
     if (names.size === 0) continue
 
     for (const importSpecifier of named) {
-      if (importSpecifier.isTypeOnly()) continue
+      if (isTypeOnly(importSpecifier)) continue
 
       const origin = names.get(importSpecifier.name.getText())
       if (!origin) continue
 
-      bindings.set(importSpecifier.getAliasNode()?.getText() || importSpecifier.name.getText(), origin)
+      bindings.set(getAliasNode(importSpecifier)?.getText() || importSpecifier.name.getText(), origin)
     }
   }
 

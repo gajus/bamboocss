@@ -8,11 +8,12 @@ import type {
 } from '@bamboocss/types'
 import {
   FileSystemRefreshResult,
+  Project as TsProject,
+  ProjectOptions as TsProjectOptions,
   ScriptKind,
   SourceFile,
-  Project as TsProject,
+  getModuleSpecifierValue,
   ts,
-  type ProjectOptions as TsProjectOptions,
 } from '@bamboocss/ts-ast'
 import { clearBoxNodeCache, invalidateDependencyPath } from '@bamboocss/extractor'
 import { classifyProject } from './classify'
@@ -917,17 +918,17 @@ export class Project {
       return cached
     }
     const declarations = [
-      ...sourceFile.getImportDeclarations().map((declaration) => ({ declaration, kind: 'import' as const })),
-      ...sourceFile.getExportDeclarations().map((declaration) => ({ declaration, kind: 'export' as const })),
+      ...getImportDeclarations(sourceFile).map((declaration) => ({ declaration, kind: 'import' as const })),
+      ...getExportDeclarations(sourceFile).map((declaration) => ({ declaration, kind: 'export' as const })),
     ]
-      .filter(({ declaration }) => declaration.getModuleSpecifierValue() !== undefined)
+      .filter(({ declaration }) => getModuleSpecifierValue(declaration) !== undefined)
       .sort((left, right) => left.declaration.getStart() - right.declaration.getStart())
 
     const facts: ResolutionFact[] = []
     const pendingCandidates: PendingResolutionCandidate[] = []
     const configurationFiles: ResolutionConfigurationFile[] = []
     for (const [ordinal, { declaration, kind }] of declarations.entries()) {
-      const specifier = declaration.getModuleSpecifierValue()
+      const specifier = getModuleSpecifierValue(declaration)
       if (!specifier) continue
       const resolved = this.resolveSpecifier(specifier, sourceFile)
       if (!resolved.local) continue

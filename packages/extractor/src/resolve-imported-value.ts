@@ -1,5 +1,13 @@
 import type { Expression, Node as TsMorphNode, SourceFile } from '@bamboocss/ts-ast'
-import { Node, SyntaxKind } from '@bamboocss/ts-ast'
+import {
+  Node,
+  SyntaxKind,
+  getAliasNode,
+  getDefaultImport,
+  getDescendantsOfKind,
+  getImportDeclarations,
+  getNamedImports,
+} from '@bamboocss/ts-ast'
 import { getExportedVarDeclarationWithName, getModuleSpecifierSourceFile } from './maybe-box-node'
 import type { BoxContext } from './types'
 import { beginDependencyCapture, replayDependencyCache, type DependencyCacheEntry } from './dependency-cache'
@@ -55,15 +63,15 @@ type Evaluator = (node: Expression, stack: TsMorphNode[], ctx: BoxContext, depth
 const importBindingsFor = (sourceFile: SourceFile) => {
   const bindings = new Map<string, { declaration: TsMorphNode; exportedName: string }>()
 
-  for (const declaration of sourceFile.getImportDeclarations()) {
-    for (const specifier of declaration.getNamedImports()) {
+  for (const declaration of getImportDeclarations(sourceFile)) {
+    for (const specifier of getNamedImports(declaration)) {
       // `getAliasNode()` is the local binding and `getNameNode()` the exported name, so
       // `import { focusRing as ring }` is keyed on `ring` and looked up as `focusRing`.
-      const local = (specifier.getAliasNode() ?? specifier.name).getText()
+      const local = (getAliasNode(specifier) ?? specifier.name).getText()
       bindings.set(local, { declaration, exportedName: specifier.name.getText() })
     }
 
-    const defaultImport = declaration.getDefaultImport()
+    const defaultImport = getDefaultImport(declaration)
     if (defaultImport) bindings.set(defaultImport.getText(), { declaration, exportedName: 'default' })
   }
 
@@ -136,7 +144,7 @@ export const importedEnvironmentFor = (
   // evaluating the helper's arrow directly still needs that binding in its environment.
   // This remains on the failure-only path and the import map makes unrelated identifiers a
   // constant-time miss.
-  const references = node.getDescendantsOfKind(SyntaxKind.Identifier)
+  const references = getDescendantsOfKind(node, SyntaxKind.Identifier)
   if (Node.isIdentifier(node)) references.unshift(node)
   if (!references.length) return
 

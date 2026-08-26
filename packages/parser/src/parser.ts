@@ -4,7 +4,7 @@ import type { Generator } from '@bamboocss/generator'
 import { logger } from '@bamboocss/logger'
 import type { ParserResultConfigureOptions } from '@bamboocss/types'
 import type { SourceFile } from '@bamboocss/ts-ast'
-import { Node, ts } from '@bamboocss/ts-ast'
+import { Node, getImportDeclarations, getLineAndColumnAtPos, getName, ts } from '@bamboocss/ts-ast'
 import { match } from 'ts-pattern'
 import { getImportDeclarations } from './get-import-declarations'
 import { importedRecipeBindings, type RecipeOrigin, type ResolveModule } from './imported-recipes'
@@ -117,7 +117,7 @@ export function createParser(context: ParserOptions) {
     // import, it touches one node per top-level statement. The recursive version measured ~10%
     // of extraction.
     if (file.importsRecipeFactory()) {
-      for (const statement of sourceFile.compilerNode.statements) {
+      for (const statement of sourceFile.statements) {
         // `const` only. A `let` can be reassigned to something that is not a recipe at all,
         // and a name is registered for the file rather than for a binding.
         if (!ts.isVariableStatement(statement)) continue
@@ -132,7 +132,7 @@ export function createParser(context: ParserOptions) {
 
           // The *imported* name, so a project's own `cva` helper is not mistaken for this one
           // — and `matchFn`, so a name that merely reads as `cva` is not either.
-          const imported = file.getName(callee.text)
+          const imported = getName(file, callee.text)
           if (imported !== 'cva' && imported !== 'sva') continue
           if (!file.matchFn(callee.text)) continue
 
@@ -152,7 +152,7 @@ export function createParser(context: ParserOptions) {
      * Defined out here rather than inside `getEvaluateOptions`, which runs per call node.
      */
     const reportUnresolvedRaw = (base: string, at: Node) => {
-      const { line, column } = sourceFile.getLineAndColumnAtPos(at.getStart())
+      const { line, column } = getLineAndColumnAtPos(sourceFile, at.getStart())
       parserResult.unresolved.push({ kind: 'atomic', prop: base, filePath, line, column, reason: 'unresolved-raw' })
     }
 
@@ -223,7 +223,7 @@ export function createParser(context: ParserOptions) {
           // `getName` echoes the identifier back when it is not an import, so the match has
           // to be confirmed against the import list — otherwise a project's own local
           // `fallback` helper would be shadowed by this one.
-          if (!file.match(local) || file.getName(local) !== 'fallback') return evaluateOptions
+          if (!file.match(local) || getName(file, local) !== 'fallback') return evaluateOptions
 
           return {
             environment: Object.assign({}, defaultEnv, { extra: { [local]: fallbackImpl } }),
@@ -278,7 +278,7 @@ export function createParser(context: ParserOptions) {
 
     extractResultByName.forEach((result, alias) => {
       //
-      const name = file.getName(file.normalizeFnName(alias))
+      const name = getName(file, file.normalizeFnName(alias))
 
       logger.debug(`ast:${name}`, name !== alias ? { kind: result.kind, alias } : { kind: result.kind })
 

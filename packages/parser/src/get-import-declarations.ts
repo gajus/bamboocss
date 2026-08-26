@@ -1,6 +1,13 @@
 import { resolveTsPathPattern } from '@bamboocss/config/ts-path'
 import type { ImportResult, ParserOptions } from '@bamboocss/core'
 import type { SourceFile } from '@bamboocss/ts-ast'
+import {
+  getAliasNode,
+  getImportDeclarations,
+  getModuleSpecifierValue,
+  getNamedImports,
+  getNamespaceImport,
+} from '@bamboocss/ts-ast'
 import { getModuleSpecifierValue } from './get-module-specifier-value'
 
 export function getImportDeclarations(context: ParserOptions, sourceFile: SourceFile) {
@@ -8,14 +15,14 @@ export function getImportDeclarations(context: ParserOptions, sourceFile: Source
 
   const importDeclarations: ImportResult[] = []
 
-  sourceFile.getImportDeclarations().forEach((node) => {
+  getImportDeclarations(sourceFile).forEach((node) => {
     const mod = getModuleSpecifierValue(node)
     if (!mod) return
 
     // import { flex, stack } from "styled-system/patterns"
-    node.getNamedImports().forEach((specifier) => {
+    getNamedImports(node).forEach((specifier) => {
       const name = specifier.name.getText()
-      const alias = specifier.getAliasNode()?.getText() || name
+      const alias = getAliasNode(specifier)?.getText() || name
 
       const result: ImportResult = { name, alias, mod, kind: 'named' }
 
@@ -30,7 +37,7 @@ export function getImportDeclarations(context: ParserOptions, sourceFile: Source
     })
 
     // import * as p from "styled-system/patterns
-    const namespace = node.getNamespaceImport()
+    const namespace = getNamespaceImport(node)
     if (namespace) {
       const name = namespace.getText()
       const result: ImportResult = { name, alias: name, mod, kind: 'namespace' }

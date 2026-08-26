@@ -1,5 +1,17 @@
 import type { CallExpression, Identifier, Node, SourceFile } from '@bamboocss/ts-ast'
-import { Node as MorphNode, SyntaxKind, literalValueOf } from '@bamboocss/ts-ast'
+import {
+  Node as MorphNode,
+  SyntaxKind,
+  getAliasNode,
+  getDefaultImport,
+  getDescendantsOfKind,
+  getImportDeclarations,
+  getModuleSpecifierValue,
+  getName,
+  getNamedImports,
+  getNamespaceImport,
+  literalValueOf,
+} from '@bamboocss/ts-ast'
 import { unwrapExpression } from './utils'
 
 type ImportEntry = {
@@ -181,7 +193,7 @@ const collectImports = (sourceFile: SourceFile): CompiledJsxImportMap => {
 
   const bundledCandidates = mayHoldBundledOutput(sourceFile.getFullText())
 
-  ;(bundledCandidates ? sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression) : []).forEach((callExpression) => {
+  ;(bundledCandidates ? getDescendantsOfKind(sourceFile, SyntaxKind.CallExpression) : []).forEach((callExpression) => {
     const callee = unwrapExpression(callExpression.expression)
     if (!MorphNode.isIdentifier(callee) || callee.getText() !== 'parcelRegister') return
 
@@ -200,23 +212,23 @@ const collectImports = (sourceFile: SourceFile): CompiledJsxImportMap => {
     }
   })
 
-  sourceFile.getImportDeclarations().forEach((declaration) => {
-    const mod = declaration.getModuleSpecifierValue()
+  getImportDeclarations(sourceFile).forEach((declaration) => {
+    const mod = getModuleSpecifierValue(declaration)
     if (!mod) return
 
-    const defaultImport = declaration.getDefaultImport()
+    const defaultImport = getDefaultImport(declaration)
     if (defaultImport) {
       defaultImports.set(defaultImport.getText(), mod)
     }
 
-    const namespaceImport = declaration.getNamespaceImport()
+    const namespaceImport = getNamespaceImport(declaration)
     if (namespaceImport) {
       namespace.set(namespaceImport.getText(), mod)
     }
 
-    declaration.getNamedImports().forEach((specifier) => {
+    getNamedImports(declaration).forEach((specifier) => {
       const importedName = specifier.name.getText()
-      const alias = specifier.getAliasNode()?.getText() || importedName
+      const alias = getAliasNode(specifier)?.getText() || importedName
       named.set(alias, { importedName, mod })
     })
   })
@@ -224,7 +236,7 @@ const collectImports = (sourceFile: SourceFile): CompiledJsxImportMap => {
   sourceFile.getVariableDeclarations().forEach((declaration) => {
     if (!MorphNode.isIdentifier(declaration.name)) return
 
-    const variableName = declaration.getName()
+    const variableName = getName(declaration)
     const initializer = declaration.initializer
     const bundledImport = resolveBundledHelperImport(variableName, initializer)
 
@@ -252,7 +264,7 @@ const collectImports = (sourceFile: SourceFile): CompiledJsxImportMap => {
         initializer.properties
           .map((property) => {
             if (MorphNode.isPropertyAssignment(property)) {
-              return property.getName()
+              return getName(property)
             }
           })
           .filter(Boolean) as string[],
@@ -268,11 +280,13 @@ const collectImports = (sourceFile: SourceFile): CompiledJsxImportMap => {
     bundledNamespace.set(variableName, mod)
   })
 
-  ;(bundledCandidates ? sourceFile.getDescendantsOfKind(SyntaxKind.FunctionDeclaration) : []).forEach((declaration) => {
-    const bundledImport = resolveBundledHelperImport(declaration.getName() ?? '', declaration)
-    if (!bundledImport || !declaration.getName()) return
-    bundledNamed.set(declaration.getName()!, bundledImport)
-  })
+  ;(bundledCandidates ? getDescendantsOfKind(sourceFile, SyntaxKind.FunctionDeclaration) : []).forEach(
+    (declaration) => {
+      const bundledImport = resolveBundledHelperImport(getName(declaration) ?? '', declaration)
+      if (!bundledImport || !getName(declaration)) return
+      bundledNamed.set(getName(declaration)!, bundledImport)
+    },
+  )
 
   const resolveBundledAliasImport = (node: Node | undefined): ImportEntry | undefined => {
     if (!node) return
@@ -294,12 +308,12 @@ const collectImports = (sourceFile: SourceFile): CompiledJsxImportMap => {
 
   sourceFile.getVariableDeclarations().forEach((declaration) => {
     if (!MorphNode.isIdentifier(declaration.name)) return
-    if (bundledNamed.has(declaration.getName())) return
+    if (bundledNamed.has(getName(declaration))) return
 
     const bundledAlias = resolveBundledAliasImport(declaration.initializer)
     if (!bundledAlias) return
 
-    bundledNamed.set(declaration.getName(), bundledAlias)
+    bundledNamed.set(getName(declaration), bundledAlias)
   })
 
   return { named, default: defaultImports, namespace, bundledNamed, bundledNamespace }
@@ -462,7 +476,7 @@ export const createCompiledJsxContext = (sourceFile: SourceFile): CompiledJsxCon
     if (!declaration) return
 
     if (MorphNode.isFunctionDeclaration(declaration)) {
-      const imported = resolveBundledHelperImport(declaration.getName() ?? name, declaration)
+      const imported = resolveBundledHelperImport(getName(declaration) ?? name, declaration)
       if (!imported) return
 
       const resolved = { mod: imported.mod, importedName: imported.importedName }
@@ -470,7 +484,7 @@ export const createCompiledJsxContext = (sourceFile: SourceFile): CompiledJsxCon
       return resolved
     }
 
-    const directImport = resolveBundledHelperImport(declaration.getName(), declaration.initializer)
+    const directImport = resolveBundledHelperImport(getName(declaration), declaration.initializer)
     const aliasImport = directImport
       ? { mod: directImport.mod, importedName: directImport.importedName }
       : resolveLocalAlias(declaration.initializer)
@@ -502,7 +516,7 @@ export const createCompiledJsxContext = (sourceFile: SourceFile): CompiledJsxCon
         imports.default.get(targetName) ?? imports.namespace.get(targetName) ?? imports.bundledNamespace.get(targetName)
       if (!mod) return
 
-      return { mod, importedName: expression.getName() }
+      return { mod, importedName: getName(expression) }
     }
   }
 

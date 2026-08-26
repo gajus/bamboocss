@@ -1,5 +1,14 @@
 import { type BoxContext, type BoxNode, box, maybeBoxNode } from '@bamboocss/extractor'
-import { type SourceFile, ts, VariableDeclarationKind, literalValueOf } from '@bamboocss/ts-ast'
+import {
+  SourceFile,
+  VariableDeclarationKind,
+  getAliasNode,
+  getDefaultImport,
+  getNamedImports,
+  getNamespaceImport,
+  literalValueOf,
+  ts,
+} from '@bamboocss/ts-ast'
 import { type BinaryExpression, type ConditionalExpression, type Expression, Node, SyntaxKind } from '@bamboocss/ts-ast'
 
 /**
@@ -585,9 +594,9 @@ const collectModuleScopeNames = (sourceFile: SourceFile): Set<string> => {
     }
 
     if (Node.isImportDeclaration(statement)) {
-      addBinding(statement.getDefaultImport())
-      addBinding(statement.getNamespaceImport())
-      for (const named of statement.getNamedImports()) addBinding(named.getAliasNode() ?? named.name)
+      addBinding(getDefaultImport(statement))
+      addBinding(getNamespaceImport(statement))
+      for (const named of getNamedImports(statement)) addBinding(getAliasNode(named) ?? named.name)
       continue
     }
 
@@ -695,7 +704,7 @@ export const identifierIndex = (sourceFile: SourceFile): IdentifierIndex => {
     ts.forEachChild(node, collect)
   }
 
-  ts.forEachChild(sourceFile.compilerNode, collect)
+  ts.forEachChild(sourceFile, collect)
 
   const wrapped = new Map<string, Node[]>()
   const wrap = sourceFile as unknown as { _getNodeFromCompilerNode: (node: ts.Node) => Node }

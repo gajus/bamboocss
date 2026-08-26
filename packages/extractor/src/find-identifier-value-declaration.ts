@@ -6,6 +6,8 @@ import {
   Node,
   ParameterDeclaration,
   VariableDeclaration,
+  forEachDescendant,
+  getAliasNode,
   ts,
 } from '@bamboocss/ts-ast'
 import { getExportedVarDeclarationWithName, getModuleSpecifierSourceFile } from './maybe-box-node'
@@ -46,7 +48,7 @@ export function getDeclarationFor(
     declaration = parent
     // `getNameNode()` is the exported name and `getAliasNode()` the local binding,
     // so `import { button as btn }` reaches here as the alias node.
-  } else if (Node.isImportSpecifier(parent) && (parent.name == node || parent.getAliasNode() == node)) {
+  } else if (Node.isImportSpecifier(parent) && (parent.name == node || getAliasNode(parent) == node)) {
     if (ctx.flags?.skipTraverseFiles) return
 
     const sourceFile = getModuleSpecifierSourceFile(parent.getImportDeclaration(), ctx)
@@ -112,7 +114,7 @@ const isDeclarationName = (node: Identifier, parent: Node): boolean => {
   ) {
     return parent.name == node
   }
-  return Node.isImportSpecifier(parent) && (parent.name == node || parent.getAliasNode() == node)
+  return Node.isImportSpecifier(parent) && (parent.name == node || getAliasNode(parent) == node)
 }
 
 /**
@@ -124,11 +126,11 @@ const isDeclarationName = (node: Identifier, parent: Node): boolean => {
  * ts-morph charges for wrapping each node — it measured ~10% of extraction on its own.
  */
 const declarationIndexFor = (scope: Node): DeclarationIndex => {
-  const cached = declarationIndexes.get(scope.compilerNode)
+  const cached = declarationIndexes.get(scope)
   if (cached) return cached
 
   const index: DeclarationIndex = new Map()
-  scope.forEachDescendant((node) => {
+  forEachDescendant(scope, (node) => {
     if (!Node.isIdentifier(node)) return
     const parent = node.parent
     if (!parent || !isDeclarationName(node, parent)) return
@@ -138,7 +140,7 @@ const declarationIndexFor = (scope: Node): DeclarationIndex => {
     else index.set(name, [node])
   })
 
-  declarationIndexes.set(scope.compilerNode, index)
+  declarationIndexes.set(scope, index)
   return index
 }
 

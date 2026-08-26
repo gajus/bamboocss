@@ -1,5 +1,5 @@
 import type { JsxAttribute } from '@bamboocss/ts-ast'
-import { Node } from '@bamboocss/ts-ast'
+import { Node, getLiteralText } from '@bamboocss/ts-ast'
 import { box } from './box'
 import { maybeBoxNode } from './maybe-box-node'
 import type { BoxContext } from './types'
@@ -21,7 +21,7 @@ export const extractJsxAttribute = (jsxAttribute: JsxAttribute, ctx: BoxContext)
 
   // <ColorBox color="red.200" />
   if (Node.isStringLiteral(initializer)) {
-    const literalText = initializer.getLiteralText()
+    const literalText = getLiteralText(initializer)
     return box.literal(trimWhitespace(literalText), initializer, stack)
   }
 

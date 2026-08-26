@@ -69,7 +69,7 @@ const evaluateNodeUncached = (
   let options = {
     policy: { ...POLICY },
     ...ctx.getEvaluateOptions?.(node, stack),
-    node: node.compilerNode as any,
+    node: node as any,
     typescript: ts as any,
   }
 

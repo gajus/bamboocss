@@ -1,5 +1,25 @@
 import { resolveTsPathPattern } from '@bamboocss/config/ts-path'
-import { type Identifier, Node, type SourceFile, SyntaxKind, ts, literalValueOf } from '@bamboocss/ts-ast'
+import {
+  Identifier,
+  Node,
+  SourceFile,
+  SyntaxKind,
+  forEachDescendant,
+  getAliasNode,
+  getDefaultImport,
+  getDescendantsOfKind,
+  getFirstAncestor,
+  getFirstAncestorByKind,
+  getLineAndColumnAtPos,
+  getLiteralText,
+  getModuleSpecifierValue,
+  getNamedImports,
+  getNamespaceImport,
+  getParent,
+  isTypeOnly,
+  literalValueOf,
+  ts,
+} from '@bamboocss/ts-ast'
 import type { BambooContext } from './create-context'
 import { type SourceSnapshot, sourceSnapshots } from './source-snapshots'
 
@@ -204,7 +224,7 @@ const mentionsToken = (ctx: BambooContext, text: string | undefined | null) => {
  * would report type errors this pass has no business declining over.
  */
 const parseErrorCount = (sourceFile: SourceFile) =>
-  (sourceFile.compilerNode as unknown as { parseDiagnostics?: readonly unknown[] }).parseDiagnostics?.length ?? 0
+  (sourceFile as unknown as { parseDiagnostics?: readonly unknown[] }).parseDiagnostics?.length ?? 0
 
 /** Whether a module specifier resolves to the generated tokens artifact. */
 const isTokensEntrypoint = (ctx: BambooContext, specifier: string) => {
@@ -225,7 +245,7 @@ const isTokensEntrypoint = (ctx: BambooContext, specifier: string) => {
   return mods.some((mod) => resolved.includes(mod) || resolved === mod)
 }
 
-const lineOf = (node: Node) => node.getSourceFile().getLineAndColumnAtPos(node.getStart()).line
+const lineOf = (node: Node) => getLineAndColumnAtPos(node.getSourceFile(), node.getStart()).line
 
 function accountFile(
   ctx: BambooContext,
@@ -245,33 +265,33 @@ function accountFile(
     // `export { token } from './tokens'` hands the binding to a module this pass may never
     // visit, so what reaches it cannot be accounted for here. `export * from` likewise.
     if (Node.isExportDeclaration(statement)) {
-      const specifier = statement.getModuleSpecifierValue()
+      const specifier = getModuleSpecifierValue(statement)
       if (specifier && isTokensEntrypoint(ctx, specifier)) decline(statement, 're-exported')
       continue
     }
 
     if (!Node.isImportDeclaration(statement)) continue
 
-    const specifier = statement.getModuleSpecifierValue()
+    const specifier = getModuleSpecifierValue(statement)
     if (!specifier) continue
 
     const clause = statement.importClause
-    if (!clause || statement.isTypeOnly()) continue
+    if (!clause || isTypeOnly(statement)) continue
 
     if (!isTokensEntrypoint(ctx, specifier)) {
       // A module this pass cannot classify. It may be a barrel re-exporting the artifact,
       // which is the same bug one module out: `import { token as t } from '@acme/ui'` then
       // `t(key)` has no artifact specifier and no `token(`-shaped call, so keying on either
       // would miss it. Keying on the *imported name* catches it.
-      for (const named of clause.getNamedImports()) {
-        if (!named.isTypeOnly() && nameOf(named.name) === 'token') decline(named, 'unclassified-import')
+      for (const named of getNamedImports(clause)) {
+        if (!isTypeOnly(named) && nameOf(named.name) === 'token') decline(named, 'unclassified-import')
       }
 
-      const foreignDefault = clause.getDefaultImport()
+      const foreignDefault = getDefaultImport(clause)
       if (foreignDefault && nameOf(foreignDefault) === 'token') decline(foreignDefault, 'unclassified-import')
 
       // A namespace only matters if something reads `.token` off it.
-      const foreignNamespace = clause.getNamespaceImport()
+      const foreignNamespace = getNamespaceImport(clause)
       if (foreignNamespace && usesTokenMember(sourceFile, foreignNamespace.getText())) {
         decline(foreignNamespace, 'unclassified-import')
       }
@@ -280,14 +300,14 @@ function accountFile(
     }
 
     // The artifact has no default export, so this names a shape not understood.
-    const defaultImport = clause.getDefaultImport()
+    const defaultImport = getDefaultImport(clause)
     if (defaultImport) decline(defaultImport, 'unsupported-import')
 
-    const namespace = clause.getNamespaceImport()
+    const namespace = getNamespaceImport(clause)
     if (namespace) bindings.add(namespace.getText())
 
-    for (const named of clause.getNamedImports()) {
-      if (named.isTypeOnly()) continue
+    for (const named of getNamedImports(clause)) {
+      if (isTypeOnly(named)) continue
       // Only `token` produces a `var()`. A differently-named import is usually the `Token`
       // *type* — `import { Token, token }` is the idiomatic spelling, and declining on it meant
       // the commonest typed usage never bounded anything.
@@ -297,11 +317,11 @@ function accountFile(
       // So the question is whether the binding is used as a *value* anywhere, not what it is
       // called.
       if (nameOf(named.name) !== 'token') {
-        const local = (named.getAliasNode() ?? named.name).getText()
+        const local = (getAliasNode(named) ?? named.name).getText()
         if (usedAsValue(sourceFile, local, named)) decline(named, 'unsupported-import')
         continue
       }
-      bindings.add((named.getAliasNode() ?? named.name).getText())
+      bindings.add((getAliasNode(named) ?? named.name).getText())
     }
   }
 
@@ -309,13 +329,13 @@ function accountFile(
   // neither pass around it would see one. Walked as descendants rather than as top-level
   // statements, because it is the one import form that can nest — inside a `namespace`, where
   // a statement-only scan missed it entirely.
-  for (const importEquals of sourceFile.getDescendantsOfKind(SyntaxKind.ImportEqualsDeclaration)) {
+  for (const importEquals of getDescendantsOfKind(sourceFile, SyntaxKind.ImportEqualsDeclaration)) {
     if (importEquals.getText().includes('token')) decline(importEquals, 'import-equals')
   }
 
   // `require('./tokens')` and `await import('./tokens')` bind by destructuring rather than by
   // an import clause, so the bindings above do not cover them.
-  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+  for (const call of getDescendantsOfKind(sourceFile, SyntaxKind.CallExpression)) {
     const callee = call.expression
     const isRequire = Node.isIdentifier(callee) && callee.getText() === 'require'
     const isDynamicImport = callee.kind === SyntaxKind.ImportKeyword
@@ -348,7 +368,7 @@ function accountFile(
     // though the export were not there. A sibling package importing that barrel then asked for a
     // declaration the build had deleted.
     if (Node.isExportSpecifier(parent)) {
-      const declaration = parent.getFirstAncestorByKind(SyntaxKind.ExportDeclaration)
+      const declaration = getFirstAncestorByKind(parent, SyntaxKind.ExportDeclaration)
       if (declaration && !declaration.moduleSpecifier) decline(identifier, 're-exported')
       continue
     }
@@ -409,7 +429,7 @@ function usesTokenMember(sourceFile: SourceFile, namespace: string) {
 
   if (properties) return true
 
-  return sourceFile.getDescendantsOfKind(SyntaxKind.ElementAccessExpression).some((access) => {
+  return getDescendantsOfKind(sourceFile, SyntaxKind.ElementAccessExpression).some((access) => {
     if (access.expression.getText() !== namespace) return false
     const argument = access.argumentExpression
     return argument != null && (!Node.isStringLiteral(argument) || literalValueOf(argument) === 'token')
@@ -449,7 +469,7 @@ function* identifiersNamed(sourceFile: SourceFile, wanted: (name: string) => boo
 
     ts.forEachChild(node, collect)
   }
-  collect(sourceFile.compilerNode)
+  collect(sourceFile)
 
   // Wrapped only after the walk, so a caller that stops early pays for nothing it did not read.
   // Typed as `Identifier` rather than `Node`, which is what `getDescendantsOfKind` handed back:
@@ -465,7 +485,7 @@ function* identifiersNamed(sourceFile: SourceFile, wanted: (name: string) => boo
  * `token` is the identifier `token`; reading `getText()` returns the escape and compares
  * unequal, which let an import of the artifact's export past the checks that key on the name.
  */
-const nameOf = (node: Node) => (Node.isIdentifier(node) ? String(node.compilerNode.escapedText) : node.getText())
+const nameOf = (node: Node) => (Node.isIdentifier(node) ? String(node.escapedText) : node.getText())
 
 /** Every name a binding name binds, following object and array destructuring. */
 function boundNames(name: Node | undefined, bound: (name: string) => void) {
@@ -522,7 +542,7 @@ function shadowedScopes(sourceFile: SourceFile) {
   // kinds — plus the variables, which cannot be resolved until the rest of the map is built.
   const variables: Node[] = []
 
-  sourceFile.forEachDescendant((node) => {
+  forEachDescendant(sourceFile, (node) => {
     // A parameter is scoped to the function it belongs to, destructuring included.
     if (Node.isParameterDeclaration(node)) {
       const scope = node.parent
@@ -560,7 +580,8 @@ function shadowedScopes(sourceFile: SourceFile) {
     const root = rootIdentifier(declaration.initializer)
     if (!root || !isShadowed(root, scopes.get(nameOf(root)))) continue
 
-    const scope = declaration.getFirstAncestor(
+    const scope = getFirstAncestor(
+      declaration,
       (ancestor) =>
         Node.isBlock(ancestor) ||
         Node.isSourceFile(ancestor) ||
@@ -720,7 +741,7 @@ function literalPath(call: Node): ResolvedReference | undefined {
   if (Node.isNoSubstitutionTemplateLiteral(argument)) return { kind: 'path', value: literalValueOf(argument) }
 
   if (Node.isTemplateExpression(argument)) {
-    const head = argument.head.getLiteralText()
+    const head = getLiteralText(argument.head)
     return head ? { kind: 'prefix', value: head } : undefined
   }
 
@@ -737,9 +758,9 @@ function literalPath(call: Node): ResolvedReference | undefined {
 function usedAsValue(sourceFile: SourceFile, name: string, declaration: Node) {
   for (const identifier of identifiersNamed(sourceFile, (candidate) => candidate === name)) {
     // The import specifier itself is the binding site, not a read.
-    if (identifier.getFirstAncestor((ancestor) => ancestor === declaration)) continue
+    if (getFirstAncestor(identifier, (ancestor) => ancestor === declaration)) continue
 
-    if (!identifier.getFirstAncestor((ancestor) => Node.isTypeNode(ancestor))) return true
+    if (!getFirstAncestor(identifier, (ancestor) => Node.isTypeNode(ancestor))) return true
   }
 
   return false

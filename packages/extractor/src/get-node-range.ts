@@ -1,11 +1,12 @@
 import type { Node } from '@bamboocss/ts-ast'
+import { getLineAndColumnAtPos } from '@bamboocss/ts-ast'
 
 export const getNodeRange = (node: Node) => {
   const src = node.getSourceFile()
   const [startPosition, endPosition] = [node.getStart(), node.getEnd()]
 
-  const startInfo = src.getLineAndColumnAtPos(startPosition)
-  const endInfo = src.getLineAndColumnAtPos(endPosition)
+  const startInfo = getLineAndColumnAtPos(src, startPosition)
+  const endInfo = getLineAndColumnAtPos(src, endPosition)
 
   return {
     startPosition,

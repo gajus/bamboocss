@@ -18,7 +18,17 @@ import type {
   TypeNode,
   VariableDeclaration,
 } from '@bamboocss/ts-ast'
-import { Node, ts, literalValueOf } from '@bamboocss/ts-ast'
+import {
+  Node,
+  getAliasNode,
+  getExportDeclarations,
+  getLiteralText,
+  getModuleSpecifierValue,
+  getName,
+  getNamedExports,
+  literalValueOf,
+  ts,
+} from '@bamboocss/ts-ast'
 import { box } from './box'
 import { clearEvaluateNodeCache, safeEvaluateNode } from './evaluate-node'
 import { findIdentifierValueDeclaration } from './find-identifier-value-declaration'
@@ -173,7 +183,7 @@ function maybeBoxNodeUncached(
 
   // <ColorBox color={css`red.400`} />
   if (Node.isTemplateHead(node)) {
-    return cache(box.literal(node.getLiteralText(), node, stack))
+    return cache(box.literal(getLiteralText(node), node, stack))
   }
 
   // <ColorBox color={`${color}.400`} />
@@ -252,7 +262,7 @@ function maybeBoxNodeUncached(
       if (Node.isIdentifier(expr)) {
         fnName = expr.getText()
       } else if (Node.isPropertyAccessExpression(expr)) {
-        const propertyName = expr.getName()
+        const propertyName = getName(expr)
 
         if (propertyName === 'value') {
           isValueMethod = true
@@ -461,9 +471,9 @@ const findProperty = (node: ObjectLiteralElementLike, propName: string, _stack: 
       return node
     }
 
-    if (Node.isStringLiteral(name) && name.getLiteralText() === propName) {
+    if (Node.isStringLiteral(name) && getLiteralText(name) === propName) {
       stack.push(name)
-      return name.getLiteralText()
+      return getLiteralText(name)
     }
 
     if (Node.isComputedPropertyName(name)) {
@@ -547,7 +557,7 @@ const maybeTemplateStringValue = (template: TemplateExpression, stack: Node[], c
     if (!propBox) return
 
     const literal = t.literal
-    return propBox.value + literal.getLiteralText()
+    return propBox.value + getLiteralText(literal)
   })
 
   if (tailValues.every(isNotNullish)) {
@@ -729,7 +739,7 @@ const getTypeLiteralNodePropValue = (
   }
 
   const members = type.members
-  const prop = members.find((member) => Node.isPropertySignature(member) && member.getName() === propName)
+  const prop = members.find((member) => Node.isPropertySignature(member) && getName(member) === propName)
 
   if (Node.isPropertySignature(prop) && prop.isReadonly()) {
     const propType = prop.type
@@ -756,7 +766,7 @@ const getTypeLiteralNodePropValue = (
 }
 
 function getNameLiteral(wrapper: Node) {
-  if (Node.isStringLiteral(wrapper)) return wrapper.getLiteralText()
+  if (Node.isStringLiteral(wrapper)) return getLiteralText(wrapper)
   return wrapper.getText()
 }
 
@@ -769,7 +779,7 @@ const getTypeNodeValue = (type: TypeNode, stack: Node[], ctx: BoxContext): Liter
   if (Node.isLiteralTypeNode(type)) {
     const literal = type.literal
     if (Node.isStringLiteral(literal)) {
-      const result = literal.getLiteralText()
+      const result = getLiteralText(literal)
       typeNodeCache.set(type, result)
 
       return result
@@ -904,14 +914,14 @@ export const getExportedVarDeclarationWithName = (
  * module does export and resolves names it does not.
  */
 const resolveExportedName = (name: string, exportDeclaration: ExportDeclaration): string | undefined => {
-  const namedExports = exportDeclaration.getNamedExports()
+  const namedExports = getNamedExports(exportDeclaration)
 
   // no namedExports means it's a full re-export like this: `export * from "xxx"`,
   // which forwards every name unchanged
   if (namedExports.length === 0) return name
 
   for (const namedExport of namedExports) {
-    const alias = namedExport.getAliasNode()
+    const alias = getAliasNode(namedExport)
     const exposedName = (alias ?? namedExport.name).getText()
 
     if (exposedName === name) {
@@ -932,7 +942,7 @@ const resolveExportedName = (name: string, exportDeclaration: ExportDeclaration)
  * @see https://github.com/dsherret/ts-morph/blob/42d811ed9a5177fc678a5bfec4923a2048124fe0/packages/ts-morph/src/compiler/ast/module/ExportDeclaration.ts#L160
  */
 export const getModuleSpecifierSourceFile = (declaration: ExportDeclaration | ImportDeclaration, ctx: BoxContext) => {
-  const moduleName = declaration.getModuleSpecifierValue()
+  const moduleName = getModuleSpecifierValue(declaration)
 
   if (!moduleName) return
   const sourceFile = ctx.resolveModule?.(moduleName, declaration.getSourceFile())
@@ -947,7 +957,7 @@ function resolveVarDeclarationFromExportWithName(
   ctx: BoxContext,
   visited: Set<string>,
 ): VariableDeclaration | undefined {
-  for (const exportDeclaration of sourceFile.getExportDeclarations()) {
+  for (const exportDeclaration of getExportDeclarations(sourceFile)) {
     const exportStack = [exportDeclaration] as Node[]
     // The name to search for upstream, which differs from the requested one when
     // the re-export renames.
@@ -1178,7 +1188,7 @@ const getPropertyAccessedExpressionValue = (
   stack: Node[],
   ctx: BoxContext,
 ): BoxNode | undefined => {
-  const propName = expression.getName()
+  const propName = getName(expression)
   const elementAccessed = unwrapExpression(expression.expression)
   const accessList = _accessList.concat(propName)
 

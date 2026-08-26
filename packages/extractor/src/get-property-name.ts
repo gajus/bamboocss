@@ -1,5 +1,5 @@
 import type { ObjectLiteralElementLike } from '@bamboocss/ts-ast'
-import { Node } from '@bamboocss/ts-ast'
+import { Node, getLiteralText, getName } from '@bamboocss/ts-ast'
 import { box } from './box'
 import { maybePropName } from './maybe-box-node'
 import type { BoxContext } from './types'
@@ -22,11 +22,11 @@ export const getPropertyName = (property: ObjectLiteralElementLike, stack: Node[
     }
 
     // { "propName": "value" }
-    if (Node.isStringLiteral(node) || Node.isNumericLiteral(node)) return box.from(node.getLiteralText(), node, stack)
+    if (Node.isStringLiteral(node) || Node.isNumericLiteral(node)) return box.from(getLiteralText(node), node, stack)
   }
 
   if (Node.isShorthandPropertyAssignment(property)) {
-    const name = property.getName()
+    const name = getName(property)
     if (name != null) return box.from(name, property, stack)
   }
 
@@ -41,6 +41,6 @@ export const getPropertyName = (property: ObjectLiteralElementLike, stack: Node[
       return maybePropName(expression, stack, ctx)
     }
 
-    if (Node.isStringLiteral(node) || Node.isNumericLiteral(node)) return box.from(node.getLiteralText(), node, stack)
+    if (Node.isStringLiteral(node) || Node.isNumericLiteral(node)) return box.from(getLiteralText(node), node, stack)
   }
 }

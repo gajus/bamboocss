@@ -1,5 +1,16 @@
 import type { ParserResultInterface, ResultItem } from '@bamboocss/types'
-import { Node, SyntaxKind, literalValueOf } from '@bamboocss/ts-ast'
+import {
+  Node,
+  SyntaxKind,
+  getAliasNode,
+  getFirstAncestorByKind,
+  getImportDeclarations,
+  getModuleSpecifierValue,
+  getName,
+  getNamedImports,
+  isTypeOnly,
+  literalValueOf,
+} from '@bamboocss/ts-ast'
 import { declaredAtModuleScope } from './fold-analysis'
 import type { StaticStyleSetCompiler, StyleSetRecipeConfig } from './style-set'
 
@@ -58,7 +69,7 @@ export const collectRecipeConfigs = (parserResult: ParserResultInterface): Map<s
     const node = definition.box?.getNode?.()
     if (!node) continue
 
-    const call = Node.isCallExpression(node) ? node : node.getFirstAncestorByKind(SyntaxKind.CallExpression)
+    const call = Node.isCallExpression(node) ? node : getFirstAncestorByKind(node, SyntaxKind.CallExpression)
     const declaration = call?.getFirstAncestorByKind(SyntaxKind.VariableDeclaration)
     const nameNode = declaration?.name
     if (!nameNode || !Node.isIdentifier(nameNode)) continue
@@ -184,22 +195,22 @@ export const ensureRecipeHelperImport = (
   let host: ReturnType<typeof sourceFile.getImportDeclarations>[number] | undefined
   let subpathModule: string | undefined
 
-  for (const declaration of sourceFile.getImportDeclarations()) {
-    const mod = declaration.getModuleSpecifierValue()
-    if (declaration.isTypeOnly()) continue
+  for (const declaration of getImportDeclarations(sourceFile)) {
+    const mod = getModuleSpecifierValue(declaration)
+    if (isTypeOnly(declaration)) continue
 
-    for (const named of declaration.getNamedImports()) {
-      if (named.isTypeOnly()) continue
+    for (const named of getNamedImports(declaration)) {
+      if (isTypeOnly(named)) continue
 
       if (named.name.getText() === imported) {
         // Somebody else's helper, or one shadowed here, is not the one this calls.
         if (!isBambooCssModule(mod)) return undefined
-        const local = (named.getAliasNode() ?? named.name).getText()
+        const local = (getAliasNode(named) ?? named.name).getText()
         return isShadowed(call, local) ? undefined : { name: local }
       }
     }
 
-    if (!host && isGeneratedCssModule(mod) && declaration.getNamedImports().length > 0) host = declaration
+    if (!host && isGeneratedCssModule(mod) && getNamedImports(declaration).length > 0) host = declaration
     if (!subpathModule) subpathModule = helperModuleFromSubpath?.(mod)
   }
 
@@ -218,14 +229,14 @@ export const ensureRecipeHelperImport = (
     // After the last import rather than at the top of the file. A directive prologue —
     // `'use client'`, which is exactly what a component file calling a recipe tends to
     // open with — stops being a directive the moment a statement precedes it.
-    const declarations = sourceFile.getImportDeclarations()
+    const declarations = getImportDeclarations(sourceFile)
     const anchor = declarations.at(-1)
     if (!anchor) return undefined
 
     return { name: imported, insert: { pos: anchor.getEnd(), names: [imported], module: fallbackModule } }
   }
 
-  const last = host.getNamedImports().at(-1)
+  const last = getNamedImports(host).at(-1)
   if (!last) return undefined
 
   return { name: imported, insert: { pos: last.getEnd(), names: [imported] } }
@@ -362,8 +373,8 @@ export const lowerRecipeCall = (
         // `{ tone }`, the idiomatic spelling. The name is the expression.
         if (Node.isShorthandPropertyAssignment(property)) {
           // Last write wins, as the object literal itself would evaluate.
-          dynamicAxes.set(property.getName(), property.getName())
-          delete selection[property.getName()]
+          dynamicAxes.set(getName(property), getName(property))
+          delete selection[getName(property)]
           continue
         }
 

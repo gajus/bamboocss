@@ -1,4 +1,11 @@
-import { CallExpression, JsxOpeningElement, JsxSelfClosingElement, Node } from '@bamboocss/ts-ast'
+import {
+  CallExpression,
+  JsxOpeningElement,
+  JsxSelfClosingElement,
+  Node,
+  forEachDescendant,
+  getFirstAncestor,
+} from '@bamboocss/ts-ast'
 import { box } from './box'
 import { BoxNodeMap, BoxNodeObject, type BoxNode, type MapTypeValue, BoxNodeConditional } from './box-factory'
 import { extractCallExpressionArguments } from './call-expression'
@@ -139,7 +146,7 @@ export const extract = ({ ast, ...ctx }: ExtractOptions) => {
     processComponentBoxNode(component, boxByProp, expression, maybeValue, matchProp, true)
   }
 
-  ast.forEachDescendant((node, traversal) => {
+  forEachDescendant(ast, (node, traversal) => {
     // quick win
     if (isImportOrExport(node)) {
       traversal.skip()
@@ -160,7 +167,7 @@ export const extract = ({ ast, ...ctx }: ExtractOptions) => {
       }
 
       if (Node.isJsxSpreadAttribute(node)) {
-        const componentNode = node.getFirstAncestor(isJsxElement) as JsxElement
+        const componentNode = getFirstAncestor(node, isJsxElement) as JsxElement
         const component = componentByNode.get(componentNode)
 
         // <ColorBox {...{ color: "facebook.100" }}>spread</ColorBox>
@@ -190,7 +197,7 @@ export const extract = ({ ast, ...ctx }: ExtractOptions) => {
         // <ColorBox color="red.200" backgroundColor="blackAlpha.100" />
         //           ^^^^^           ^^^^^^^^^^^^^^^
 
-        const componentNode = node.getFirstAncestor(isJsxElement) as JsxElement
+        const componentNode = getFirstAncestor(node, isJsxElement) as JsxElement
         const component = componentByNode.get(componentNode)
 
         if (!componentNode || !component) return

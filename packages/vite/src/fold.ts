@@ -7,11 +7,26 @@ import type { Dict, ParserResultInterface, ResultItem } from '@bamboocss/types'
 import MagicString from 'magic-string'
 import { dirname, relative, resolve as resolvePath } from 'node:path'
 import {
-  type CallExpression,
-  type ImportEqualsDeclaration,
+  CallExpression,
+  ImportEqualsDeclaration,
   Node,
-  type SourceFile,
+  SourceFile,
   SyntaxKind,
+  forEachDescendant,
+  getAliasNode,
+  getDefaultImport,
+  getDescendantsOfKind,
+  getExportDeclarations,
+  getFirstAncestor,
+  getFirstAncestorByKind,
+  getImportDeclarations,
+  getModuleSpecifierValue,
+  getName,
+  getNamedExports,
+  getNamedImports,
+  getNamespaceImport,
+  is,
+  isTypeOnly,
   literalValueOf,
 } from '@bamboocss/ts-ast'
 import {
@@ -390,7 +405,8 @@ const isValueReference = (identifier: Node): boolean => {
   }
 
   // `typeof css`, `Foo<typeof css>`, an interface member — all erased with the type.
-  return !identifier.getFirstAncestor(
+  return !getFirstAncestor(
+    identifier,
     (ancestor) =>
       Node.isTypeNode(ancestor) || Node.isTypeAliasDeclaration(ancestor) || Node.isInterfaceDeclaration(ancestor),
   )
@@ -664,16 +680,16 @@ const calleeRootName = (call: Node): string | undefined => {
 const bambooImportedNames = (sourceFile: SourceFile, ctx: Context): Set<string> => {
   const names = new Set<string>()
 
-  for (const declaration of sourceFile.getImportDeclarations()) {
-    const mod = declaration.getModuleSpecifierValue()
+  for (const declaration of getImportDeclarations(sourceFile)) {
+    const mod = getModuleSpecifierValue(declaration)
 
-    for (const named of declaration.getNamedImports()) {
+    for (const named of getNamedImports(declaration)) {
       const name = named.name.getText()
-      const alias = named.getAliasNode()?.getText() ?? name
+      const alias = getAliasNode(named)?.getText() ?? name
       if (ctx.imports.match({ mod, name, alias })) names.add(alias)
     }
 
-    const namespace = declaration.getNamespaceImport()
+    const namespace = getNamespaceImport(declaration)
     if (namespace) {
       const alias = namespace.getText()
       if (ctx.imports.match({ mod, name: alias, alias, kind: 'namespace' })) names.add(alias)
@@ -921,15 +937,15 @@ export const foldSource = (options: FoldOptions): FoldResult => {
    * its `/recipes` suffix; falling back to the configured generated entry covers bare imports.
    */
   const configRecipeCssSpecifier = (call: Node, binding: string): string => {
-    for (const declaration of call.getSourceFile().getImportDeclarations()) {
-      if (declaration.isTypeOnly()) continue
-      const namesBinding = declaration.getNamedImports().some((named) => {
-        if (named.isTypeOnly()) return false
-        return (named.getAliasNode() ?? named.name).getText() === binding
+    for (const declaration of getImportDeclarations(call.getSourceFile())) {
+      if (isTypeOnly(declaration)) continue
+      const namesBinding = getNamedImports(declaration).some((named) => {
+        if (isTypeOnly(named)) return false
+        return (getAliasNode(named) ?? named.name).getText() === binding
       })
       if (!namesBinding) continue
 
-      const mod = declaration.getModuleSpecifierValue().replaceAll('\\', '/')
+      const mod = getModuleSpecifierValue(declaration).replaceAll('\\', '/')
       const marker = '/recipes'
       const at = mod.lastIndexOf(marker)
       if (at >= 0) return `${mod.slice(0, at)}/css`
@@ -950,10 +966,10 @@ export const foldSource = (options: FoldOptions): FoldResult => {
    * expressed from the module being folded.
    */
   const cssModuleSpecifierFrom = (declaring: SourceFile): string | undefined => {
-    for (const declaration of declaring.getImportDeclarations()) {
-      if (declaration.isTypeOnly()) continue
+    for (const declaration of getImportDeclarations(declaring)) {
+      if (isTypeOnly(declaration)) continue
 
-      const mod = declaration.getModuleSpecifierValue()
+      const mod = getModuleSpecifierValue(declaration)
       if (isGeneratedCssModule(mod)) return mod
     }
 
@@ -1127,7 +1143,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     if (!definition) continue
     const call = Node.isCallExpression(definition)
       ? definition
-      : definition.getFirstAncestorByKind(SyntaxKind.CallExpression)
+      : getFirstAncestorByKind(definition, SyntaxKind.CallExpression)
     if (!call || code.slice(call.getStart(), call.getEnd()) !== call.getText()) continue
     recipeDefinitions.push({ name, call })
   }
@@ -1323,7 +1339,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
           if (Array.isArray(entry?.config.slots)) {
             const parent = call.parent
             if (Node.isPropertyAccessExpression(parent) && parent.expression === call) {
-              const accessed = parent.getName()
+              const accessed = getName(parent)
               if (entry.config.slots.includes(accessed)) {
                 inlineSlot = accessed
                 inlineEnd = parent.getEnd()
@@ -1560,11 +1576,11 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     const sourceFile = ownSourceFile ?? candidates[0]?.node.getSourceFile()
     if (sourceFile) {
       const cxBindings = new Set<string>()
-      for (const declaration of sourceFile.getImportDeclarations()) {
-        if (declaration.isTypeOnly() || !isBambooCssModule(declaration.getModuleSpecifierValue())) continue
-        for (const named of declaration.getNamedImports()) {
-          if (named.isTypeOnly() || named.name.getText() !== 'cx') continue
-          cxBindings.add((named.getAliasNode() ?? named.name).getText())
+      for (const declaration of getImportDeclarations(sourceFile)) {
+        if (isTypeOnly(declaration) || !isBambooCssModule(getModuleSpecifierValue(declaration))) continue
+        for (const named of getNamedImports(declaration)) {
+          if (isTypeOnly(named) || named.name.getText() !== 'cx') continue
+          cxBindings.add((getAliasNode(named) ?? named.name).getText())
         }
       }
 
@@ -1574,7 +1590,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       // half: `getDescendantsOfKind` wraps every call in the file in a ts-morph node, for a
       // `cxBindings.has(...)` that is false every time. The same reasoning defers the identifier
       // index in `reportRuntimeBindings`; this walk simply never had the guard.
-      for (const call of cxBindings.size ? sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression) : []) {
+      for (const call of cxBindings.size ? getDescendantsOfKind(sourceFile, SyntaxKind.CallExpression) : []) {
         const callee = call.expression
         if (!Node.isIdentifier(callee) || !cxBindings.has(callee.getText()) || isShadowed(call, callee.getText())) {
           continue
@@ -1929,15 +1945,15 @@ export const foldSource = (options: FoldOptions): FoldResult => {
   // so without this the walk ran for *every* styled module, wrapping every property access in the
   // file to ask a question almost none of them answer.
   //
-  // The escape half is not decoration. `access.getName()` reads the identifier as the compiler
+  // The escape half is not decoration. `getName(access)` reads the identifier as the compiler
   // resolves it, not as it is spelled, so `badge.splitVariantProps(p)` matches the loop while
   // the literal name appears nowhere in the source. Testing the text alone left that call
   // unlowered against an erased binding. Both escape forms an identifier may use begin with a
   // backslash and a `u`, so one test covers them, and a `\u` in an ordinary string costs only the
   // walk it would have done anyway. `token-accounting.ts` guards the same way for the same reason.
   if (recipeSourceFile && mayNameSplitVariantProps(recipeSourceFile.getFullText())) {
-    for (const access of recipeSourceFile.getDescendantsOfKind(SyntaxKind.PropertyAccessExpression)) {
-      if (access.getName() !== 'splitVariantProps') continue
+    for (const access of getDescendantsOfKind(recipeSourceFile, SyntaxKind.PropertyAccessExpression)) {
+      if (getName(access) !== 'splitVariantProps') continue
 
       const target = access.expression
       if (!Node.isIdentifier(target)) continue
@@ -2019,12 +2035,12 @@ export const foldSource = (options: FoldOptions): FoldResult => {
    */
   /** The specifier this module imported `binding` through, if it did. */
   function importSpecifierFor(sourceFile: SourceFile, binding: string) {
-    for (const declaration of sourceFile.getImportDeclarations()) {
-      if (declaration.isTypeOnly()) continue
-      for (const named of declaration.getNamedImports()) {
-        if (named.isTypeOnly()) continue
-        if ((named.getAliasNode() ?? named.name).getText() === binding) {
-          return named.getAliasNode() ?? named.name
+    for (const declaration of getImportDeclarations(sourceFile)) {
+      if (isTypeOnly(declaration)) continue
+      for (const named of getNamedImports(declaration)) {
+        if (isTypeOnly(named)) continue
+        if ((getAliasNode(named) ?? named.name).getText() === binding) {
+          return getAliasNode(named) ?? named.name
         }
       }
     }
@@ -2092,7 +2108,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
         // `RecipeVariantProps<typeof button>` is erased by TypeScript and does not keep the
         // recipe binding alive at runtime. Treating that type query as a value read rejects
         // the generated API's documented way to derive component props.
-        (reference) => !reference.getFirstAncestorByKind(SyntaxKind.TypeQuery),
+        (reference) => !getFirstAncestorByKind(reference, SyntaxKind.TypeQuery),
       )
 
       const declined = skipped
@@ -2128,7 +2144,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     const runtimeCalls: CallExpression[] = []
     const importEquals: ImportEqualsDeclaration[] = []
 
-    sourceFile.forEachDescendant((node) => {
+    forEachDescendant(sourceFile, (node) => {
       if (Node.isCallExpression(node)) runtimeCalls.push(node)
       else if (Node.isImportEqualsDeclaration(node)) importEquals.push(node)
     })
@@ -2154,7 +2170,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     }
 
     for (const declaration of importEquals) {
-      if (declaration.isTypeOnly()) continue
+      if (isTypeOnly(declaration)) continue
       const reference = declaration.getModuleReference()
       if (!Node.isExternalModuleReference(reference)) continue
       const expression = reference.expression
@@ -2166,7 +2182,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
         continue
       }
       skipped.push({
-        name: declaration.getName(),
+        name: getName(declaration),
         reason: 'runtime-binding',
         start: declaration.getStart(),
         end: declaration.getEnd(),
@@ -2176,29 +2192,29 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     /** Local name -> what to call it in the report. */
     const watched = new Map<string, string>()
 
-    for (const declaration of sourceFile.getImportDeclarations()) {
-      if (declaration.isTypeOnly()) continue
-      if (!matchesModule(declaration.getModuleSpecifierValue(), bambooModules)) continue
+    for (const declaration of getImportDeclarations(sourceFile)) {
+      if (isTypeOnly(declaration)) continue
+      if (!matchesModule(getModuleSpecifierValue(declaration), bambooModules)) continue
 
-      for (const named of declaration.getNamedImports()) {
-        if (named.isTypeOnly()) continue
+      for (const named of getNamedImports(declaration)) {
+        if (isTypeOnly(named)) continue
         const imported = named.name.getText()
         if (PERMITTED_BINDINGS.has(imported)) continue
-        watched.set((named.getAliasNode() ?? named.name).getText(), imported)
+        watched.set((getAliasNode(named) ?? named.name).getText(), imported)
       }
 
-      const namespace = declaration.getNamespaceImport()
+      const namespace = getNamespaceImport(declaration)
       if (namespace) watched.set(namespace.getText(), `${namespace.getText()}.*`)
 
-      const defaultImport = declaration.getDefaultImport()
+      const defaultImport = getDefaultImport(declaration)
       if (defaultImport) watched.set(defaultImport.getText(), defaultImport.getText())
     }
 
     // `export { css } from 'styled-system/css'` re-exports the binding without importing it,
     // which is exactly how a wrapper module keeps the engine alive.
-    for (const declaration of sourceFile.getExportDeclarations()) {
-      if (declaration.isTypeOnly()) continue
-      if (!matchesModule(declaration.getModuleSpecifierValue() ?? '', bambooModules)) continue
+    for (const declaration of getExportDeclarations(sourceFile)) {
+      if (isTypeOnly(declaration)) continue
+      if (!matchesModule(getModuleSpecifierValue(declaration) ?? '', bambooModules)) continue
 
       // `export * from` and `export * as ns from` alike: both keep the module alive, whatever
       // they bind. (The parser's barrel walk distinguishes them because it asks a different
@@ -2213,8 +2229,8 @@ export const foldSource = (options: FoldOptions): FoldResult => {
         continue
       }
 
-      for (const named of declaration.getNamedExports()) {
-        if (named.isTypeOnly()) continue
+      for (const named of getNamedExports(declaration)) {
+        if (isTypeOnly(named)) continue
         const imported = named.name.getText()
         if (PERMITTED_BINDINGS.has(imported)) continue
 
@@ -2226,11 +2242,11 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     // and the more common one, since a barrel that also *uses* the binding has to import it.
     // The identifier walk cannot see it: an export specifier is excluded there to keep the
     // single-statement form above from being counted twice.
-    for (const declaration of sourceFile.getExportDeclarations()) {
-      if (declaration.isTypeOnly() || declaration.moduleSpecifier) continue
+    for (const declaration of getExportDeclarations(sourceFile)) {
+      if (isTypeOnly(declaration) || declaration.moduleSpecifier) continue
 
-      for (const named of declaration.getNamedExports()) {
-        if (named.isTypeOnly()) continue
+      for (const named of getNamedExports(declaration)) {
+        if (isTypeOnly(named)) continue
 
         const imported = watched.get(named.name.getText())
         if (imported === undefined) continue
@@ -2263,7 +2279,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
         const start = identifier.getStart()
         // The import declaration naming it is not a use of it, and neither is anything the
         // rewrite already replaced.
-        if (identifier.getFirstAncestorByKind(SyntaxKind.ImportDeclaration)) continue
+        if (getFirstAncestorByKind(identifier, SyntaxKind.ImportDeclaration)) continue
         if (applied.some(([from, to]) => start >= from && start < to)) continue
         if (declined.some(([from, to]) => start >= from && start < to)) continue
         if (!isValueReference(identifier)) continue

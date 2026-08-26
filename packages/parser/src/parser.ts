@@ -4,7 +4,13 @@ import type { Generator } from '@bamboocss/generator'
 import { logger } from '@bamboocss/logger'
 import type { ParserResultConfigureOptions } from '@bamboocss/types'
 import type { SourceFile } from '@bamboocss/ts-ast'
-import { Node, getImportDeclarations, getLineAndColumnAtPos, getName, ts } from '@bamboocss/ts-ast'
+import {
+  Node,
+  getImportDeclarations as astGetImportDeclarations,
+  getLineAndColumnAtPos,
+  getName,
+  ts,
+} from '@bamboocss/ts-ast'
 import { match } from 'ts-pattern'
 import { getImportDeclarations } from './get-import-declarations'
 import { importedRecipeBindings, type RecipeOrigin, type ResolveModule } from './imported-recipes'
@@ -65,7 +71,7 @@ export function createParser(context: ParserOptions) {
   ) {
     if (!sourceFile) return
 
-    const importDeclarations: ImportResult[] = getImportDeclarations(context, sourceFile)
+    const importDeclarations: ImportResult[] = astGetImportDeclarations(context, sourceFile)
 
     const file = imports.file(importDeclarations)
 

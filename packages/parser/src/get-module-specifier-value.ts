@@ -1,5 +1,5 @@
 import type { ExportDeclaration, ImportDeclaration } from '@bamboocss/ts-ast'
-import { getModuleSpecifierValue } from '@bamboocss/ts-ast'
+import { getModuleSpecifierValue as astGetModuleSpecifierValue } from '@bamboocss/ts-ast'
 
 /**
  * Both declaration kinds carry a specifier, and `export { x } from './m'` is how a barrel
@@ -8,7 +8,7 @@ import { getModuleSpecifierValue } from '@bamboocss/ts-ast'
  */
 export const getModuleSpecifierValue = (node: ExportDeclaration | ImportDeclaration) => {
   try {
-    return getModuleSpecifierValue(node)
+    return astGetModuleSpecifierValue(node)
   } catch {
     return
   }

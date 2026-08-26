@@ -5,7 +5,7 @@ import {
   getAliasNode,
   getExportDeclarations,
   getImportDeclarations,
-  getModuleSpecifierValue,
+  getModuleSpecifierValue as astGetModuleSpecifierValue,
   getNamedExports,
   getNamedImports,
   isTypeOnly,
@@ -72,7 +72,7 @@ const recipeFactoryAliases = (sourceFile: SourceFile, imports: ImportMap): Set<s
   for (const declaration of getImportDeclarations(sourceFile)) {
     if (isTypeOnly(declaration)) continue
 
-    const mod = getModuleSpecifierValue(declaration)
+    const mod = astGetModuleSpecifierValue(declaration)
     if (!mod) continue
 
     for (const specifier of getNamedImports(declaration)) {
@@ -174,7 +174,7 @@ const walkExports = (
   for (const declaration of getExportDeclarations(sourceFile)) {
     if (isTypeOnly(declaration)) continue
 
-    const specifier = getModuleSpecifierValue(declaration)
+    const specifier = astGetModuleSpecifierValue(declaration)
     const target = specifier ? resolveModule(specifier, sourceFile) : undefined
     if (specifier && !target) continue
 
@@ -249,7 +249,7 @@ const walkImports = (
     const named = getNamedImports(declaration)
     if (named.length === 0) continue
 
-    const specifier = getModuleSpecifierValue(declaration)
+    const specifier = astGetModuleSpecifierValue(declaration)
     if (!specifier) continue
 
     const target = resolveModule(specifier, sourceFile)

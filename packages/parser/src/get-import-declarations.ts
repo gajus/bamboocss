@@ -3,8 +3,8 @@ import type { ImportResult, ParserOptions } from '@bamboocss/core'
 import type { SourceFile } from '@bamboocss/ts-ast'
 import {
   getAliasNode,
-  getImportDeclarations,
-  getModuleSpecifierValue,
+  getImportDeclarations as astGetImportDeclarations,
+  getModuleSpecifierValue as astGetModuleSpecifierValue,
   getNamedImports,
   getNamespaceImport,
   nameNodeOf,
@@ -16,8 +16,8 @@ export function getImportDeclarations(context: ParserOptions, sourceFile: Source
 
   const importDeclarations: ImportResult[] = []
 
-  getImportDeclarations(sourceFile).forEach((node) => {
-    const mod = getModuleSpecifierValue(node)
+  astGetImportDeclarations(sourceFile).forEach((node) => {
+    const mod = astGetModuleSpecifierValue(node)
     if (!mod) return
 
     // import { flex, stack } from "styled-system/patterns"

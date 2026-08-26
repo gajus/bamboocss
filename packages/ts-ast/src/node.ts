@@ -346,8 +346,18 @@ export const isInNodeModules = (sourceFile: SourceFile): boolean => sourceFile.f
  * to nothing. ts-morph spelled this `isNamespaceExport()`; here it is the absence of any export
  * clause.
  */
-export const isStarExport = (declaration: Node): boolean =>
-  predicates.isExportDeclaration(declaration) && childOf<Node>(declaration, 'exportClause') === undefined
+export const isStarExport = (declaration: Node): boolean => {
+  if (!predicates.isExportDeclaration(declaration)) return false
+
+  // Both forms, which is what ts-morph's `isNamespaceExport()` meant: `export * from` has no
+  // clause at all, and `export * as ns from` has one that is itself a namespace export. Each
+  // carries the whole module through, so anything asking "does this re-export everything" has
+  // to see both — a survivor scan that saw only the first read `export * as ns from
+  // 'styled-system/css'` as binding nothing, and let a module that keeps the runtime alive be
+  // compiled away.
+  const clause = childOf<Node>(declaration, 'exportClause')
+  return clause === undefined || predicates.isNamespaceExport(clause)
+}
 
 /**
  * A string literal's value, for a caller that has already established the kind.

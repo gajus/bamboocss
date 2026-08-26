@@ -2240,8 +2240,11 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       // they bind. (The parser's barrel walk distinguishes them because it asks a different
       // question — which individual names come through.)
       if (isStarExport(declaration)) {
+        // `export * as ns from` names the namespace; a bare `export * from` names nothing, and
+        // asking a missing node for its name is how that reached `getName` as `undefined`.
+        const namespace = getNamespaceExport(declaration)
         skipped.push({
-          name: getName(getNamespaceExport(declaration) as Node) ?? '*',
+          name: (namespace && getName(namespace)) ?? '*',
           reason: 'runtime-binding',
           start: declaration.getStart(),
           end: declaration.getEnd(),

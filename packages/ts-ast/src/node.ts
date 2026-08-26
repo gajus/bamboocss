@@ -52,12 +52,20 @@ export const getKind = (node: Node): number => node.kind
  * is a bare token, so the cheaper walk is also the correct one; `getDescendantsOfKind` below
  * relies on the same thing.
  */
-export const forEachDescendant = (node: Node, visit: (child: Node) => void | boolean): void => {
+/**
+ * Returned from a `forEachDescendant` visitor to leave that node's subtree unvisited.
+ *
+ * A symbol rather than `false` because skipping is semantic, not cosmetic — the extractor
+ * declines to walk into imports and exports because the identifiers there are module bindings
+ * rather than values. Spelling it as a boolean makes any visitor that happens to end in a
+ * boolean expression silently stop descending, which is a wrong answer that still passes;
+ * against a symbol the same expression is a type error.
+ */
+export const SKIP: unique symbol = Symbol('bamboo.forEachDescendant.skip')
+
+export const forEachDescendant = (node: Node, visit: (child: Node) => void | typeof SKIP): void => {
   node.forEachChild((child: Node) => {
-    // `false` means do not descend, which is what ts-morph's `traversal.skip()` did. It is not
-    // an optimisation: the extractor skips import and export subtrees deliberately, and walking
-    // into one finds identifiers that are module bindings rather than values.
-    if (visit(child) === false) return
+    if (visit(child) === SKIP) return
     forEachDescendant(child, visit)
   })
 }

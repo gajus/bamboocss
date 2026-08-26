@@ -176,7 +176,11 @@ describe('withText alongside the overlay', () => {
 
     const scoped = project.withText(file('src/app.ts'), `export const a = 'scoped'\n`, (sourceFile) => {
       const found: string[] = []
-      if (sourceFile) forEachDescendant(sourceFile, (node) => is.isStringLiteral(node) && found.push(node.text))
+      if (sourceFile) {
+        forEachDescendant(sourceFile, (node) => {
+          if (is.isStringLiteral(node)) found.push(node.text)
+        })
+      }
       return found
     })
 

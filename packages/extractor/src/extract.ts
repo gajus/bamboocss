@@ -1,4 +1,4 @@
-import { Node, forEachDescendant, getFirstAncestor } from '@bamboocss/ts-ast'
+import { Node, SKIP, forEachDescendant, getFirstAncestor } from '@bamboocss/ts-ast'
 import type { CallExpression, JsxAttribute, JsxOpeningElement, JsxSelfClosingElement } from '@bamboocss/ts-ast'
 import { box } from './box'
 import { BoxNodeMap, BoxNodeObject, type BoxNode, type MapTypeValue, BoxNodeConditional } from './box-factory'
@@ -144,7 +144,7 @@ export const extract = ({ ast, ...ctx }: ExtractOptions) => {
     // quick win
     if (isImportOrExport(node)) {
       // Do not descend: the bindings inside an import or export are module plumbing, not values.
-      return false
+      return SKIP
     }
 
     if (components) {

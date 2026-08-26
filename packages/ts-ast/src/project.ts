@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
+import { isAbsolute, resolve } from 'node:path'
 import { API } from '@typescript/api/unstable/sync'
 import type { FileSystemDelegate, Node, ProjectOptions, SourceFile } from './types'
 
@@ -50,6 +51,9 @@ export class Project {
   #cwd: string
   #fs: FileSystemDelegate | undefined
 
+  /** Paths this project has asked the compiler to hold open, so each is opened once. */
+  #opened = new Set<string>()
+
   constructor(options: ProjectOptions) {
     this.#tsConfigFilePath = options.tsConfigFilePath
     this.#cwd = options.cwd
@@ -58,9 +62,36 @@ export class Project {
     this.#snapshot = this.#api.updateSnapshot({ openProjects: [this.#tsConfigFilePath] })
   }
 
-  /** The file as the current snapshot sees it, or `undefined` when it is not in the program. */
+  /** The file as the current snapshot sees it, or `undefined` when no project holds it. */
   getSourceFile(filePath: string): SourceFile | undefined {
-    return this.#project()?.program.getSourceFile(filePath) as SourceFile | undefined
+    return this.#find(this.#snapshot, this.#abs(filePath))
+  }
+
+  /**
+   * The first project in a snapshot holding this file.
+   *
+   * Not `getProjects()[0]`. A file opened from outside the tsconfig's `include` is loaded into
+   * an *inferred* project, which is a separate entry — so asking only the configured project
+   * answers `undefined` for exactly the files that needed opening in the first place.
+   */
+  #find(snapshot: ReturnType<API['updateSnapshot']>, path: string): SourceFile | undefined {
+    for (const project of snapshot.getProjects()) {
+      const found = project.program.getSourceFile(path)
+      if (found) return found as SourceFile
+    }
+    return undefined
+  }
+
+  /**
+   * The path the compiler knows a file by.
+   *
+   * The Go process addresses files absolutely, while callers pass whatever spelling they hold —
+   * a relative path from a config's `include`, an absolute one from a resolver. Normalising at
+   * the boundary is what keeps the overlay's keys and the program's keys the same strings;
+   * without it an installed source is readable under one spelling and absent under the other.
+   */
+  #abs(filePath: string): string {
+    return isAbsolute(filePath) ? filePath : resolve(this.#cwd, filePath)
   }
 
   /**
@@ -73,12 +104,13 @@ export class Project {
    * almost every one of those is byte-identical to what the project already holds.
    */
   addSourceFile(filePath: string, content: string): SourceFile | undefined {
-    if (this.#overlay.get(filePath) === content) return this.getSourceFile(filePath)
+    const path = this.#abs(filePath)
+    if (this.#overlay.get(path) === content) return this.getSourceFile(path)
 
-    const existed = this.#overlay.has(filePath) || this.#onDisk(filePath)
-    this.#overlay.set(filePath, content)
-    this.#apply(existed ? { changed: [filePath] } : { created: [filePath] })
-    return this.getSourceFile(filePath)
+    const existed = this.#overlay.has(path) || this.#onDisk(path)
+    this.#overlay.set(path, content)
+    this.#apply(existed ? { changed: [path] } : { created: [path] })
+    return this.getSourceFile(path)
   }
 
   /**
@@ -90,22 +122,24 @@ export class Project {
    */
   createSourceFile(filePath: string, content?: string, _options?: unknown): SourceFile | undefined {
     if (content !== undefined) return this.addSourceFile(filePath, content)
-    this.#apply({ created: [filePath] })
+    this.#apply({ created: [this.#abs(filePath)] })
     return this.getSourceFile(filePath)
   }
 
   /** A file's bytes moved, so anything this project held for it is stale. */
   reloadSourceFile(filePath: string): SourceFile | undefined {
-    this.#overlay.delete(filePath)
-    this.#apply({ changed: [filePath] })
-    return this.getSourceFile(filePath)
+    const path = this.#abs(filePath)
+    this.#overlay.delete(path)
+    this.#apply({ changed: [path] })
+    return this.getSourceFile(path)
   }
 
   /** A file went away. Answers whether the project was holding it. */
   removeSourceFile(filePath: string): boolean {
-    const held = this.#overlay.has(filePath) || this.getSourceFile(filePath) !== undefined
-    this.#overlay.delete(filePath)
-    this.#apply({ deleted: [filePath] })
+    const path = this.#abs(filePath)
+    const held = this.#overlay.has(path) || this.getSourceFile(path) !== undefined
+    this.#overlay.delete(path)
+    this.#apply({ deleted: [path] })
     return held
   }
 
@@ -123,6 +157,7 @@ export class Project {
       return
     }
     this.#overlay.clear()
+    this.#opened.clear()
     this.#snapshot = this.#api.updateSnapshot({ fileChanges: { invalidateAll: true } })
   }
 
@@ -136,9 +171,9 @@ export class Project {
   withText<T>(filePath: string, text: string, read: (sourceFile: SourceFile | undefined) => T): T {
     let result!: T
     // `DocumentIdentifier` is the path itself, not a wrapper around one.
-    this.#api.runWithTemporaryFileUpdate(this.#snapshot, filePath, text, (snapshot) => {
-      const project = snapshot.getProjects()[0]
-      result = read(project?.program.getSourceFile(filePath) as SourceFile | undefined)
+    const path = this.#abs(filePath)
+    this.#api.runWithTemporaryFileUpdate(this.#snapshot, path, text, (snapshot) => {
+      result = read(this.#find(snapshot, path))
     })
     return result
   }
@@ -161,7 +196,7 @@ export class Project {
    * transformed.
    */
   readFile(filePath: string): string | undefined {
-    const held = this.#overlay.get(filePath)
+    const held = this.#overlay.get(this.#abs(filePath))
     if (held !== undefined) return held
 
     const delegated = this.#fs?.readFile?.(filePath)
@@ -212,8 +247,32 @@ export class Project {
     this.#api.close()
   }
 
+  /**
+   * Tell the Go process what moved, and open anything it has not been asked to hold before.
+   *
+   * A tsconfig defines a program, so a file outside its `include` is not in one however
+   * plainly it exists — and bamboo installs such files routinely: a bundler hands over a
+   * module from anywhere in the graph, and a test builds a project out of string paths that
+   * were never on disk. ts-morph had no such notion, since its project was a bag of files.
+   *
+   * `openFiles` is that bag, and is what an editor uses for the same reason: it loads a file
+   * into the containing project when there is one and an inferred project otherwise. Opens are
+   * ref-counted and persist, so each path is sent once.
+   */
   #apply(changes: { changed?: string[]; created?: string[]; deleted?: string[] }): void {
-    this.#snapshot = this.#api.updateSnapshot({ fileChanges: changes })
+    const opening: string[] = []
+    for (const path of [...(changes.created ?? []), ...(changes.changed ?? [])]) {
+      if (this.#opened.has(path)) continue
+      this.#opened.add(path)
+      opening.push(path)
+    }
+    for (const path of changes.deleted ?? []) this.#opened.delete(path)
+
+    this.#snapshot = this.#api.updateSnapshot({
+      fileChanges: changes,
+      ...(opening.length ? { openFiles: opening } : {}),
+      ...(changes.deleted?.length ? { closeFiles: changes.deleted } : {}),
+    })
   }
 
   #project() {
@@ -257,19 +316,38 @@ export class Project {
        * auxiliary source with no file behind it, which is how a framework plugin hands over a
        * block it lifted out of a single-file component.
        */
+      /**
+       * What the compiler is allowed to see in a directory, overlay included.
+       *
+       * Both halves are load-bearing. A synthesized file has to appear among `files` or it is
+       * readable by path yet absent from the program — the compiler walks the tree to decide
+       * membership rather than asking about paths it has not been shown.
+       *
+       * And the *directories* leading to it have to appear too. Overlay content is routinely
+       * installed under paths with nothing behind them — a test that builds a project out of
+       * strings writes `src/a.tsx` into a directory that was never created. Reporting the file
+       * without its parent leaves the compiler with no reason to descend, so it never asks
+       * about the directory that would have contained it, and the file is silently not in the
+       * program. That reads downstream as a parse that found no styles, not as a missing file.
+       */
       getAccessibleEntries(directoryName) {
         const delegated = fs?.getAccessibleEntries?.(directoryName)
-        const added: string[] = []
+        const prefix = directoryName.endsWith('/') ? directoryName : `${directoryName}/`
+        const addedFiles: string[] = []
+        const addedDirectories: string[] = []
         for (const held of overlay.keys()) {
-          const at = held.lastIndexOf('/')
-          if (at !== -1 && held.slice(0, at) === directoryName) added.push(held.slice(at + 1))
+          if (!held.startsWith(prefix)) continue
+          const rest = held.slice(prefix.length)
+          const at = rest.indexOf('/')
+          if (at === -1) addedFiles.push(rest)
+          else addedDirectories.push(rest.slice(0, at))
         }
-        if (!added.length) return delegated
+        if (!addedFiles.length && !addedDirectories.length) return delegated
 
         const base = delegated ?? readDirectory(directoryName)
         return {
-          files: [...new Set([...base.files, ...added])],
-          directories: base.directories,
+          files: [...new Set([...base.files, ...addedFiles])],
+          directories: [...new Set([...base.directories, ...addedDirectories])],
         }
       },
     }

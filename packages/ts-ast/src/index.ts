@@ -1,4 +1,5 @@
 export {
+  SKIP,
   forEachDescendant,
   getDescendantsOfKind,
   childOf,

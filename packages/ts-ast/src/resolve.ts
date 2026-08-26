@@ -186,25 +186,39 @@ export const createResolver = (options: { cwd: string; fs?: FileSystemDelegate }
    * `#name` from the nearest `package.json`'s `imports`, and a self-reference by the package's
    * own name.
    */
-  const bareThroughDelegate = (specifier: string, from: string): { path?: string; affectingFiles: string[] } => {
+  const bareThroughDelegate = (
+    specifier: string,
+    from: string,
+  ): { path?: string; failedLookups: string[]; affectingFiles: string[] } => {
     const owner = nearestPackage(from)
 
     if (specifier.startsWith('#')) {
-      if (!owner) return { affectingFiles: [] }
+      if (!owner) return { failedLookups: [], affectingFiles: [] }
       const targets = targetsOf((owner.json.imports as Record<string, unknown>)?.[specifier])
       const found = firstExisting(targets.map((target) => join(owner.dir, target)))
-      return { path: found.path, affectingFiles: [owner.path] }
+      return { path: found.path, failedLookups: found.failedLookups, affectingFiles: [owner.path] }
     }
 
     const slash = specifier.indexOf('/', specifier.startsWith('@') ? specifier.indexOf('/') + 1 : 0)
     const name = slash === -1 ? specifier : specifier.slice(0, slash)
     const subpath = slash === -1 ? '.' : `.${specifier.slice(slash)}`
 
+    // Misses from the package's *own* map only — `imports` and a self-referencing `exports`,
+    // whose targets are files inside the project. Those become the pending candidates a watch
+    // build re-checks, so a target listed ahead of the one that resolved has to appear here or
+    // writing it later re-resolves nothing.
+    //
+    // The `node_modules` walk below is deliberately silent. Package discovery probes a
+    // directory at every level above the importer, and reporting those would make an ordinary
+    // external dependency look like a local name waiting to be written.
+    const failedLookups: string[] = []
+
     // A package referring to itself by name, which `exports` is what makes legal.
     if (owner && owner.json.name === name) {
       const targets = targetsOf((owner.json.exports as Record<string, unknown>)?.[subpath])
       const found = firstExisting(targets.map((target) => join(owner.dir, target)))
-      if (found.path) return { path: found.path, affectingFiles: [owner.path] }
+      failedLookups.push(...found.failedLookups)
+      if (found.path) return { path: found.path, failedLookups, affectingFiles: [owner.path] }
     }
 
     for (let dir = from; ; dir = dirname(dir)) {
@@ -217,16 +231,16 @@ export const createResolver = (options: { cwd: string; fs?: FileSystemDelegate }
         const implied = subpath === '.' ? targetsOf(manifest.types ?? manifest.main ?? manifest.module) : []
         const direct = subpath === '.' ? [] : [subpath]
         const found = firstExisting([...exported, ...implied, ...direct].map((target) => join(root, target)))
-        if (found.path) return { path: found.path, affectingFiles: [manifestPath] }
+        if (found.path) return { path: found.path, failedLookups, affectingFiles: [manifestPath] }
       }
 
       if (subpath !== '.') {
         const found = firstExisting([join(root, subpath)])
-        if (found.path) return { path: found.path, affectingFiles: manifest ? [manifestPath] : [] }
+        if (found.path) return { path: found.path, failedLookups, affectingFiles: manifest ? [manifestPath] : [] }
       }
 
       const parent = dirname(dir)
-      if (parent === dir) return { affectingFiles: [] }
+      if (!parent || parent === dir) return { failedLookups, affectingFiles: [] }
     }
   }
 
@@ -294,7 +308,7 @@ export const createResolver = (options: { cwd: string; fs?: FileSystemDelegate }
     const delegated = bareThroughDelegate(specifier, from)
     return {
       path: delegated.path,
-      failedLookups: viaPaths.failedLookups,
+      failedLookups: [...viaPaths.failedLookups, ...delegated.failedLookups],
       affectingFiles: delegated.affectingFiles,
     }
   }

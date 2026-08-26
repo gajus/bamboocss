@@ -187,7 +187,10 @@ function checkSlotRecipeNamingAgreement(
 export const classFormatter = (ctx: ClassFormatterContext) => {
   const prefix = ctx.utility.prefix
   const withPrefix = (className: string) => (prefix ? (className ? `${prefix}-${className}` : prefix) : className)
-  return ctx.hash.className ? (className: string) => withPrefix(ctx.utility.toHash([className], toHash)) : withPrefix
+  return ctx.hash.className
+    ? (className: string) =>
+        withPrefix(ctx.utility.claimHashedClassName(className, ctx.utility.toHash([className], toHash)))
+    : withPrefix
 }
 
 /**

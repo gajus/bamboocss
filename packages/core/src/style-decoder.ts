@@ -114,7 +114,12 @@ export class StyleDecoder {
 
     if (hash.className) {
       conds.push(className)
-      result = utility.formatClassName(utility.toHash(conds, utility.defaultHashFn))
+      // The identity `toHash` is about to reduce to 32 bits, kept so the collision it may land
+      // on can name both sides rather than just the class they share.
+      const identity = conds.join(':')
+      result = utility.formatClassName(
+        utility.claimHashedClassName(identity, utility.toHash(conds, utility.defaultHashFn)),
+      )
     } else {
       conds.push(utility.formatClassName(className))
       result = conds.join(':')

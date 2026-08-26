@@ -1,5 +1,6 @@
 import { logger } from '@bamboocss/logger'
 import {
+  BambooError,
   compact,
   FALLBACK_SEPARATOR,
   getArbitraryValue,
@@ -220,7 +221,58 @@ export class Utility {
 
   defaultHashFn = toHash
 
+  /**
+   * Kept a pure, self-contained expression: `generateCva` and `generateRecipe` serialize this
+   * function into the styled-system runtime with `${utility.toHash}`, so anything it closes
+   * over would be a free variable in the browser. That is why the collision check below is a
+   * separate method rather than a guard in here.
+   */
   toHash = (path: string[], hashFn: (str: string) => string): string => hashFn(path.join(':'))
+
+  /** Hashed class name -> the identity that claimed it. Only populated under `hash.className`. */
+  private hashedClassNames = new Map<string, string>()
+
+  /**
+   * Hand out a hashed class name, refusing to give the same one to two different declarations.
+   *
+   * `toHash` is a 32-bit hash rendered into letters, so distinct declarations can land on the
+   * same name. Nothing noticed: the sheet emitted two rules under one selector and every
+   * element carrying it got a declaration it never asked for — `width: 114360px` and
+   * `transition: 192009px` both resolve to `.bRzHLW`. Silent, and undiagnosable from the
+   * symptom, which is a component styled with a property that appears nowhere in its source.
+   *
+   * The odds are per build and grow with the square of the atom count: negligible for a small
+   * project, around one in twenty at 20,000 atoms, one in four at 50,000. Rare enough to have
+   * never been reported, common enough to be someone's afternoon.
+   *
+   * So it fails the build instead, which is what this codebase does everywhere else a name is
+   * derived twice and the two only meet in the DOM — see `checkNamingAgreement`, whose reason
+   * is the same one: failing now costs a build, not failing ships the wrong styles.
+   *
+   * Only reachable with `hash.className` on. Readable names carry the declaration that made
+   * them, so they are unique by construction.
+   */
+  claimHashedClassName = (identity: string, className: string) => {
+    const claimed = this.hashedClassNames.get(className)
+
+    if (claimed === undefined) {
+      this.hashedClassNames.set(className, identity)
+    } else if (claimed !== identity) {
+      throw new BambooError(
+        'HASH_COLLISION',
+        `Two different declarations hash to the same class name \`${className}\`:\n` +
+          `  ${claimed}\n  ${identity}\n` +
+          `Emitting both would give every element carrying that class a declaration it did not ask for.`,
+        {
+          hint:
+            'This is a rare accident of a 32-bit hash, not a mistake in your styles. Changing either ' +
+            'value — or setting a `prefix` — moves one of them off the collision.',
+        },
+      )
+    }
+
+    return className
+  }
 
   private normalizeConfig(config: UtilityConfig) {
     return Object.fromEntries(

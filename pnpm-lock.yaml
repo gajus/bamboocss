@@ -337,7 +337,7 @@ importers:
         version: link:../shared
       ts-evaluator:
         specifier: 2.0.0
-        version: 2.0.0(jsdom@27.2.0)(typescript@7.1.0-dev.20260819.1)
+        version: 2.0.0(jsdom@27.2.0)(typescript@7.1.0-dev.20260826.1)
       ts-morph:
         specifier: 28.0.0
         version: 28.0.0
@@ -586,8 +586,8 @@ importers:
         specifier: workspace:*
         version: link:../plugin-vue
       '@typescript/api':
-        specifier: npm:typescript@7.1.0-dev.20260819.1
-        version: typescript@7.1.0-dev.20260819.1
+        specifier: npm:typescript@7.1.0-dev.20260826.1
+        version: typescript@7.1.0-dev.20260826.1
 
   packages/plugin-lightningcss:
     dependencies:
@@ -721,6 +721,16 @@ importers:
       '@types/picomatch':
         specifier: 4.0.2
         version: 4.0.2
+
+  packages/ts-ast:
+    dependencies:
+      '@typescript/api':
+        specifier: npm:typescript@7.1.0-dev.20260826.1
+        version: typescript@7.1.0-dev.20260826.1
+    devDependencies:
+      ts-morph:
+        specifier: 28.0.0
+        version: 28.0.0
 
   packages/types:
     devDependencies:
@@ -1090,10 +1100,10 @@ importers:
         version: 10.1.2(react@19.2.0)(storybook@10.1.2(@testing-library/dom@10.4.1)(prettier@3.9.6)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))
       '@storybook/react':
         specifier: ^10.1.2
-        version: 10.1.2(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(storybook@10.1.2(@testing-library/dom@10.4.1)(prettier@3.9.6)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(typescript@7.1.0-dev.20260819.1)
+        version: 10.1.2(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(storybook@10.1.2(@testing-library/dom@10.4.1)(prettier@3.9.6)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(typescript@7.1.0-dev.20260826.1)
       '@storybook/react-vite':
         specifier: 10.1.4
-        version: 10.1.4(esbuild@0.27.7)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(rollup@4.53.1)(storybook@10.1.2(@testing-library/dom@10.4.1)(prettier@3.9.6)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(typescript@7.1.0-dev.20260819.1)(vite@7.2.6(@types/node@24.10.1)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))
+        version: 10.1.4(esbuild@0.27.7)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(rollup@4.53.1)(storybook@10.1.2(@testing-library/dom@10.4.1)(prettier@3.9.6)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(typescript@7.1.0-dev.20260826.1)(vite@7.2.6(@types/node@24.10.1)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))
       '@types/react':
         specifier: 19.2.7
         version: 19.2.7
@@ -4867,8 +4877,8 @@ packages:
     cpu: [arm64]
     os: [darwin]
 
-  '@typescript/typescript-darwin-arm64@7.1.0-dev.20260819.1':
-    resolution: {integrity: sha512-/AE/pqkfHkH0FtmAkP9KSirb28Rx6Membtd1XPuTGPsz5geYtlM3e49NSfz7HqQHwLMf2XEpwpWpZZXLEpf8Lg==}
+  '@typescript/typescript-darwin-arm64@7.1.0-dev.20260826.1':
+    resolution: {integrity: sha512-JtgriO6/JqGI7Aa83yOrHHfn5+7d3voEh/PiOHxHlLyzExnrSePPQNe/rKaNttLZyp8k2xN6PqdkJypZ2z1XLA==}
     engines: {node: '>=16.20.0'}
     cpu: [arm64]
     os: [darwin]
@@ -4879,8 +4889,8 @@ packages:
     cpu: [x64]
     os: [darwin]
 
-  '@typescript/typescript-darwin-x64@7.1.0-dev.20260819.1':
-    resolution: {integrity: sha512-V/8HRKJkwfF6Hdh0etl0uiqommbC3qlONlGLLw+q6hPlpDOO4pkHJdjOCj61VW2HMIzhBgfnRmgIkXQuQ9M+3Q==}
+  '@typescript/typescript-darwin-x64@7.1.0-dev.20260826.1':
+    resolution: {integrity: sha512-ilaPOBxA57t9dOPaPiFV461mKOhnMOnH52GIDlhT1gOyyewYrd7aQltKY28hPY9fu92Ouy8iSFUNPO5WsQT+eg==}
     engines: {node: '>=16.20.0'}
     cpu: [x64]
     os: [darwin]
@@ -4903,8 +4913,8 @@ packages:
     cpu: [arm64]
     os: [linux]
 
-  '@typescript/typescript-linux-arm64@7.1.0-dev.20260819.1':
-    resolution: {integrity: sha512-W/zIUn0+yd0+TukbIA42T1Tpe7CJHZ0ruXbPmg3Ic/ZPjbK11fnEYx8lcHYJ6FLkiJsvnwc6SuDiC93G8oXa2Q==}
+  '@typescript/typescript-linux-arm64@7.1.0-dev.20260826.1':
+    resolution: {integrity: sha512-dyd+JGmJudNvO7VftWD8BVR1uNP4lHpkbb3CMOUSVa9Fe3XboQVG70IgyQBcnCy2anMjroBaZ6cgs869PnO+Cg==}
     engines: {node: '>=16.20.0'}
     cpu: [arm64]
     os: [linux]
@@ -4915,8 +4925,8 @@ packages:
     cpu: [arm]
     os: [linux]
 
-  '@typescript/typescript-linux-arm@7.1.0-dev.20260819.1':
-    resolution: {integrity: sha512-r6+wvOqah3HT5gN62yYUQDcDq3j4VCpZxQT+YoepDnEOJJQYpl7MUTuEU0T7X7+PwsYDYGE18BlysJ24AVTgbA==}
+  '@typescript/typescript-linux-arm@7.1.0-dev.20260826.1':
+    resolution: {integrity: sha512-zB547ei4qtvBjPKJE8PwxmPfH/ayGUwAG0WUpRLBUZ3n91gaa9XA8VIjE00uDQxxb5r3SbecyF4zfAiuB8Mm6Q==}
     engines: {node: '>=16.20.0'}
     cpu: [arm]
     os: [linux]
@@ -4957,8 +4967,8 @@ packages:
     cpu: [x64]
     os: [linux]
 
-  '@typescript/typescript-linux-x64@7.1.0-dev.20260819.1':
-    resolution: {integrity: sha512-t+qhWUi+XTj8F+sQ9SUt6bI3OMR/hR5SEXd6CMEYT9I0IQYMwBanVfPrfRz3EjCvGwpVahhezV3hOw6Z3NP29Q==}
+  '@typescript/typescript-linux-x64@7.1.0-dev.20260826.1':
+    resolution: {integrity: sha512-R0GeopttynHqVvHAAlXRpIHHrD+VaQES5DhCEuw0vb+G4lERccjr2hKafz2h2PRd/Lln79ZRP5XQVt8KQe46OA==}
     engines: {node: '>=16.20.0'}
     cpu: [x64]
     os: [linux]
@@ -4999,8 +5009,8 @@ packages:
     cpu: [arm64]
     os: [win32]
 
-  '@typescript/typescript-win32-arm64@7.1.0-dev.20260819.1':
-    resolution: {integrity: sha512-TpyclXJjp6F1rb+OosYNIeGkcyvL594PPiepBKwGWBvtVFkfnXiRQeU78CAVvErO2+kD/ruhfCr576yBnF1jAw==}
+  '@typescript/typescript-win32-arm64@7.1.0-dev.20260826.1':
+    resolution: {integrity: sha512-fqKfzTMdw84X70iA5vc2dibPKMM20CgGfh7bfJpve5x9XUQ6xJ3DNBTvn6E9FcEtRnYggx+7KX+6Edj6nYi28w==}
     engines: {node: '>=16.20.0'}
     cpu: [arm64]
     os: [win32]
@@ -5011,8 +5021,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@typescript/typescript-win32-x64@7.1.0-dev.20260819.1':
-    resolution: {integrity: sha512-vs062fcTCaJur2g9OqAruUBYyhm6QmmEcWeJkujeybWGlVthocitGRcUoG5fJsM9PSmPXqWYmU/chxoDkUSqEw==}
+  '@typescript/typescript-win32-x64@7.1.0-dev.20260826.1':
+    resolution: {integrity: sha512-ro65itnnd6/3VfU1//4OnK3KrqudGqw7g+Eay70qHVBiMW9ujGp1b5hi9FT6ROi2jpNU5ESmEoHYQeVO5+M6Hg==}
     engines: {node: '>=16.20.0'}
     cpu: [x64]
     os: [win32]
@@ -9956,8 +9966,8 @@ packages:
     engines: {node: '>=16.20.0'}
     hasBin: true
 
-  typescript@7.1.0-dev.20260819.1:
-    resolution: {integrity: sha512-dzLk6+I1+8YCAcNmCkeEjl2SUeCHdhNG7UnpMZkShIii97XKypQCvbEPQGGR4AKCP7kw/6YTVmKB+ZH5/dUuOw==}
+  typescript@7.1.0-dev.20260826.1:
+    resolution: {integrity: sha512-fpmuaoIKxBNELDDc0hwdzdzYJuhgoyfdTc3pAMw99TKUMbCJXmxmNdMCqsRx/iHOckUkVdcBQ7R2cOKXbXZFww==}
     engines: {node: '>=16.20.0'}
     hasBin: true
 
@@ -12385,14 +12395,14 @@ snapshots:
     dependencies:
       minipass: 7.1.2
 
-  '@joshwooding/vite-plugin-react-docgen-typescript@0.6.1(typescript@7.1.0-dev.20260819.1)(vite@7.2.6(@types/node@24.10.1)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))':
+  '@joshwooding/vite-plugin-react-docgen-typescript@0.6.1(typescript@7.1.0-dev.20260826.1)(vite@7.2.6(@types/node@24.10.1)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))':
     dependencies:
       glob: 10.4.5
       magic-string: 0.30.21
-      react-docgen-typescript: 2.4.0(typescript@7.1.0-dev.20260819.1)
+      react-docgen-typescript: 2.4.0(typescript@7.1.0-dev.20260826.1)
       vite: 7.2.6(@types/node@24.10.1)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0)
     optionalDependencies:
-      typescript: 7.1.0-dev.20260819.1
+      typescript: 7.1.0-dev.20260826.1
 
   '@jridgewell/gen-mapping@0.3.13':
     dependencies:
@@ -14227,12 +14237,12 @@ snapshots:
       react-dom: 19.2.0(react@19.2.0)
       storybook: 10.1.2(@testing-library/dom@10.4.1)(prettier@3.9.6)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
 
-  '@storybook/react-vite@10.1.4(esbuild@0.27.7)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(rollup@4.53.1)(storybook@10.1.2(@testing-library/dom@10.4.1)(prettier@3.9.6)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(typescript@7.1.0-dev.20260819.1)(vite@7.2.6(@types/node@24.10.1)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))':
+  '@storybook/react-vite@10.1.4(esbuild@0.27.7)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(rollup@4.53.1)(storybook@10.1.2(@testing-library/dom@10.4.1)(prettier@3.9.6)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(typescript@7.1.0-dev.20260826.1)(vite@7.2.6(@types/node@24.10.1)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))':
     dependencies:
-      '@joshwooding/vite-plugin-react-docgen-typescript': 0.6.1(typescript@7.1.0-dev.20260819.1)(vite@7.2.6(@types/node@24.10.1)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))
+      '@joshwooding/vite-plugin-react-docgen-typescript': 0.6.1(typescript@7.1.0-dev.20260826.1)(vite@7.2.6(@types/node@24.10.1)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))
       '@rollup/pluginutils': 5.3.0(rollup@4.53.1)
       '@storybook/builder-vite': 10.1.4(esbuild@0.27.7)(rollup@4.53.1)(storybook@10.1.2(@testing-library/dom@10.4.1)(prettier@3.9.6)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(vite@7.2.6(@types/node@24.10.1)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))
-      '@storybook/react': 10.1.4(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(storybook@10.1.2(@testing-library/dom@10.4.1)(prettier@3.9.6)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(typescript@7.1.0-dev.20260819.1)
+      '@storybook/react': 10.1.4(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(storybook@10.1.2(@testing-library/dom@10.4.1)(prettier@3.9.6)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(typescript@7.1.0-dev.20260826.1)
       empathic: 2.0.0
       magic-string: 0.30.21
       react: 19.2.0
@@ -14250,7 +14260,7 @@ snapshots:
       - typescript
       - webpack
 
-  '@storybook/react@10.1.2(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(storybook@10.1.2(@testing-library/dom@10.4.1)(prettier@3.9.6)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(typescript@7.1.0-dev.20260819.1)':
+  '@storybook/react@10.1.2(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(storybook@10.1.2(@testing-library/dom@10.4.1)(prettier@3.9.6)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(typescript@7.1.0-dev.20260826.1)':
     dependencies:
       '@storybook/global': 5.0.0
       '@storybook/react-dom-shim': 10.1.2(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(storybook@10.1.2(@testing-library/dom@10.4.1)(prettier@3.9.6)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))
@@ -14259,11 +14269,11 @@ snapshots:
       react-dom: 19.2.0(react@19.2.0)
       storybook: 10.1.2(@testing-library/dom@10.4.1)(prettier@3.9.6)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
     optionalDependencies:
-      typescript: 7.1.0-dev.20260819.1
+      typescript: 7.1.0-dev.20260826.1
     transitivePeerDependencies:
       - supports-color
 
-  '@storybook/react@10.1.4(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(storybook@10.1.2(@testing-library/dom@10.4.1)(prettier@3.9.6)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(typescript@7.1.0-dev.20260819.1)':
+  '@storybook/react@10.1.4(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(storybook@10.1.2(@testing-library/dom@10.4.1)(prettier@3.9.6)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(typescript@7.1.0-dev.20260826.1)':
     dependencies:
       '@storybook/global': 5.0.0
       '@storybook/react-dom-shim': 10.1.4(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(storybook@10.1.2(@testing-library/dom@10.4.1)(prettier@3.9.6)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))
@@ -14272,7 +14282,7 @@ snapshots:
       react-dom: 19.2.0(react@19.2.0)
       storybook: 10.1.2(@testing-library/dom@10.4.1)(prettier@3.9.6)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
     optionalDependencies:
-      typescript: 7.1.0-dev.20260819.1
+      typescript: 7.1.0-dev.20260826.1
     transitivePeerDependencies:
       - supports-color
 
@@ -14685,13 +14695,13 @@ snapshots:
   '@typescript/typescript-darwin-arm64@7.0.2':
     optional: true
 
-  '@typescript/typescript-darwin-arm64@7.1.0-dev.20260819.1':
+  '@typescript/typescript-darwin-arm64@7.1.0-dev.20260826.1':
     optional: true
 
   '@typescript/typescript-darwin-x64@7.0.2':
     optional: true
 
-  '@typescript/typescript-darwin-x64@7.1.0-dev.20260819.1':
+  '@typescript/typescript-darwin-x64@7.1.0-dev.20260826.1':
     optional: true
 
   '@typescript/typescript-freebsd-arm64@7.0.2':
@@ -14703,13 +14713,13 @@ snapshots:
   '@typescript/typescript-linux-arm64@7.0.2':
     optional: true
 
-  '@typescript/typescript-linux-arm64@7.1.0-dev.20260819.1':
+  '@typescript/typescript-linux-arm64@7.1.0-dev.20260826.1':
     optional: true
 
   '@typescript/typescript-linux-arm@7.0.2':
     optional: true
 
-  '@typescript/typescript-linux-arm@7.1.0-dev.20260819.1':
+  '@typescript/typescript-linux-arm@7.1.0-dev.20260826.1':
     optional: true
 
   '@typescript/typescript-linux-loong64@7.0.2':
@@ -14730,7 +14740,7 @@ snapshots:
   '@typescript/typescript-linux-x64@7.0.2':
     optional: true
 
-  '@typescript/typescript-linux-x64@7.1.0-dev.20260819.1':
+  '@typescript/typescript-linux-x64@7.1.0-dev.20260826.1':
     optional: true
 
   '@typescript/typescript-netbsd-arm64@7.0.2':
@@ -14751,13 +14761,13 @@ snapshots:
   '@typescript/typescript-win32-arm64@7.0.2':
     optional: true
 
-  '@typescript/typescript-win32-arm64@7.1.0-dev.20260819.1':
+  '@typescript/typescript-win32-arm64@7.1.0-dev.20260826.1':
     optional: true
 
   '@typescript/typescript-win32-x64@7.0.2':
     optional: true
 
-  '@typescript/typescript-win32-x64@7.1.0-dev.20260819.1':
+  '@typescript/typescript-win32-x64@7.1.0-dev.20260826.1':
     optional: true
 
   '@typescript/typescript6@6.0.2':
@@ -20094,9 +20104,9 @@ snapshots:
       minimist: 1.2.8
       strip-json-comments: 2.0.1
 
-  react-docgen-typescript@2.4.0(typescript@7.1.0-dev.20260819.1):
+  react-docgen-typescript@2.4.0(typescript@7.1.0-dev.20260826.1):
     dependencies:
-      typescript: 7.1.0-dev.20260819.1
+      typescript: 7.1.0-dev.20260826.1
 
   react-docgen@8.0.2:
     dependencies:
@@ -21280,12 +21290,12 @@ snapshots:
 
   ts-dedent@2.2.0: {}
 
-  ts-evaluator@2.0.0(jsdom@27.2.0)(typescript@7.1.0-dev.20260819.1):
+  ts-evaluator@2.0.0(jsdom@27.2.0)(typescript@7.1.0-dev.20260826.1):
     dependencies:
       ansi-colors: 4.1.3
       crosspath: 2.0.0
       object-path: 0.11.8
-      typescript: 7.1.0-dev.20260819.1
+      typescript: 7.1.0-dev.20260826.1
     optionalDependencies:
       jsdom: 27.2.0
 
@@ -21429,15 +21439,15 @@ snapshots:
       '@typescript/typescript-win32-arm64': 7.0.2
       '@typescript/typescript-win32-x64': 7.0.2
 
-  typescript@7.1.0-dev.20260819.1:
+  typescript@7.1.0-dev.20260826.1:
     optionalDependencies:
-      '@typescript/typescript-darwin-arm64': 7.1.0-dev.20260819.1
-      '@typescript/typescript-darwin-x64': 7.1.0-dev.20260819.1
-      '@typescript/typescript-linux-arm': 7.1.0-dev.20260819.1
-      '@typescript/typescript-linux-arm64': 7.1.0-dev.20260819.1
-      '@typescript/typescript-linux-x64': 7.1.0-dev.20260819.1
-      '@typescript/typescript-win32-arm64': 7.1.0-dev.20260819.1
-      '@typescript/typescript-win32-x64': 7.1.0-dev.20260819.1
+      '@typescript/typescript-darwin-arm64': 7.1.0-dev.20260826.1
+      '@typescript/typescript-darwin-x64': 7.1.0-dev.20260826.1
+      '@typescript/typescript-linux-arm': 7.1.0-dev.20260826.1
+      '@typescript/typescript-linux-arm64': 7.1.0-dev.20260826.1
+      '@typescript/typescript-linux-x64': 7.1.0-dev.20260826.1
+      '@typescript/typescript-win32-arm64': 7.1.0-dev.20260826.1
+      '@typescript/typescript-win32-x64': 7.1.0-dev.20260826.1
 
   ufo@1.6.1: {}
 

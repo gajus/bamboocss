@@ -1,14 +1,14 @@
 {
-  "name": "@bamboocss/parser",
+  "name": "@bamboocss/ts-ast",
   "version": "1.49.0",
-  "description": "The static parser for bamboo css",
+  "description": "The AST backend bamboo extracts through, on TypeScript 7's Go compiler",
   "homepage": "https://bamboocss.com",
   "license": "MIT",
   "author": "Gajus Kuizinas <gajus@gajus.com>",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/gajus/bamboocss.git",
-    "directory": "packages/parser"
+    "directory": "packages/ts-ast"
   },
   "files": [
     "dist"
@@ -21,12 +21,13 @@
     ".": {
       "source": "./src/index.ts",
       "types": "./dist/index.d.cts",
+      "require": "./dist/index.cjs",
       "import": {
         "types": "./dist/index.d.mts",
         "default": "./dist/index.mjs"
-      },
-      "require": "./dist/index.cjs"
-    }
+      }
+    },
+    "./package.json": "./package.json"
   },
   "publishConfig": {
     "access": "public"
@@ -34,22 +35,12 @@
   "scripts": {
     "build": "tsdown src/index.ts --format=esm,cjs --dts",
     "build-fast": "tsdown --dts=false src/index.ts --format=esm,cjs",
-    "dev": "pnpm build-fast --watch"
+    "dev": "tsdown --dts=false src/index.ts --watch --format=esm,cjs"
   },
   "dependencies": {
-    "@bamboocss/config": "workspace:^",
-    "@bamboocss/core": "workspace:^",
-    "@bamboocss/extractor": "workspace:*",
-    "@bamboocss/logger": "workspace:*",
-    "@bamboocss/shared": "workspace:*",
-    "@bamboocss/types": "workspace:*",
-    "ts-morph": "28.0.0",
-    "ts-pattern": "5.9.0"
+    "@typescript/api": "npm:typescript@7.1.0-dev.20260826.1"
   },
   "devDependencies": {
-    "@bamboocss/generator": "workspace:*",
-    "@bamboocss/plugin-svelte": "workspace:*",
-    "@bamboocss/plugin-vue": "workspace:*",
-    "@typescript/api": "npm:typescript@7.1.0-dev.20260826.1"
+    "ts-morph": "28.0.0"
   }
 }

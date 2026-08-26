@@ -1,3 +1,4 @@
+import { pathOf } from '@bamboocss/ts-ast'
 import type { DeadImport, ParserOptions } from '@bamboocss/core'
 import { type BoxNode, box } from '@bamboocss/extractor'
 import { BambooError, getOrCreateSet } from '@bamboocss/shared'
@@ -292,7 +293,7 @@ export class ParserResult implements ParserResultInterface {
       if (!node || seen.has(node)) return
       seen.add(node)
 
-      const path = node.getNode?.()?.getSourceFile().fileName.replaceAll('\\', '/')
+      const path = pathOf(node.getNode?.()?.getSourceFile())?.replaceAll('\\', '/')
       if (path && path !== own) paths.add(path)
 
       if (box.isMap(node)) {

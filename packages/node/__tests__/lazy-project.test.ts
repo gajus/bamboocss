@@ -13,6 +13,19 @@ import { codegen } from '../src/codegen'
 import { BambooContext } from '../src/create-context'
 import { nodeRuntime } from '../src/node-runtime'
 
+/**
+ * Reads of the fixture's own files.
+ *
+ * These counts were always about bamboo's sources — how many the wrapper materialized, and that
+ * a second source operation adds none. Under ts-morph the spy saw nothing else, because its
+ * project was constructed with `skipLoadingLibFiles` and an in-memory filesystem. TypeScript 7
+ * reads through this same delegate for everything it needs, `lib.*.d.ts` included, so a bare
+ * call count is now a number about the compiler's installation. Filtering to the fixture
+ * directory asks the original question again.
+ */
+const sourceReads = (spy: { mock: { calls: unknown[][] } }, directory: string) =>
+  spy.mock.calls.filter(([file]) => typeof file === 'string' && file.startsWith(directory)).length
+
 const temporaryDirectories = new Set<string>()
 
 afterEach(() => {
@@ -110,10 +123,10 @@ describe('BambooContext.project materialization', () => {
 
     expect(project.getSourceFile(path.join(directory, 'src/a.ts'))).toBeDefined()
 
-    expect(read).toHaveBeenCalledTimes(3)
+    expect(sourceReads(read, directory)).toBe(3)
     expect(createSourceFile).toHaveBeenCalledTimes(3)
     expect(project.getSourceFile(path.join(directory, 'src/b.tsx'))).toBeDefined()
-    expect(read).toHaveBeenCalledTimes(3)
+    expect(sourceReads(read, directory)).toBe(3)
     expect(createSourceFile).toHaveBeenCalledTimes(3)
     const loadedDescriptor = Object.getOwnPropertyDescriptor(context, 'project')!
     expect(loadedDescriptor).toMatchObject({
@@ -131,7 +144,7 @@ describe('BambooContext.project materialization', () => {
   test('direct ts-morph project access is a materializing source operation', () => {
     const read = vi.spyOn(nodeRuntime.fs, 'readFileSync')
     const createSourceFile = vi.spyOn(TsProject.prototype, 'createSourceFile')
-    const { context } = contextFor({
+    const { context, directory } = contextFor({
       'src/a.ts': 'export const a = 1',
       'src/b.ts': 'export const b = 2',
     })
@@ -139,10 +152,10 @@ describe('BambooContext.project materialization', () => {
 
     expect(read).not.toHaveBeenCalled()
     expect(wrapper.project.getSourceFiles()).toHaveLength(2)
-    expect(read).toHaveBeenCalledTimes(2)
+    expect(sourceReads(read, directory)).toBe(2)
     expect(createSourceFile).toHaveBeenCalledTimes(2)
     expect(wrapper.project.getSourceFiles()).toHaveLength(2)
-    expect(read).toHaveBeenCalledTimes(2)
+    expect(sourceReads(read, directory)).toBe(2)
     expect(createSourceFile).toHaveBeenCalledTimes(2)
   })
 
@@ -342,7 +355,7 @@ describe('BambooContext.project materialization', () => {
     expect(context.project).toBe(project)
     expect(read).not.toHaveBeenCalled()
     expect(project.getSourceFile(path.join(directory, 'src/a.ts'))).toBeDefined()
-    expect(read).toHaveBeenCalledTimes(1)
+    expect(sourceReads(read, directory)).toBe(1)
     expect(createSourceFile).toHaveBeenCalledTimes(1)
     const loadedFrozenDescriptor = Object.getOwnPropertyDescriptor(context, 'project')!
     expect(loadedFrozenDescriptor).toMatchObject({
@@ -367,7 +380,7 @@ describe('BambooContext.project materialization', () => {
     expect(context.project).toBe(project)
     expect(read).not.toHaveBeenCalled()
     expect(project.getSourceFile(path.join(directory, 'src/a.ts'))).toBeDefined()
-    expect(read).toHaveBeenCalledTimes(1)
+    expect(sourceReads(read, directory)).toBe(1)
     expect(createSourceFile).toHaveBeenCalledTimes(1)
     expect(Object.isSealed(context)).toBe(true)
     expect(Object.isFrozen(context)).toBe(false)
@@ -381,7 +394,7 @@ describe('BambooContext.project materialization', () => {
     const replacement = {} as BambooProject
     context.project = replacement
     expect(context.project).toBe(replacement)
-    expect(read).toHaveBeenCalledTimes(1)
+    expect(sourceReads(read, directory)).toBe(1)
     expect(createSourceFile).toHaveBeenCalledTimes(1)
   })
 
@@ -400,10 +413,10 @@ describe('BambooContext.project materialization', () => {
     expect(createSourceFile).not.toHaveBeenCalled()
     const first = project.getSourceFile(path.join(directory, 'src/a.ts'))
     expect(first).toBeDefined()
-    expect(read).toHaveBeenCalledTimes(2)
+    expect(sourceReads(read, directory)).toBe(2)
     expect(createSourceFile).toHaveBeenCalledTimes(2)
     expect(project.getSourceFile(path.join(directory, 'src/a.ts'))).toBe(first)
-    expect(read).toHaveBeenCalledTimes(2)
+    expect(sourceReads(read, directory)).toBe(2)
     expect(createSourceFile).toHaveBeenCalledTimes(2)
     expect(() => {
       project.project = new TsProject()
@@ -445,23 +458,29 @@ describe('BambooContext.project materialization', () => {
     ])
 
     expect(second).toBe(first)
-    expect(read).toHaveBeenCalledTimes(1)
+    expect(sourceReads(read, directory)).toBe(1)
     expect(createSourceFile).toHaveBeenCalledTimes(1)
   })
 
   test('a failed preload leaves the wrapper intact and retries a fresh project', () => {
-    const realRead = nodeRuntime.fs.readFileSync.bind(nodeRuntime.fs)
-    let reads = 0
-    const read = vi.spyOn(nodeRuntime.fs, 'readFileSync').mockImplementation((file) => {
-      reads++
-      if (reads === 2) throw new Error('synthetic read failure')
-      return realRead(file)
-    })
-    const createSourceFile = vi.spyOn(TsProject.prototype, 'createSourceFile')
     const { context, directory } = contextFor({
       'src/a.ts': 'export const a = 1',
       'src/b.ts': 'export const b = 2',
     })
+
+    // Counted per *fixture* read, not per read. The compiler reads its own library through this
+    // same delegate, so an ordinal now names one of those instead of one of these two files —
+    // and failing a library read proves nothing about how a failed preload is recovered.
+    const realRead = nodeRuntime.fs.readFileSync.bind(nodeRuntime.fs)
+    let reads = 0
+    const read = vi.spyOn(nodeRuntime.fs, 'readFileSync').mockImplementation((file) => {
+      if (typeof file === 'string' && file.startsWith(directory)) {
+        reads++
+        if (reads === 2) throw new Error('synthetic read failure')
+      }
+      return realRead(file)
+    })
+    const createSourceFile = vi.spyOn(TsProject.prototype, 'createSourceFile')
 
     const project = context.project
     expect(() => project.getSourceFile(path.join(directory, 'src/a.ts'))).toThrow('synthetic read failure')
@@ -471,7 +490,7 @@ describe('BambooContext.project materialization', () => {
 
     expect(project.getSourceFile(path.join(directory, 'src/a.ts'))).toBeDefined()
     expect(project.getSourceFile(path.join(directory, 'src/b.ts'))).toBeDefined()
-    expect(read).toHaveBeenCalledTimes(4)
+    expect(sourceReads(read, directory)).toBe(4)
     // One file entered the discarded Project; both entered the successful retry.
     expect(createSourceFile).toHaveBeenCalledTimes(3)
   })
@@ -498,7 +517,7 @@ describe('BambooContext.project materialization', () => {
     expect(descriptor.writable).toBe(true)
     expect(descriptor.value).toBe(project)
     expect(project.getSourceFile(path.join(directory, 'src/a.ts'))).toBeDefined()
-    expect(read).toHaveBeenCalledTimes(2)
+    expect(sourceReads(read, directory)).toBe(2)
     expect(createSourceFile).toHaveBeenCalledTimes(2)
   })
 
@@ -522,7 +541,7 @@ describe('BambooContext.project materialization', () => {
     expect(descriptor.writable).toBe(true)
     expect(descriptor.value).toBe(project)
     expect(context.project.getSourceFile(path.join(fixture, 'src/a.ts'))).toBeDefined()
-    expect(read).toHaveBeenCalledTimes(2)
+    expect(sourceReads(read, fixture)).toBe(2)
   })
 
   test('an included file disappearing before first access is still an ENOENT skip', () => {
@@ -535,7 +554,7 @@ describe('BambooContext.project materialization', () => {
     const project = context.project
 
     expect(project.getSourceFile(file)).toBeUndefined()
-    expect(read).toHaveBeenCalledTimes(1)
+    expect(sourceReads(read, directory)).toBe(1)
     expect(createSourceFile).not.toHaveBeenCalled()
 
     writeFileSync(file, 'export const back = true')
@@ -583,7 +602,10 @@ describe('eager-equivalent snapshots', () => {
     expect(project.getSourceFile(a)).toBeDefined()
     expect(project.getSourceFile(a)?.getFullText()).toContain('a = 9')
     expect(project.getSourceFile(b)).toBeUndefined()
-    expect(project.project.getCompilerOptions().target).toBe(ts.ScriptTarget.ES5)
+    // The value bamboo was configured with, not the compiler's reading of a tsconfig — there is
+    // no config file here, and `ES5` is not a target TypeScript 7 still has. What is under test
+    // is that the later mutation to `'ESNext'` above is not observed.
+    expect(project.project.getCompilerOptions()?.target).toBe('ES5')
     expect(project.files).toEqual([b])
 
     project.reloadSourceFiles()
@@ -621,11 +643,11 @@ describe('transparent Project consumers', () => {
 
     const result = context.parseFile(file)
     expect(result?.filePath).toBe(file)
-    expect(read).toHaveBeenCalledTimes(1)
+    expect(sourceReads(read, directory)).toBe(1)
     expect(createSourceFile).not.toHaveBeenCalled()
 
     expect(context.project.getSourceFile(source)).toBeDefined()
-    expect(read).toHaveBeenCalledTimes(3)
+    expect(sourceReads(read, directory)).toBe(3)
     expect(createSourceFile).toHaveBeenCalledTimes(2)
   })
 

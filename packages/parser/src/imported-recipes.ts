@@ -13,6 +13,7 @@ import {
   isTypeOnly,
   nameNodeOf,
   ts,
+  pathOf,
 } from '@bamboocss/ts-ast'
 import type { SourceFile } from '@bamboocss/ts-ast'
 import { getModuleSpecifierValue } from './get-module-specifier-value'
@@ -100,7 +101,7 @@ const declaredRecipes = (sourceFile: SourceFile, imports: ImportMap) => {
   const factories = recipeFactoryAliases(sourceFile, imports)
   if (factories.size === 0) return { declared, exported }
 
-  const filePath = sourceFile.fileName
+  const filePath = pathOf(sourceFile)
 
   for (const statement of sourceFile.statements) {
     if (!ts.isVariableStatement(statement)) continue

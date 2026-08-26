@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { isAbsolute, resolve } from 'node:path'
 import { API } from '@typescript/api/unstable/sync'
+import { compilerPathOf } from './node'
 import type { FileSystemDelegate, Node, ProjectOptions, SourceFile } from './types'
 
 /** A file shipped with the compiler rather than written by the project. */
@@ -58,9 +59,13 @@ export class Project {
   /** Paths this project has asked the compiler to hold open, so each is opened once. */
   #opened = new Set<string>()
 
+  /** Options supplied by the caller, which outrank the compiler's own reading — see below. */
+  #compilerOptions: Record<string, unknown> | undefined
+
   constructor(options: ProjectOptions) {
     this.#cwd = options.cwd ?? process.cwd()
     this.#fs = options.fs
+    this.#compilerOptions = (options as { compilerOptions?: Record<string, unknown> }).compilerOptions
 
     // Only a config that is actually there. Opening one that is not appears to succeed and
     // then poisons the session: the server has no such project, so every later
@@ -103,9 +108,13 @@ export class Project {
    * a relative path from a config's `include`, an absolute one from a resolver. Normalising at
    * the boundary is what keeps the overlay's keys and the program's keys the same strings;
    * without it an installed source is readable under one spelling and absent under the other.
+   *
+   * It is also where an extension the compiler will not parse is aliased to one it will, so a
+   * `.vue` or `.svelte` module — whose text a `parser:before` hook has already turned into TSX —
+   * is admitted to the program at all. `pathOf` is the inverse, for anything recording a path.
    */
   #abs(filePath: string): string {
-    return isAbsolute(filePath) ? filePath : resolve(this.#cwd, filePath)
+    return compilerPathOf(isAbsolute(filePath) ? filePath : resolve(this.#cwd, filePath))
   }
 
   /**
@@ -224,18 +233,32 @@ export class Project {
   getSourceFiles(): SourceFile[] {
     const found = new Map<string, SourceFile>()
     for (const project of this.#snapshot.getProjects()) {
-      for (const file of project.program.getSourceFiles()) {
-        const source = file as SourceFile
-        if (isDefaultLibrary(source.fileName)) continue
-        found.set(source.fileName, source)
+      // Names first, then the file. The program exposes its membership as paths and materializes
+      // a tree only when asked for one, so filtering here keeps the library's files from being
+      // fetched across the process boundary just to be discarded.
+      for (const fileName of project.program.getSourceFileNames()) {
+        if (isDefaultLibrary(fileName) || found.has(fileName)) continue
+        const source = project.program.getSourceFile(fileName) as SourceFile | undefined
+        if (source) found.set(fileName, source)
       }
     }
     return [...found.values()]
   }
 
-  /** The project's resolved `compilerOptions`, as the Go compiler parsed them. */
+  /**
+   * The project's `compilerOptions` — what it was configured with, over what the compiler
+   * resolved.
+   *
+   * ts-morph was *constructed* from these options, so asking a project for them returned the
+   * caller's own values. TypeScript 7 takes its options from a `tsconfig.json` and reports what
+   * it parsed, which means options supplied directly — as bamboo does, having resolved the
+   * tsconfig itself, and as a caller with no config file on disk must — would otherwise be
+   * invisible here. The compiler's answer still fills in everything not spoken for.
+   */
   getCompilerOptions() {
-    return this.#project()?.program.getCompilerOptions()
+    const reported = this.#project()?.program.getCompilerOptions()
+    if (!this.#compilerOptions) return reported
+    return { ...reported, ...this.#compilerOptions }
   }
 
   /** The directory the project is rooted at. */

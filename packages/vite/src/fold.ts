@@ -30,6 +30,7 @@ import {
   literalValueOf,
   nameNodeOf,
   stringLiteralValue,
+  pathOf,
 } from '@bamboocss/ts-ast'
 import type {
   CallExpression,
@@ -613,7 +614,7 @@ const createDependencyScan = (ownFile: SourceFile): DependencyScan => {
 
       let path = paths.get(sourceFile)
       if (path === undefined) {
-        path = sourceFile.fileName
+        path = pathOf(sourceFile)
         paths.set(sourceFile, path)
       }
       if (path) results.add(path)
@@ -1043,7 +1044,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       // Declared here after all — the local pass owns it, and parsing this module again
       // from inside its own fold would recurse.
       const consuming = call.getSourceFile()
-      if (origin.filePath === consuming.fileName) return undefined
+      if (origin.filePath === pathOf(consuming)) return undefined
 
       let foreign = configsByModule.get(origin.filePath)
 
@@ -1083,7 +1084,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
 
       helperModules.set(
         name,
-        foreign.cssSpecifier ? rebaseSpecifier(foreign.cssSpecifier, origin.filePath, consuming.fileName) : undefined,
+        foreign.cssSpecifier ? rebaseSpecifier(foreign.cssSpecifier, origin.filePath, pathOf(consuming)) : undefined,
       )
       return entry
     }

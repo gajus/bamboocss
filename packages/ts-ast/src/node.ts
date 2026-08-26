@@ -360,3 +360,51 @@ export const stringLiteralValue = (node: Node): string => (node as { text?: stri
 /** Whether a member carries the `readonly` modifier. */
 export const isReadonly = (node: Node): boolean =>
   (childOf<Node[]>(node, 'modifiers') ?? []).some((modifier) => modifier.kind === SyntaxKindValues.ReadonlyKeyword)
+
+/**
+ * The suffix an unparseable extension is held under.
+ *
+ * TypeScript 7 decides a file's script kind from its extension and declines everything it does
+ * not recognise — a `.vue`, `.svelte` or `.astro` path is simply not admitted to the program,
+ * whatever text is supplied for it. ts-morph took a `scriptKind` argument and asked no further
+ * questions, which is how bamboo has always parsed single-file components: a `parser:before`
+ * hook lifts the script block out and the result is TSX under the original name.
+ *
+ * So the compiler is given a name it will accept, and bamboo keeps its own. The suffix is
+ * appended rather than substituted so the original extension survives inside it, and it is
+ * distinctive enough that `pathOf` can undo it without a lookup table.
+ */
+const ALIAS_SUFFIX = '.bamboo.tsx'
+
+/** Extensions TypeScript will parse under their own name. */
+const COMPILER_EXTENSIONS = new Set(['.cjs', '.cts', '.js', '.json', '.jsx', '.mjs', '.mts', '.ts', '.tsx'])
+
+const extensionOf = (filePath: string): string => {
+  const at = filePath.lastIndexOf('.')
+  const slash = filePath.lastIndexOf('/')
+  return at > slash ? filePath.slice(at).toLowerCase() : ''
+}
+
+/** The name the compiler will hold this path under, which is the path itself unless it refuses it. */
+export const compilerPathOf = (filePath: string): string =>
+  COMPILER_EXTENSIONS.has(extensionOf(filePath)) ? filePath : `${filePath}${ALIAS_SUFFIX}`
+
+/**
+ * The path bamboo knows a file by, given the compiler's name for it.
+ *
+ * Identity for everything the compiler accepts under its own name, which is nearly every file.
+ * Everywhere bamboo records or compares a path — the ledger, dependency records, diagnostics —
+ * this is the spelling to use, because it is the one the watcher and the bundler will report.
+ */
+export function pathOf(file: string | { fileName: string }): string
+export function pathOf(file: string | { fileName: string } | undefined): string | undefined
+export function pathOf(file: string | { fileName: string } | undefined): string | undefined {
+  if (file === undefined) return undefined
+  const filePath = typeof file === 'string' ? file : file.fileName
+  if (!filePath.endsWith(ALIAS_SUFFIX)) return filePath
+
+  // Only when something recognisable is underneath: a file genuinely named `x.bamboo.tsx` ends
+  // with the same characters and is not an alias of anything.
+  const original = filePath.slice(0, -ALIAS_SUFFIX.length)
+  return extensionOf(original) && !COMPILER_EXTENSIONS.has(extensionOf(original)) ? original : filePath
+}

@@ -1,4 +1,4 @@
-import { Node, getLineAndColumnAtPos, getName } from '@bamboocss/ts-ast'
+import { Node, getLineAndColumnAtPos, getName, pathOf } from '@bamboocss/ts-ast'
 import type { Identifier, TemplateExpression } from '@bamboocss/ts-ast'
 import { type BoxNode, box, unwrapExpression } from '@bamboocss/extractor'
 import type { ResultItem } from '@bamboocss/types'
@@ -287,7 +287,7 @@ export const findUnresolvedRecipeStyles = (item: ResultItem): UnresolvedStyle[] 
   if (!losses.length) return []
 
   const { line, column } = getLineAndColumnAtPos(sourceFile, node.getStart())
-  return losses.map((loss) => ({ column, filePath: sourceFile.fileName, kind: 'recipe' as const, line, ...loss }))
+  return losses.map((loss) => ({ column, filePath: pathOf(sourceFile), kind: 'recipe' as const, line, ...loss }))
 }
 
 export const findUnresolvedStyles = (item: ResultItem, kind: 'atomic'): UnresolvedStyle[] => {
@@ -339,7 +339,7 @@ export const findUnresolvedStyles = (item: ResultItem, kind: 'atomic'): Unresolv
   // top of the file, and this now runs for every JSX element and pattern call a grouped
   // build sees — where the answer is almost always that nothing was lost.
   const { line, column } = getLineAndColumnAtPos(sourceFile, node.getStart())
-  const at = { filePath: sourceFile.fileName, line, column }
+  const at = { filePath: pathOf(sourceFile), line, column }
 
   return losses.map((loss) => ({ ...at, kind, ...loss }))
 }

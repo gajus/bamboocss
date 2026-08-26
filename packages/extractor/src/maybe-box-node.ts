@@ -16,6 +16,7 @@ import {
   nameNodeOf,
   stringLiteralValue,
   ts,
+  pathOf,
 } from '@bamboocss/ts-ast'
 import type {
   ArrayLiteralExpression,
@@ -898,10 +899,10 @@ export const getExportedVarDeclarationWithName = (
   // Every hop of a cross-file value resolution, recorded so a later edit can be verified
   // against exactly what was read — including re-export hops, whose re-resolution is what
   // catches a barrel re-routing a name without the final declaration changing.
-  ctx.recordExportRead?.(sourceFile.fileName, varName)
+  ctx.recordExportRead?.(pathOf(sourceFile), varName)
   // Guard the entry rather than the recursive call, so a file re-exporting itself
   // is caught on the way in.
-  const key = `${sourceFile.fileName}:${varName}`
+  const key = `${pathOf(sourceFile)}:${varName}`
   if (visited.has(key)) return
   visited.add(key)
 
@@ -957,7 +958,7 @@ export const getModuleSpecifierSourceFile = (declaration: ExportDeclaration | Im
 
   if (!moduleName) return
   const sourceFile = ctx.resolveModule?.(moduleName, declaration.getSourceFile())
-  if (sourceFile) recordModuleDependency(ctx, sourceFile.fileName)
+  if (sourceFile) recordModuleDependency(ctx, pathOf(sourceFile))
   return sourceFile
 }
 

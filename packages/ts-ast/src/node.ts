@@ -1,6 +1,6 @@
 import * as predicates from '@typescript/api/unstable/ast/is'
 import type { ImportDeclaration, SourceFile } from '@typescript/api/unstable/ast'
-import type { Node } from './types'
+import type { Node as AstNode } from './types'
 
 /**
  * The predicates, under the spelling the extractor already uses.
@@ -17,6 +17,21 @@ import type { Node } from './types'
  * function over a node, never a thing that owns one.
  */
 export const is = predicates
+
+/**
+ * The same predicates under ts-morph's spelling, so the call sites do not have to move.
+ *
+ * ts-morph exposes them as statics on a `Node` class — `Node.isIdentifier(x)` — and bamboo
+ * writes that 438 times. Rebinding the namespace rather than rewriting those call sites means
+ * the backend swap reaches them through the import statement alone, which is 438 fewer chances
+ * to change a predicate while changing a backend.
+ *
+ * Merged with the type of the same name below, exactly as ts-morph's class was both.
+ */
+export const Node = predicates
+
+/** The type half of the merge, so `Node` names both the predicates and what they narrow. */
+export type Node = AstNode
 
 /**
  * ts-morph spells the parent and the kind as getters; TypeScript 7 spells them as properties.

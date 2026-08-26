@@ -9,6 +9,7 @@ import {
   getImportDeclarations,
   getModuleSpecifierValue,
   is,
+  Node as NodeNamespace,
 } from '../src/node'
 import { Project } from '../src/project'
 import type { SourceFile } from '../src/types'
@@ -200,5 +201,34 @@ describe('reading text that is not on disk', () => {
     forEachDescendant(sourceFile(), (node) => is.isStringLiteral(node) && literals.push(node.text as string))
 
     expect(literals).toContain('red.300')
+  })
+})
+
+/**
+ * The predicates are also exported under ts-morph's spelling, because bamboo writes
+ * `Node.isIdentifier(x)` 438 times and rewriting those is 438 chances to change a predicate
+ * while changing a backend. The value and the type share a name here exactly as ts-morph's
+ * class did, so an existing `import { Node } from 'ts-morph'` becomes an import from this
+ * package and nothing under it moves.
+ */
+describe('the ts-morph spelling of the predicates', () => {
+  test('Node.isX is the same function as is.isX', () => {
+    expect(NodeNamespace.isCallExpression).toBe(is.isCallExpression)
+    expect(NodeNamespace.isIdentifier).toBe(is.isIdentifier)
+  })
+
+  test('narrows the same nodes a walk finds', () => {
+    const viaNamespace: string[] = []
+    forEachDescendant(sourceFile(), (node) => {
+      if (NodeNamespace.isCallExpression(node)) viaNamespace.push(node.getText())
+    })
+
+    const viaIs: string[] = []
+    forEachDescendant(sourceFile(), (node) => {
+      if (is.isCallExpression(node)) viaIs.push(node.getText())
+    })
+
+    expect(viaNamespace).toEqual(viaIs)
+    expect(viaNamespace.length).toBeGreaterThan(0)
   })
 })

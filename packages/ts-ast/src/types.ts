@@ -38,9 +38,17 @@ export interface FileSystemDelegate {
 
 export interface ProjectOptions {
   /** Directory the project is rooted at. */
-  cwd: string
+  cwd?: string
   /** The `tsconfig.json` whose `include` decides the program's files. */
-  tsConfigFilePath: string
+  /**
+   * The config the compiler opens this project on, when there is one.
+   *
+   * Optional because bamboo's parser is routinely constructed from compiler options with no
+   * file behind them — a standalone project, or a caller supplying options directly. TypeScript
+   * 7 has a shape for that: with no configured project, an opened file is loaded into an
+   * *inferred* one, which is what ts-morph's bag-of-files amounted to.
+   */
+  tsConfigFilePath?: string
   /** Reads delegated to bamboo's runtime rather than to the disk. */
   fs?: FileSystemDelegate
   /**

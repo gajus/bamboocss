@@ -3,6 +3,10 @@ import { isAbsolute, resolve } from 'node:path'
 import { API } from '@typescript/api/unstable/sync'
 import type { FileSystemDelegate, Node, ProjectOptions, SourceFile } from './types'
 
+/** A file shipped with the compiler rather than written by the project. */
+const isDefaultLibrary = (fileName: string): boolean =>
+  fileName.includes('/typescript/lib/') || /\/lib\.[a-z0-9.]+\.d\.ts$/.test(fileName)
+
 /** The real directory, or an empty listing when there is none — an absent directory is not an error. */
 const readDirectory = (directoryName: string): { files: string[]; directories: string[] } => {
   try {
@@ -35,7 +39,7 @@ const readDirectory = (directoryName: string): { files: string[]; directories: s
 export class Project {
   #api: API
   #snapshot: ReturnType<API['updateSnapshot']>
-  #tsConfigFilePath: string
+  #tsConfigFilePath: string | undefined
 
   /**
    * Content this project holds that is not on disk, or differs from what is.
@@ -55,11 +59,21 @@ export class Project {
   #opened = new Set<string>()
 
   constructor(options: ProjectOptions) {
-    this.#tsConfigFilePath = options.tsConfigFilePath
-    this.#cwd = options.cwd
+    this.#cwd = options.cwd ?? process.cwd()
     this.#fs = options.fs
-    this.#api = new API({ cwd: options.cwd, fs: this.#delegate(options.fs) })
-    this.#snapshot = this.#api.updateSnapshot({ openProjects: [this.#tsConfigFilePath] })
+
+    // Only a config that is actually there. Opening one that is not appears to succeed and
+    // then poisons the session: the server has no such project, so every later
+    // `updateSnapshot` fails with `project not found for update` — including the first source
+    // this project is asked to hold. bamboo reaches here that way whenever a project has no
+    // tsconfig, which is an ordinary configuration rather than an error.
+    this.#tsConfigFilePath =
+      options.tsConfigFilePath && this.#onDisk(options.tsConfigFilePath) ? options.tsConfigFilePath : undefined
+
+    this.#api = new API({ cwd: this.#cwd, fs: this.#delegate(options.fs) })
+    // No config is not an error. The snapshot simply starts with no configured project, and
+    // whatever is opened later lands in the inferred one.
+    this.#snapshot = this.#api.updateSnapshot(this.#tsConfigFilePath ? { openProjects: [this.#tsConfigFilePath] } : {})
   }
 
   /** The file as the current snapshot sees it, or `undefined` when no project holds it. */
@@ -197,6 +211,26 @@ export class Project {
       return project.program.getSyntacticDiagnostics(path).length
     }
     return 0
+  }
+
+  /**
+   * Every source the project holds, the compiler's own library excluded.
+   *
+   * ts-morph was constructed with `skipLoadingLibFiles`, so its answer was the files bamboo had
+   * put in and nothing else. TypeScript 7 always has `lib.*.d.ts` in the program, and counting
+   * those would make this a number about the compiler's installation rather than about the
+   * project — so they are filtered out, which leaves the same set as before.
+   */
+  getSourceFiles(): SourceFile[] {
+    const found = new Map<string, SourceFile>()
+    for (const project of this.#snapshot.getProjects()) {
+      for (const file of project.program.getSourceFiles()) {
+        const source = file as SourceFile
+        if (isDefaultLibrary(source.fileName)) continue
+        found.set(source.fileName, source)
+      }
+    }
+    return [...found.values()]
   }
 
   /** The project's resolved `compilerOptions`, as the Go compiler parsed them. */

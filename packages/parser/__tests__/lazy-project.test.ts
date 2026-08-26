@@ -1,7 +1,24 @@
 import { createContext } from '@bamboocss/fixture'
-import { Project as TsProject } from 'ts-morph'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import { Project as TsProject } from '@bamboocss/ts-ast'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { Project } from '../src/project'
+
+/**
+ * A project to hand over as a replacement, with nothing in it.
+ *
+ * ts-morph could conjure one from `useInMemoryFileSystem`. The TypeScript 7 backend is a
+ * compiler in another process, so the empty project still needs somewhere to be rooted and a
+ * config to be opened on — the point of these cases is only that assigning one is a
+ * materializing operation, not what it contains.
+ */
+const standaloneProject = () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'bamboo-standalone-'))
+  writeFileSync(path.join(root, 'tsconfig.json'), JSON.stringify({ compilerOptions: { noEmit: true, noLib: true } }))
+  return new TsProject({ cwd: root, tsConfigFilePath: path.join(root, 'tsconfig.json') })
+}
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -65,7 +82,7 @@ describe('Project deferred initial sources', () => {
       writable: true,
     })
 
-    const replacement = new TsProject({ useInMemoryFileSystem: true })
+    const replacement = standaloneProject()
     project.project = replacement
     expect(project.project).toBe(replacement)
   })
@@ -133,7 +150,7 @@ describe('Project deferred initial sources', () => {
 
   test('a frozen deferred wrapper does not mutate an alternate assignment receiver', () => {
     const { project, readFile } = projectFixture(true)
-    const replacement = new TsProject({ useInMemoryFileSystem: true })
+    const replacement = standaloneProject()
     const receiver = {}
 
     Object.freeze(project)
@@ -148,7 +165,7 @@ describe('Project deferred initial sources', () => {
   test('alternate-receiver raw-project assignment leaves the deferred wrapper untouched', () => {
     const createSourceFile = vi.spyOn(TsProject.prototype, 'createSourceFile')
     const { project, readFile } = projectFixture(true)
-    const replacement = new TsProject({ useInMemoryFileSystem: true })
+    const replacement = standaloneProject()
     const receiver = {}
     const before = Object.getOwnPropertyDescriptor(project, 'project')
 
@@ -169,7 +186,7 @@ describe('Project deferred initial sources', () => {
   })
 
   test('raw project replacement cannot observe or overwrite an in-flight preload', () => {
-    const replacement = new TsProject({ useInMemoryFileSystem: true })
+    const replacement = standaloneProject()
     let replaceDuringRead = true
     let project!: Project
     const readFile = vi.fn((file: string) => {
@@ -199,7 +216,7 @@ describe('Project deferred initial sources', () => {
   test('a restored raw-project descriptor cannot hide reentrant parse side effects', () => {
     const parserOptions = createContext().parserOptions
     const encoderBefore = JSON.stringify(parserOptions.encoder.toJSON())
-    const replacement = new TsProject({ useInMemoryFileSystem: true })
+    const replacement = standaloneProject()
     const dependency = replacement.createSourceFile('ghost/dependency.ts', 'export const dependency = true')
     const importer = replacement.createSourceFile(
       'ghost/importer.ts',
@@ -222,7 +239,7 @@ describe('Project deferred initial sources', () => {
           value: replacement,
           writable: true,
         })
-        project.parseSourceFile(importer.getFilePath())
+        project.parseSourceFile(importer.fileName)
         Object.defineProperty(project, 'project', deferred)
       }
       return 'export const candidate = true'
@@ -249,8 +266,8 @@ describe('Project deferred initial sources', () => {
     expect(escaped).toBeUndefined()
     expect(JSON.stringify(parserOptions.encoder.toJSON())).toBe(encoderBefore)
     expect(project.getUnresolvedImporters()).toEqual([])
-    expect(project.getDependents(dependency.getFilePath())).not.toContain(importer.getFilePath())
-    expect(project.project.getSourceFile(importer.getFilePath())).toBeUndefined()
+    expect(project.getDependents(dependency.fileName)).not.toContain(importer.fileName)
+    expect(project.project.getSourceFile(importer.fileName)).toBeUndefined()
     expect(readFile).toHaveBeenCalledTimes(2)
   })
 
@@ -368,13 +385,13 @@ describe('Project deferred initial sources', () => {
     ['reloadSourceFiles', (project) => project.reloadSourceFiles()],
     ['parseJson', (project) => project.parseJson('ghost/cache.json')],
     ['JSON parseSourceFile', (project) => project.parseSourceFile('ghost/cache.json')],
-    ['source parseSourceFile', (project, { importer }) => project.parseSourceFile(importer.getFilePath())],
+    ['source parseSourceFile', (project, { importer }) => project.parseSourceFile(importer.fileName)],
     ['transformFile', (project) => project.transformFile('ghost/source.ts', 'source')],
     ['classify', (project) => project.classify(new Map())],
   ])('a caught %s access invalidates loading before exposing wrapper state', (_name, invoke) => {
     const parserOptions = createContext().parserOptions
     const encoderBefore = JSON.stringify(parserOptions.encoder.toJSON())
-    const replacement = new TsProject({ useInMemoryFileSystem: true })
+    const replacement = standaloneProject()
     replacement.createSourceFile('ghost/dependency.ts', 'export const dependency = true')
     const importer = replacement.createSourceFile(
       'ghost/importer.ts',
@@ -427,14 +444,14 @@ describe('Project deferred initial sources', () => {
     expect(createSourceFile).toHaveBeenCalledTimes(1)
     expect(project.getDependents('ghost/dependency.ts')).toEqual([])
     expect(project.project).not.toBe(replacement)
-    expect(project.project.getSourceFile(importer.getFilePath())).toBeUndefined()
+    expect(project.project.getSourceFile(importer.fileName)).toBeUndefined()
     expect(readFile).toHaveBeenCalledTimes(2)
   })
 
   test('the deferred raw-project boundary is non-configurable while assignment stays authoritative', () => {
     const { project, readFile } = projectFixture(true, ['app/a.ts'])
     const deferred = Object.getOwnPropertyDescriptor(project, 'project')!
-    const replacement = new TsProject({ useInMemoryFileSystem: true })
+    const replacement = standaloneProject()
 
     expect(deferred).toMatchObject({ configurable: false, enumerable: true })
     expect(() => {
@@ -460,7 +477,7 @@ describe('Project deferred initial sources', () => {
     (operation) => {
       const parserOptions = createContext().parserOptions
       const encoderBefore = JSON.stringify(parserOptions.encoder.toJSON())
-      const replacement = new TsProject({ useInMemoryFileSystem: true })
+      const replacement = standaloneProject()
       const dependency = replacement.createSourceFile('ghost/dependency.ts', 'export const dependency = true')
       const importer = replacement.createSourceFile(
         'ghost/importer.ts',
@@ -479,7 +496,7 @@ describe('Project deferred initial sources', () => {
           attack = false
           try {
             if (operation === 'assignment') project.project = replacement
-            if (operation === 'source parse') project.parseSourceFile(importer.getFilePath())
+            if (operation === 'source parse') project.parseSourceFile(importer.fileName)
             if (operation === 'JSON parse') project.parseSourceFile('ghost/cache.json')
             if (operation === 'parser') project.parser(importer)
           } catch {
@@ -504,8 +521,8 @@ describe('Project deferred initial sources', () => {
       expect(project.getUnresolvedImporters()).toEqual([])
 
       expect(project.getSourceFile('app/candidate.ts')).toBeDefined()
-      expect(project.getDependents(dependency.getFilePath())).not.toContain(importer.getFilePath())
-      expect(project.project.getSourceFile(importer.getFilePath())).toBeUndefined()
+      expect(project.getDependents(dependency.fileName)).not.toContain(importer.fileName)
+      expect(project.project.getSourceFile(importer.fileName)).toBeUndefined()
       expect(readFile).toHaveBeenCalledTimes(2)
     },
   )

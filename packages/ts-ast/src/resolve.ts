@@ -79,22 +79,33 @@ export const createResolver = (options: { cwd: string; fs?: FileSystemDelegate }
   /**
    * Does this path hold a file?
    *
-   * The delegate answers first and the disk answers when it declines, which is the contract
-   * `FileSystemDelegate` states: `undefined` means fall through. Defaulting to `false` instead
-   * would make a project with no delegate resolve nothing at all — every candidate a miss, every
-   * specifier local.
+   * Asked once per candidate, and `firstExisting` walks a lot of candidates, so what this does
+   * *not* do matters as much as what it does.
+   *
+   * The disk answers first. It is the cheap answer — one `stat`, no bytes — and it is the
+   * precise one: a candidate has to be a *file*, or `./nested` stops at the directory rather
+   * than reaching `nested/index.ts`. Only when there is nothing on disk is a delegate worth
+   * asking, because the sole case it decides differently is a module with no file behind it,
+   * which is exactly what a synthesized or overlay source is. A delegate that merely *shadows*
+   * a real path does not change whether that path exists.
+   *
+   * Every delegated call is contained. A resolver probes paths that mostly do not exist, and
+   * asks about directories as though they were files; bamboo's runtime `fs` throws for both,
+   * being written for callers that read files they believe in. Here a failure to answer is
+   * absence, which is what it means — an escaping ENOENT would fail the parse of a file whose
+   * imports all resolve, over a candidate that was never supposed to be there.
    */
   const exists = (filePath: string): boolean => {
-    const answer = options.fs?.fileExists?.(filePath)
-    if (answer !== undefined) return answer
-
-    const read = options.fs?.readFile?.(filePath)
-    if (read !== undefined) return read !== null
-
-    // A file, specifically. `./nested` must reach `nested/index.ts` rather than stopping at the
-    // directory that contains it, and a bare existence check answers yes to both.
     try {
-      return statSync(filePath).isFile()
+      if (statSync(filePath).isFile()) return true
+    } catch {
+      // Nothing on disk under that name — ask below.
+    }
+
+    try {
+      if (options.fs?.fileExists?.(filePath) === true) return true
+      const read = options.fs?.readFile?.(filePath)
+      return read !== undefined && read !== null
     } catch {
       return false
     }

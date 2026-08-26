@@ -199,8 +199,14 @@ export class Project {
     const held = this.#overlay.get(this.#abs(filePath))
     if (held !== undefined) return held
 
-    const delegated = this.#fs?.readFile?.(filePath)
-    if (delegated !== undefined) return delegated ?? undefined
+    // Contained for the same reason the compiler's delegate is: bamboo's runtime `fs` throws
+    // for a missing path, and every caller here is asking whether there is anything to read.
+    try {
+      const delegated = this.#fs?.readFile?.(filePath)
+      if (delegated !== undefined) return delegated ?? undefined
+    } catch {
+      return undefined
+    }
 
     try {
       return readFileSync(filePath, 'utf8')
@@ -295,27 +301,39 @@ export class Project {
    * has to win over whatever is on disk under the same path — which is exactly the bundler case,
    * same filename, different bytes.
    */
+  /**
+   * The filesystem the Go process reads through.
+   *
+   * Every method here has to be *total*. An exception thrown in a callback does not propagate
+   * to the caller that provoked it — it crosses a process boundary and comes back as
+   * ``Error calling callback `readFile` `` attached to whatever request happened to be in
+   * flight, which fails the whole snapshot rather than the one lookup.
+   *
+   * That matters because the compiler probes speculatively: module resolution asks about paths
+   * that do not exist and about directories as though they were files, and expects "no" for an
+   * answer. bamboo's own runtime `fs` throws for both, being written for callers that only ask
+   * about files they believe in. So each delegated call is contained, and a failure to answer
+   * is reported as absence — which is what it means.
+   */
   #delegate(fs: FileSystemDelegate | undefined): FileSystemDelegate {
     const overlay = this.#overlay
+    /** `undefined` rather than a thrown ENOENT/EISDIR — see above. */
+    const attempt = <T>(read: () => T): T | undefined => {
+      try {
+        return read()
+      } catch {
+        return undefined
+      }
+    }
     return {
       ...fs,
       readFile(fileName) {
         const held = overlay.get(fileName)
-        return held === undefined ? fs?.readFile?.(fileName) : held
+        return held === undefined ? attempt(() => fs?.readFile?.(fileName)) : held
       },
       fileExists(fileName) {
-        return overlay.has(fileName) ? true : fs?.fileExists?.(fileName)
+        return overlay.has(fileName) ? true : (attempt(() => fs?.fileExists?.(fileName)) ?? false)
       },
-      /**
-       * Directory listings have to include overlay entries, or a synthesized file is readable
-       * and still not in the program.
-       *
-       * The Go process builds its file set by enumerating what the project's `include` resolves
-       * to, so a path that only answers `fileExists` is never asked for. That is the difference
-       * between an override of a real module — which the enumeration already found — and an
-       * auxiliary source with no file behind it, which is how a framework plugin hands over a
-       * block it lifted out of a single-file component.
-       */
       /**
        * What the compiler is allowed to see in a directory, overlay included.
        *
@@ -331,7 +349,7 @@ export class Project {
        * program. That reads downstream as a parse that found no styles, not as a missing file.
        */
       getAccessibleEntries(directoryName) {
-        const delegated = fs?.getAccessibleEntries?.(directoryName)
+        const delegated = attempt(() => fs?.getAccessibleEntries?.(directoryName))
         const prefix = directoryName.endsWith('/') ? directoryName : `${directoryName}/`
         const addedFiles: string[] = []
         const addedDirectories: string[] = []

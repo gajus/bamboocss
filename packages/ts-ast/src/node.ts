@@ -159,7 +159,17 @@ export const getName = (node: Node): string | undefined => {
  * was written. `'a\\nb'` is two characters to the first and six to the second, and a caller that
  * confuses them either loses an escape or invents one.
  */
-export const getLiteralText = (node: Node): string => node.getText()
+/**
+ * A literal's text as its value, not as it was written.
+ *
+ * ts-morph's `getLiteralText()` reads like a request for source, and it is not: it returned
+ * `compilerNode.text`, which is the *cooked* text — `red` for `'red'`, and `1px ` for the head
+ * of `` `1px ${x}` ``. `getText()` returns the source span instead, quotes, backticks and
+ * `${` included, which survives all the way into the stylesheet: a property name keeps its
+ * quotes, and an interpolated template comes out as its own source with the substitution
+ * spliced into the middle of it.
+ */
+export const getLiteralText = (node: Node): string => (node as Node & { text?: string }).text ?? node.getText()
 
 /** 1-based line and column for an offset, for a diagnostic that names a place in a file. */
 export const getLineAndColumnAtPos = (sourceFile: SourceFile, pos: number): { line: number; column: number } => {
@@ -208,7 +218,25 @@ export const getNamedExports = (declaration: Node): Node[] => {
  * inventing a decision about which kinds are expected there — this answers `undefined` for a
  * node with no name, exactly as the old call did.
  */
-export const nameNodeOf = (node: Node): Node | undefined => (node as { name?: Node }).name
+/**
+ * The node ts-morph's `getNameNode()` returned.
+ *
+ * For most nodes that is simply `name`. For an import or export specifier it is not: ts-morph
+ * answered with the name being *imported* — `token` in `import { token as t }` — while
+ * TypeScript keeps that under `propertyName` and puts the local binding in `name`. Reading
+ * `name` there silently swaps the two, so an aliased import resolves against the alias, finds
+ * no such export, and the styles it named are dropped rather than reported.
+ *
+ * The preference has to stay scoped to specifiers. A `BindingElement` also carries
+ * `propertyName` — `const { a: b } = x` — and there ts-morph's `getNameNode()` really is `b`,
+ * so preferring `propertyName` everywhere would break destructuring in the opposite direction.
+ */
+export const nameNodeOf = (node: Node): Node | undefined => {
+  if (predicates.isImportSpecifier(node) || predicates.isExportSpecifier(node)) {
+    return ((node as { propertyName?: Node }).propertyName ?? (node as { name?: Node }).name) as Node | undefined
+  }
+  return (node as { name?: Node }).name
+}
 
 /**
  * A named child of a node, without narrowing to the kind that declares it.

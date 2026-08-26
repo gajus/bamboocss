@@ -7,14 +7,15 @@ import type {
   Runtime,
 } from '@bamboocss/types'
 import {
-  Project,
   Project as TsProject,
-  ProjectOptions as TsProjectOptions,
   ScriptKind,
+  createResolver,
+  getExportDeclarations,
+  getImportDeclarations,
   getModuleSpecifierValue,
   ts,
 } from '@bamboocss/ts-ast'
-import type { CompilerOptions, SourceFile } from '@bamboocss/ts-ast'
+import type { CompilerOptions, ProjectOptions as TsProjectOptions, SourceFile } from '@bamboocss/ts-ast'
 import { clearBoxNodeCache, invalidateDependencyPath } from '@bamboocss/extractor'
 import { classifyProject } from './classify'
 import { clearImportedRecipeCache } from './imported-recipes'
@@ -36,11 +37,17 @@ const invalidateResolutions = () => {
 
 // TS 6.0 rejects raw JSON compiler options (e.g. `target: "ESNext"`) in createProgram.
 // They must be normalized to numeric enum values via TypeScript's own parser API first.
-const normalizeCompilerOptions = (raw: CompilerOptions | undefined, basePath = process.cwd()): CompilerOptions => {
-  if (!raw) return {}
-  const { options } = ts.convertCompilerOptionsFromJson(raw, basePath)
-  return options
-}
+/**
+ * Compiler options as given.
+ *
+ * TypeScript 6 needed `convertCompilerOptionsFromJson` to turn a tsconfig's JSON spellings —
+ * `"target": "esnext"`, relative `paths` — into the enum values and absolute paths a program
+ * consumed. TypeScript 7 parses the tsconfig in the Go process and hands back options already
+ * in that form, so there is nothing left to convert; the argument survives because callers pass
+ * overrides that are already normalized.
+ */
+const normalizeCompilerOptions = (raw: CompilerOptions | undefined, _basePath = process.cwd()): CompilerOptions =>
+  raw ?? {}
 
 /** Snapshot the JSON-shaped ts-morph options while retaining opaque hosts and callbacks. */
 const snapshotProjectOption = <T>(value: T): T => {
@@ -77,7 +84,7 @@ const prepareTsProjectOptions = (
       skipLibCheck: true,
       // Normalize now, so a deferred ts-morph constructor cannot observe a later cwd or
       // mutation of the raw compiler options that the old eager constructor had consumed.
-      ...normalizeCompilerOptions(snapshot.compilerOptions, compilerOptionsBasePath),
+      ...normalizeCompilerOptions(snapshot.compilerOptions as CompilerOptions | undefined, compilerOptionsBasePath),
     },
   }
 }
@@ -447,7 +454,7 @@ export class Project {
       // Global invalidation dispatches into other packages and, ultimately, built-ins such as
       // Map#clear. It must be inside the transaction. After this last assertion, publication
       // is only existing private-slot/data-field assignment with no user-code boundary.
-      this.#moduleResolutionCache = undefined
+      this.#resolver = undefined
       this.#fileTreeRevision++
       this.#assertSourceFilesTransaction(revision)
       this.#sourceFiles.project = candidate
@@ -539,7 +546,7 @@ export class Project {
   }
 
   private resetResolutionState = () => {
-    this.#moduleResolutionCache = undefined
+    this.#resolver = undefined
     this.#fileTreeRevision++
     this.dependents = new Map()
     this.dependencies = new Map()
@@ -599,7 +606,7 @@ export class Project {
   private normalizePath = (filePath: string) => filePath.replaceAll('\\', '/')
 
   /** Shared filesystem-only resolution cache; no type checker is constructed. */
-  #moduleResolutionCache: unknown | undefined
+  #resolver: ReturnType<typeof createResolver> | undefined
 
   /**
    * Everything memoized against the shape of the file tree, including the negative half.
@@ -637,7 +644,7 @@ export class Project {
     // per module on the transform path — dropping the cache there measured +50% on a module
     // with eight relative imports, for no correctness gained.
     if (fileTreeChanged) {
-      this.#moduleResolutionCache = undefined
+      this.#resolver = undefined
       this.#fileTreeRevision++
     }
   }
@@ -662,21 +669,22 @@ export class Project {
 
     if (replaceCompilerOptions) {
       const next =
-        prepareTsProjectOptions({ compilerOptions }, false, this.options.parserOptions.config.cwd || process.cwd())
-          .compilerOptions ?? {}
+        prepareTsProjectOptions(
+          { compilerOptions } as unknown as TsProjectOptions,
+          false,
+          this.options.parserOptions.config.cwd || process.cwd(),
+        ).compilerOptions ?? {}
       this.#sourceFiles.projectOptions = {
         ...this.#sourceFiles.projectOptions,
         compilerOptions: snapshotProjectOption(next),
       }
-      if (this.#sourceFiles.phase === 'ready') {
-        const current = this.project.getCompilerOptions()
-        const cleared = Object.fromEntries(Object.keys(current).map((key) => [key, undefined]))
-        this.project.compilerOptions.set({ ...cleared, ...next })
-      }
+      // Nothing to push: the compiler owns its options and rereads them from the tsconfig it was
+      // opened with. A project that needs different options is a different project, which is
+      // what replacing `projectOptions` above already records for the next construction.
     }
 
     invalidateResolutions()
-    this.#moduleResolutionCache = undefined
+    this.#resolver = undefined
     this.#fileTreeRevision++
     this.sourcePreparations.clear()
   }
@@ -755,45 +763,40 @@ export class Project {
 
     const project = this.project
     const compilerOptions = project.getCompilerOptions()
-    this.#moduleResolutionCache ??= ts.createModuleResolutionCache(
-      project.getFileSystem().getCurrentDirectory(),
-      (f) => f,
-      compilerOptions,
-    )
 
     const configurationFiles = new Set<string>()
-    const resolutionHost = project.getModuleResolutionHost()
     const recordConfigurationFile = (filePath: string) => {
       const normalized = this.normalizePath(filePath)
       if (!normalized.endsWith('/package.json') || normalized.includes('/node_modules/')) return
       if (!this.isInCheckout(normalized)) return
       configurationFiles.add(normalized)
     }
-    const host: unknown = {
-      ...resolutionHost,
-      fileExists: (filePath) => {
-        recordConfigurationFile(filePath)
-        return resolutionHost.fileExists(filePath)
-      },
-      readFile: (filePath) => {
-        recordConfigurationFile(filePath)
-        return resolutionHost.readFile?.(filePath)
-      },
-    }
+
+    // Resolution is bamboo's now: the Go compiler resolves internally to build its program and
+    // exposes neither the graph nor the probes. `failedLookups` is the half that matters — it is
+    // what `getLocalFailedLookupCandidates` filters to decide whether an unresolved specifier is
+    // local, and therefore whether a file written later can satisfy it.
+    this.#resolver ??= createResolver({
+      cwd: project.getCurrentDirectory(),
+      fs: { readFile: (filePath) => this.options.readFile(filePath) },
+    })
 
     this.resolutionWork.moduleResolutionsAttempted++
-    const resolved = ts.resolveModuleName(moduleName, from.fileName, compilerOptions, host, this.#moduleResolutionCache)
-    // TypeScript returns these concrete probes at runtime but intentionally omits them from
-    // the public result type. They are the only evidence that an unresolved bare name was
-    // redirected into this checkout rather than searched solely as an external package.
-    const failedLookupLocations = (resolved as unknown as { readonly failedLookupLocations?: readonly string[] })
-      .failedLookupLocations
-    const affectingLocations = (resolved as unknown as { readonly affectingLocations?: readonly string[] })
-      .affectingLocations
-    for (const filePath of affectingLocations ?? []) recordConfigurationFile(filePath)
-    const pendingCandidates = this.getLocalFailedLookupCandidates(failedLookupLocations)
+    const resolved = this.#resolver(moduleName, {
+      importer: from.fileName,
+      // Read off the resolved options rather than the published type: `baseUrl` and `paths` are
+      // tsconfig fields the Go compiler resolves and reports, and TypeScript 7's exported
+      // `CompilerOptions` does not name them.
+      baseUrl: (compilerOptions as { baseUrl?: string } | undefined)?.baseUrl,
+      paths: (compilerOptions as { paths?: Record<string, string[]> } | undefined)?.paths,
+    })
 
-    const module = resolved.resolvedModule
+    for (const filePath of resolved.affectingFiles) recordConfigurationFile(filePath)
+    const pendingCandidates = this.getLocalFailedLookupCandidates(resolved.failedLookups)
+
+    const module = resolved.path
+      ? { resolvedFileName: resolved.path, isExternalLibraryImport: resolved.path.includes('/node_modules/') }
+      : undefined
     if (!module) {
       return {
         configurationFiles: [...configurationFiles].sort(),
@@ -836,13 +839,10 @@ export class Project {
     try {
       this.resolutionWork.sourceFilesRead++
       const content = project.getFileSystem().readFileSync(name)
-      const sourceFile = project.createSourceFile(name, content, {
-        // Resolution hosts can leave a compiler source in ts-morph's factory without adding
-        // it to the Project. It is not observable through getSourceFile, but create still
-        // sees it; overwrite publishes our explicitly read copy into the owned graph.
-        overwrite: true,
-        scriptKind: scriptKindFor(name),
-      })
+      // Installing the bytes this pass read, rather than trusting whatever the compiler would
+      // find at that path — a resolution can name a file the program has not been told about.
+      const sourceFile = project.createSourceFile(name, content, { scriptKind: scriptKindFor(name) })
+      if (!sourceFile) throw new Error(`bamboo: resolved ${name} but the project produced no source file`)
       this.resolutionWork.sourceFilesAdded++
       this.canonicalPaths.set(name, this.normalizePath(sourceFile.fileName))
       return { configurationFiles: [...configurationFiles].sort(), local: true, pendingCandidates, sourceFile }
@@ -1332,10 +1332,9 @@ export class Project {
     this.invalidateSourcePreparation(filePath, existing)
     this.removedSourcePaths.delete(this.normalizePath(filePath))
     this.invalidate()
-    return this.project.createSourceFile(filePath, content, {
-      overwrite: true,
-      scriptKind: scriptKindFor(filePath),
-    })
+    const created = this.project.createSourceFile(filePath, content, { scriptKind: scriptKindFor(filePath) })
+    if (!created) throw new Error(`bamboo: could not add ${filePath} to the project`)
+    return created
   }
 
   createSourceFiles = () => {
@@ -1426,7 +1425,7 @@ export class Project {
       // would otherwise outlive it for as long as the context does.
       this.options.parserOptions.encoder.releaseFile(sourceFile.fileName)
       this.auxiliarySources.delete(this.normalizePath(sourceFile.fileName))
-      return this.project.removeSourceFile(sourceFile)
+      return this.project.removeSourceFile(sourceFile.fileName)
     }
     return false
   }

@@ -1,5 +1,5 @@
 import * as predicates from '@typescript/api/unstable/ast/is'
-import type { ImportDeclaration, SourceFile } from '@typescript/api/unstable/ast'
+import type { ExportDeclaration, ImportDeclaration, SourceFile } from '@typescript/api/unstable/ast'
 import type { Node as AstNode } from './types'
 
 /**
@@ -110,11 +110,13 @@ export const getImportDeclarations = (sourceFile: SourceFile): ImportDeclaration
  * `moduleSpecifier` is a string literal node, so `.text` is the value with the quotes already
  * removed — the same thing ts-morph's `getModuleSpecifierValue()` returns.
  */
-export const getModuleSpecifierValue = (declaration: ImportDeclaration): string | undefined =>
-  predicates.isStringLiteral(declaration.moduleSpecifier) ? declaration.moduleSpecifier.text : undefined
+export const getModuleSpecifierValue = (declaration: ExportDeclaration | ImportDeclaration): string | undefined =>
+  declaration.moduleSpecifier && predicates.isStringLiteral(declaration.moduleSpecifier)
+    ? declaration.moduleSpecifier.text
+    : undefined
 
 /** The export declarations of a source file, without walking past the top level. */
-export const getExportDeclarations = (sourceFile: SourceFile): Node[] =>
+export const getExportDeclarations = (sourceFile: SourceFile): ExportDeclaration[] =>
   sourceFile.statements.filter((statement) => predicates.isExportDeclaration(statement))
 
 /** The nearest ancestor of a kind, or `undefined`. */

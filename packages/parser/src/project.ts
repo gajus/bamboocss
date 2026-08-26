@@ -964,7 +964,7 @@ export class Project {
       facts.push(
         Object.freeze({
           importer,
-          target: resolved.sourceFile ? this.normalizePath(resolved.pathOf(sourceFile)) : null,
+          target: resolved.sourceFile ? this.normalizePath(pathOf(resolved.sourceFile)) : null,
           specifier,
           kind,
           ordinal,

@@ -4,10 +4,6 @@ import { API } from '@typescript/api/unstable/sync'
 import { compilerPathOf } from './node'
 import type { FileSystemDelegate, Node, ProjectOptions, SourceFile } from './types'
 
-/** A file shipped with the compiler rather than written by the project. */
-const isDefaultLibrary = (fileName: string): boolean =>
-  fileName.includes('/typescript/lib/') || /\/lib\.[a-z0-9.]+\.d\.ts$/.test(fileName)
-
 /** The real directory, or an empty listing when there is none — an absent directory is not an error. */
 const readDirectory = (directoryName: string): { files: string[]; directories: string[] } => {
   try {
@@ -223,26 +219,22 @@ export class Project {
   }
 
   /**
-   * Every source the project holds, the compiler's own library excluded.
+   * The sources this project was given, in the order they were installed.
    *
-   * ts-morph was constructed with `skipLoadingLibFiles`, so its answer was the files bamboo had
-   * put in and nothing else. TypeScript 7 always has `lib.*.d.ts` in the program, and counting
-   * those would make this a number about the compiler's installation rather than about the
-   * project — so they are filtered out, which leaves the same set as before.
+   * Deliberately not the program's file list. ts-morph's project *was* the set of files put
+   * into it — constructed with `skipLoadingLibFiles` and asked not to follow dependencies — so
+   * this answered "what does bamboo hold". A TypeScript 7 program is a different quantity: it
+   * carries `lib.*.d.ts`, every `@types` package it resolves, and the transitive closure of
+   * every import, which on a project rooted in this repository is some 1,700 files and not one
+   * of them a source bamboo asked about.
    */
   getSourceFiles(): SourceFile[] {
-    const found = new Map<string, SourceFile>()
-    for (const project of this.#snapshot.getProjects()) {
-      // Names first, then the file. The program exposes its membership as paths and materializes
-      // a tree only when asked for one, so filtering here keeps the library's files from being
-      // fetched across the process boundary just to be discarded.
-      for (const fileName of project.program.getSourceFileNames()) {
-        if (isDefaultLibrary(fileName) || found.has(fileName)) continue
-        const source = project.program.getSourceFile(fileName) as SourceFile | undefined
-        if (source) found.set(fileName, source)
-      }
+    const found: SourceFile[] = []
+    for (const path of this.#opened) {
+      const source = this.#find(this.#snapshot, path)
+      if (source) found.push(source)
     }
-    return [...found.values()]
+    return found
   }
 
   /**

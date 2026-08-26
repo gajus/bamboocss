@@ -1,4 +1,3 @@
-import type { CallExpression, Identifier, Node, SourceFile } from '@bamboocss/ts-ast'
 import {
   Node as MorphNode,
   SyntaxKind,
@@ -11,9 +10,14 @@ import {
   getName,
   getNamedImports,
   getNamespaceImport,
+  getVariableDeclaration,
+  getVariableDeclarations,
+  is,
   literalValueOf,
   nameNodeOf,
+  stringLiteralValue,
 } from '@bamboocss/ts-ast'
+import type { CallExpression, Identifier, Node, SourceFile } from '@bamboocss/ts-ast'
 import { unwrapExpression } from './utils'
 
 type ImportEntry = {
@@ -196,10 +200,10 @@ const collectImports = (sourceFile: SourceFile): CompiledJsxImportMap => {
   const bundledCandidates = mayHoldBundledOutput(sourceFile.getFullText())
 
   ;(bundledCandidates ? getDescendantsOfKind(sourceFile, SyntaxKind.CallExpression) : []).forEach((callExpression) => {
-    const callee = unwrapExpression(childOf(callExpression, 'expression'))
+    const callee = unwrapExpression(childOf<Node>(callExpression, 'expression') as Node)
     if (!MorphNode.isIdentifier(callee) || callee.getText() !== 'parcelRegister') return
 
-    const [idArg, factoryArg] = childOf(callExpression, 'arguments')
+    const [idArg, factoryArg] = childOf<Node[]>(callExpression, 'arguments') ?? []
     if (!MorphNode.isStringLiteral(idArg)) return
     if (!MorphNode.isArrowFunction(factoryArg) && !MorphNode.isFunctionExpression(factoryArg)) return
 
@@ -210,7 +214,7 @@ const collectImports = (sourceFile: SourceFile): CompiledJsxImportMap => {
       factoryText.includes('"jsxs"') &&
       factoryText.includes('module.exports')
     ) {
-      parcelRuntimeModuleIds.set(literalValueOf(idArg), 'react/jsx-runtime')
+      parcelRuntimeModuleIds.set(stringLiteralValue(idArg), 'react/jsx-runtime')
     }
   })
 
@@ -229,17 +233,17 @@ const collectImports = (sourceFile: SourceFile): CompiledJsxImportMap => {
     }
 
     getNamedImports(declaration).forEach((specifier) => {
-      const importedName = nameNodeOf(specifier).getText()
+      const importedName = nameNodeOf(specifier)?.getText()
       const alias = getAliasNode(specifier)?.getText() || importedName
-      named.set(alias, { importedName, mod })
+      named.set(alias ?? '', { importedName: importedName ?? '', mod })
     })
   })
 
-  sourceFile.getVariableDeclarations().forEach((declaration) => {
-    if (!MorphNode.isIdentifier(declaration.name)) return
+  getVariableDeclarations(sourceFile).forEach((declaration: Node) => {
+    if (!MorphNode.isIdentifier(nameNodeOf(declaration) as Node)) return
 
     const variableName = getName(declaration)
-    const initializer = declaration.initializer
+    const initializer = childOf<Node>(declaration, 'initializer')
     const bundledImport = resolveBundledHelperImport(variableName ?? '', initializer)
 
     if (bundledImport) {
@@ -257,7 +261,7 @@ const collectImports = (sourceFile: SourceFile): CompiledJsxImportMap => {
         callee.getText() === 'parcelRequire' &&
         MorphNode.isStringLiteral(firstArg)
       ) {
-        mod = parcelRuntimeModuleIds.get(literalValueOf(firstArg))
+        mod = parcelRuntimeModuleIds.get(stringLiteralValue(firstArg))
       }
     }
 
@@ -308,11 +312,11 @@ const collectImports = (sourceFile: SourceFile): CompiledJsxImportMap => {
     }
   }
 
-  sourceFile.getVariableDeclarations().forEach((declaration) => {
-    if (!MorphNode.isIdentifier(declaration.name)) return
+  getVariableDeclarations(sourceFile).forEach((declaration: Node) => {
+    if (!MorphNode.isIdentifier(nameNodeOf(declaration) as Node)) return
     if (bundledNamed.has(getName(declaration) ?? '')) return
 
-    const bundledAlias = resolveBundledAliasImport(declaration.initializer)
+    const bundledAlias = resolveBundledAliasImport(childOf<Node>(declaration, 'initializer'))
     if (!bundledAlias) return
 
     bundledNamed.set(getName(declaration) ?? '', bundledAlias)
@@ -418,12 +422,14 @@ const findLocalDeclaration = (identifier: Identifier) => {
   const name = identifier.getText()
 
   for (let scope: Node | undefined = identifier.parent; scope; scope = scope.parent) {
-    if (!MorphNode.isStatemented(scope)) continue
+    if (!MorphNode.isStatement(scope)) continue
 
-    const variable = scope.getVariableDeclaration(name)
+    const variable = getVariableDeclaration(scope as unknown as SourceFile, name)
     if (variable) return variable
 
-    const fn = scope.getFunction(name)
+    const fn = (childOf<Node[]>(scope, 'statements') ?? []).find(
+      (statement) => is.isFunctionDeclaration(statement) && getName(statement) === name,
+    )
     if (fn) return fn
   }
 }
@@ -486,10 +492,13 @@ export const createCompiledJsxContext = (sourceFile: SourceFile): CompiledJsxCon
       return resolved
     }
 
-    const directImport = resolveBundledHelperImport(getName(declaration) ?? '', declaration.initializer)
+    const directImport = resolveBundledHelperImport(
+      getName(declaration) ?? '',
+      childOf<Node>(declaration, 'initializer'),
+    )
     const aliasImport = directImport
       ? { mod: directImport.mod, importedName: directImport.importedName }
-      : resolveLocalAlias(declaration.initializer)
+      : resolveLocalAlias(childOf<Node>(declaration, 'initializer'))
 
     if (!aliasImport) return
 
@@ -541,12 +550,17 @@ export const createCompiledJsxContext = (sourceFile: SourceFile): CompiledJsxCon
 
     const baseInfo = {
       tagName,
-      isFactory: tagName.includes('.'),
+      isFactory: String(tagName).includes('.'),
     }
 
     for (const profile of runtimeProfiles) {
-      if (profile.matches(resolved)) {
-        return { framework: profile.framework, ...baseInfo, propNodes: profile.getPropNodes(args) }
+      if (profile.matches({ ...resolved, importedName: resolved.importedName ?? '' })) {
+        return {
+          framework: profile.framework,
+          ...baseInfo,
+          tagName: String(baseInfo.tagName),
+          propNodes: profile.getPropNodes(args),
+        }
       }
     }
   }

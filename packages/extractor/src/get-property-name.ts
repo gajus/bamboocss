@@ -1,5 +1,5 @@
-import type { ObjectLiteralElementLike } from '@bamboocss/ts-ast'
 import { Node, getLiteralText, getName } from '@bamboocss/ts-ast'
+import type { ObjectLiteralElementLike } from '@bamboocss/ts-ast'
 import { box } from './box'
 import { maybePropName } from './maybe-box-node'
 import type { BoxContext } from './types'

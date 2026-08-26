@@ -1,3 +1,4 @@
+import { childOf } from '@bamboocss/ts-ast'
 import { getExportedVarDeclarationWithName, maybeBoxNode, unbox, type BoxContext } from '@bamboocss/extractor'
 import { createHash } from 'node:crypto'
 import type { SourceFile } from '@bamboocss/ts-ast'
@@ -41,7 +42,7 @@ export const digestExportValue = (
     const declaration = getExportedVarDeclarationWithName(exportedName, sourceFile, [], boxCtx)
     if (!declaration) return 'bamboo:export-missing'
 
-    const initializer = declaration.getInitializer?.()
+    const initializer = childOf(declaration, 'initializer')
     if (!initializer) return undefined
 
     const box = maybeBoxNode(initializer, [], boxCtx)

@@ -2,7 +2,7 @@ import { type BoxContext, type BoxNode, box, maybeBoxNode } from '@bamboocss/ext
 import {
   Node,
   SyntaxKind,
-  VariableDeclarationKind,
+  childOf,
   getAliasNode,
   getDefaultImport,
   getNamedImports,
@@ -12,7 +12,6 @@ import {
   ts,
 } from '@bamboocss/ts-ast'
 import type { BinaryExpression, ConditionalExpression, Expression, Identifier, SourceFile } from '@bamboocss/ts-ast'
-import { type BinaryExpression, type ConditionalExpression, type Expression, Node, SyntaxKind } from '@bamboocss/ts-ast'
 
 /**
  * Nodes that *compose* a value out of their children rather than computing one.
@@ -520,7 +519,7 @@ const collectModuleScopeNames = (sourceFile: SourceFile): Set<string> => {
 
   const addDeclarations = (list: Node) => {
     if (Node.isVariableStatement(list)) {
-      for (const declaration of list.declarations) addBinding(declaration.name)
+      for (const declaration of list.declarationList.declarations) addBinding(declaration.name)
       return
     }
     if (Node.isVariableDeclarationList(list)) {
@@ -530,7 +529,7 @@ const collectModuleScopeNames = (sourceFile: SourceFile): Set<string> => {
 
   const isVar = (node: Node): boolean =>
     (Node.isVariableStatement(node) || Node.isVariableDeclarationList(node)) &&
-    node.getDeclarationKind() === VariableDeclarationKind.Var
+    (childOf<Node>(node, 'declarationList')?.flags ?? 0) === 0
 
   /**
    * `var` is scoped to the enclosing *function*, not the enclosing block, so one written
@@ -576,16 +575,16 @@ const collectModuleScopeNames = (sourceFile: SourceFile): Set<string> => {
       return
     }
     if (Node.isTryStatement(node)) {
-      addHoistedVars(node.getTryBlock())
-      const caught = node.getCatchClause()
-      if (caught) addHoistedVars(caught.getBlock())
-      const finally_ = node.getFinallyBlock()
+      addHoistedVars(node.tryBlock)
+      const caught = childOf<Node>(node, 'catchClause')
+      if (caught) addHoistedVars(childOf<Node>(caught, 'block') as Node)
+      const finally_ = childOf<Node>(node, 'finallyBlock')
       if (finally_) addHoistedVars(finally_)
       return
     }
     if (Node.isSwitchStatement(node)) {
-      for (const clause of node.getCaseBlock().getClauses()) {
-        for (const statement of clause.statements) addHoistedVars(statement)
+      for (const clause of childOf<{ clauses?: Node[] }>(node, 'caseBlock')?.clauses ?? []) {
+        for (const statement of childOf<Node[]>(clause, 'statements') ?? []) addHoistedVars(statement)
       }
     }
   }
@@ -695,7 +694,7 @@ export const identifierIndex = (sourceFile: SourceFile): IdentifierIndex => {
 
   const collect = (node: Node) => {
     if (node.kind === ts.SyntaxKind.Identifier) {
-      const name = String((node as Identifier).escapedText)
+      const name = String((node as Identifier).text)
       const known = compilerNodes.get(name)
       if (known) known.push(node)
       else compilerNodes.set(name, [node])

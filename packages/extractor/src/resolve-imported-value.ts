@@ -1,4 +1,3 @@
-import type { Expression, Node as TsMorphNode, SourceFile } from '@bamboocss/ts-ast'
 import {
   Node,
   SyntaxKind,
@@ -7,8 +6,10 @@ import {
   getDescendantsOfKind,
   getImportDeclarations,
   getNamedImports,
+  isInNodeModules,
   nameNodeOf,
 } from '@bamboocss/ts-ast'
+import type { Expression, Node as TsMorphNode, SourceFile } from '@bamboocss/ts-ast'
 import { getExportedVarDeclarationWithName, getModuleSpecifierSourceFile } from './maybe-box-node'
 import type { BoxContext } from './types'
 import { beginDependencyCapture, replayDependencyCache, type DependencyCacheEntry } from './dependency-cache'
@@ -68,8 +69,8 @@ const importBindingsFor = (sourceFile: SourceFile) => {
     for (const specifier of getNamedImports(declaration)) {
       // `getAliasNode()` is the local binding and `getNameNode()` the exported name, so
       // `import { focusRing as ring }` is keyed on `ring` and looked up as `focusRing`.
-      const local = (getAliasNode(specifier) ?? nameNodeOf(specifier)).getText()
-      bindings.set(local, { declaration, exportedName: nameNodeOf(specifier).getText() })
+      const local = (getAliasNode(specifier) ?? nameNodeOf(specifier))?.getText()
+      bindings.set(local ?? '', { declaration, exportedName: nameNodeOf(specifier)?.getText() ?? '' })
     }
 
     const defaultImport = getDefaultImport(declaration)
@@ -92,7 +93,7 @@ const valueForBinding = (
 
   // The project boundary. A dependency's code is not ours to run at build time, however pure
   // it looks, and declining leaves exactly the behaviour that shipped before any of this.
-  if (sourceFile.isInNodeModules()) return
+  if (isInNodeModules(sourceFile)) return
 
   const declaration = getExportedVarDeclarationWithName(binding.exportedName, sourceFile, stack, ctx)
   if (!declaration) return

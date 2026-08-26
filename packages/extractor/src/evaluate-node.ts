@@ -1,6 +1,6 @@
 import { evaluate } from 'ts-evaluator'
-import type { Expression, Node } from '@bamboocss/ts-ast'
 import { ts } from '@bamboocss/ts-ast'
+import type { Expression, Node } from '@bamboocss/ts-ast'
 import { importedEnvironmentFor } from './resolve-imported-value'
 import type { BoxContext } from './types'
 import { beginDependencyCapture, replayDependencyCache, type DependencyCacheEntry } from './dependency-cache'

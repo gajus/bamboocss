@@ -98,6 +98,12 @@ export class BambooContext extends Generator {
     // configurable data property. Only this wrapper's initial source loading is opt-in lazy;
     // standalone parser Projects retain their eager constructor.
     this.project = new Project({
+      // The compiler is rooted at a project rather than assembled here: TypeScript 7 builds its
+      // program from the `tsconfig.json` it is opened with, and reads every file through the
+      // delegate below — which is the same `runtime.fs` bamboo has always read through.
+      cwd: config.cwd ?? this.runtime.cwd(),
+      tsConfigFilePath: conf.tsconfigFile ?? `${config.cwd ?? this.runtime.cwd()}/tsconfig.json`,
+      fs: { readFile: (filePath: string) => this.runtime.fs.readFileSync(filePath) },
       ...conf.tsconfig,
       deferInitialSourceFiles: true,
       resolutionConfigFiles: getTsConfigResolutionFiles(conf),

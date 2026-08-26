@@ -1,5 +1,5 @@
+import { Node, childOf } from '@bamboocss/ts-ast'
 import type { ObjectLiteralExpression } from '@bamboocss/ts-ast'
-import { Node } from '@bamboocss/ts-ast'
 import { box } from './box'
 import { BoxNodeConditional, type BoxNode, type BoxNodeMap } from './box-factory'
 import { getPropertyName } from './get-property-name'
@@ -59,9 +59,9 @@ export const getObjectLiteralExpressionPropPairs = (
       let init: Node | undefined
       if (Node.isGetAccessorDeclaration(property)) {
         const body = property.body
-        init = Node.isBlock(body) ? body.statements.at(-1) : undefined
+        init = body !== undefined && Node.isBlock(body) ? body.statements.at(-1) : undefined
       } else {
-        init = property.initializer
+        init = childOf<Node>(property, 'initializer')
       }
       if (!init) return
 

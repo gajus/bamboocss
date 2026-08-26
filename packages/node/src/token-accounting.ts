@@ -18,6 +18,7 @@ import {
   isTypeOnly,
   literalValueOf,
   nameNodeOf,
+  stringLiteralValue,
   ts,
 } from '@bamboocss/ts-ast'
 import type { Identifier, PropertyAssignment, ShorthandPropertyAssignment, SourceFile } from '@bamboocss/ts-ast'
@@ -285,7 +286,7 @@ function accountFile(
       // `t(key)` has no artifact specifier and no `token(`-shaped call, so keying on either
       // would miss it. Keying on the *imported name* catches it.
       for (const named of getNamedImports(clause)) {
-        if (!isTypeOnly(named) && nameOf(nameNodeOf(named)) === 'token') decline(named, 'unclassified-import')
+        if (!isTypeOnly(named) && nameOf(nameNodeOf(named) as Node) === 'token') decline(named, 'unclassified-import')
       }
 
       const foreignDefault = getDefaultImport(clause)
@@ -317,12 +318,12 @@ function accountFile(
       // and re-export `token` under another name, which a call of that name would then reach.
       // So the question is whether the binding is used as a *value* anywhere, not what it is
       // called.
-      if (nameOf(nameNodeOf(named)) !== 'token') {
-        const local = (getAliasNode(named) ?? nameNodeOf(named)).getText()
+      if (nameOf(nameNodeOf(named) as Node) !== 'token') {
+        const local = (getAliasNode(named) ?? nameNodeOf(named))?.getText() ?? ''
         if (usedAsValue(sourceFile, local, named)) decline(named, 'unsupported-import')
         continue
       }
-      bindings.add((getAliasNode(named) ?? nameNodeOf(named)).getText())
+      bindings.add((getAliasNode(named) ?? nameNodeOf(named))?.getText() ?? '')
     }
   }
 
@@ -338,15 +339,15 @@ function accountFile(
   // an import clause, so the bindings above do not cover them.
   for (const call of getDescendantsOfKind(sourceFile, SyntaxKind.CallExpression)) {
     const callee = childOf(call, 'expression')
-    const isRequire = Node.isIdentifier(callee) && callee.getText() === 'require'
-    const isDynamicImport = callee.kind === SyntaxKind.ImportKeyword
+    const isRequire = callee !== undefined && Node.isIdentifier(callee) && callee.getText() === 'require'
+    const isDynamicImport = callee?.kind === SyntaxKind.ImportKeyword
     if (!isRequire && !isDynamicImport) continue
 
-    const argument = childOf(call, 'arguments')[0]
+    const argument = childOf<Node[]>(call, 'arguments')?.[0]
     // A template or a concatenation is not a specifier this can read, and one that is could
     // still be the artifact.
     if (!argument) continue
-    if (Node.isStringLiteral(argument) ? isTokensEntrypoint(ctx, literalValueOf(argument)) : true) {
+    if (Node.isStringLiteral(argument) ? isTokensEntrypoint(ctx, stringLiteralValue(argument)) : true) {
       decline(call, isRequire ? 'require' : 'dynamic-import')
     }
   }
@@ -424,16 +425,17 @@ function accountFile(
  * property-access-only scan.
  */
 function usesTokenMember(sourceFile: SourceFile, namespace: string) {
-  const properties = sourceFile
-    .getDescendantsOfKind(SyntaxKind.PropertyAccessExpression)
-    .some((access) => access.expression.getText() === namespace && nameOf(access.name) === 'token')
+  const properties = getDescendantsOfKind(sourceFile, SyntaxKind.PropertyAccessExpression).some(
+    (access: Node) =>
+      childOf<Node>(access, 'expression')?.getText() === namespace && nameOf(nameNodeOf(access) as Node) === 'token',
+  )
 
   if (properties) return true
 
   return getDescendantsOfKind(sourceFile, SyntaxKind.ElementAccessExpression).some((access) => {
-    if (childOf(access, 'expression').getText() !== namespace) return false
-    const argument = access.argumentExpression
-    return argument != null && (!Node.isStringLiteral(argument) || literalValueOf(argument) === 'token')
+    if (childOf(access, 'expression')?.getText() !== namespace) return false
+    const argument = childOf<Node>(access, 'argumentExpression')
+    return argument != null && (!Node.isStringLiteral(argument) || stringLiteralValue(argument) === 'token')
   })
 }
 
@@ -461,7 +463,7 @@ function* identifiersNamed(sourceFile: SourceFile, wanted: (name: string) => boo
   const found: Node[] = []
 
   const collect = (node: Node) => {
-    if (node.kind === SyntaxKind.Identifier && wanted(String((node as Identifier).escapedText))) {
+    if (node.kind === SyntaxKind.Identifier && wanted(String((node as Identifier).text))) {
       found.push(node)
     }
 
@@ -486,7 +488,7 @@ function* identifiersNamed(sourceFile: SourceFile, wanted: (name: string) => boo
  * `token` is the identifier `token`; reading `getText()` returns the escape and compares
  * unequal, which let an import of the artifact's export past the checks that key on the name.
  */
-const nameOf = (node: Node) => (Node.isIdentifier(node) ? String(node.escapedText) : node.getText())
+const nameOf = (node: Node) => (Node.isIdentifier(node) ? String(node.text) : node.getText())
 
 /** Every name a binding name binds, following object and array destructuring. */
 function boundNames(name: Node | undefined, bound: (name: string) => void) {
@@ -737,9 +739,9 @@ function literalPath(call: Node): ResolvedReference | undefined {
   const argument = unwrapAssertions(call.arguments[0])
   if (!argument) return undefined
 
-  if (Node.isStringLiteral(argument)) return { kind: 'path', value: literalValueOf(argument) }
+  if (Node.isStringLiteral(argument)) return { kind: 'path', value: stringLiteralValue(argument) }
   // A template with no substitutions is a literal in every way that matters here.
-  if (Node.isNoSubstitutionTemplateLiteral(argument)) return { kind: 'path', value: literalValueOf(argument) }
+  if (Node.isNoSubstitutionTemplateLiteral(argument)) return { kind: 'path', value: stringLiteralValue(argument) }
 
   if (Node.isTemplateExpression(argument)) {
     const head = getLiteralText(argument.head)

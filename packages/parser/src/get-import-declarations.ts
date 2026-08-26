@@ -1,6 +1,5 @@
 import { resolveTsPathPattern } from '@bamboocss/config/ts-path'
 import type { ImportResult, ParserOptions } from '@bamboocss/core'
-import type { SourceFile } from '@bamboocss/ts-ast'
 import {
   getAliasNode,
   getImportDeclarations as astGetImportDeclarations,
@@ -9,6 +8,7 @@ import {
   getNamespaceImport,
   nameNodeOf,
 } from '@bamboocss/ts-ast'
+import type { SourceFile } from '@bamboocss/ts-ast'
 import { getModuleSpecifierValue } from './get-module-specifier-value'
 
 export function getImportDeclarations(context: ParserOptions, sourceFile: SourceFile) {
@@ -22,10 +22,10 @@ export function getImportDeclarations(context: ParserOptions, sourceFile: Source
 
     // import { flex, stack } from "styled-system/patterns"
     getNamedImports(node).forEach((specifier) => {
-      const name = nameNodeOf(specifier).getText()
+      const name = nameNodeOf(specifier)?.getText()
       const alias = getAliasNode(specifier)?.getText() || name
 
-      const result: ImportResult = { name, alias, mod, kind: 'named' }
+      const result: ImportResult = { name: name ?? '', alias: alias ?? '', mod, kind: 'named' }
 
       const found = imports.match(result, (mod) => {
         if (!tsOptions?.pathMappings) return

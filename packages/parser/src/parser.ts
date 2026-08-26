@@ -3,14 +3,8 @@ import { BoxNodeMap, box, extract, unbox, type EvaluateOptions, type Unboxed } f
 import type { Generator } from '@bamboocss/generator'
 import { logger } from '@bamboocss/logger'
 import type { ParserResultConfigureOptions } from '@bamboocss/types'
+import { Node, getLineAndColumnAtPos, getName, ts } from '@bamboocss/ts-ast'
 import type { SourceFile } from '@bamboocss/ts-ast'
-import {
-  Node,
-  getImportDeclarations as astGetImportDeclarations,
-  getLineAndColumnAtPos,
-  getName,
-  ts,
-} from '@bamboocss/ts-ast'
 import { match } from 'ts-pattern'
 import { getImportDeclarations } from './get-import-declarations'
 import { importedRecipeBindings, type RecipeOrigin, type ResolveModule } from './imported-recipes'
@@ -71,7 +65,7 @@ export function createParser(context: ParserOptions) {
   ) {
     if (!sourceFile) return
 
-    const importDeclarations: ImportResult[] = astGetImportDeclarations(context, sourceFile)
+    const importDeclarations: ImportResult[] = getImportDeclarations(context, sourceFile)
 
     const file = imports.file(importDeclarations)
 
@@ -138,7 +132,7 @@ export function createParser(context: ParserOptions) {
 
           // The *imported* name, so a project's own `cva` helper is not mistaken for this one
           // — and `matchFn`, so a name that merely reads as `cva` is not either.
-          const imported = getName(file, callee.text)
+          const imported = file.getName(callee.text)
           if (imported !== 'cva' && imported !== 'sva') continue
           if (!file.matchFn(callee.text)) continue
 
@@ -229,7 +223,7 @@ export function createParser(context: ParserOptions) {
           // `getName` echoes the identifier back when it is not an import, so the match has
           // to be confirmed against the import list — otherwise a project's own local
           // `fallback` helper would be shadowed by this one.
-          if (!file.match(local) || getName(file, local) !== 'fallback') return evaluateOptions
+          if (!file.match(local) || file.getName(local) !== 'fallback') return evaluateOptions
 
           return {
             environment: Object.assign({}, defaultEnv, { extra: { [local]: fallbackImpl } }),
@@ -284,7 +278,7 @@ export function createParser(context: ParserOptions) {
 
     extractResultByName.forEach((result, alias) => {
       //
-      const name = getName(file, file.normalizeFnName(alias))
+      const name = file.getName(file.normalizeFnName(alias))
 
       logger.debug(`ast:${name}`, name !== alias ? { kind: result.kind, alias } : { kind: result.kind })
 
@@ -452,13 +446,23 @@ export function createParser(context: ParserOptions) {
     parserResult.deadCalls = file.getDeadCalls()
 
     if (exportReadPairs.size) {
-      const project = sourceFile.getProject()
       parserResult.setExportReads(
         [...exportReadPairs].map((pair) => {
           const at = pair.indexOf('\u0000')
           const file = pair.slice(0, at)
           const name = pair.slice(at + 1)
-          return { file, name, digest: digestExportValue(project.getSourceFile(file), name, resolveModule) }
+          return {
+            file,
+            name,
+            digest: digestExportValue(
+              // Resolved rather than looked up in a project: TypeScript 7's source files are views
+              // the compiler owns, and none of them knows which program produced it. The path is
+              // absolute, which `resolveModule` handles as a specifier of itself.
+              resolveModule?.(file, sourceFile),
+              name,
+              resolveModule,
+            ),
+          }
         }),
       )
     }

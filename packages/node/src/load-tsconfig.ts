@@ -1,9 +1,9 @@
+import { ts } from '@bamboocss/ts-ast'
 import type { Node } from '@bamboocss/ts-ast'
 import { convertTsPathsToRegexes } from '@bamboocss/config'
 import type { LoadConfigResult, LoadTsConfigResult } from '@bamboocss/types'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { ts } from '@bamboocss/ts-ast'
 import type { TsconfigResolutionProvenance } from './tsconfig-provenance'
 
 import {
@@ -84,7 +84,9 @@ const collectReferenceGraph = async (
       visited.add(referencedPath)
       try {
         const source = await fs.readFile(referencedPath, 'utf8')
-        if (ts.parseConfigFileTextToJson(referencedPath, source).error) throw new Error('Invalid tsconfig')
+        // A parse check, not a conversion: TypeScript 7 reads the tsconfig in the Go process, so
+        // all this needs is to know the text is well-formed JSON-with-comments before queueing it.
+        JSON.parse(source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1'))
         queue.push({ parsed: parseTsconfig(referencedPath, cache), path: referencedPath })
       } catch {
         unresolvedReferences.push(referencedPath)

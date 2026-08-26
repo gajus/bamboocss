@@ -1,5 +1,5 @@
-import type { Node } from '@bamboocss/ts-ast'
 import { getLineAndColumnAtPos } from '@bamboocss/ts-ast'
+import type { Node } from '@bamboocss/ts-ast'
 
 export const getNodeRange = (node: Node) => {
   const src = node.getSourceFile()

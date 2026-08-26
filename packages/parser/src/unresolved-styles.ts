@@ -1,7 +1,7 @@
+import { Node, getLineAndColumnAtPos, getName } from '@bamboocss/ts-ast'
 import type { Identifier, TemplateExpression } from '@bamboocss/ts-ast'
 import { type BoxNode, box, unwrapExpression } from '@bamboocss/extractor'
 import type { ResultItem } from '@bamboocss/types'
-import { Node, getLineAndColumnAtPos, getName } from '@bamboocss/ts-ast'
 
 export interface UnresolvedStyle {
   /**
@@ -134,7 +134,7 @@ const writtenProps = (node: Node | undefined): WrittenProps | undefined => {
 
   for (const property of literal.properties) {
     if (Node.isPropertyAssignment(property) || Node.isShorthandPropertyAssignment(property)) {
-      const name = getName(property)
+      const name = getName(property) ?? ''
       // A computed or quoted-dynamic key is not comparable against a resolved key.
       if (name.startsWith('[')) {
         uncertain = true
@@ -210,7 +210,7 @@ const findUnresolvedInValue = (
       if (Node.isObjectLiteralExpression(spread)) {
         for (const inner of spread.properties) {
           if (!Node.isPropertyAssignment(inner) && !Node.isShorthandPropertyAssignment(inner)) continue
-          const innerName = getName(inner)
+          const innerName = getName(inner) ?? ''
           if (!innerName.startsWith('[')) written.push(innerName.replace(/^['"]|['"]$/g, ''))
         }
         continue
@@ -221,7 +221,7 @@ const findUnresolvedInValue = (
     }
     if (!Node.isPropertyAssignment(property) && !Node.isShorthandPropertyAssignment(property)) continue
 
-    const name = getName(property)
+    const name = getName(property) ?? ''
     if (name.startsWith('[')) {
       uncertain = true
       continue
@@ -247,7 +247,7 @@ const findUnresolvedInValue = (
 
   for (const property of properties) {
     if (!Node.isPropertyAssignment(property)) continue
-    const name = getName(property).replace(/^['"]|['"]$/g, '')
+    const name = (getName(property) ?? '').replace(/^['"]|['"]$/g, '')
     if (name.startsWith('[')) continue
     findUnresolvedInValue(
       property.initializer,

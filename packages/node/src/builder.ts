@@ -1,3 +1,4 @@
+import { getExportDeclarations } from '@bamboocss/ts-ast'
 import { findConfig } from '@bamboocss/config'
 import { logger } from '@bamboocss/logger'
 import { BambooError, uniq } from '@bamboocss/shared'
@@ -618,7 +619,7 @@ export class Builder {
         for (const item of set ?? []) recipes.push([item.name ?? '', item.data])
       }
       const sourceFile = ctx.project?.getSourceFile?.(file)
-      const exports = sourceFile ? sourceFile.getExportDeclarations().map((declaration) => declaration.getText()) : []
+      const exports = sourceFile ? getExportDeclarations(sourceFile).map((declaration) => declaration.getText()) : []
       const json = JSON.stringify([recipes, exports], (_key, value) =>
         value === undefined ? 'bamboo:undefined' : value,
       )

@@ -1,7 +1,7 @@
 import type { ParserOptions } from '@bamboocss/core'
 import type {
-  ConfigTsOptions,
   BambooHooks,
+  ConfigTsOptions,
   ParserResultConfigureOptions,
   ParserResultInterface,
   Runtime,

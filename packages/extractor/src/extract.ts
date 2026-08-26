@@ -140,11 +140,11 @@ export const extract = ({ ast, ...ctx }: ExtractOptions) => {
     processComponentBoxNode(component, boxByProp, expression, maybeValue, matchProp, true)
   }
 
-  forEachDescendant(ast, (node, traversal) => {
+  forEachDescendant(ast, (node: Node) => {
     // quick win
     if (isImportOrExport(node)) {
-      traversal.skip()
-      return
+      // Do not descend: the bindings inside an import or export are module plumbing, not values.
+      return false
     }
 
     if (components) {

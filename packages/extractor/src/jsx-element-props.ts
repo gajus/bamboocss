@@ -1,4 +1,4 @@
-import { Node } from '@bamboocss/ts-ast'
+import { Node, childOf } from '@bamboocss/ts-ast'
 import type { JsxOpeningElement, JsxSelfClosingElement } from '@bamboocss/ts-ast'
 import { box } from './box'
 import type { BoxNode, BoxNodeMap, BoxNodeObject } from './box-factory'
@@ -11,10 +11,10 @@ const isObjectLike = (node: BoxNode | undefined): node is BoxNodeObject | BoxNod
 
 export const extractJsxElementProps = (node: JsxOpeningElement | JsxSelfClosingElement, ctx: BoxContext) => {
   const tagName = node.tagName.getText()
-  const jsxAttributes = node.getAttributes()
+  const jsxAttributes = childOf<{ properties?: Node[] }>(node, 'attributes')?.properties ?? []
 
   const props = new Map<string, BoxNode>()
-  jsxAttributes.forEach((attrNode) => {
+  jsxAttributes.forEach((attrNode: Node) => {
     if (Node.isJsxAttribute(attrNode)) {
       const nameNode = attrNode.name
       const maybeValue = extractJsxAttribute(attrNode, ctx)

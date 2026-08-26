@@ -1,3 +1,4 @@
+import { SyntaxKind as SyntaxKindValues } from '@typescript/api/unstable/ast'
 import * as predicates from '@typescript/api/unstable/ast/is'
 import type { ExportDeclaration, ImportDeclaration, SourceFile } from '@typescript/api/unstable/ast'
 import type { Node as AstNode } from './types'
@@ -51,9 +52,12 @@ export const getKind = (node: Node): number => node.kind
  * is a bare token, so the cheaper walk is also the correct one; `getDescendantsOfKind` below
  * relies on the same thing.
  */
-export const forEachDescendant = (node: Node, visit: (child: Node) => void): void => {
+export const forEachDescendant = (node: Node, visit: (child: Node) => void | boolean): void => {
   node.forEachChild((child: Node) => {
-    visit(child)
+    // `false` means do not descend, which is what ts-morph's `traversal.skip()` did. It is not
+    // an optimisation: the extractor skips import and export subtrees deliberately, and walking
+    // into one finds identifiers that are module bindings rather than values.
+    if (visit(child) === false) return
     forEachDescendant(child, visit)
   })
 }
@@ -184,7 +188,7 @@ export const getAliasNode = (specifier: Node): Node | undefined => {
 /** The named specifiers of an export — `export { a, b }`. */
 export const getNamedExports = (declaration: Node): Node[] => {
   const clause = (declaration as { exportClause?: Node }).exportClause
-  return clause && predicates.isNamedExports(clause) ? [...(clause as { elements: Node[] }).elements] : []
+  return clause && predicates.isNamedExports(clause) ? [...clause.elements] : []
 }
 
 /**
@@ -238,3 +242,46 @@ export const getChildIndex = (node: Node): number => {
   })
   return index
 }
+
+/** Every variable declaration in a file, across all its `var`/`let`/`const` statements. */
+export const getVariableDeclarations = (sourceFile: SourceFile): Node[] =>
+  sourceFile.statements
+    .filter((statement) => predicates.isVariableStatement(statement))
+    .flatMap((statement) => [...(childOf<{ declarations?: Node[] }>(statement, 'declarationList')?.declarations ?? [])])
+
+/** One variable declaration by name, or `undefined`. */
+export const getVariableDeclaration = (sourceFile: SourceFile, name: string): Node | undefined =>
+  getVariableDeclarations(sourceFile).find((declaration) => getName(declaration) === name)
+
+/** The `* as ns` clause of an export, or `undefined`. */
+export const getNamespaceExport = (declaration: Node): Node | undefined => {
+  const clause = childOf<Node>(declaration, 'exportClause')
+  return clause && predicates.isNamespaceExport(clause) ? clause : undefined
+}
+
+/** Whether a file was loaded out of `node_modules`. */
+export const isInNodeModules = (sourceFile: SourceFile): boolean => sourceFile.fileName.includes('/node_modules/')
+
+/**
+ * Whether an export re-exports everything — `export * from './m'`.
+ *
+ * Distinct from `getNamespaceExport`, which answers the `export * as ns from './m'` form. The
+ * two look alike and behave differently: a bare star forwards every name, while `* as ns` binds
+ * one object and forwards none, so a barrel walk that confuses them folds imports that resolve
+ * to nothing. ts-morph spelled this `isNamespaceExport()`; here it is the absence of any export
+ * clause.
+ */
+export const isStarExport = (declaration: Node): boolean =>
+  predicates.isExportDeclaration(declaration) && childOf<Node>(declaration, 'exportClause') === undefined
+
+/**
+ * A string literal's value, for a caller that has already established the kind.
+ *
+ * `literalValueOf` answers for every literal kind and so returns a union; at a site guarded by
+ * `is.isStringLiteral` that union is noise the call site would otherwise widen away with a cast.
+ */
+export const stringLiteralValue = (node: Node): string => (node as { text?: string }).text ?? ''
+
+/** Whether a member carries the `readonly` modifier. */
+export const isReadonly = (node: Node): boolean =>
+  (childOf<Node[]>(node, 'modifiers') ?? []).some((modifier) => modifier.kind === SyntaxKindValues.ReadonlyKeyword)

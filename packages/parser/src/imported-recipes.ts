@@ -8,6 +8,8 @@ import {
   getModuleSpecifierValue as astGetModuleSpecifierValue,
   getNamedExports,
   getNamedImports,
+  getNamespaceExport,
+  isStarExport,
   isTypeOnly,
   nameNodeOf,
   ts,
@@ -78,7 +80,7 @@ const recipeFactoryAliases = (sourceFile: SourceFile, imports: ImportMap): Set<s
     for (const specifier of getNamedImports(declaration)) {
       if (isTypeOnly(specifier)) continue
 
-      const name = nameNodeOf(specifier).getText()
+      const name = nameNodeOf(specifier)?.getText()
       if (name !== 'cva' && name !== 'sva') continue
 
       const alias = getAliasNode(specifier)?.getText() || name
@@ -181,9 +183,9 @@ const walkExports = (
     // `export * as ns from './m'` reports itself a namespace export too, and it re-exports
     // no individual name — it binds one object called `ns`. Reading it as `export *` made
     // `import { textInput }` from such a barrel fold, though it resolves to nothing at all.
-    if (declaration.getNamespaceExport()) continue
+    if (getNamespaceExport(declaration)) continue
 
-    if (declaration.isNamespaceExport()) {
+    if (isStarExport(declaration)) {
       if (!target) continue
       const walk = walkExports(target, imports, resolveModule, seen)
       complete &&= walk.complete
@@ -211,9 +213,9 @@ const walkExports = (
     for (const exportSpecifier of getNamedExports(declaration)) {
       if (isTypeOnly(exportSpecifier)) continue
 
-      const name = nameNodeOf(exportSpecifier).getText()
-      const origin = source.get(name)
-      if (origin) names.set(getAliasNode(exportSpecifier)?.getText() || name, origin)
+      const name = nameNodeOf(exportSpecifier)?.getText()
+      const origin = source.get(name ?? '')
+      if (origin) names.set(getAliasNode(exportSpecifier)?.getText() || (name ?? ''), origin)
     }
   }
 
@@ -263,10 +265,10 @@ const walkImports = (
     for (const importSpecifier of named) {
       if (isTypeOnly(importSpecifier)) continue
 
-      const origin = names.get(nameNodeOf(importSpecifier).getText())
+      const origin = names.get(nameNodeOf(importSpecifier)?.getText() ?? '')
       if (!origin) continue
 
-      bindings.set(getAliasNode(importSpecifier)?.getText() || nameNodeOf(importSpecifier).getText(), origin)
+      bindings.set(getAliasNode(importSpecifier)?.getText() || (nameNodeOf(importSpecifier)?.getText() ?? ''), origin)
     }
   }
 

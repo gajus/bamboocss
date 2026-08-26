@@ -1,5 +1,3 @@
-import type { PropertyAssignment } from '@bamboocss/ts-ast'
-import type { ParserResultInterface, ResultItem } from '@bamboocss/types'
 import {
   Node,
   SyntaxKind,
@@ -12,7 +10,10 @@ import {
   isTypeOnly,
   literalValueOf,
   nameNodeOf,
+  stringLiteralValue,
 } from '@bamboocss/ts-ast'
+import type { PropertyAssignment } from '@bamboocss/ts-ast'
+import type { ParserResultInterface, ResultItem } from '@bamboocss/types'
 import { declaredAtModuleScope } from './fold-analysis'
 import type { StaticStyleSetCompiler, StyleSetRecipeConfig } from './style-set'
 
@@ -72,8 +73,8 @@ export const collectRecipeConfigs = (parserResult: ParserResultInterface): Map<s
     if (!node) continue
 
     const call = Node.isCallExpression(node) ? node : getFirstAncestorByKind(node, SyntaxKind.CallExpression)
-    const declaration = call?.getFirstAncestorByKind(SyntaxKind.VariableDeclaration)
-    const nameNode = declaration?.name
+    const declaration = call && getFirstAncestorByKind(call, SyntaxKind.VariableDeclaration)
+    const nameNode = declaration && nameNodeOf(declaration)
     if (!nameNode || !Node.isIdentifier(nameNode)) continue
 
     // One resolution only. `cva(dark ? A : B)` yields a candidate per branch, and folding
@@ -151,7 +152,7 @@ const literalValue = (node: Node | undefined): string | number | boolean | undef
 const propertyKey = (nameNode: Node): string | undefined => {
   if (Node.isIdentifier(nameNode)) return nameNode.getText()
   if (Node.isStringLiteral(nameNode) || Node.isNoSubstitutionTemplateLiteral(nameNode)) {
-    return literalValueOf(nameNode)
+    return stringLiteralValue(nameNode)
   }
   if (Node.isNumericLiteral(nameNode)) return String(literalValueOf(nameNode))
   return undefined
@@ -194,7 +195,7 @@ export const ensureRecipeHelperImport = (
   helperModuleFromSubpath?: (mod: string) => string | undefined,
 ): { name: string; insert?: { pos: number; names: string[]; module?: string } } | undefined => {
   const sourceFile = call.getSourceFile()
-  let host: ReturnType<typeof sourceFile.getImportDeclarations>[number] | undefined
+  let host: Node | undefined
   let subpathModule: string | undefined
 
   for (const declaration of getImportDeclarations(sourceFile)) {
@@ -204,10 +205,10 @@ export const ensureRecipeHelperImport = (
     for (const named of getNamedImports(declaration)) {
       if (isTypeOnly(named)) continue
 
-      if (nameNodeOf(named).getText() === imported) {
+      if (nameNodeOf(named)?.getText() === imported) {
         // Somebody else's helper, or one shadowed here, is not the one this calls.
         if (!isBambooCssModule(mod ?? '')) return undefined
-        const local = (getAliasNode(named) ?? nameNodeOf(named)).getText()
+        const local = (getAliasNode(named) ?? nameNodeOf(named))?.getText() ?? ''
         return isShadowed(call, local) ? undefined : { name: local }
       }
     }
@@ -375,8 +376,8 @@ export const lowerRecipeCall = (
         // `{ tone }`, the idiomatic spelling. The name is the expression.
         if (Node.isShorthandPropertyAssignment(property)) {
           // Last write wins, as the object literal itself would evaluate.
-          dynamicAxes.set(getName(property) ?? '', getName(property))
-          delete selection[getName(property)]
+          dynamicAxes.set(getName(property) ?? '', getName(property) ?? '')
+          delete selection[getName(property) ?? '']
           continue
         }
 

@@ -1,5 +1,5 @@
-import type { JsxAttribute } from '@bamboocss/ts-ast'
 import { Node, getLiteralText } from '@bamboocss/ts-ast'
+import type { JsxAttribute } from '@bamboocss/ts-ast'
 import { box } from './box'
 import { maybeBoxNode } from './maybe-box-node'
 import type { BoxContext } from './types'

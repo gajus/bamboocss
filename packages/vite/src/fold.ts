@@ -22,11 +22,14 @@ import {
   getName,
   getNamedExports,
   getNamedImports,
+  getNamespaceExport,
   getNamespaceImport,
   is,
+  isStarExport,
   isTypeOnly,
   literalValueOf,
   nameNodeOf,
+  stringLiteralValue,
 } from '@bamboocss/ts-ast'
 import type {
   CallExpression,
@@ -522,7 +525,7 @@ export const isInertExpression = (node: Node): boolean => {
   if (Node.isRegularExpressionLiteral(node) || Node.isBigIntLiteral(node)) return true
 
   if (Node.isPrefixUnaryExpression(node)) {
-    const operator = node.operatorToken
+    const operator = node.operator
     return (
       (operator === SyntaxKind.MinusToken ||
         operator === SyntaxKind.PlusToken ||
@@ -690,15 +693,16 @@ const bambooImportedNames = (sourceFile: SourceFile, ctx: Context): Set<string> 
     const mod = getModuleSpecifierValue(declaration)
 
     for (const named of getNamedImports(declaration)) {
-      const name = nameNodeOf(named).getText()
+      const name = nameNodeOf(named)?.getText()
       const alias = getAliasNode(named)?.getText() ?? name
-      if (ctx.imports.match({ mod, name, alias })) names.add(alias)
+      if (ctx.imports.match({ mod: mod ?? '', name: name ?? '', alias: alias ?? '' })) names.add(alias ?? '')
     }
 
     const namespace = getNamespaceImport(declaration)
     if (namespace) {
       const alias = namespace.getText()
-      if (ctx.imports.match({ mod, name: alias, alias, kind: 'namespace' })) names.add(alias)
+      if (ctx.imports.match({ mod: mod ?? '', name: alias ?? '', alias: alias ?? '', kind: 'namespace' }))
+        names.add(alias ?? '')
     }
   }
 
@@ -742,6 +746,7 @@ const bindingIntroduces = (nameNode: Node | undefined, name: string): boolean =>
 }
 
 const declarationsBind = (list: Node | undefined, name: string): boolean =>
+  list !== undefined &&
   Node.isVariableDeclarationList(list) &&
   list.declarations.some((declaration) => bindingIntroduces(declaration.name, name))
 
@@ -756,7 +761,7 @@ const bindsName = (scope: Node, name: string): boolean => {
     Node.isFunctionExpression(scope) ||
     Node.isMethodDeclaration(scope)
   ) {
-    return scope.getParameters().some((parameter) => bindingIntroduces(parameter.name, name))
+    return scope.parameters.some((parameter) => bindingIntroduces(parameter.name, name))
   }
 
   // `catch` and the three `for` heads bind in their own scope rather than in the
@@ -774,7 +779,7 @@ const bindsName = (scope: Node, name: string): boolean => {
 
 const statementBinds = (statement: Node, name: string): boolean => {
   if (Node.isVariableStatement(statement)) {
-    return statement.declarations.some((declaration) => bindingIntroduces(declaration.name, name))
+    return statement.declarationList.declarations.some((declaration) => bindingIntroduces(declaration.name, name))
   }
 
   if (Node.isFunctionDeclaration(statement) || Node.isClassDeclaration(statement)) {
@@ -947,11 +952,11 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       if (isTypeOnly(declaration)) continue
       const namesBinding = getNamedImports(declaration).some((named) => {
         if (isTypeOnly(named)) return false
-        return (getAliasNode(named) ?? nameNodeOf(named)).getText() === binding
+        return (getAliasNode(named) ?? nameNodeOf(named))?.getText() === binding
       })
       if (!namesBinding) continue
 
-      const mod = getModuleSpecifierValue(declaration).replaceAll('\\', '/')
+      const mod = (getModuleSpecifierValue(declaration) ?? '').replaceAll('\\', '/')
       const marker = '/recipes'
       const at = mod.lastIndexOf(marker)
       if (at >= 0) return `${mod.slice(0, at)}/css`
@@ -1220,7 +1225,10 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       // is whatever the file bound the import to, which `token as t` makes some name the
       // matcher has never heard of.
       const callee = Node.isCallExpression(call) ? call.expression : undefined
-      const propertyName = Node.isPropertyAccessExpression(callee) ? callee.name.getText() : undefined
+      const propertyName =
+        callee !== undefined && Node.isPropertyAccessExpression(callee)
+          ? (nameNodeOf(callee)?.getText() ?? '')
+          : undefined
       const wantsValue = type === 'tokenValue'
 
       if (wantsValue !== (propertyName === 'value')) {
@@ -1585,8 +1593,8 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       for (const declaration of getImportDeclarations(sourceFile)) {
         if (isTypeOnly(declaration) || !isBambooCssModule(getModuleSpecifierValue(declaration) ?? '')) continue
         for (const named of getNamedImports(declaration)) {
-          if (isTypeOnly(named) || nameNodeOf(named).getText() !== 'cx') continue
-          cxBindings.add((getAliasNode(named) ?? nameNodeOf(named)).getText())
+          if (isTypeOnly(named) || nameNodeOf(named)?.getText() !== 'cx') continue
+          cxBindings.add((getAliasNode(named) ?? nameNodeOf(named))?.getText() ?? '')
         }
       }
 
@@ -1598,7 +1606,12 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       // index in `reportRuntimeBindings`; this walk simply never had the guard.
       for (const call of cxBindings.size ? getDescendantsOfKind(sourceFile, SyntaxKind.CallExpression) : []) {
         const callee = childOf(call, 'expression')
-        if (!Node.isIdentifier(callee) || !cxBindings.has(callee.getText()) || isShadowed(call, callee.getText())) {
+        if (
+          callee === undefined ||
+          !Node.isIdentifier(callee) ||
+          !cxBindings.has(callee.getText()) ||
+          isShadowed(call, callee.getText())
+        ) {
           continue
         }
 
@@ -1631,7 +1644,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
           }
 
           if (Node.isStringLiteral(arg) || Node.isNoSubstitutionTemplateLiteral(arg)) {
-            parts.push({ kind: 'class', value: literalValueOf(arg) })
+            parts.push({ kind: 'class', value: stringLiteralValue(arg) })
             return true
           }
 
@@ -1656,7 +1669,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
           return false
         }
 
-        for (const arg of childOf(call, 'arguments')) {
+        for (const arg of childOf<Node[]>(call, 'arguments') ?? []) {
           if (take(arg)) continue
           supported = false
           break
@@ -1962,7 +1975,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       if (getName(access) !== 'splitVariantProps') continue
 
       const target = childOf(access, 'expression')
-      if (!Node.isIdentifier(target)) continue
+      if (target === undefined || !Node.isIdentifier(target)) continue
       if (isShadowed(access, target.getText())) continue
 
       // An inline recipe the module bound, or a config recipe it imported. The keys are
@@ -2045,7 +2058,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       if (isTypeOnly(declaration)) continue
       for (const named of getNamedImports(declaration)) {
         if (isTypeOnly(named)) continue
-        if ((getAliasNode(named) ?? nameNodeOf(named)).getText() === binding) {
+        if ((getAliasNode(named) ?? nameNodeOf(named))?.getText() === binding) {
           return getAliasNode(named) ?? nameNodeOf(named)
         }
       }
@@ -2103,7 +2116,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       const definition = entry?.box?.getNode?.()
       const declaredHere = definition?.getSourceFile() === sourceFile
       const nameNode = declaredHere
-        ? definition?.getFirstAncestorByKind(SyntaxKind.VariableDeclaration)?.name
+        ? nameNodeOf(getFirstAncestorByKind(definition, SyntaxKind.VariableDeclaration) as Node)
         : importSpecifierFor(sourceFile, binding)
 
       if (!nameNode || !Node.isIdentifier(nameNode)) continue
@@ -2161,7 +2174,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       if (!argument || (!Node.isStringLiteral(argument) && !Node.isNoSubstitutionTemplateLiteral(argument))) {
         continue
       }
-      if (!matchesModule(literalValueOf(argument), bambooModules)) continue
+      if (!matchesModule(stringLiteralValue(argument), bambooModules)) continue
 
       const isDynamicImport = callee.kind === SyntaxKind.ImportKeyword
       const isRequire = Node.isIdentifier(callee) && callee.getText() === 'require' && !isShadowed(call, 'require')
@@ -2177,18 +2190,18 @@ export const foldSource = (options: FoldOptions): FoldResult => {
 
     for (const declaration of importEquals) {
       if (isTypeOnly(declaration)) continue
-      const reference = declaration.getModuleReference()
+      const reference = declaration.moduleReference
       if (!Node.isExternalModuleReference(reference)) continue
       const expression = reference.expression
       if (
         !expression ||
         !Node.isStringLiteral(expression) ||
-        !matchesModule(literalValueOf(expression), bambooModules)
+        !matchesModule(stringLiteralValue(expression), bambooModules)
       ) {
         continue
       }
       skipped.push({
-        name: getName(declaration),
+        name: getName(declaration) ?? '',
         reason: 'runtime-binding',
         start: declaration.getStart(),
         end: declaration.getEnd(),
@@ -2204,9 +2217,9 @@ export const foldSource = (options: FoldOptions): FoldResult => {
 
       for (const named of getNamedImports(declaration)) {
         if (isTypeOnly(named)) continue
-        const imported = nameNodeOf(named).getText()
-        if (PERMITTED_BINDINGS.has(imported)) continue
-        watched.set((getAliasNode(named) ?? nameNodeOf(named)).getText(), imported)
+        const imported = nameNodeOf(named)?.getText()
+        if (PERMITTED_BINDINGS.has(imported ?? '')) continue
+        watched.set((getAliasNode(named) ?? nameNodeOf(named))?.getText() ?? '', imported ?? '')
       }
 
       const namespace = getNamespaceImport(declaration)
@@ -2225,9 +2238,9 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       // `export * from` and `export * as ns from` alike: both keep the module alive, whatever
       // they bind. (The parser's barrel walk distinguishes them because it asks a different
       // question — which individual names come through.)
-      if (declaration.isNamespaceExport()) {
+      if (isStarExport(declaration)) {
         skipped.push({
-          name: declaration.getNamespaceExport()?.getName() ?? '*',
+          name: getName(getNamespaceExport(declaration) as Node) ?? '*',
           reason: 'runtime-binding',
           start: declaration.getStart(),
           end: declaration.getEnd(),
@@ -2237,10 +2250,10 @@ export const foldSource = (options: FoldOptions): FoldResult => {
 
       for (const named of getNamedExports(declaration)) {
         if (isTypeOnly(named)) continue
-        const imported = nameNodeOf(named).getText()
-        if (PERMITTED_BINDINGS.has(imported)) continue
+        const imported = nameNodeOf(named)?.getText()
+        if (PERMITTED_BINDINGS.has(imported ?? '')) continue
 
-        skipped.push({ name: imported, reason: 'runtime-binding', start: named.getStart(), end: named.getEnd() })
+        skipped.push({ name: imported ?? '', reason: 'runtime-binding', start: named.getStart(), end: named.getEnd() })
       }
     }
 
@@ -2254,10 +2267,10 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       for (const named of getNamedExports(declaration)) {
         if (isTypeOnly(named)) continue
 
-        const imported = watched.get(nameNodeOf(named).getText())
+        const imported = watched.get(nameNodeOf(named)?.getText() ?? '')
         if (imported === undefined) continue
 
-        skipped.push({ name: imported, reason: 'runtime-binding', start: named.getStart(), end: named.getEnd() })
+        skipped.push({ name: imported ?? '', reason: 'runtime-binding', start: named.getStart(), end: named.getEnd() })
       }
     }
 

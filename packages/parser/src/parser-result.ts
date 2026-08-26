@@ -292,7 +292,7 @@ export class ParserResult implements ParserResultInterface {
       if (!node || seen.has(node)) return
       seen.add(node)
 
-      const path = node.getNode?.()?.getSourceFile().getFilePath().replaceAll('\\', '/')
+      const path = node.getNode?.()?.getSourceFile().fileName.replaceAll('\\', '/')
       if (path && path !== own) paths.add(path)
 
       if (box.isMap(node)) {

@@ -87,6 +87,48 @@ describe('generated cx', () => {
   test('leaves classes bamboo did not generate alone', () => {
     expect(cx('my-button', 'px_4', 'my-button')).toBe('my-button px_4 my-button')
   })
+
+  /**
+   * `cx` answers the two-argument case — `cx(<compiled literal>, className)`, the shape the
+   * transform leaves at a wrapper that forwards a className — without allocating a rest array
+   * or entering the loop. That is a second implementation of the join, reachable only for
+   * `arguments.length === 2`, and nothing above would notice it drifting: every assertion in
+   * this file that passes two arguments passes two plain non-empty strings.
+   *
+   * So compare the two paths directly. A third argument of `undefined` is not the same call as
+   * two arguments, but it *is* the same answer, and it routes through the general loop — which
+   * makes it the reference the shortcut has to agree with, across the whole value grid `cx`
+   * accepts.
+   */
+  test('the two-argument shortcut agrees with the general path', () => {
+    const values = ['', 'px_4', 'a b', 0, 1, -1, Number.NaN, true, false, null, undefined, [], ['x'], ['x', 'y']]
+    const disagreements: string[] = []
+
+    for (const first of values) {
+      for (const second of values) {
+        const shortcut = cx(first, second)
+        const general = cx(first, second, undefined)
+        if (shortcut !== general) {
+          disagreements.push(
+            `cx(${JSON.stringify(first)}, ${JSON.stringify(second)}): ${JSON.stringify(shortcut)} vs ${JSON.stringify(general)}`,
+          )
+        }
+      }
+    }
+
+    expect(disagreements).toEqual([])
+  })
+
+  test('the shortcut still joins, drops the empty side, and ignores a non-string tail', () => {
+    expect(cx('px_4', 'c_red.300')).toBe('px_4 c_red.300')
+    expect(cx('', 'c_red.300')).toBe('c_red.300')
+    expect(cx('px_4', '')).toBe('px_4')
+    // `cond && cls` with a false condition, and a className that was never passed.
+    expect(cx('px_4', false)).toBe('px_4')
+    expect(cx('px_4', undefined)).toBe('px_4')
+    // `true` is truthy but carries no class — the loop maps it to '', and so must the shortcut.
+    expect(cx('px_4', true)).toBe('px_4')
+  })
 })
 
 /**

@@ -66,11 +66,24 @@ export function generateCx(ctx: Context) {
     js: outdent`
   ${ctx.file.import('splitProps', '../helpers')}
 
-  function cx(...args) {
-    let str = ''
+  function cx(a, b) {
+    const n = arguments.length
 
-    for (let i = 0; i < args.length; i++) {
-      const arg = args[i]
+    // \`cx(<compiled class literal>, className)\` is what the transform emits at nearly every
+    // call site it cannot fold, so it is the shape that actually runs per render — a wrapper
+    // forwarding a className down. Answering it here skips the rest-array allocation and the
+    // loop below. \`b\` covers the whole non-string tail \`cx\` ignores (null/undefined/booleans),
+    // which is the \`cond && cls\` idiom when the condition is false.
+    if (n === 2 && typeof a === 'string') {
+      if (typeof b === 'string') return a ? (b ? a + ' ' + b : a) : b
+      if (b == null || b === false || b === true) return a
+    }
+
+    let str = ''
+    // \`arguments\` rather than a rest parameter: this is the variadic tail, and allocating an
+    // array per call to iterate it once is the cost the fast path above exists to avoid.
+    for (let i = 0; i < n; i++) {
+      const arg = arguments[i]
       if (!arg) continue
       // Arrays are part of the declared type, so this branch has to handle them.
       // Returning '' for \`cx(['a', 'b'])\` would be a lie.

@@ -1,4 +1,5 @@
 import * as predicates from '@typescript/api/unstable/ast/is'
+import type { ImportDeclaration, SourceFile } from '@typescript/api/unstable/ast'
 import type { Node } from './types'
 
 /**
@@ -68,8 +69,8 @@ export const getFirstAncestor = (node: Node, matches: (ancestor: Node) => boolea
 }
 
 /** The import declarations of a source file, without walking past the top level. */
-export const getImportDeclarations = (sourceFile: Node): Node[] =>
-  (sourceFile.statements ?? []).filter((statement: Node) => predicates.isImportDeclaration(statement))
+export const getImportDeclarations = (sourceFile: SourceFile): ImportDeclaration[] =>
+  sourceFile.statements.filter((statement) => predicates.isImportDeclaration(statement))
 
 /**
  * The module a declaration imports from, as written.
@@ -77,4 +78,5 @@ export const getImportDeclarations = (sourceFile: Node): Node[] =>
  * `moduleSpecifier` is a string literal node, so `.text` is the value with the quotes already
  * removed — the same thing ts-morph's `getModuleSpecifierValue()` returns.
  */
-export const getModuleSpecifierValue = (declaration: Node): string | undefined => declaration.moduleSpecifier?.text
+export const getModuleSpecifierValue = (declaration: ImportDeclaration): string | undefined =>
+  predicates.isStringLiteral(declaration.moduleSpecifier) ? declaration.moduleSpecifier.text : undefined

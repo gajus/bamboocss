@@ -1,38 +1,23 @@
+import type { Node as CompilerNode, SourceFile as CompilerSourceFile } from '@typescript/api/unstable/ast'
+
 /**
  * What a node is, from bamboo's side of the boundary.
  *
- * TypeScript 7 returns lazy views over a binary buffer the Go compiler owns. Their shape is
- * described by `@typescript/api/unstable/ast`, but that surface is `unstable/*` by name and
- * moves between dev builds, so the extractor is typed against what it actually reads instead of
- * against whatever the current build happens to export. Anything absent here is a thing bamboo
- * does not use, not a thing TypeScript does not have.
+ * Aliased from the compiler rather than restated. Writing an interface of the members bamboo
+ * happens to read looked tempting — it would document the surface, and it would not move when
+ * an `unstable/*` dev build did — but the predicates in `unstable/ast/is` are typed against the
+ * compiler's own `Node`, and that interface is not satisfied structurally. A parallel
+ * declaration therefore fails to be assignable to it, and every `is.isX(node)` call stops
+ * compiling. The dependency is real; naming it is better than shadowing it.
  *
- * The index signature is load-bearing: named child accessors — `expression`, `properties`,
- * `arguments`, `declarations` and around a hundred more — are generated per node kind, and
- * enumerating them here would be transcribing a table that already exists.
+ * What bamboo actually reads: `kind`, `pos`, `end`, `parent`, `text`, `getText()`, `getStart()`,
+ * `getEnd()`, `getSourceFile()`, `forEachChild()`, and the named child accessors generated per
+ * node kind — `expression`, `initializer`, `name`, `properties`, `arguments`, `statements`,
+ * `moduleSpecifier`, `declarations`.
  */
-export interface Node {
-  readonly kind: number
-  readonly pos: number
-  readonly end: number
-  readonly parent?: Node
-  readonly text?: string
-  readonly statements?: Node[]
-  readonly moduleSpecifier?: Node
-  getText(): string
-  getFullText(): string
-  getStart(): number
-  getEnd(): number
-  getSourceFile(): SourceFile
-  forEachChild(visit: (child: Node) => void): void
-  [member: string]: unknown
-}
+export type Node = CompilerNode
 
-export interface SourceFile extends Node {
-  /** The file's whole text. Slicing it by a node's `pos`/`end` is how a range is read. */
-  readonly text: string
-  readonly fileName: string
-}
+export type SourceFile = CompilerSourceFile
 
 /**
  * The filesystem TypeScript 7 reads through.

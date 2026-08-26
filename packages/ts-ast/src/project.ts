@@ -66,11 +66,6 @@ export class Project {
     return result
   }
 
-  /** Every file in the program, which is what the project's `include` resolved to. */
-  getSourceFiles(): SourceFile[] {
-    return (this.#project()?.program.getSourceFiles() ?? []) as SourceFile[]
-  }
-
   /** Ends the compiler process. A project that is not closed keeps one alive. */
   dispose(): void {
     this.#api.close()

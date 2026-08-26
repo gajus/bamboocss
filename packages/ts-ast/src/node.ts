@@ -179,18 +179,32 @@ export const getLineAndColumnAtPos = (sourceFile: SourceFile, pos: number): { li
 }
 
 /** The named bindings of an import — `import { a, b } from 'x'`. */
+/**
+ * The import clause, whether given the declaration or the clause itself.
+ *
+ * ts-morph hung `getNamedImports()` and friends on the *declaration*, so that is what most
+ * callers hold. But a caller that has already narrowed to `statement.importClause` — because it
+ * needed to check the clause for a type-only import first — naturally passes the clause, and
+ * silently reading `undefined.namedBindings` off it reports a file with no imports at all.
+ * Accepting both is one comparison and removes a whole class of caller-side mistake.
+ */
+const clauseOf = (node: Node): { name?: Node; namedBindings?: Node } | undefined => {
+  const declared = (node as { importClause?: { name?: Node; namedBindings?: Node } }).importClause
+  if (declared) return declared
+  return predicates.isImportClause(node) ? (node as { name?: Node; namedBindings?: Node }) : undefined
+}
+
 export const getNamedImports = (declaration: Node): Node[] => {
-  const bindings = (declaration as { importClause?: { namedBindings?: Node } }).importClause?.namedBindings
+  const bindings = clauseOf(declaration)?.namedBindings
   return bindings && predicates.isNamedImports(bindings) ? [...bindings.elements] : []
 }
 
 /** The default binding of an import — `import a from 'x'` — or `undefined`. */
-export const getDefaultImport = (declaration: Node): Node | undefined =>
-  (declaration as { importClause?: { name?: Node } }).importClause?.name
+export const getDefaultImport = (declaration: Node): Node | undefined => clauseOf(declaration)?.name
 
 /** The namespace binding of an import — `import * as a from 'x'` — or `undefined`. */
 export const getNamespaceImport = (declaration: Node): Node | undefined => {
-  const bindings = (declaration as { importClause?: { namedBindings?: Node } }).importClause?.namedBindings
+  const bindings = clauseOf(declaration)?.namedBindings
   return bindings && predicates.isNamespaceImport(bindings) ? (bindings as { name?: Node }).name : undefined
 }
 

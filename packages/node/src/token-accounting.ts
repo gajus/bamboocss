@@ -168,7 +168,7 @@ export function accountSnapshot(ctx: BambooContext, snapshot: SourceSnapshot, ac
     // Syntax diagnostics separate the two exactly: zero for a healthy file, non-zero for one
     // the parser could not read as written. That the check is coarse is the safe direction, and
     // the report says which file to look at.
-    if (parseErrorCount(sourceFile!)) {
+    if (ctx.project.getSyntacticDiagnosticCount(filePath)) {
       if (!mentionsToken(ctx, parsed)) return
       declined.push({ filePath, line: 1, reason: 'unparsed' })
       return
@@ -216,17 +216,6 @@ const mentionsToken = (ctx: BambooContext, text: string | undefined | null) => {
 
   return IMPORTING_CALL.test(text)
 }
-
-/**
- * How many syntax errors the parse produced.
- *
- * `parseDiagnostics` is TypeScript-internal and absent from the public `SourceFile` type, so
- * it is reached through a cast. The alternative, `getPreEmitDiagnostics`, runs the type checker
- * over the whole program — orders of magnitude more work for a question about syntax, and it
- * would report type errors this pass has no business declining over.
- */
-const parseErrorCount = (sourceFile: SourceFile) =>
-  (sourceFile as unknown as { parseDiagnostics?: readonly unknown[] }).parseDiagnostics?.length ?? 0
 
 /** Whether a module specifier resolves to the generated tokens artifact. */
 const isTokensEntrypoint = (ctx: BambooContext, specifier: string) => {
@@ -474,12 +463,11 @@ function* identifiersNamed(sourceFile: SourceFile, wanted: (name: string) => boo
   }
   collect(sourceFile)
 
-  // Wrapped only after the walk, so a caller that stops early pays for nothing it did not read.
-  // Typed as `Identifier` rather than `Node`, which is what `getDescendantsOfKind` handed back:
-  // an identifier always has a parent, so its `getParent()` is non-optional and callers below
-  // rely on that narrowing.
-  const wrap = sourceFile as unknown as { _getNodeFromCompilerNode: (node: Node) => Identifier }
-  for (const node of found) yield wrap._getNodeFromCompilerNode(node)
+  // Yielded as they are. ts-morph kept a parallel wrapper object per compiler node and this
+  // walk had to ask the source file to produce one; TypeScript 7 hands back the compiler's own
+  // nodes, so there is nothing to wrap and the cast only restores the narrowing — an identifier
+  // always has a parent, which callers below rely on.
+  for (const node of found) yield node as Identifier
 }
 
 /**

@@ -602,6 +602,18 @@ export class Project {
     return this.project.getSourceFile(filePath)
   }
 
+  /**
+   * How many syntax errors this file's parse produced.
+   *
+   * Asked by the token accounting, which may only speak for a file whose tree it can trust: a
+   * construct the parser could not read leaves an ast that stops early, and every call below
+   * the offending line silently ceases to exist. Zero means the file parsed as written.
+   */
+  getSyntacticDiagnosticCount = (filePath: string): number => {
+    this.#assertNotLoading()
+    return this.project.getSyntacticDiagnosticCount(filePath)
+  }
+
   /** ts-morph reports forward slashes; normalize callers' paths to match on Windows. */
   private normalizePath = (filePath: string) => filePath.replaceAll('\\', '/')
 

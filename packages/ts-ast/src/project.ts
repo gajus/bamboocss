@@ -178,6 +178,27 @@ export class Project {
     return result
   }
 
+  /**
+   * How many syntax errors the parse of this file produced.
+   *
+   * ts-morph exposed TypeScript's internal `parseDiagnostics` array directly on the source
+   * file. TypeScript 7's nodes are views over a buffer the Go process owns and carry no such
+   * property, so reading it answers `undefined` — which coerces to "no errors" and quietly
+   * retires whatever safety net was built on it.
+   *
+   * `getSyntacticDiagnostics` is the question actually being asked, and scoped to one file it
+   * stays a syntax check: no checker is instantiated, so this does not drag in the cost that
+   * `getPreEmitDiagnostics` would.
+   */
+  getSyntacticDiagnosticCount(filePath: string): number {
+    const path = this.#abs(filePath)
+    for (const project of this.#snapshot.getProjects()) {
+      if (!project.program.getSourceFile(path)) continue
+      return project.program.getSyntacticDiagnostics(path).length
+    }
+    return 0
+  }
+
   /** The project's resolved `compilerOptions`, as the Go compiler parsed them. */
   getCompilerOptions() {
     return this.#project()?.program.getCompilerOptions()

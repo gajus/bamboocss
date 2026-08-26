@@ -7,7 +7,9 @@ import { OutputEngine } from '../src/output-engine'
  * path there, and is it a directory.
  */
 const createEngine = (files: Record<string, string>) => {
+  const written: string[] = []
   const write = (file: string, code: string) => {
+    written.push(file)
     files[file] = code
   }
 
@@ -44,7 +46,7 @@ const createEngine = (files: Record<string, string>) => {
     },
   } as any)
 
-  return { engine, files }
+  return { engine, files, written }
 }
 
 const pkg = (code: string) => ({ id: 'package.json' as const, files: [{ file: 'package.json', code }] })
@@ -228,5 +230,73 @@ describe('OutputEngine prune', () => {
 
     expect(removed).toBe(1)
     expect(files['out/patterns/stack.mjs']).toBeUndefined()
+  })
+})
+
+/**
+ * Codegen used to write every artifact on every build, whether or not a byte had moved. The
+ * write is cheap; the mtime is not. Everything downstream watches the generated directory —
+ * the dev server's module graph, `tsc --incremental`, any bundler with it in scope — and a
+ * touched file makes each of them redo work for contents they have already read. Most builds
+ * move nothing: `csstype.d.ts` alone is 895 kB copied verbatim from a constant.
+ */
+describe('OutputEngine skips a write whose contents already match', () => {
+  const artifact = (code: string) => ({ id: 'css-fn' as const, files: [{ file: 'css/index.mjs', code }] })
+
+  test('writes when the file is not there yet', async () => {
+    const { engine, files, written } = createEngine({})
+
+    await engine.write(artifact('export const a = 1'))
+
+    expect(written).toEqual(['out/css/index.mjs'])
+    expect(files['out/css/index.mjs']).toBe('export const a = 1')
+  })
+
+  test('does not write again when the contents are identical', async () => {
+    const { engine, written } = createEngine({})
+
+    await engine.write(artifact('export const a = 1'))
+    await engine.write(artifact('export const a = 1'))
+    await engine.write(artifact('export const a = 1'))
+
+    expect(written).toEqual(['out/css/index.mjs'])
+  })
+
+  test('writes again as soon as a byte moves', async () => {
+    const { engine, files, written } = createEngine({})
+
+    await engine.write(artifact('export const a = 1'))
+    await engine.write(artifact('export const a = 2'))
+
+    expect(written).toEqual(['out/css/index.mjs', 'out/css/index.mjs'])
+    expect(files['out/css/index.mjs']).toBe('export const a = 2')
+  })
+
+  /** Whitespace is a byte. A formatting-only change still has to reach disk. */
+  test('treats a whitespace-only difference as a change', async () => {
+    const { engine, written } = createEngine({})
+
+    await engine.write(artifact('export const a = 1'))
+    await engine.write(artifact('export const a = 1\n'))
+
+    expect(written).toHaveLength(2)
+  })
+
+  /**
+   * `package.json` is merged rather than overwritten, so it keeps its own path. Reaching the
+   * comparison would ask whether the *generated* contents match the *merged* file, which they
+   * never do once a consumer has added a key.
+   */
+  test('leaves package.json on its merging path', async () => {
+    const existing = { name: 'styled-system', private: true }
+    const { engine, files } = createEngine({ 'out/package.json': JSON.stringify(existing) })
+
+    await engine.write(pkg(generated))
+
+    expect(JSON.parse(files['out/package.json'])).toEqual({
+      ...existing,
+      type: 'module',
+      sideEffects: ['*.css'],
+    })
   })
 })

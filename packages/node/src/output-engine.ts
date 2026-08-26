@@ -133,9 +133,38 @@ export class OutputEngine {
           return this.writePackageJson(absPath, code)
         }
 
+        if (this.isUnchanged(absPath, code)) {
+          logger.debug('write:unchanged', dir.slice(-1).concat(file).join('/'))
+          return
+        }
+
         return this.fs.writeFile(absPath, code)
       }),
     )
+  }
+
+  /**
+   * Whether the file on disk already holds exactly what codegen would write.
+   *
+   * Not for the write itself, which is cheap — 54 artifacts and 1.4 MB measure ~6ms, against
+   * ~1.3ms to read them back and compare. It is for the mtime. Codegen rewrote every artifact
+   * on every build whether or not a byte moved, and most builds move nothing: `csstype.d.ts` is
+   * copied verbatim from a constant and accounts for 895 kB on its own. Everything downstream
+   * watches those files — the dev server's module graph, `tsc --incremental`, any bundler with
+   * the output directory in scope — and each of them re-does work for a file that is identical
+   * to the one it already read.
+   *
+   * A read that throws is an answer, not a failure: the file is unreadable or absent, so it has
+   * to be written.
+   */
+  private isUnchanged = (absPath: string, code: string) => {
+    if (!this.fs.existsSync(absPath)) return false
+
+    try {
+      return this.fs.readFileSync(absPath) === code
+    } catch {
+      return false
+    }
   }
 
   /**

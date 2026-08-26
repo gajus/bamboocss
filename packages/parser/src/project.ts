@@ -994,7 +994,14 @@ export class Project {
   /** The sole cross-file source resolver supplied to parser and extractor. */
   private resolveModule = (specifier: string, from: SourceFile): SourceFile | undefined => {
     const resolution = this.ensureResolutionFacts(from)
-    const target = resolution.facts.find((fact) => fact.specifier === specifier)?.target
+    // An absolute path names itself. The resolution facts are keyed by the specifier some
+    // importer actually wrote, and the export-read digest asks for a module by path — a
+    // specifier nobody wrote, and so a fact that cannot exist. Without this the digest is
+    // `module-missing` for every read, which reads downstream as "unverifiable" and costs the
+    // watch path its whole suppression.
+    const target =
+      resolution.facts.find((fact) => fact.specifier === specifier)?.target ??
+      (specifier.startsWith('/') ? specifier : undefined)
     if (!target) return
 
     const sourceFile = this.project.getSourceFile(target)

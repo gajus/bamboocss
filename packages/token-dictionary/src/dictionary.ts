@@ -110,7 +110,51 @@ export class TokenDictionary {
 
   formatTokenName = (path: string[]): string => path.join('.')
 
-  formatCssVar = (path: string[], options: CssVarOptions): CssVar => cssVar(path.join('-'), options)
+  /** Hashed custom-property name -> the token path that claimed it. Only used under `hash.cssVar`. */
+  private hashedCssVars = new Map<string, string>()
+
+  /**
+   * The custom property a token path resolves to, refusing to give one property to two paths.
+   *
+   * Under `hash.cssVar` the name is a 32-bit hash of the path, so distinct tokens can land on
+   * the same custom property. Only one definition then survives in `:root`, and every token
+   * that lost silently takes the winner's value — `sizes.t36050` declared as `111px` resolving
+   * to `222px` because `spacing.t125265` hashed to the same `--kQArEY`. Nothing is reported,
+   * and the symptom is a token rendering as a value that appears nowhere near its definition.
+   *
+   * Worse than the same accident on a class name, which affects the elements carrying it; this
+   * one follows the token everywhere it is referenced.
+   *
+   * References resolve through here too, with the same path as the definition, so they reclaim
+   * their own name rather than colliding with it.
+   */
+  formatCssVar = (path: string[], options: CssVarOptions): CssVar => {
+    const identity = path.join('-')
+    const result = cssVar(identity, options)
+
+    if (options.hash) {
+      const claimed = this.hashedCssVars.get(result.var)
+
+      if (claimed === undefined) {
+        this.hashedCssVars.set(result.var, identity)
+      } else if (claimed !== identity) {
+        throw new BambooError(
+          'HASH_COLLISION',
+          `Two different tokens hash to the same css variable \`${result.var}\`:\n` +
+            `  ${claimed.replaceAll('-', '.')}\n  ${identity.replaceAll('-', '.')}\n` +
+            `Only one of them can be defined, and the other would silently take its value.`,
+          {
+            hint:
+              'A rare accident of a 32-bit hash, not a mistake in your theme. Renaming either ' +
+              'token moves one of them off it. `prefix` will not: it is applied after hashing, ' +
+              'so both names carry it and both still collide.',
+          },
+        )
+      }
+    }
+
+    return result
+  }
 
   registerTokens() {
     const { tokens = {}, semanticTokens = {}, breakpoints, themes = {} } = this.options

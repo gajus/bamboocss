@@ -265,8 +265,9 @@ export class Utility {
           `Emitting both would give every element carrying that class a declaration it did not ask for.`,
         {
           hint:
-            'This is a rare accident of a 32-bit hash, not a mistake in your styles. Changing either ' +
-            'value — or setting a `prefix` — moves one of them off the collision.',
+            'A rare accident of a 32-bit hash, not a mistake in your styles. Changing either value ' +
+            'moves one of them off it. `prefix` will not: it is applied after hashing, so both ' +
+            'names carry it and both still collide.',
         },
       )
     }

@@ -806,15 +806,13 @@ export class Project {
 
     type PathOptions = { baseUrl?: string; paths?: Record<string, string[]> }
 
-    // bamboo's answer first, the compiler's second.
-    //
-    // `loadTsConfig` resolves the project's tsconfig itself — following solution references and
-    // `extends` — and hands the result down as project options. The Go compiler resolves the one
-    // config file it was opened on, which is not always the same thing, and a caller may supply
-    // compiler options with no file behind them at all. Where bamboo has decided, that decision
-    // is the one the fold has to agree with, or a `paths` alias resolves here and not there.
-    const configured = this.#sourceFiles.projectOptions.compilerOptions as PathOptions | undefined
-    const reported = compilerOptions as PathOptions | undefined
+    // Through the project, which merges the options it was *given* over the ones the compiler
+    // parsed — see `Project.getCompilerOptions`. That is the view to resolve against: bamboo
+    // resolves the tsconfig itself, following solution references and `extends`, and hands the
+    // result down when the project is built. Reading the parser's own copy instead would pin
+    // the aliases as they stood when this Project was first constructed, so a retargeted
+    // `paths` entry — or a deleted tsconfig — would keep resolving to what it used to name.
+    const configured = compilerOptions as PathOptions | undefined
 
     this.resolutionWork.moduleResolutionsAttempted++
     const resolved = this.#resolver(moduleName, {
@@ -822,8 +820,8 @@ export class Project {
       // Read off the resolved options rather than the published type: `baseUrl` and `paths` are
       // tsconfig fields the Go compiler resolves and reports, and TypeScript 7's exported
       // `CompilerOptions` does not name them.
-      baseUrl: configured?.baseUrl ?? reported?.baseUrl,
-      paths: configured?.paths ?? reported?.paths,
+      baseUrl: configured?.baseUrl,
+      paths: configured?.paths,
     })
 
     for (const filePath of resolved.affectingFiles) recordConfigurationFile(filePath)

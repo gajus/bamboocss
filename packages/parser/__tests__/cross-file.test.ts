@@ -299,19 +299,23 @@ describe('cross-file: tsconfig path aliases', () => {
     const ctx = createContext({
       tsconfig: { compilerOptions: { baseUrl: '/', paths: { '~/*': ['./app/src/*'] } } },
     } as any)
+    // Absolute, because the `baseUrl` above is: a `paths` target is resolved against the base
+    // URL, so `~/styles` names `/app/src/styles.ts` and nothing else. Adding the file under a
+    // relative path instead put it beside the process's working directory, where the alias
+    // does not point.
     ctx.project.addSourceFile(
-      'app/src/styles.ts',
+      '/app/src/styles.ts',
       `${CSS_IMPORT}
        export const button = css.raw({ borderWidth: '2px' })`,
     )
     ctx.project.addSourceFile(
-      'app/src/app.tsx',
+      '/app/src/app.tsx',
       `${CSS_IMPORT}
        import { button } from '~/styles'
        export const App = () => <div className={css(button, { margin: '2' })} />`,
     )
 
-    const data = ctx.project.parseSourceFile('app/src/app.tsx')!
+    const data = ctx.project.parseSourceFile('/app/src/app.tsx')!
     expect([...data.css].map((c: any) => c.data)).toEqual([[{ borderWidth: '2px' }, { margin: '2' }]])
   })
 })

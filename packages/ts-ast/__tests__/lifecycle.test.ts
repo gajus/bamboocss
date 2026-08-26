@@ -184,3 +184,42 @@ describe('withText alongside the overlay', () => {
     expect(literalsIn(file('src/app.ts'))).toEqual(['installed'])
   })
 })
+
+/**
+ * What the parser needs from a project besides its trees. ts-morph answered these through
+ * `getFileSystem()` and `getModuleResolutionHost()`; here they are on the project itself,
+ * because the filesystem is a delegate rather than an object this process owns.
+ */
+describe('project surface', () => {
+  test('reports the compiler options the Go compiler parsed', () => {
+    const options = project.getCompilerOptions()
+
+    expect(options).toBeDefined()
+    expect(options?.noEmit).toBe(true)
+  })
+
+  test('reports the directory it is rooted at', () => {
+    expect(project.getCurrentDirectory()).toBe(root)
+  })
+
+  /**
+   * The read has to go through the same order the compiler does. A caller that reaches the disk
+   * directly sees a module as written rather than as transformed, which is the whole point of
+   * the overlay.
+   */
+  test('reads through the overlay, not past it', () => {
+    expect(project.readFile(file('src/app.ts'))).toBe(`export const a = 'original'\n`)
+
+    project.addSourceFile(file('src/app.ts'), `export const a = 'installed'\n`)
+
+    expect(project.readFile(file('src/app.ts'))).toBe(`export const a = 'installed'\n`)
+  })
+
+  test('reading a path with nothing behind it answers undefined rather than throwing', () => {
+    expect(project.readFile(file('src/absent.ts'))).toBeUndefined()
+  })
+
+  test('realpath answers for a path that does not resolve rather than throwing', () => {
+    expect(project.realpath(file('src/absent.ts'))).toBe(file('src/absent.ts'))
+  })
+})

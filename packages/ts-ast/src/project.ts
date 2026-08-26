@@ -1,4 +1,4 @@
-import { readdirSync, statSync } from 'node:fs'
+import { readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { API } from '@typescript/api/unstable/sync'
 import type { FileSystemDelegate, Node, ProjectOptions, SourceFile } from './types'
 
@@ -47,8 +47,13 @@ export class Project {
    */
   #overlay = new Map<string, string>()
 
+  #cwd: string
+  #fs: FileSystemDelegate | undefined
+
   constructor(options: ProjectOptions) {
     this.#tsConfigFilePath = options.tsConfigFilePath
+    this.#cwd = options.cwd
+    this.#fs = options.fs
     this.#api = new API({ cwd: options.cwd, fs: this.#delegate(options.fs) })
     this.#snapshot = this.#api.updateSnapshot({ openProjects: [this.#tsConfigFilePath] })
   }
@@ -129,6 +134,49 @@ export class Project {
       result = read(project?.program.getSourceFile(filePath) as SourceFile | undefined)
     })
     return result
+  }
+
+  /** The project's resolved `compilerOptions`, as the Go compiler parsed them. */
+  getCompilerOptions() {
+    return this.#project()?.program.getCompilerOptions()
+  }
+
+  /** The directory the project is rooted at. */
+  getCurrentDirectory(): string {
+    return this.#cwd
+  }
+
+  /**
+   * A file's bytes, through the same order the compiler reads them: overlay, delegate, disk.
+   *
+   * Callers that want the text bamboo is *acting on* have to ask through here rather than the
+   * disk, or they read past an installed override and see a module as written instead of as
+   * transformed.
+   */
+  readFile(filePath: string): string | undefined {
+    const held = this.#overlay.get(filePath)
+    if (held !== undefined) return held
+
+    const delegated = this.#fs?.readFile?.(filePath)
+    if (delegated !== undefined) return delegated ?? undefined
+
+    try {
+      return readFileSync(filePath, 'utf8')
+    } catch {
+      return undefined
+    }
+  }
+
+  /** The real path behind a symlink, or the path itself when it does not resolve. */
+  realpath(filePath: string): string {
+    const delegated = this.#fs?.realpath?.(filePath)
+    if (delegated !== undefined) return delegated
+
+    try {
+      return realpathSync(filePath)
+    } catch {
+      return filePath
+    }
   }
 
   /** Ends the compiler process. A project that is not closed keeps one alive. */

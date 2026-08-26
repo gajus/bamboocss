@@ -852,7 +852,12 @@ export class Project {
       }
     }
 
-    const existing = project.getSourceFile(name)
+    // Held by *bamboo*, not merely present in the compiler's program. A TypeScript 7 program
+    // contains every file its config matches, so asking the compiler reports this resolved
+    // target as already loaded — and it is not: nothing installed it, nothing recorded reading
+    // it, and a later edit to it finds no file to re-read. ts-morph's project was exactly what
+    // had been put into it, which is the sense every question on this path was written in.
+    const existing = this.project.has(name) ? project.getSourceFile(name) : undefined
     if (existing) {
       this.removedSourcePaths.delete(name)
       return {

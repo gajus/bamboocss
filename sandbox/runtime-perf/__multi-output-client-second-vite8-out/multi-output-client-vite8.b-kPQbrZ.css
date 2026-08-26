@@ -1,0 +1,23 @@
+@layer reset, base, tokens, utilities;
+
+@layer base {
+  :root {
+    --made-with-bamboo: '🎋';
+  }
+
+  * {
+    margin: 0;
+    font-family: Inter;
+  }
+
+  a {
+    text-decoration: none;
+    color: inherit;
+  }
+}
+
+@layer utilities {
+  .w_\[62\.101px\] {
+    width: 62.101px;
+  }
+}

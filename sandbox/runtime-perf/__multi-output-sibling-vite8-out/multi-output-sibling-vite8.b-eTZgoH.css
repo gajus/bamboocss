@@ -1,0 +1,24 @@
+@layer reset;
+@layer base {
+  :root {
+    --made-with-bamboo: '🎋';
+  }
+  * {
+    margin: 0;
+    font-family: Inter;
+  }
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+}
+@layer tokens;
+@layer utilities {
+  .w_\[62\.101px\] {
+    width: 62.101px;
+  }
+  .w_\[62\.404px\] {
+    width: 62.404px;
+  }
+}
+/*$vite$:1*/

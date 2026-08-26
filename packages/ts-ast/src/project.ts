@@ -49,6 +49,17 @@ export class Project {
    */
   #overlay = new Map<string, string>()
 
+  /**
+   * Content this project's *filesystem* holds that the real one does not.
+   *
+   * ts-morph's in-memory filesystem, which several callers use as a disk with nothing behind
+   * it: a module written here exists, resolves and can be read, and is not part of the project
+   * until something loads it. Kept apart from the overlay because the two answer different
+   * questions — the overlay is the text bamboo is *acting on*, and `reloadSourceFile` drops it
+   * precisely so the file reads from here again.
+   */
+  #disk = new Map<string, string>()
+
   #cwd: string
   #fs: FileSystemDelegate | undefined
 
@@ -289,7 +300,8 @@ export class Project {
   }
 
   #readFile(filePath: string): string | undefined {
-    const held = this.#overlay.get(this.#abs(filePath))
+    const path = this.#abs(filePath)
+    const held = this.#overlay.get(path) ?? this.#disk.get(path)
     if (held !== undefined) return held
 
     // Contained for the same reason the compiler's delegate is: bamboo's runtime `fs` throws
@@ -320,7 +332,8 @@ export class Project {
    * resolution asks this of many candidates and reads none of them.
    */
   fileExists(filePath: string): boolean {
-    if (this.#overlay.has(this.#abs(filePath))) return true
+    const path = this.#abs(filePath)
+    if (this.#overlay.has(path) || this.#disk.has(path)) return true
 
     try {
       const answered = this.#fs?.fileExists?.(filePath)
@@ -372,10 +385,13 @@ export class Project {
     realpathSync: (filePath: string) => this.#realpath(filePath),
     fileExists: (filePath: string) => this.#readFile(filePath) !== undefined,
     writeFileSync: (filePath: string, content: string) => {
-      this.#overlay.set(this.#abs(filePath), content)
+      // Written, not installed — and deliberately without advancing the snapshot. Bytes moving
+      // on disk is not the same event as a project being told about them, which is why the
+      // callers that write here go on to call `reloadSourceFile`.
+      this.#disk.set(this.#abs(filePath), content)
     },
     deleteSync: (filePath: string) => {
-      this.#overlay.delete(this.#abs(filePath))
+      this.#disk.delete(this.#abs(filePath))
     },
     mkdirSync: () => undefined,
   }
@@ -423,6 +439,7 @@ export class Project {
   }
 
   #onDisk(filePath: string): boolean {
+    if (this.#disk.has(this.#abs(filePath))) return true
     try {
       return statSync(filePath).isFile()
     } catch {
@@ -454,6 +471,9 @@ export class Project {
    */
   #delegate(fs: FileSystemDelegate | undefined): FileSystemDelegate {
     const overlay = this.#overlay
+    const disk = this.#disk
+    /** Both stores, overlay first: installed text outranks the bytes it was installed over. */
+    const held = (fileName: string) => overlay.get(fileName) ?? disk.get(fileName)
     /** `undefined` rather than a thrown ENOENT/EISDIR — see above. */
     const attempt = <T>(read: () => T): T | undefined => {
       try {
@@ -465,15 +485,15 @@ export class Project {
     return {
       ...fs,
       readFile(fileName) {
-        const held = overlay.get(fileName)
-        return held === undefined ? attempt(() => fs?.readFile?.(fileName)) : held
+        const known = held(fileName)
+        return known === undefined ? attempt(() => fs?.readFile?.(fileName)) : known
       },
       fileExists(fileName) {
         // `undefined` is not `false` here. The delegate's contract is that declining to answer
         // falls through to the real filesystem, so collapsing "no delegate" into "no such file"
         // tells the compiler every file on disk is missing — and a project constructed without
         // an `fs` at all, which is the ordinary case, then has an empty program.
-        return overlay.has(fileName) ? true : attempt(() => fs?.fileExists?.(fileName))
+        return held(fileName) !== undefined ? true : attempt(() => fs?.fileExists?.(fileName))
       },
       /**
        * What the compiler is allowed to see in a directory, overlay included.
@@ -494,9 +514,9 @@ export class Project {
         const prefix = directoryName.endsWith('/') ? directoryName : `${directoryName}/`
         const addedFiles: string[] = []
         const addedDirectories: string[] = []
-        for (const held of overlay.keys()) {
-          if (!held.startsWith(prefix)) continue
-          const rest = held.slice(prefix.length)
+        for (const known of [...overlay.keys(), ...disk.keys()]) {
+          if (!known.startsWith(prefix)) continue
+          const rest = known.slice(prefix.length)
           const at = rest.indexOf('/')
           if (at === -1) addedFiles.push(rest)
           else addedDirectories.push(rest.slice(0, at))

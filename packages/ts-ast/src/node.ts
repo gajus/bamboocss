@@ -267,8 +267,20 @@ export const childOf = <T = Node>(node: Node, key: string): T | undefined =>
   (node as unknown as Record<string, T | undefined>)[key]
 
 /** A named property of an object literal, by key — ts-morph's `getProperty(name)`. */
+/**
+ * A named entry of an object literal or of a type literal.
+ *
+ * One name, two containers: ts-morph put `getProperty()` on both `ObjectLiteralExpression`,
+ * whose entries are `properties`, and `TypeLiteralNode`, whose entries are `members`. Reading
+ * only `properties` therefore answers `undefined` for every type literal — and the caller that
+ * needs it is the one that resolves a `declare const tokens: { readonly shadows: … }`, where
+ * the declaration has no initializer and its *type* is the only thing holding the values. That
+ * failure is silent: the property resolves as unresolvable and its declarations are dropped.
+ */
 export const getProperty = (node: Node, name: string): Node | undefined =>
-  (childOf<Node[]>(node, 'properties') ?? []).find((property) => getName(property) === name)
+  (childOf<Node[]>(node, 'properties') ?? childOf<Node[]>(node, 'members') ?? []).find(
+    (property) => getName(property) === name,
+  )
 
 /** A named member of a type literal, interface or enum — ts-morph's `getMember(name)`. */
 export const getMember = (node: Node, name: string): Node | undefined =>

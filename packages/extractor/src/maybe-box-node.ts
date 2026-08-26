@@ -801,11 +801,14 @@ const getTypeNodeValue = (type: TypeNode, stack: Node[], ctx: BoxContext): Liter
       const entries = props
         .map((member) => {
           const nameNode = member.name
-          const nameText = nameNode.getText()
           const name = getNameLiteral(nameNode)
           if (!name) return
 
-          const value = getTypeLiteralNodePropValue(type, nameText, stack, ctx)
+          // Looked up by the same name it is emitted under. These used to differ: the lookup
+          // took the name node's *source text*, so a quoted key like `'2xl'` was searched for
+          // with its quotes and never found — and a miss caches the whole type literal as
+          // unreadable, so every property declared after the first quoted one disappeared too.
+          const value = getTypeLiteralNodePropValue(type, name, stack, ctx)
           return [name, value] as const
         })
         .filter(isNotNullish)

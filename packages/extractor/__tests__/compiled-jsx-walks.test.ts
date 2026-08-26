@@ -1,5 +1,7 @@
-import { Node, Project } from 'ts-morph'
-import { describe, expect, test } from 'vitest'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import { describe, expect, test, vi } from 'vitest'
 import { createCompiledJsxContext } from '../src/compiled-jsx'
 
 /**
@@ -15,27 +17,45 @@ import { createCompiledJsxContext } from '../src/compiled-jsx'
  * this — 158 fixtures of real bundler output across react, preact, vue and solid — so a guard that
  * skipped too much fails there rather than here.
  */
-const project = new Project({ useInMemoryFileSystem: true, compilerOptions: { jsx: 2 } })
+/**
+ * The walk counter.
+ *
+ * ts-morph made every node an object of its own, so counting reads meant patching one method on
+ * `Node.prototype`. TypeScript 7's nodes carry no such method — `getDescendantsOfKind` is a free
+ * function in `@bamboocss/ts-ast` — so the count has to be taken where the function lives, which
+ * is a module mock rather than a prototype patch. `vi.hoisted` is what lets the tally exist
+ * before the hoisted factory closes over it.
+ */
+const tally = vi.hoisted(() => ({ walks: 0 }))
+
+vi.mock('@bamboocss/ts-ast', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@bamboocss/ts-ast')>()
+  return {
+    ...actual,
+    getDescendantsOfKind: (...args: Parameters<typeof actual.getDescendantsOfKind>) => {
+      tally.walks++
+      return actual.getDescendantsOfKind(...args)
+    },
+  }
+})
+
+const { Project } = await import('@bamboocss/ts-ast')
+
+const root = mkdtempSync(path.join(tmpdir(), 'bamboo-walks-'))
+writeFileSync(
+  path.join(root, 'tsconfig.json'),
+  JSON.stringify({ compilerOptions: { jsx: 'react', noEmit: true, noLib: true }, include: ['**/*'] }),
+)
+const project = new Project({ cwd: root, tsConfigFilePath: path.join(root, 'tsconfig.json') })
 
 let counter = 0
 const walksFor = (code: string) => {
-  const sourceFile = project.createSourceFile(`walks-${counter++}.tsx`, code, { overwrite: true })
+  const sourceFile = project.createSourceFile(`walks-${counter++}.tsx`, code)
+  if (!sourceFile) throw new Error('bamboo: the walk-counting project did not accept the source')
 
-  let walks = 0
-  const proto = Node.prototype as unknown as Record<string, (...args: never[]) => unknown>
-  const original = proto.getDescendantsOfKind
-
-  proto.getDescendantsOfKind = function patched(...args: never[]) {
-    walks++
-    return original.apply(this, args)
-  }
-
-  try {
-    createCompiledJsxContext(sourceFile)
-    return walks
-  } finally {
-    proto.getDescendantsOfKind = original
-  }
+  tally.walks = 0
+  createCompiledJsxContext(sourceFile)
+  return tally.walks
 }
 
 /** What a person writes. Neither walk can match it. */

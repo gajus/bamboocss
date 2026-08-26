@@ -600,6 +600,10 @@ export class Project {
 
   getSourceFile = (filePath: string): SourceFile | undefined => {
     this.#assertNotLoading()
+    // Only what this project was given. The compiler's program reaches every file its config
+    // matches and everything those import, so asking it directly reports a neighbouring source
+    // as already loaded — and the whole point of this question is to find out whether it is.
+    if (!this.project.has(filePath)) return undefined
     return this.project.getSourceFile(filePath)
   }
 

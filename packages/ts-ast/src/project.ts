@@ -83,6 +83,20 @@ export class Project {
   }
 
   /**
+   * Whether this project was *given* the file, as opposed to the compiler having found it.
+   *
+   * A TypeScript 7 program contains everything its config matches plus the transitive closure
+   * of every import, so `getSourceFile` answers for files nobody installed. ts-morph's project
+   * was exactly the set put into it — constructed with `skipAddingFilesFromTsConfig` and
+   * `skipFileDependencyResolution` — and bamboo's laziness is built on that distinction: a
+   * source outside the declared inventory has to read as absent until something resolves to it,
+   * or nothing is ever recorded as having been demanded.
+   */
+  has(filePath: string): boolean {
+    return this.#opened.has(this.#abs(filePath))
+  }
+
+  /**
    * The first project in a snapshot holding this file.
    *
    * Not `getProjects()[0]`. A file opened from outside the tsconfig's `include` is loaded into
@@ -175,8 +189,10 @@ export class Project {
       this.#apply({ changed: changedFiles })
       return
     }
+    // The overlay goes; the *membership* does not. Invalidating everything means "re-read what
+    // you hold", not "you hold nothing" — dropping the opened set would make every file this
+    // project was given read as absent until something added it back.
     this.#overlay.clear()
-    this.#opened.clear()
     this.#snapshot = this.#api.updateSnapshot({ fileChanges: { invalidateAll: true } })
   }
 

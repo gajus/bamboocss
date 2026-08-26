@@ -27,6 +27,22 @@ import { globDirname } from './glob-dirname'
  */
 export const globIgnore = (exclude: string[] | undefined) => ['**/*.d.ts', ...(exclude ?? [])]
 
+/**
+ * The order the source glob returns files in, made a decision rather than an accident.
+ *
+ * `fast-glob` hands back whatever `readdir` gave it, which is the filesystem's order and is not
+ * the same on every machine. That order is not cosmetic: it is the order atoms enter the sheet,
+ * and sheet order is what decides a conflict between two classes on one element — `cx` joins
+ * them and the browser picks by position, not by the order they were passed. So an unsorted
+ * glob lets two checkouts of the same commit build stylesheets that resolve the same conflict
+ * differently, and makes the emitted bytes irreproducible, which is also what content-hashed
+ * asset caching is keyed on.
+ *
+ * Sorted by code unit rather than `localeCompare`, whose answer depends on the host's locale —
+ * the exact class of machine-dependence this exists to remove.
+ */
+export const sortSources = (files: string[]) => files.sort()
+
 export const nodeRuntime: Runtime = {
   cwd() {
     return process.cwd()
@@ -54,7 +70,7 @@ export const nodeRuntime: Runtime = {
     glob(opts) {
       if (!opts.include) return []
 
-      return glob.sync(opts.include, { cwd: opts.cwd, ignore: globIgnore(opts.exclude), absolute: true })
+      return sortSources(glob.sync(opts.include, { cwd: opts.cwd, ignore: globIgnore(opts.exclude), absolute: true }))
     },
     writeFile: fsExtra.writeFile,
     writeFileSync: fsExtra.writeFileSync,

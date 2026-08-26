@@ -377,7 +377,11 @@ export class Project {
         return held === undefined ? attempt(() => fs?.readFile?.(fileName)) : held
       },
       fileExists(fileName) {
-        return overlay.has(fileName) ? true : (attempt(() => fs?.fileExists?.(fileName)) ?? false)
+        // `undefined` is not `false` here. The delegate's contract is that declining to answer
+        // falls through to the real filesystem, so collapsing "no delegate" into "no such file"
+        // tells the compiler every file on disk is missing — and a project constructed without
+        // an `fs` at all, which is the ordinary case, then has an empty program.
+        return overlay.has(fileName) ? true : attempt(() => fs?.fileExists?.(fileName))
       },
       /**
        * What the compiler is allowed to see in a directory, overlay included.

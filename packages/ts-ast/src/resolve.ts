@@ -43,6 +43,19 @@ export interface ResolveOptions {
  */
 const EXTENSIONS = ['.ts', '.tsx', '.d.ts', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'] as const
 
+/**
+ * What a `.js`-family specifier may actually name.
+ *
+ * A TypeScript source importing `./x.js` means `./x.ts`; the emitted name is what the runtime
+ * will see, not what is on disk now. Listed source-first so the checkout's real file wins over
+ * a stale build output beside it.
+ */
+const EMITTED_EXTENSIONS = [
+  ['.js', ['.ts', '.tsx', '.d.ts', '.js', '.jsx']],
+  ['.mjs', ['.mts', '.d.mts', '.mjs']],
+  ['.cjs', ['.cts', '.d.cts', '.cjs']],
+] as const
+
 const dirname = (filePath: string) => filePath.slice(0, Math.max(0, filePath.lastIndexOf('/')))
 
 /**
@@ -74,11 +87,22 @@ const join = (...parts: string[]) => {
  * misses are reported as `failedLookups`, which become the *pending candidates* a watch build
  * re-checks, so an unsatisfiable one keeps its importer permanently unresolved and rebuilt.
  */
-const candidatesFor = (base: string): string[] => [
-  ...(EXTENSIONS.some((extension) => base.endsWith(extension)) ? [base] : []),
-  ...EXTENSIONS.map((extension) => base + extension),
-  ...EXTENSIONS.map((extension) => join(base, 'index' + extension)),
-]
+const candidatesFor = (base: string): string[] => {
+  // A path that already names a file names *that* file. Appending extensions to it produces
+  // candidates like `primary.ts.cjs`, which cannot exist — and those are not merely wasted
+  // probes, they are reported as pending candidates a watch build keeps re-checking.
+  const substitutions = EMITTED_EXTENSIONS.find(([emitted]) => base.endsWith(emitted))
+  if (substitutions) {
+    const [emitted, sources] = substitutions
+    return sources.map((source) => base.slice(0, -emitted.length) + source)
+  }
+  if (EXTENSIONS.some((extension) => base.endsWith(extension))) return [base]
+
+  return [
+    ...EXTENSIONS.map((extension) => base + extension),
+    ...EXTENSIONS.map((extension) => join(base, 'index' + extension)),
+  ]
+}
 
 const isRelative = (specifier: string) =>
   specifier.startsWith('./') || specifier.startsWith('../') || specifier === '.' || specifier === '..'

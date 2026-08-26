@@ -175,7 +175,7 @@ export function findIdentifierValueDeclaration(
         const typeNode = maybeDeclaration.type
         if (initializer) {
           innerStack.push(...declarationStack.concat(initializer))
-        } else if (typeNode && Node.isTypeLiteral(typeNode)) {
+        } else if (typeNode && Node.isTypeLiteralNode(typeNode)) {
           innerStack.push(...declarationStack.concat(typeNode))
         } else {
           // A parameter with neither an initializer nor a type literal is unresolvable, and

@@ -759,8 +759,8 @@ export const localReferencesTo = (index: IdentifierIndex, name: string, declarat
         Node.isPropertyDeclaration(parent) ||
         Node.isGetAccessorDeclaration(parent) ||
         Node.isSetAccessorDeclaration(parent) ||
-        Node.isMethodSignature(parent) ||
-        Node.isPropertySignature(parent) ||
+        Node.isMethodSignatureDeclaration(parent) ||
+        Node.isPropertySignatureDeclaration(parent) ||
         Node.isEnumMember(parent)) &&
       nameNodeOf(parent) === identifier
     ) {

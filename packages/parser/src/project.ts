@@ -1395,10 +1395,8 @@ export class Project {
     this.invalidateSourcePreparation(filePath, existing)
     this.removedSourcePaths.delete(this.normalizePath(filePath))
     this.invalidate(!existing, existing?.fileName)
-    const sourceFile = this.project.createSourceFile(filePath, content, {
-      overwrite: true,
-      scriptKind: scriptKindFor(filePath),
-    })
+    const sourceFile = this.project.createSourceFile(filePath, content, { scriptKind: scriptKindFor(filePath) })
+    if (!sourceFile) throw new Error(`bamboo: could not add ${filePath} to the project`)
     // Keyed on the source file's own spelling, which is the one the ledger records.
     this.markAuxiliary(sourceFile.fileName, options.auxiliary)
     return sourceFile

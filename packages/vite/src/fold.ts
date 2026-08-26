@@ -372,8 +372,8 @@ const isValueReference = (identifier: Node): boolean => {
     Node.isPropertyDeclaration(parent) ||
     Node.isGetAccessorDeclaration(parent) ||
     Node.isSetAccessorDeclaration(parent) ||
-    Node.isMethodSignature(parent) ||
-    Node.isPropertySignature(parent) ||
+    Node.isMethodSignatureDeclaration(parent) ||
+    Node.isPropertySignatureDeclaration(parent) ||
     Node.isEnumMember(parent)
   ) {
     if (nameNodeOf(parent) === identifier) return false

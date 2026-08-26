@@ -630,8 +630,8 @@ function rootIdentifier(expression: Node | undefined): Node | undefined {
 function isDeclarationName(identifier: Node, parent: Node) {
   if (
     Node.isPropertyAssignment(parent) ||
-    Node.isPropertySignature(parent) ||
-    Node.isMethodSignature(parent) ||
+    Node.isPropertySignatureDeclaration(parent) ||
+    Node.isMethodSignatureDeclaration(parent) ||
     Node.isPropertyDeclaration(parent) ||
     Node.isMethodDeclaration(parent) ||
     Node.isEnumMember(parent)

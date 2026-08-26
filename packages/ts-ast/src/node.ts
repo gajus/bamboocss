@@ -211,3 +211,30 @@ export const nameNodeOf = (node: Node): Node | undefined => (node as { name?: No
  */
 export const childOf = <T = Node>(node: Node, key: string): T | undefined =>
   (node as unknown as Record<string, T | undefined>)[key]
+
+/** A named property of an object literal, by key — ts-morph's `getProperty(name)`. */
+export const getProperty = (node: Node, name: string): Node | undefined =>
+  (childOf<Node[]>(node, 'properties') ?? []).find((property) => getName(property) === name)
+
+/** A named member of a type literal, interface or enum — ts-morph's `getMember(name)`. */
+export const getMember = (node: Node, name: string): Node | undefined =>
+  (childOf<Node[]>(node, 'members') ?? []).find((member) => getName(member) === name)
+
+/**
+ * A node's position among its parent's named children.
+ *
+ * ts-morph counted every child including punctuation; `forEachChild` visits named children
+ * only. Nothing bamboo does with the index cares about commas — it identifies which element of a
+ * binding pattern or array a node is — and the named-only count is the one that matches.
+ */
+export const getChildIndex = (node: Node): number => {
+  const parent = node.parent
+  if (!parent) return -1
+  let index = -1
+  let seen = 0
+  parent.forEachChild((child) => {
+    if (child === node) index = seen
+    seen++
+  })
+  return index
+}

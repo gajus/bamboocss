@@ -195,7 +195,7 @@ function maybeBoxNodeUncached(
 
   // css`font-size: 1.5em;`
   if (Node.isTaggedTemplateExpression(node)) {
-    return cache(maybeBoxNode(node.getTemplate(), stack, ctx))
+    return cache(maybeBoxNode(node.template, stack, ctx))
   }
 
   // <ColorBox color={colors[staticColor]} /> or <ColorBox color={colors["brand"]} />
@@ -508,7 +508,7 @@ const getObjectLiteralPropValue = (
   const stack = [..._stack]
   const propName = accessList.pop()!
   const property =
-    initializer.getProperty(propName) ?? initializer.properties.find((p) => findProperty(p, propName, stack, ctx))
+    getProperty(initializer, propName) ?? initializer.properties.find((p) => findProperty(p, propName, stack, ctx))
 
   if (!property) return
   stack.push(property)
@@ -575,7 +575,7 @@ const maybeBindingElementValue = (def: BindingElement, stack: Node[], propName: 
   if (!grandParent) return
 
   if (Node.isArrayBindingPattern(parent)) {
-    const index = parent.getChildIndex()
+    const index = getChildIndex(parent)
     if (Number.isNaN(index)) return
 
     if (Node.isVariableDeclaration(grandParent)) {
@@ -625,19 +625,19 @@ function maybePropDefinitionValue(def: Node, accessList: string[], _stack: Node[
       const type = def.type
       if (!type) return
 
-      if (Node.isTypeLiteral(type)) {
+      if (Node.isTypeLiteralNode(type)) {
         if (accessList.length > 0) {
           const stack = [..._stack]
           stack.push(type)
 
           let propName = accessList.pop()!
-          let typeProp = type.getProperty(propName)
+          let typeProp = getProperty(type, propName)
           let typeLiteral = typeProp?.type
 
-          while (typeProp && accessList.length > 0 && typeLiteral && Node.isTypeLiteral(typeLiteral)) {
+          while (typeProp && accessList.length > 0 && typeLiteral && Node.isTypeLiteralNode(typeLiteral)) {
             stack.push(typeProp, typeLiteral)
             propName = accessList.pop()!
-            typeProp = typeLiteral.getProperty(propName)
+            typeProp = getProperty(typeLiteral, propName)
             typeLiteral = typeProp?.type
           }
 
@@ -691,7 +691,7 @@ function maybePropDefinitionValue(def: Node, accessList: string[], _stack: Node[
   }
 
   if (Node.isEnumDeclaration(def)) {
-    const member = def.getMember(propName)
+    const member = getMember(def, propName)
     if (!member) return
 
     const initializer = member.initializer
@@ -740,9 +740,9 @@ const getTypeLiteralNodePropValue = (
   }
 
   const members = type.members
-  const prop = members.find((member) => Node.isPropertySignature(member) && getName(member) === propName)
+  const prop = members.find((member) => Node.isPropertySignatureDeclaration(member) && getName(member) === propName)
 
-  if (Node.isPropertySignature(prop) && prop.isReadonly()) {
+  if (Node.isPropertySignatureDeclaration(prop) && prop.isReadonly()) {
     const propType = prop.type
     if (!propType) {
       typeLiteralCache.set(type, null)
@@ -787,9 +787,9 @@ const getTypeNodeValue = (type: TypeNode, stack: Node[], ctx: BoxContext): Liter
     }
   }
 
-  if (Node.isTypeLiteral(type)) {
+  if (Node.isTypeLiteralNode(type)) {
     const members = type.members
-    if (!members.some((member) => !Node.isPropertySignature(member) || !member.isReadonly())) {
+    if (!members.some((member) => !Node.isPropertySignatureDeclaration(member) || !member.isReadonly())) {
       const props = members as PropertySignatureDeclaration[]
       const entries = props
         .map((member) => {
@@ -827,7 +827,7 @@ const maybeDefinitionValue = (def: Node, stack: Node[], ctx: BoxContext): BoxNod
       const type = def.type
       if (!type) return
 
-      if (Node.isTypeLiteral(type)) {
+      if (Node.isTypeLiteralNode(type)) {
         stack.push(type)
         const maybeTypeValue = getTypeNodeValue(type, stack, ctx)
         if (isNotNullish(maybeTypeValue)) return box.from(maybeTypeValue, def, stack)

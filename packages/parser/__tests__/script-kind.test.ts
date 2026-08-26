@@ -18,12 +18,14 @@ const parse = (file: string, code: string) => {
   ctx.project.addSourceFile(file, code)
 
   const result = ctx.project.parseSourceFile(file)
-  const sourceFile = ctx.project.getSourceFile(file)!
 
   return {
     css: Array.from(result?.css ?? []).flatMap((item) => item.data),
-    parseErrors: (sourceFile.compilerNode as unknown as { parseDiagnostics?: readonly unknown[] }).parseDiagnostics
-      ?.length,
+    // Asked of the compiler rather than read off the node. ts-morph exposed TypeScript's
+    // internal `parseDiagnostics` array on the source file; TypeScript 7's nodes are views over
+    // a buffer another process owns and carry no such property, so reading it answers
+    // `undefined` — which is indistinguishable from "parsed cleanly".
+    parseErrors: ctx.project.getSyntacticDiagnosticCount(file),
   }
 }
 

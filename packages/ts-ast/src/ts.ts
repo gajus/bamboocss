@@ -79,6 +79,16 @@ const canHaveDecorators = (node: Node): boolean =>
   predicates.isClassDeclaration(node)
 
 const compat = {
+  /**
+   * A kind's canonical name.
+   *
+   * Not `SyntaxKind[kind]`. Several kinds share a numeric value with a range marker —
+   * `NumericLiteral` is also `FirstLiteralToken`, `Identifier` is also `FirstNode` — and a
+   * reverse lookup answers with whichever name the enum declared last. ts-morph's
+   * `getKindName()` returned the real one, and this string reaches snapshots and diagnostics.
+   */
+  formatSyntaxKind: ast.formatSyntaxKind,
+
   /** TypeScript 7 spells the type guard `isStringLiteralLikeNode`. */
   isStringLiteralLike: predicates.isStringLiteralLikeNode,
   isParameter: predicates.isParameterDeclaration,

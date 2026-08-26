@@ -1,4 +1,4 @@
-import { SyntaxKind as SyntaxKindValues } from '@typescript/api/unstable/ast'
+import { SyntaxKind as SyntaxKindValues, formatSyntaxKind } from '@typescript/api/unstable/ast'
 import * as predicates from '@typescript/api/unstable/ast/is'
 import type { ExportDeclaration, ImportDeclaration, SourceFile } from '@typescript/api/unstable/ast'
 import type { Node as AstNode } from './types'
@@ -418,3 +418,6 @@ export function pathOf(file: string | { fileName: string } | undefined): string 
   const original = filePath.slice(0, -ALIAS_SUFFIX.length)
   return extensionOf(original) && !COMPILER_EXTENSIONS.has(extensionOf(original)) ? original : filePath
 }
+
+/** A kind's canonical name — see `ts.formatSyntaxKind` for why this is not a reverse lookup. */
+export const kindNameOf = (kind: number | undefined): string => (kind === undefined ? '' : formatSyntaxKind(kind))

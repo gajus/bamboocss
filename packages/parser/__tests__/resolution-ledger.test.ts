@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Project } from '../src/project'
 import { describe, expect, test, vi } from 'vitest'
+import { pathOf } from '@bamboocss/ts-ast'
 
 const CSS_IMPORT = `import { css } from 'styled-system/css'`
 
@@ -284,7 +285,7 @@ describe('Project resolution ledger', () => {
     const parser = ctx.project.parser
     let observedOptions: any
     ctx.project.parser = ((sourceFile, _encoder, options) => {
-      if (sourceFile?.getFilePath() === '/app/src/dependency.ts') observedOptions = options
+      if (sourceFile && pathOf(sourceFile) === '/app/src/dependency.ts') observedOptions = options
     }) as typeof parser
 
     ctx.project.parseSourceFile('/app/src/dependency.ts')

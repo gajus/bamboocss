@@ -1,4 +1,4 @@
-import { SyntaxKind } from '@bamboocss/ts-ast'
+import { SyntaxKind, kindNameOf } from '@bamboocss/ts-ast'
 import type { Node } from '@bamboocss/ts-ast'
 import type { EvaluatedObjectResult, PrimitiveType } from './types'
 import { getNodeRange } from './get-node-range'
@@ -96,7 +96,7 @@ abstract class BoxNodeType<Definition extends BoxNodeDefinition = BoxNodeDefinit
       type: this.type,
       // @ts-expect-error
       value: this.value,
-      node: this.node.kind !== undefined ? SyntaxKind[this.node.kind] : '',
+      node: kindNameOf(this.node.kind),
       line: range.startLineNumber,
       column: range.startColumn,
       endLineNumber: range.endLineNumber,

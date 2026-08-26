@@ -1,5 +1,6 @@
 export {
   SKIP,
+  kindNameOf,
   compilerPathOf,
   pathOf,
   forEachDescendant,

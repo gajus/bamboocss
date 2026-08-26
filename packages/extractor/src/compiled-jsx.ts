@@ -11,6 +11,7 @@ import {
   getNamedImports,
   getNamespaceImport,
   literalValueOf,
+  nameNodeOf,
 } from '@bamboocss/ts-ast'
 import { unwrapExpression } from './utils'
 
@@ -227,7 +228,7 @@ const collectImports = (sourceFile: SourceFile): CompiledJsxImportMap => {
     }
 
     getNamedImports(declaration).forEach((specifier) => {
-      const importedName = specifier.name.getText()
+      const importedName = nameNodeOf(specifier).getText()
       const alias = getAliasNode(specifier)?.getText() || importedName
       named.set(alias, { importedName, mod })
     })

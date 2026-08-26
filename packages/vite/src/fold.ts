@@ -7,10 +7,7 @@ import type { Dict, ParserResultInterface, ResultItem } from '@bamboocss/types'
 import MagicString from 'magic-string'
 import { dirname, relative, resolve as resolvePath } from 'node:path'
 import {
-  CallExpression,
-  ImportEqualsDeclaration,
   Node,
-  SourceFile,
   SyntaxKind,
   forEachDescendant,
   getAliasNode,
@@ -28,6 +25,14 @@ import {
   is,
   isTypeOnly,
   literalValueOf,
+  nameNodeOf,
+} from '@bamboocss/ts-ast'
+import type {
+  CallExpression,
+  Identifier,
+  ImportEqualsDeclaration,
+  ShorthandPropertyAssignment,
+  SourceFile,
 } from '@bamboocss/ts-ast'
 import {
   AMBIGUOUS,
@@ -370,7 +375,7 @@ const isValueReference = (identifier: Node): boolean => {
     Node.isPropertySignature(parent) ||
     Node.isEnumMember(parent)
   ) {
-    if (parent.name === identifier) return false
+    if (nameNodeOf(parent) === identifier) return false
   }
 
   // `label: for (…) break label` names a target, not a value.
@@ -684,7 +689,7 @@ const bambooImportedNames = (sourceFile: SourceFile, ctx: Context): Set<string> 
     const mod = getModuleSpecifierValue(declaration)
 
     for (const named of getNamedImports(declaration)) {
-      const name = named.name.getText()
+      const name = nameNodeOf(named).getText()
       const alias = getAliasNode(named)?.getText() ?? name
       if (ctx.imports.match({ mod, name, alias })) names.add(alias)
     }
@@ -941,7 +946,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       if (isTypeOnly(declaration)) continue
       const namesBinding = getNamedImports(declaration).some((named) => {
         if (isTypeOnly(named)) return false
-        return (getAliasNode(named) ?? named.name).getText() === binding
+        return (getAliasNode(named) ?? nameNodeOf(named)).getText() === binding
       })
       if (!namesBinding) continue
 
@@ -1579,8 +1584,8 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       for (const declaration of getImportDeclarations(sourceFile)) {
         if (isTypeOnly(declaration) || !isBambooCssModule(getModuleSpecifierValue(declaration))) continue
         for (const named of getNamedImports(declaration)) {
-          if (isTypeOnly(named) || named.name.getText() !== 'cx') continue
-          cxBindings.add((getAliasNode(named) ?? named.name).getText())
+          if (isTypeOnly(named) || nameNodeOf(named).getText() !== 'cx') continue
+          cxBindings.add((getAliasNode(named) ?? nameNodeOf(named)).getText())
         }
       }
 
@@ -2039,8 +2044,8 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       if (isTypeOnly(declaration)) continue
       for (const named of getNamedImports(declaration)) {
         if (isTypeOnly(named)) continue
-        if ((getAliasNode(named) ?? named.name).getText() === binding) {
-          return getAliasNode(named) ?? named.name
+        if ((getAliasNode(named) ?? nameNodeOf(named)).getText() === binding) {
+          return getAliasNode(named) ?? nameNodeOf(named)
         }
       }
     }
@@ -2198,9 +2203,9 @@ export const foldSource = (options: FoldOptions): FoldResult => {
 
       for (const named of getNamedImports(declaration)) {
         if (isTypeOnly(named)) continue
-        const imported = named.name.getText()
+        const imported = nameNodeOf(named).getText()
         if (PERMITTED_BINDINGS.has(imported)) continue
-        watched.set((getAliasNode(named) ?? named.name).getText(), imported)
+        watched.set((getAliasNode(named) ?? nameNodeOf(named)).getText(), imported)
       }
 
       const namespace = getNamespaceImport(declaration)
@@ -2231,7 +2236,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
 
       for (const named of getNamedExports(declaration)) {
         if (isTypeOnly(named)) continue
-        const imported = named.name.getText()
+        const imported = nameNodeOf(named).getText()
         if (PERMITTED_BINDINGS.has(imported)) continue
 
         skipped.push({ name: imported, reason: 'runtime-binding', start: named.getStart(), end: named.getEnd() })
@@ -2248,7 +2253,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       for (const named of getNamedExports(declaration)) {
         if (isTypeOnly(named)) continue
 
-        const imported = watched.get(named.name.getText())
+        const imported = watched.get(nameNodeOf(named).getText())
         if (imported === undefined) continue
 
         skipped.push({ name: imported, reason: 'runtime-binding', start: named.getStart(), end: named.getEnd() })

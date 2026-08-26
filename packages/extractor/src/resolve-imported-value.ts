@@ -7,6 +7,7 @@ import {
   getDescendantsOfKind,
   getImportDeclarations,
   getNamedImports,
+  nameNodeOf,
 } from '@bamboocss/ts-ast'
 import { getExportedVarDeclarationWithName, getModuleSpecifierSourceFile } from './maybe-box-node'
 import type { BoxContext } from './types'
@@ -67,8 +68,8 @@ const importBindingsFor = (sourceFile: SourceFile) => {
     for (const specifier of getNamedImports(declaration)) {
       // `getAliasNode()` is the local binding and `getNameNode()` the exported name, so
       // `import { focusRing as ring }` is keyed on `ring` and looked up as `focusRing`.
-      const local = (getAliasNode(specifier) ?? specifier.name).getText()
-      bindings.set(local, { declaration, exportedName: specifier.name.getText() })
+      const local = (getAliasNode(specifier) ?? nameNodeOf(specifier)).getText()
+      bindings.set(local, { declaration, exportedName: nameNodeOf(specifier).getText() })
     }
 
     const defaultImport = getDefaultImport(declaration)

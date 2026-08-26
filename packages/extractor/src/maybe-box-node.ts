@@ -27,6 +27,7 @@ import {
   getName,
   getNamedExports,
   literalValueOf,
+  nameNodeOf,
   ts,
 } from '@bamboocss/ts-ast'
 import { box } from './box'
@@ -922,10 +923,10 @@ const resolveExportedName = (name: string, exportDeclaration: ExportDeclaration)
 
   for (const namedExport of namedExports) {
     const alias = getAliasNode(namedExport)
-    const exposedName = (alias ?? namedExport.name).getText()
+    const exposedName = (alias ?? nameNodeOf(namedExport)).getText()
 
     if (exposedName === name) {
-      return namedExport.name.getText()
+      return nameNodeOf(namedExport).getText()
     }
   }
 

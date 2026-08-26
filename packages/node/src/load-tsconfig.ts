@@ -1,3 +1,4 @@
+import type { Node } from '@bamboocss/ts-ast'
 import { convertTsPathsToRegexes } from '@bamboocss/config'
 import type { LoadConfigResult, LoadTsConfigResult } from '@bamboocss/types'
 import { promises as fs } from 'node:fs'

@@ -1,8 +1,6 @@
 import { resolveTsPathPattern } from '@bamboocss/config/ts-path'
 import {
-  Identifier,
   Node,
-  SourceFile,
   SyntaxKind,
   forEachDescendant,
   getAliasNode,
@@ -18,8 +16,10 @@ import {
   getParent,
   isTypeOnly,
   literalValueOf,
+  nameNodeOf,
   ts,
 } from '@bamboocss/ts-ast'
+import type { Identifier, PropertyAssignment, ShorthandPropertyAssignment, SourceFile } from '@bamboocss/ts-ast'
 import type { BambooContext } from './create-context'
 import { type SourceSnapshot, sourceSnapshots } from './source-snapshots'
 
@@ -284,7 +284,7 @@ function accountFile(
       // `t(key)` has no artifact specifier and no `token(`-shaped call, so keying on either
       // would miss it. Keying on the *imported name* catches it.
       for (const named of getNamedImports(clause)) {
-        if (!isTypeOnly(named) && nameOf(named.name) === 'token') decline(named, 'unclassified-import')
+        if (!isTypeOnly(named) && nameOf(nameNodeOf(named)) === 'token') decline(named, 'unclassified-import')
       }
 
       const foreignDefault = getDefaultImport(clause)
@@ -316,12 +316,12 @@ function accountFile(
       // and re-export `token` under another name, which a call of that name would then reach.
       // So the question is whether the binding is used as a *value* anywhere, not what it is
       // called.
-      if (nameOf(named.name) !== 'token') {
-        const local = (getAliasNode(named) ?? named.name).getText()
+      if (nameOf(nameNodeOf(named)) !== 'token') {
+        const local = (getAliasNode(named) ?? nameNodeOf(named)).getText()
         if (usedAsValue(sourceFile, local, named)) decline(named, 'unsupported-import')
         continue
       }
-      bindings.add((getAliasNode(named) ?? named.name).getText())
+      bindings.add((getAliasNode(named) ?? nameNodeOf(named)).getText())
     }
   }
 
@@ -457,14 +457,14 @@ function usesTokenMember(sourceFile: SourceFile, namespace: string) {
  * prunes a rule that is live — the silent direction, with no failing test to catch it.
  */
 function* identifiersNamed(sourceFile: SourceFile, wanted: (name: string) => boolean): Generator<Identifier> {
-  const found: ts.Node[] = []
+  const found: Node[] = []
 
-  const collect = (node: ts.Node) => {
-    if (node.kind === SyntaxKind.Identifier && wanted(String((node as ts.Identifier).escapedText))) {
+  const collect = (node: Node) => {
+    if (node.kind === SyntaxKind.Identifier && wanted(String((node as Identifier).escapedText))) {
       found.push(node)
     }
 
-    const jsDoc = (node as { jsDoc?: ts.Node[] }).jsDoc
+    const jsDoc = (node as { jsDoc?: Node[] }).jsDoc
     if (jsDoc) for (const doc of jsDoc) collect(doc)
 
     ts.forEachChild(node, collect)
@@ -475,7 +475,7 @@ function* identifiersNamed(sourceFile: SourceFile, wanted: (name: string) => boo
   // Typed as `Identifier` rather than `Node`, which is what `getDescendantsOfKind` handed back:
   // an identifier always has a parent, so its `getParent()` is non-optional and callers below
   // rely on that narrowing.
-  const wrap = sourceFile as unknown as { _getNodeFromCompilerNode: (node: ts.Node) => Identifier }
+  const wrap = sourceFile as unknown as { _getNodeFromCompilerNode: (node: Node) => Identifier }
   for (const node of found) yield wrap._getNodeFromCompilerNode(node)
 }
 
@@ -635,7 +635,7 @@ function isDeclarationName(identifier: Node, parent: Node) {
     Node.isMethodDeclaration(parent) ||
     Node.isEnumMember(parent)
   ) {
-    return parent.name === identifier
+    return nameNodeOf(parent) === identifier
   }
 
   return false

@@ -9,6 +9,7 @@ export {
   getLineAndColumnAtPos,
   getLiteralText,
   getName,
+  nameNodeOf,
   getNamedImports,
   getNamedExports,
   getNamespaceImport,
@@ -22,6 +23,7 @@ export {
   Node,
 } from './node'
 export { Project } from './project'
+export { ts } from './ts'
 export { createResolver } from './resolve'
 export type { ResolvedModule, ResolveOptions } from './resolve'
 export type { FileSystemDelegate, ProjectOptions, SourceFile } from './types'

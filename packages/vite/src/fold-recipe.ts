@@ -1,3 +1,4 @@
+import type { PropertyAssignment } from '@bamboocss/ts-ast'
 import type { ParserResultInterface, ResultItem } from '@bamboocss/types'
 import {
   Node,
@@ -10,6 +11,7 @@ import {
   getNamedImports,
   isTypeOnly,
   literalValueOf,
+  nameNodeOf,
 } from '@bamboocss/ts-ast'
 import { declaredAtModuleScope } from './fold-analysis'
 import type { StaticStyleSetCompiler, StyleSetRecipeConfig } from './style-set'
@@ -202,10 +204,10 @@ export const ensureRecipeHelperImport = (
     for (const named of getNamedImports(declaration)) {
       if (isTypeOnly(named)) continue
 
-      if (named.name.getText() === imported) {
+      if (nameNodeOf(named).getText() === imported) {
         // Somebody else's helper, or one shadowed here, is not the one this calls.
         if (!isBambooCssModule(mod)) return undefined
-        const local = (getAliasNode(named) ?? named.name).getText()
+        const local = (getAliasNode(named) ?? nameNodeOf(named)).getText()
         return isShadowed(call, local) ? undefined : { name: local }
       }
     }

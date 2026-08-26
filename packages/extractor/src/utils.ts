@@ -1,4 +1,5 @@
-import { JsxOpeningElement, JsxSelfClosingElement, Node } from '@bamboocss/ts-ast'
+import { Node } from '@bamboocss/ts-ast'
+import type { JsxOpeningElement, JsxSelfClosingElement } from '@bamboocss/ts-ast'
 import type { PrimitiveType } from './types'
 
 type Nullable<T> = T | null | undefined

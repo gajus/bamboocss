@@ -1,14 +1,11 @@
-import {
+import { Node, Project, forEachDescendant, getAliasNode, ts } from '@bamboocss/ts-ast'
+import type {
   BindingElement,
   EnumDeclaration,
   FunctionDeclaration,
   Identifier,
-  Node,
   ParameterDeclaration,
   VariableDeclaration,
-  forEachDescendant,
-  getAliasNode,
-  ts,
 } from '@bamboocss/ts-ast'
 import { getExportedVarDeclarationWithName, getModuleSpecifierSourceFile } from './maybe-box-node'
 import type { BoxContext } from './types'
@@ -102,7 +99,7 @@ type DeclarationIndex = Map<string, Identifier[]>
  * stylesheet rather than a slow one. Keying on the compiler node makes the cache
  * self-invalidating: ts-morph reuses a compiler node exactly when its subtree did not change.
  */
-const declarationIndexes = new WeakMap<ts.Node, DeclarationIndex>()
+const declarationIndexes = new WeakMap<Node, DeclarationIndex>()
 
 const isDeclarationName = (node: Identifier, parent: Node): boolean => {
   if (

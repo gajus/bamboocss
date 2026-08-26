@@ -1,3 +1,4 @@
+import type { Identifier, TemplateExpression } from '@bamboocss/ts-ast'
 import { type BoxNode, box, unwrapExpression } from '@bamboocss/extractor'
 import type { ResultItem } from '@bamboocss/types'
 import { Node, getLineAndColumnAtPos, getName } from '@bamboocss/ts-ast'

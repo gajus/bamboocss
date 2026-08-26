@@ -8,13 +8,14 @@ import type {
 } from '@bamboocss/types'
 import {
   FileSystemRefreshResult,
+  Project,
   Project as TsProject,
   ProjectOptions as TsProjectOptions,
   ScriptKind,
-  SourceFile,
   getModuleSpecifierValue,
   ts,
 } from '@bamboocss/ts-ast'
+import type { CompilerOptions, SourceFile } from '@bamboocss/ts-ast'
 import { clearBoxNodeCache, invalidateDependencyPath } from '@bamboocss/extractor'
 import { classifyProject } from './classify'
 import { clearImportedRecipeCache } from './imported-recipes'
@@ -36,10 +37,7 @@ const invalidateResolutions = () => {
 
 // TS 6.0 rejects raw JSON compiler options (e.g. `target: "ESNext"`) in createProgram.
 // They must be normalized to numeric enum values via TypeScript's own parser API first.
-const normalizeCompilerOptions = (
-  raw: ts.CompilerOptions | undefined,
-  basePath = process.cwd(),
-): ts.CompilerOptions => {
+const normalizeCompilerOptions = (raw: CompilerOptions | undefined, basePath = process.cwd()): CompilerOptions => {
   if (!raw) return {}
   const { options } = ts.convertCompilerOptionsFromJson(raw, basePath)
   return options
@@ -602,7 +600,7 @@ export class Project {
   private normalizePath = (filePath: string) => filePath.replaceAll('\\', '/')
 
   /** Shared filesystem-only resolution cache; no type checker is constructed. */
-  #moduleResolutionCache: ts.ModuleResolutionCache | undefined
+  #moduleResolutionCache: unknown | undefined
 
   /**
    * Everything memoized against the shape of the file tree, including the negative half.
@@ -656,7 +654,7 @@ export class Project {
    * @internal
    */
   refreshResolutionConfiguration = (
-    compilerOptions: ts.CompilerOptions | undefined,
+    compilerOptions: CompilerOptions | undefined,
     resolutionConfigFiles: readonly string[],
     replaceCompilerOptions: boolean,
   ) => {
@@ -772,7 +770,7 @@ export class Project {
       if (!this.isInCheckout(normalized)) return
       configurationFiles.add(normalized)
     }
-    const host: ts.ModuleResolutionHost = {
+    const host: unknown = {
       ...resolutionHost,
       fileExists: (filePath) => {
         recordConfigurationFile(filePath)
@@ -1060,7 +1058,12 @@ export class Project {
 
       const transformed = custom ?? this.transformFile(hookFilePath, currentText)
       assertTransaction(currentText)
-      if (currentText !== transformed) sourceFile.replaceWithText(transformed)
+      // Installed rather than written into a tree this process owns. The compiler reads through
+      // the project's overlay, so handing it the transformed text is what makes a `.vue` block or
+      // a JSX-lowered module parse as what it became rather than as what is on disk.
+      if (currentText !== transformed) {
+        sourceFile = this.project.addSourceFile(filePath, transformed) ?? sourceFile
+      }
       assertTransaction(transformed)
 
       this.trackDependencies(filePath, sourceFile)
@@ -1079,7 +1082,9 @@ export class Project {
       if (this.sourcePreparations.get(sourcePath) === transaction) this.sourcePreparations.delete(sourcePath)
       this.retractImporter(sourcePath)
       try {
-        if (sourceFile.getFullText() !== currentText) sourceFile.replaceWithText(currentText)
+        // Put the source back the way it was found. `addSourceFile` is idempotent on identical
+        // text, so a failed transform that changed nothing costs nothing to undo.
+        if (sourceFile.getFullText() !== currentText) this.project.addSourceFile(filePath, currentText)
       } catch {
         // The source may have been removed by the re-entrant operation. Its replacement or
         // re-add is the next revision and will create a fresh preparation transaction.
@@ -1525,7 +1530,7 @@ export class Project {
       return this.parseJson(filePath, encoder)
     }
 
-    const sourceFile = this.project.getSourceFile(filePath)
+    let sourceFile = this.project.getSourceFile(filePath)
     if (!sourceFile) return
     const { options: parserOptions } = this.prepareEffectiveSource(filePath, sourceFile, hookFilePath)
 

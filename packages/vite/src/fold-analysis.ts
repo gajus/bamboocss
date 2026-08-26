@@ -1,14 +1,17 @@
 import { type BoxContext, type BoxNode, box, maybeBoxNode } from '@bamboocss/extractor'
 import {
-  SourceFile,
+  Node,
+  SyntaxKind,
   VariableDeclarationKind,
   getAliasNode,
   getDefaultImport,
   getNamedImports,
   getNamespaceImport,
   literalValueOf,
+  nameNodeOf,
   ts,
 } from '@bamboocss/ts-ast'
+import type { BinaryExpression, ConditionalExpression, Expression, Identifier, SourceFile } from '@bamboocss/ts-ast'
 import { type BinaryExpression, type ConditionalExpression, type Expression, Node, SyntaxKind } from '@bamboocss/ts-ast'
 
 /**
@@ -596,7 +599,7 @@ const collectModuleScopeNames = (sourceFile: SourceFile): Set<string> => {
     if (Node.isImportDeclaration(statement)) {
       addBinding(getDefaultImport(statement))
       addBinding(getNamespaceImport(statement))
-      for (const named of getNamedImports(statement)) addBinding(getAliasNode(named) ?? named.name)
+      for (const named of getNamedImports(statement)) addBinding(getAliasNode(named) ?? nameNodeOf(named))
       continue
     }
 
@@ -688,17 +691,17 @@ export interface IdentifierIndex {
  * `Attempted to get information from a node that was removed or forgotten` on the next read.
  */
 export const identifierIndex = (sourceFile: SourceFile): IdentifierIndex => {
-  const compilerNodes = new Map<string, ts.Node[]>()
+  const compilerNodes = new Map<string, Node[]>()
 
-  const collect = (node: ts.Node) => {
+  const collect = (node: Node) => {
     if (node.kind === ts.SyntaxKind.Identifier) {
-      const name = String((node as ts.Identifier).escapedText)
+      const name = String((node as Identifier).escapedText)
       const known = compilerNodes.get(name)
       if (known) known.push(node)
       else compilerNodes.set(name, [node])
     }
 
-    const jsDoc = (node as { jsDoc?: ts.Node[] }).jsDoc
+    const jsDoc = (node as { jsDoc?: Node[] }).jsDoc
     if (jsDoc) for (const doc of jsDoc) collect(doc)
 
     ts.forEachChild(node, collect)
@@ -707,7 +710,7 @@ export const identifierIndex = (sourceFile: SourceFile): IdentifierIndex => {
   ts.forEachChild(sourceFile, collect)
 
   const wrapped = new Map<string, Node[]>()
-  const wrap = sourceFile as unknown as { _getNodeFromCompilerNode: (node: ts.Node) => Node }
+  const wrap = sourceFile as unknown as { _getNodeFromCompilerNode: (node: Node) => Node }
 
   return {
     get: (name) => {
@@ -759,7 +762,7 @@ export const localReferencesTo = (index: IdentifierIndex, name: string, declarat
         Node.isMethodSignature(parent) ||
         Node.isPropertySignature(parent) ||
         Node.isEnumMember(parent)) &&
-      parent.name === identifier
+      nameNodeOf(parent) === identifier
     ) {
       continue
     }

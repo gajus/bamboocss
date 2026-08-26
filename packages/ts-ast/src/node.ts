@@ -184,3 +184,14 @@ export const getNamedExports = (declaration: Node): Node[] => {
   const clause = (declaration as { exportClause?: Node }).exportClause
   return clause && predicates.isNamedExports(clause) ? [...(clause as { elements: Node[] }).elements] : []
 }
+
+/**
+ * The name node of a declaration, without narrowing first.
+ *
+ * ts-morph let `.getNameNode()` be reached off any node because its class hierarchy declared it
+ * broadly; TypeScript 7 puts `name` only on the kinds that have one, so a call site that has a
+ * `Node` in hand cannot ask. Rather than narrow at every one of those sites — which would be
+ * inventing a decision about which kinds are expected there — this answers `undefined` for a
+ * node with no name, exactly as the old call did.
+ */
+export const nameNodeOf = (node: Node): Node | undefined => (node as { name?: Node }).name

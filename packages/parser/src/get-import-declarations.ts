@@ -7,6 +7,7 @@ import {
   getModuleSpecifierValue,
   getNamedImports,
   getNamespaceImport,
+  nameNodeOf,
 } from '@bamboocss/ts-ast'
 import { getModuleSpecifierValue } from './get-module-specifier-value'
 
@@ -21,7 +22,7 @@ export function getImportDeclarations(context: ParserOptions, sourceFile: Source
 
     // import { flex, stack } from "styled-system/patterns"
     getNamedImports(node).forEach((specifier) => {
-      const name = specifier.name.getText()
+      const name = nameNodeOf(specifier).getText()
       const alias = getAliasNode(specifier)?.getText() || name
 
       const result: ImportResult = { name, alias, mod, kind: 'named' }

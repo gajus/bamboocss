@@ -1,7 +1,7 @@
 import type { ImportMap } from '@bamboocss/core'
 import type { ResolveModule } from '@bamboocss/extractor'
 import {
-  SourceFile,
+  Project,
   getAliasNode,
   getExportDeclarations,
   getImportDeclarations,
@@ -9,8 +9,10 @@ import {
   getNamedExports,
   getNamedImports,
   isTypeOnly,
+  nameNodeOf,
   ts,
 } from '@bamboocss/ts-ast'
+import type { SourceFile } from '@bamboocss/ts-ast'
 import { getModuleSpecifierValue } from './get-module-specifier-value'
 
 /**
@@ -76,7 +78,7 @@ const recipeFactoryAliases = (sourceFile: SourceFile, imports: ImportMap): Set<s
     for (const specifier of getNamedImports(declaration)) {
       if (isTypeOnly(specifier)) continue
 
-      const name = specifier.name.getText()
+      const name = nameNodeOf(specifier).getText()
       if (name !== 'cva' && name !== 'sva') continue
 
       const alias = getAliasNode(specifier)?.getText() || name
@@ -209,7 +211,7 @@ const walkExports = (
     for (const exportSpecifier of getNamedExports(declaration)) {
       if (isTypeOnly(exportSpecifier)) continue
 
-      const name = exportSpecifier.name.getText()
+      const name = nameNodeOf(exportSpecifier).getText()
       const origin = source.get(name)
       if (origin) names.set(getAliasNode(exportSpecifier)?.getText() || name, origin)
     }
@@ -261,10 +263,10 @@ const walkImports = (
     for (const importSpecifier of named) {
       if (isTypeOnly(importSpecifier)) continue
 
-      const origin = names.get(importSpecifier.name.getText())
+      const origin = names.get(nameNodeOf(importSpecifier).getText())
       if (!origin) continue
 
-      bindings.set(getAliasNode(importSpecifier)?.getText() || importSpecifier.name.getText(), origin)
+      bindings.set(getAliasNode(importSpecifier)?.getText() || nameNodeOf(importSpecifier).getText(), origin)
     }
   }
 

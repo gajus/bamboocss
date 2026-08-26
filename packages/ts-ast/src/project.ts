@@ -81,8 +81,15 @@ export class Project {
     return this.getSourceFile(filePath)
   }
 
-  /** A file appeared. Its content comes from the delegate or the disk, not from here. */
-  createSourceFile(filePath: string): SourceFile | undefined {
+  /**
+   * A file appeared, optionally with content this process is supplying.
+   *
+   * Keeps ts-morph's `(path, content?, options?)` shape. The options it took — `overwrite`,
+   * `scriptKind` — described a program built here; the Go compiler decides both from the path
+   * and from what the snapshot already holds, so they are accepted and ignored.
+   */
+  createSourceFile(filePath: string, content?: string, _options?: unknown): SourceFile | undefined {
+    if (content !== undefined) return this.addSourceFile(filePath, content)
     this.#apply({ created: [filePath] })
     return this.getSourceFile(filePath)
   }
@@ -177,6 +184,27 @@ export class Project {
     } catch {
       return filePath
     }
+  }
+
+  /**
+   * The filesystem, in the shape ts-morph's `getFileSystem()` returned.
+   *
+   * A compatibility surface rather than an object this owns: every answer routes through the
+   * same overlay-then-delegate-then-disk order the compiler reads by, so a caller asking the
+   * "filesystem" for a file it has installed gets what it installed.
+   */
+  getFileSystem() {
+    return {
+      getCurrentDirectory: () => this.#cwd,
+      readFileSync: (filePath: string) => this.readFile(filePath) ?? '',
+      realpathSync: (filePath: string) => this.realpath(filePath),
+      fileExists: (filePath: string) => this.readFile(filePath) !== undefined,
+    }
+  }
+
+  /** The resolved compiler options, under the property spelling ts-morph exposed. */
+  get compilerOptions() {
+    return this.getCompilerOptions()
   }
 
   /** Ends the compiler process. A project that is not closed keeps one alive. */

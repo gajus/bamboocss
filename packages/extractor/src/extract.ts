@@ -1,11 +1,5 @@
-import {
-  CallExpression,
-  JsxOpeningElement,
-  JsxSelfClosingElement,
-  Node,
-  forEachDescendant,
-  getFirstAncestor,
-} from '@bamboocss/ts-ast'
+import { Node, forEachDescendant, getFirstAncestor } from '@bamboocss/ts-ast'
+import type { CallExpression, JsxAttribute, JsxOpeningElement, JsxSelfClosingElement } from '@bamboocss/ts-ast'
 import { box } from './box'
 import { BoxNodeMap, BoxNodeObject, type BoxNode, type MapTypeValue, BoxNodeConditional } from './box-factory'
 import { extractCallExpressionArguments } from './call-expression'

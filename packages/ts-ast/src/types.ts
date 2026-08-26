@@ -43,4 +43,14 @@ export interface ProjectOptions {
   tsConfigFilePath: string
   /** Reads delegated to bamboo's runtime rather than to the disk. */
   fs?: FileSystemDelegate
+  /**
+   * Options that were ts-morph's and are the Go compiler's own business now.
+   *
+   * `skipAddingFilesFromTsConfig`, `skipLoadingLibFiles`, `compilerOptions` and friends
+   * configured a program this process built. TypeScript 7 builds its program from the
+   * `tsconfig.json` it is pointed at, so these are accepted and ignored rather than rejected —
+   * the call sites that pass them are describing an intent the new backend already has, and
+   * failing on them would be failing on agreement.
+   */
+  [ignored: string]: unknown
 }

@@ -1,4 +1,5 @@
-import { JsxOpeningElement, JsxSelfClosingElement, Node } from '@bamboocss/ts-ast'
+import { Node } from '@bamboocss/ts-ast'
+import type { JsxOpeningElement, JsxSelfClosingElement } from '@bamboocss/ts-ast'
 import { box } from './box'
 import type { BoxNode, BoxNodeMap, BoxNodeObject } from './box-factory'
 import { extractJsxAttribute } from './jsx-attribute'

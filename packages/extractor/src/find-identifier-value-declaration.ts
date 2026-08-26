@@ -1,4 +1,4 @@
-import { Node, Project, forEachDescendant, getAliasNode, ts } from '@bamboocss/ts-ast'
+import { Node, Project, forEachDescendant, getAliasNode, nameNodeOf, ts } from '@bamboocss/ts-ast'
 import type {
   BindingElement,
   EnumDeclaration,
@@ -43,9 +43,11 @@ export function getDeclarationFor(
   ) {
     declarationStack.push(parent)
     declaration = parent
-    // `getNameNode()` is the exported name and `getAliasNode()` the local binding,
-    // so `import { button as btn }` reaches here as the alias node.
-  } else if (Node.isImportSpecifier(parent) && (parent.name == node || getAliasNode(parent) == node)) {
+    // Either half of `import { button as btn }` reaches here — `nameNodeOf()` is the imported
+    // name and `getAliasNode()` the local binding. Neither is `parent.name`: TypeScript keeps
+    // the imported name under `propertyName` and the local one under `name`, which is the
+    // opposite of the accessor this was written against.
+  } else if (Node.isImportSpecifier(parent) && (nameNodeOf(parent) == node || getAliasNode(parent) == node)) {
     if (ctx.flags?.skipTraverseFiles) return
 
     const sourceFile = getModuleSpecifierSourceFile(parent.parent?.parent?.parent as never, ctx)
@@ -53,7 +55,7 @@ export function getDeclarationFor(
     if (sourceFile) {
       const exportStack = [parent, sourceFile] as Node[]
       // Always look up the *exported* name, which differs from the local one when aliased.
-      const exportedName = parent.name.getText()
+      const exportedName = nameNodeOf(parent)?.getText() ?? ''
       const maybeVar = getExportedVarDeclarationWithName(exportedName, sourceFile, exportStack, ctx)
 
       if (maybeVar) {
@@ -111,7 +113,7 @@ const isDeclarationName = (node: Identifier, parent: Node): boolean => {
   ) {
     return parent.name == node
   }
-  return Node.isImportSpecifier(parent) && (parent.name == node || getAliasNode(parent) == node)
+  return Node.isImportSpecifier(parent) && (nameNodeOf(parent) == node || getAliasNode(parent) == node)
 }
 
 /**

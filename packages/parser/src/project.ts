@@ -788,10 +788,28 @@ export class Project {
     // exposes neither the graph nor the probes. `failedLookups` is the half that matters — it is
     // what `getLocalFailedLookupCandidates` filters to decide whether an unresolved specifier is
     // local, and therefore whether a file written later can satisfy it.
+    // Asked through the project, not the runtime. A file the bundler handed over as text — or
+    // that a test seeded as a string — exists only in the project's overlay, and a resolver that
+    // reads past it to the disk cannot place `./styles` at all.
     this.#resolver ??= createResolver({
       cwd: project.getCurrentDirectory(),
-      fs: { readFile: (filePath) => this.options.readFile(filePath) },
+      fs: {
+        fileExists: (filePath) => project.fileExists(filePath),
+        readFile: (filePath) => project.readFile(filePath),
+      },
     })
+
+    type PathOptions = { baseUrl?: string; paths?: Record<string, string[]> }
+
+    // bamboo's answer first, the compiler's second.
+    //
+    // `loadTsConfig` resolves the project's tsconfig itself — following solution references and
+    // `extends` — and hands the result down as project options. The Go compiler resolves the one
+    // config file it was opened on, which is not always the same thing, and a caller may supply
+    // compiler options with no file behind them at all. Where bamboo has decided, that decision
+    // is the one the fold has to agree with, or a `paths` alias resolves here and not there.
+    const configured = this.#sourceFiles.projectOptions.compilerOptions as PathOptions | undefined
+    const reported = compilerOptions as PathOptions | undefined
 
     this.resolutionWork.moduleResolutionsAttempted++
     const resolved = this.#resolver(moduleName, {
@@ -799,8 +817,8 @@ export class Project {
       // Read off the resolved options rather than the published type: `baseUrl` and `paths` are
       // tsconfig fields the Go compiler resolves and reports, and TypeScript 7's exported
       // `CompilerOptions` does not name them.
-      baseUrl: (compilerOptions as { baseUrl?: string } | undefined)?.baseUrl,
-      paths: (compilerOptions as { paths?: Record<string, string[]> } | undefined)?.paths,
+      baseUrl: configured?.baseUrl ?? reported?.baseUrl,
+      paths: configured?.paths ?? reported?.paths,
     })
 
     for (const filePath of resolved.affectingFiles) recordConfigurationFile(filePath)

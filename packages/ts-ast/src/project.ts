@@ -236,6 +236,30 @@ export class Project {
     }
   }
 
+  /**
+   * Whether this project can read a file at that path.
+   *
+   * Same order as `readFile` and for the same reason: a module installed as text has no file
+   * behind it, so anything that decides existence from the disk alone reports it missing. That
+   * is what a resolver asks, and answering "no" there makes an import of a synthesized module
+   * unresolvable — the styles it names are then silently absent rather than reported.
+   *
+   * Separate from `readFile` so the answer costs a lookup rather than a file's contents;
+   * resolution asks this of many candidates and reads none of them.
+   */
+  fileExists(filePath: string): boolean {
+    if (this.#overlay.has(this.#abs(filePath))) return true
+
+    try {
+      const answered = this.#fs?.fileExists?.(filePath)
+      if (answered !== undefined) return answered
+    } catch {
+      return false
+    }
+
+    return this.#onDisk(filePath)
+  }
+
   /** The real path behind a symlink, or the path itself when it does not resolve. */
   realpath(filePath: string): string {
     const delegated = this.#fs?.realpath?.(filePath)

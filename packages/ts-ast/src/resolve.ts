@@ -45,6 +45,15 @@ const EXTENSIONS = ['.ts', '.tsx', '.d.ts', '.mts', '.cts', '.js', '.jsx', '.mjs
 
 const dirname = (filePath: string) => filePath.slice(0, Math.max(0, filePath.lastIndexOf('/')))
 
+/**
+ * The next directory up, ending at the root.
+ *
+ * `dirname('/app')` is the empty string, so a walk that stops as soon as it sees one never
+ * looks in `/` — and `/node_modules` is exactly where a hoisted dependency lives. Ending at
+ * `'/'` and then at `''` gives every level once and terminates.
+ */
+const parentOf = (dir: string) => (dir === '/' ? '' : dirname(dir) || '/')
+
 const join = (...parts: string[]) => {
   const joined = parts.filter(Boolean).join('/')
   const segments: string[] = []
@@ -161,15 +170,12 @@ export const createResolver = (options: { cwd: string; fs?: FileSystemDelegate }
 
   /** The nearest `package.json` at or above a directory, with the directory that holds it. */
   const nearestPackage = (from: string): { dir: string; json: Record<string, unknown>; path: string } | undefined => {
-    let dir = from
-    for (;;) {
+    for (let dir = from; dir; dir = parentOf(dir)) {
       const path = join(dir, 'package.json')
       const json = readJson(path)
       if (json) return { dir, json, path }
-      const parent = dirname(dir)
-      if (parent === dir) return undefined
-      dir = parent
     }
+    return undefined
   }
 
   /**
@@ -221,7 +227,7 @@ export const createResolver = (options: { cwd: string; fs?: FileSystemDelegate }
       if (found.path) return { path: found.path, failedLookups, affectingFiles: [owner.path] }
     }
 
-    for (let dir = from; ; dir = dirname(dir)) {
+    for (let dir = from; dir; dir = parentOf(dir)) {
       const root = join(dir, 'node_modules', name)
       const manifestPath = join(root, 'package.json')
       const manifest = readJson(manifestPath)
@@ -238,10 +244,9 @@ export const createResolver = (options: { cwd: string; fs?: FileSystemDelegate }
         const found = firstExisting([join(root, subpath)])
         if (found.path) return { path: found.path, failedLookups, affectingFiles: manifest ? [manifestPath] : [] }
       }
-
-      const parent = dirname(dir)
-      if (!parent || parent === dir) return { failedLookups, affectingFiles: [] }
     }
+
+    return { failedLookups, affectingFiles: [] }
   }
 
   const factory = new ResolverFactory({

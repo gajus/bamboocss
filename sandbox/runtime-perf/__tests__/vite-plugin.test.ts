@@ -1767,7 +1767,10 @@ const runRejectedOutputWatchRebuild = async (
             output.source = source.replace('--made-with-bamboo', '--removed-after-bamboo')
           }
         }
-        if (!rejectClientOutput) return
+        const isClientOutput = Object.values(bundle).some(
+          (output) => output.type === 'chunk' && output.facadeModuleId?.split('?')[0] === clientEntry,
+        )
+        if (!rejectClientOutput || !isClientOutput) return
         rejectedJs = Object.values(bundle)
           .map((output) => (output.type === 'chunk' ? output.code : ''))
           .join('\n')
@@ -1897,7 +1900,6 @@ const runRejectedOutputWatchRebuild = async (
     await new Promise((settle) => setTimeout(settle, 800))
     writeWatchTrigger(clientTrigger, 'second')
     const rejectedError = await rejectedBuild
-    rejectClientOutput = false
 
     expect(rejectedError?.message).toContain(`test rejected client output (${label})`)
     expect(rejectedJs).toContain(`w_[${widths.rejected}]`)
@@ -1927,6 +1929,10 @@ const runRejectedOutputWatchRebuild = async (
     expect(rebuiltCss).toContain(widths.sibling)
     expect(rebuiltCss).not.toContain(widths.rejected)
     expect(rebuiltCss, 'cached sibling output disagrees with the clean no-cache build').toBe(cleanCss)
+    // Keep the injected failure armed through the sibling assertion. A filesystem watcher may
+    // replay a coalesced notification after reporting END; accepting that duplicate would make
+    // this fixture publish the candidate whose rollback it is meant to inspect.
+    rejectClientOutput = false
 
     // `writeBundle` is a notification after every output file has been replaced. A peer hook
     // rejecting there makes the watch cycle red but cannot roll those bytes back, so Bamboo must

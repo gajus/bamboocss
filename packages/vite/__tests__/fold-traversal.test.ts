@@ -2,8 +2,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createContext } from '@bamboocss/fixture'
-import { Node } from 'ts-morph'
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
 import { foldSource } from '../src/fold'
 import { createRuntimeCss } from '../src/runtime-css'
 import { createStaticStyleSetCompiler } from '../src/style-set'
@@ -33,15 +32,38 @@ import { createStaticStyleSetCompiler } from '../src/style-set'
  * nothing failing, which is how these accumulated: before the guards below, every styled module
  * paid two whole-tree reads and every reported one paid five, whatever it contained.
  *
- * What this cannot see is a walk over raw compiler nodes — `identifierIndex` is one, deliberately,
- * and costs about a hundredth of a wrapped walk. So a zero here means "nothing wraps the tree",
- * not "nothing reads it". That is the right thing to hold: wrapping is the cost.
+ * What this cannot see is a walk that goes straight to `ts.forEachChild` — `identifierIndex` is
+ * one, deliberately. So a zero here means "nothing took a whole-tree helper", not "nothing read
+ * the tree".
+ *
+ * The counting moved with the backend. ts-morph put these walks on `Node.prototype`, so the
+ * count was a prototype patch; TypeScript 7's nodes carry no such methods and the helpers are
+ * free functions in `@bamboocss/ts-ast`, so the count is a module mock. Patching a prototype
+ * that no longer has the methods silently counts nothing, which reads as a fold that walks
+ * nothing at all.
  */
 const here = dirname(fileURLToPath(import.meta.url))
 
 const ctx = createContext()
 const runtimeCss = createRuntimeCss(ctx)
 const styleCompiler = createStaticStyleSetCompiler(ctx, runtimeCss)
+
+const tally = vi.hoisted(() => ({ walks: 0 }))
+
+vi.mock('@bamboocss/ts-ast', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@bamboocss/ts-ast')>()
+  return {
+    ...actual,
+    getDescendantsOfKind: (...args: Parameters<typeof actual.getDescendantsOfKind>) => {
+      tally.walks++
+      return actual.getDescendantsOfKind(...args)
+    },
+    forEachDescendant: (...args: Parameters<typeof actual.forEachDescendant>) => {
+      tally.walks++
+      return actual.forEachDescendant(...args)
+    },
+  }
+})
 
 let counter = 0
 
@@ -52,22 +74,9 @@ const foldWithCount = (code: string, extra: Record<string, unknown> = {}) => {
   const parserResult = ctx.project.parseSourceFile(filePath)
   if (!parserResult) throw new Error('fixture did not parse')
 
-  let walks = 0
-  // `Node.prototype`, not `SourceFile.prototype`: both methods are own properties of `Node`, so
-  // patching the subclass installs a shadow that counts only walks whose receiver is the source
-  // file. Every walk on this path happens to have one today, which is exactly why patching the
-  // subclass would pass while a regression walking from any inner node went uncounted.
-  const proto = Node.prototype as unknown as Record<string, (...args: never[]) => unknown>
-  const originals = { getDescendantsOfKind: proto.getDescendantsOfKind, forEachDescendant: proto.forEachDescendant }
-
-  proto.getDescendantsOfKind = function patched(...args: never[]) {
-    walks++
-    return originals.getDescendantsOfKind.apply(this, args)
-  }
-  proto.forEachDescendant = function patched(...args: never[]) {
-    walks++
-    return originals.forEachDescendant.apply(this, args)
-  }
+  // Reset per fold, not per file: the parse above takes walks of its own, and what is under
+  // test is what the *fold* reads.
+  tally.walks = 0
 
   try {
     // `sourceFile` because `plugin.ts` always passes it, and it is the only thing that reaches
@@ -82,10 +91,9 @@ const foldWithCount = (code: string, extra: Record<string, unknown> = {}) => {
       sourceFile: ctx.project.getSourceFile(filePath),
       ...extra,
     } as never)
-    return { walks, result }
+    return { walks: tally.walks, result }
   } finally {
-    proto.getDescendantsOfKind = originals.getDescendantsOfKind
-    proto.forEachDescendant = originals.forEachDescendant
+    tally.walks = 0
   }
 }
 

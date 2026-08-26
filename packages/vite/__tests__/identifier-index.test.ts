@@ -1,17 +1,19 @@
 import { execSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
-import { type Node, Project, type SourceFile, SyntaxKind } from 'ts-morph'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import { type Node, Project, type SourceFile, SyntaxKind, getDescendantsOfKind } from '@bamboocss/ts-ast'
 import { expect, test } from 'vitest'
 import { identifierIndex } from '../src/fold-analysis'
 
 /**
  * `identifierIndex` against the obvious implementation of the same thing.
  *
- * It walks compiler nodes and wraps only the buckets a caller reads, because
- * `getDescendantsOfKind(SyntaxKind.Identifier)` takes ts-morph's token path — `Identifier` sorts
- * below `SyntaxKind.FirstNode` — and materialises every brace and comma in the file on the way to
- * the identifiers. That is a real reimplementation of a traversal, so it is held to the output of
- * the thing it replaced rather than to a description of it.
+ * It is a hand-written traversal rather than a call to `getDescendantsOfKind`, so it is held to
+ * the output of the thing it replaced rather than to a description of it. The saving that
+ * motivated it was ts-morph's wrapper objects, which TypeScript 7 does not have; what remains is
+ * that the walk is `ts.forEachChild` directly, and the risk that it and a full descendant walk
+ * disagree about what a file contains.
  *
  * Identity and order both matter downstream: `localReferencesTo` compares a candidate against the
  * declaration with `===`, and the survivor report takes the first entry in document order.
@@ -21,14 +23,35 @@ import { identifierIndex } from '../src/fold-analysis'
  * appearing only in a `@type` annotation went missing until the walk was taught to. A missing
  * reference reads as "nothing uses this binding", which is the direction that ships broken output.
  */
+/**
+ * The obvious implementation: every identifier a full descendant walk reaches.
+ *
+ * JSDoc is added on top of it, because `getDescendantsOfKind` descends with `forEachChild` and
+ * that does not enter JSDoc — where ts-morph's token path, which this used to be written
+ * against, did. The reference is therefore not fully independent of the implementation on that
+ * one axis; it cannot be, since the tree offers no other way in. It stays independent about
+ * everything else, which is where the two walks could still drift: order, escapes, decorators,
+ * namespaces and JSX.
+ */
 const REFERENCE = (sourceFile: SourceFile) => {
   const index = new Map<string, Node[]>()
-  for (const identifier of sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)) {
-    const text = identifier.getText()
+
+  const record = (identifier: Node) => {
+    // The resolved name, not the source span: `\u0062adge` and `badge` are the same binding and
+    // have to share a bucket, which is the whole point of the `escaped.tsx` fixture.
+    const text = String((identifier as { text?: string }).text)
     const known = index.get(text)
     if (known) known.push(identifier)
     else index.set(text, [identifier])
   }
+
+  const walk = (node: Node) => {
+    if (node.kind === SyntaxKind.Identifier) record(node)
+    for (const doc of (node as { jsDoc?: Node[] }).jsDoc ?? []) walk(doc)
+    node.forEachChild(walk as never)
+  }
+
+  walk(sourceFile)
   return index
 }
 
@@ -60,15 +83,26 @@ const sandbox = () => {
   }
 }
 
-test('the index returns exactly what a wrapped whole-tree walk did', () => {
-  const project = new Project({ useInMemoryFileSystem: true, compilerOptions: { jsx: 2 } })
+/** A project over a real directory, which is the only kind TypeScript 7 has. */
+const projectFor = (label: string) => {
+  const root = mkdtempSync(path.join(tmpdir(), `bamboo-${label}-`))
+  writeFileSync(
+    path.join(root, 'tsconfig.json'),
+    JSON.stringify({ compilerOptions: { allowJs: true, jsx: 'react', noEmit: true, noLib: true }, include: ['**/*'] }),
+  )
+  return new Project({ cwd: root, tsConfigFilePath: path.join(root, 'tsconfig.json') })
+}
+
+test('the index returns exactly what a whole-tree walk did', () => {
+  const project = projectFor('identifier-index')
   const corpus = [...sandbox(), ...Object.entries(FIXTURES)]
 
   let names = 0
   const problems: string[] = []
 
   for (const [name, text] of corpus) {
-    const sourceFile = project.createSourceFile(name, text, { overwrite: true })
+    const sourceFile = project.createSourceFile(name, text)
+    if (!sourceFile) throw new Error(`the index fixture project did not accept ${name}`)
     const expected = REFERENCE(sourceFile)
     const actual = identifierIndex(sourceFile)
 
@@ -93,8 +127,9 @@ test('the index returns exactly what a wrapped whole-tree walk did', () => {
 })
 
 test('a name the module never spells comes back empty rather than undefined', () => {
-  const project = new Project({ useInMemoryFileSystem: true, compilerOptions: { jsx: 2 } })
+  const project = projectFor('identifier-index-empty')
   const sourceFile = project.createSourceFile('empty.tsx', 'export const a = 1')
+  if (!sourceFile) throw new Error('the index fixture project did not accept empty.tsx')
 
   expect(identifierIndex(sourceFile).get('nothingHere')).toEqual([])
 })

@@ -695,9 +695,11 @@ export class Project {
         ...this.#sourceFiles.projectOptions,
         compilerOptions: snapshotProjectOption(next),
       }
-      // Nothing to push: the compiler owns its options and rereads them from the tsconfig it was
-      // opened with. A project that needs different options is a different project, which is
-      // what replacing `projectOptions` above already records for the next construction.
+      // Pushed as well as recorded. The compiler keeps the options it parsed from the tsconfig
+      // it was opened on, and that file may since have been retargeted or removed — so a
+      // project that outlives a config reload has to be told, or it answers `paths` questions
+      // with aliases the project no longer declares.
+      this.#sourceFiles.project?.setCompilerOptions(next as Record<string, unknown>)
     }
 
     invalidateResolutions()
@@ -812,7 +814,7 @@ export class Project {
     // result down when the project is built. Reading the parser's own copy instead would pin
     // the aliases as they stood when this Project was first constructed, so a retargeted
     // `paths` entry — or a deleted tsconfig — would keep resolving to what it used to name.
-    const configured = compilerOptions as PathOptions | undefined
+    const configured = (this.#sourceFiles.projectOptions.compilerOptions ?? compilerOptions) as PathOptions | undefined
 
     this.resolutionWork.moduleResolutionsAttempted++
     const resolved = this.#resolver(moduleName, {

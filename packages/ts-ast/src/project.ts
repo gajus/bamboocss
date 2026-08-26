@@ -283,6 +283,19 @@ export class Project {
     return { ...reported, ...this.#compilerOptions }
   }
 
+  /**
+   * Replace the options this project was configured with.
+   *
+   * A config reload does not build a new compiler process — the program is incremental and the
+   * whole point of the reload path is to keep it — but it does change what bamboo believes
+   * about `paths` and `baseUrl`. Without this the project keeps reporting the aliases it was
+   * constructed with, so a retargeted alias resolves to what it used to name and a deleted
+   * tsconfig resolves at all.
+   */
+  setCompilerOptions(compilerOptions: Record<string, unknown> | undefined): void {
+    this.#compilerOptions = compilerOptions
+  }
+
   /** The directory the project is rooted at. */
   getCurrentDirectory(): string {
     return this.#cwd

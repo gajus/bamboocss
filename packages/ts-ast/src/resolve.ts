@@ -155,9 +155,12 @@ export const createResolver = (options: { cwd: string; fs?: FileSystemDelegate }
     }
     if (resolveOptions.baseUrl) mapped.push(join(resolveOptions.baseUrl, specifier))
 
-    const viaPaths = firstExisting(
-      mapped.map((target) => (target.startsWith('/') ? target : join(options.cwd, target))),
-    )
+    // Against `baseUrl`, which is what a `paths` target is relative to — TypeScript resolves
+    // `{"~/*": ["./app/src/*"]}` from the base URL, not from the process's working directory.
+    // Joining against the cwd instead silently turns every mapped target into a different path,
+    // and the alias resolves to nothing.
+    const pathsBase = resolveOptions.baseUrl ?? options.cwd
+    const viaPaths = firstExisting(mapped.map((target) => (target.startsWith('/') ? target : join(pathsBase, target))))
     if (viaPaths.path) return { path: viaPaths.path, failedLookups: viaPaths.failedLookups, affectingFiles: [] }
 
     const result = factory.sync(from, specifier)

@@ -1,4 +1,4 @@
-import { statSync } from 'node:fs'
+import { readFileSync, statSync } from 'node:fs'
 import { ResolverFactory } from 'oxc-resolver'
 import type { FileSystemDelegate } from './types'
 
@@ -56,9 +56,17 @@ const join = (...parts: string[]) => {
   return (joined.startsWith('/') ? '/' : '') + segments.join('/')
 }
 
-/** Every concrete file a bare path could name: the path itself, then extensions, then `/index`. */
+/**
+ * Every concrete file a path could name: the path itself, then extensions, then `/index`.
+ *
+ * The path itself only when it already carries one of those extensions. `./styles` names
+ * `styles.ts`, never a file called `styles` with no extension — and probing for one anyway
+ * leaves a candidate that can never be satisfied. That is not merely a wasted `stat`: the
+ * misses are reported as `failedLookups`, which become the *pending candidates* a watch build
+ * re-checks, so an unsatisfiable one keeps its importer permanently unresolved and rebuilt.
+ */
 const candidatesFor = (base: string): string[] => [
-  base,
+  ...(EXTENSIONS.some((extension) => base.endsWith(extension)) ? [base] : []),
   ...EXTENSIONS.map((extension) => base + extension),
   ...EXTENSIONS.map((extension) => join(base, 'index' + extension)),
 ]
@@ -108,6 +116,117 @@ export const createResolver = (options: { cwd: string; fs?: FileSystemDelegate }
       return read !== undefined && read !== null
     } catch {
       return false
+    }
+  }
+
+  /** A file's text through the same order `exists` asks in, or nothing. */
+  const readContent = (filePath: string): string | undefined => {
+    try {
+      const delegated = options.fs?.readFile?.(filePath)
+      if (delegated != null) return delegated
+    } catch {
+      // Fall through to the disk.
+    }
+    try {
+      return statSync(filePath).isFile() ? readFileSync(filePath, 'utf8') : undefined
+    } catch {
+      return undefined
+    }
+  }
+
+  const readJson = (filePath: string): Record<string, unknown> | undefined => {
+    const text = readContent(filePath)
+    if (text === undefined) return undefined
+    try {
+      const parsed: unknown = JSON.parse(text)
+      return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : undefined
+    } catch {
+      return undefined
+    }
+  }
+
+  /**
+   * Every target an `exports`/`imports` entry can name, in the order to try them.
+   *
+   * The field is a string, an array of fallbacks, or an object of conditions — and conditions
+   * nest. Order is what matters here rather than which condition is "right": these are
+   * candidates, and the first that exists wins, which is what the array form means anyway.
+   */
+  const targetsOf = (entry: unknown): string[] => {
+    if (typeof entry === 'string') return [entry]
+    if (Array.isArray(entry)) return entry.flatMap(targetsOf)
+    if (entry && typeof entry === 'object') return Object.values(entry).flatMap(targetsOf)
+    return []
+  }
+
+  /** The nearest `package.json` at or above a directory, with the directory that holds it. */
+  const nearestPackage = (from: string): { dir: string; json: Record<string, unknown>; path: string } | undefined => {
+    let dir = from
+    for (;;) {
+      const path = join(dir, 'package.json')
+      const json = readJson(path)
+      if (json) return { dir, json, path }
+      const parent = dirname(dir)
+      if (parent === dir) return undefined
+      dir = parent
+    }
+  }
+
+  /**
+   * A bare specifier, resolved by reading through the project's filesystem.
+   *
+   * Reached only when `oxc-resolver` finds nothing, which on a real checkout means the module
+   * genuinely is not there. It matters when the files are not on disk at all: a bundler hands
+   * bamboo modules it holds in memory, and `oxc-resolver` reads the real filesystem and cannot
+   * be given another one. Without this, resolution is inconsistent about where it looks —
+   * relative and `paths` specifiers read through the delegate while bare ones do not, so a
+   * virtual `node_modules` resolves for one and not the other.
+   *
+   * Covers what a bare specifier can be: a package subpath, a package's own `exports` map, a
+   * `#name` from the nearest `package.json`'s `imports`, and a self-reference by the package's
+   * own name.
+   */
+  const bareThroughDelegate = (specifier: string, from: string): { path?: string; affectingFiles: string[] } => {
+    const owner = nearestPackage(from)
+
+    if (specifier.startsWith('#')) {
+      if (!owner) return { affectingFiles: [] }
+      const targets = targetsOf((owner.json.imports as Record<string, unknown>)?.[specifier])
+      const found = firstExisting(targets.map((target) => join(owner.dir, target)))
+      return { path: found.path, affectingFiles: [owner.path] }
+    }
+
+    const slash = specifier.indexOf('/', specifier.startsWith('@') ? specifier.indexOf('/') + 1 : 0)
+    const name = slash === -1 ? specifier : specifier.slice(0, slash)
+    const subpath = slash === -1 ? '.' : `.${specifier.slice(slash)}`
+
+    // A package referring to itself by name, which `exports` is what makes legal.
+    if (owner && owner.json.name === name) {
+      const targets = targetsOf((owner.json.exports as Record<string, unknown>)?.[subpath])
+      const found = firstExisting(targets.map((target) => join(owner.dir, target)))
+      if (found.path) return { path: found.path, affectingFiles: [owner.path] }
+    }
+
+    for (let dir = from; ; dir = dirname(dir)) {
+      const root = join(dir, 'node_modules', name)
+      const manifestPath = join(root, 'package.json')
+      const manifest = readJson(manifestPath)
+
+      if (manifest) {
+        const exported = targetsOf((manifest.exports as Record<string, unknown>)?.[subpath])
+        const implied = subpath === '.' ? targetsOf(manifest.types ?? manifest.main ?? manifest.module) : []
+        const direct = subpath === '.' ? [] : [subpath]
+        const found = firstExisting([...exported, ...implied, ...direct].map((target) => join(root, target)))
+        if (found.path) return { path: found.path, affectingFiles: [manifestPath] }
+      }
+
+      if (subpath !== '.') {
+        const found = firstExisting([join(root, subpath)])
+        if (found.path) return { path: found.path, affectingFiles: manifest ? [manifestPath] : [] }
+      }
+
+      const parent = dirname(dir)
+      if (parent === dir) return { affectingFiles: [] }
     }
   }
 
@@ -164,10 +283,19 @@ export const createResolver = (options: { cwd: string; fs?: FileSystemDelegate }
     if (viaPaths.path) return { path: viaPaths.path, failedLookups: viaPaths.failedLookups, affectingFiles: [] }
 
     const result = factory.sync(from, specifier)
+    if (result.path) {
+      return {
+        path: result.path,
+        failedLookups: viaPaths.failedLookups,
+        affectingFiles: result.packageJsonPath ? [result.packageJsonPath] : [],
+      }
+    }
+
+    const delegated = bareThroughDelegate(specifier, from)
     return {
-      path: result.path ?? undefined,
+      path: delegated.path,
       failedLookups: viaPaths.failedLookups,
-      affectingFiles: result.packageJsonPath ? [result.packageJsonPath] : [],
+      affectingFiles: delegated.affectingFiles,
     }
   }
 }

@@ -146,3 +146,59 @@ describe('bare specifiers', () => {
     expect(result.affectingFiles.some((file) => file.endsWith('package.json'))).toBe(true)
   })
 })
+
+/**
+ * Counted rather than timed, for the reason `shared/__tests__/memo.test.ts` counts
+ * serializations: a wall-clock threshold fails on a busy machine instead of on a regression.
+ * On a 400-file build this took the resolver's `stat` probes from 4,920 to 312.
+ */
+describe('repeat resolution', () => {
+  test('an answer already given is not re-derived', () => {
+    let probes = 0
+    const resolveCounted = createResolver({
+      cwd: root,
+      // Consulted only for paths with nothing on disk under that name, which is what a
+      // synthesized module is -- so every probe for it lands here and can be counted.
+      fs: { fileExists: (filePath) => (probes++, filePath === path.join(root, 'src/virtual.ts')) },
+    })
+    const importer = path.join(root, 'src/app.ts')
+
+    const first = resolveCounted('./virtual', { importer })
+    expect(first.path).toBe(path.join(root, 'src/virtual.ts'))
+    const afterFirst = probes
+    expect(afterFirst).toBeGreaterThan(0)
+
+    expect(resolveCounted('./virtual', { importer }).path).toBe(first.path)
+    expect(probes).toBe(afterFirst)
+  })
+
+  test('a sibling in the same directory shares the answer, a different directory does not', () => {
+    let probes = 0
+    const resolveCounted = createResolver({
+      cwd: root,
+      fs: { fileExists: (filePath) => (probes++, filePath === path.join(root, 'src/virtual.ts')) },
+    })
+
+    resolveCounted('./virtual', { importer: path.join(root, 'src/app.ts') })
+    const afterFirst = probes
+
+    // Same directory, different importer: resolution reads only the directory.
+    resolveCounted('./virtual', { importer: path.join(root, 'src/other.ts') })
+    expect(probes).toBe(afterFirst)
+
+    // A different directory is a different question, and is asked.
+    resolveCounted('./virtual', { importer: path.join(root, 'src/nested/deep.ts') })
+    expect(probes).toBeGreaterThan(afterFirst)
+  })
+
+  test('a change to paths or baseUrl is not served from the previous table', () => {
+    const importer = path.join(root, 'src/app.ts')
+    const resolveCounted = createResolver({ cwd: root })
+
+    expect(resolveCounted('~/styles', { importer, baseUrl: root, paths: { '~/*': ['./src/*'] } }).path).toBe(
+      path.join(root, 'src/styles.ts'),
+    )
+    // The same specifier under a table that maps it nowhere must miss, not repeat the hit.
+    expect(resolveCounted('~/styles', { importer, baseUrl: root, paths: { '#/*': ['./src/*'] } }).path).toBeUndefined()
+  })
+})

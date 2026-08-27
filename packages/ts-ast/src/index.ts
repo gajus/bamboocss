@@ -37,7 +37,7 @@ export {
   literalValueOf,
   Node,
 } from './node'
-export { Project, disposeAllProjects } from './project'
+export { CompilerGoneError, Project, disposeAllProjects, isCompilerGone } from './project'
 export { ts } from './ts'
 export { createResolver } from './resolve'
 export type { ResolvedModule, ResolveOptions } from './resolve'

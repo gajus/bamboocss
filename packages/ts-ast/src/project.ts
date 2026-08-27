@@ -32,6 +32,78 @@ const readDirectory = (directoryName: string): { files: string[]; directories: s
  *
  * The exit hook is the last resort, for a process that ends while projects are still live.
  */
+/**
+ * The compiler process is gone.
+ *
+ * Every request to TypeScript 7 is a synchronous write to a Go child process's stdin, so a
+ * process that has died turns the *next* write into `EPIPE: broken pipe, write` — and every
+ * write after it, identically. Nothing recovers from it: the program lived in that process, and
+ * this one holds only views over buffers it had already sent.
+ *
+ * It is its own error type because of what a caller does with it. A parse failure is about one
+ * file and a pass continues past it; this is about the compiler, and every file after it fails
+ * the same way. `parseFile` reads the distinction to fail once, naming the real event, rather
+ * than reporting a project's worth of files as individually unparseable — which is what buries
+ * the panic or the OOM kill that actually caused it.
+ */
+export class CompilerGoneError extends Error {
+  readonly code = 'ERR_BAMBOO_COMPILER_GONE'
+
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options)
+    this.name = 'CompilerGoneError'
+  }
+}
+
+/**
+ * Every way the channel reports that there is nothing on the other end of it.
+ *
+ * `EPIPE` is a write to a stdin whose reader has exited, which is what a caller hits first —
+ * every request writes before it reads. The other two are the read side and a channel this
+ * process closed itself, and are matched on their message because that is all they carry.
+ */
+const isChannelDead = (error: unknown): boolean => {
+  const code = (error as NodeJS.ErrnoException | undefined)?.code
+  if (code === 'EPIPE' || code === 'EBADF') return true
+  const message = error instanceof Error ? error.message : ''
+  return (
+    message.includes('SyncRpcChannel is closed') || message.includes('Unexpected EOF while reading from child process')
+  )
+}
+
+/**
+ * Whether an error means the compiler is unreachable, rather than one file unparseable.
+ *
+ * Answers for a raw channel error as well as for the wrapped one, because a node handed out
+ * before the process died is read outside this module — the extractor walks it — and the throw
+ * that surfaces there has not been through `#ask`.
+ */
+export const isCompilerGone = (error: unknown): boolean => error instanceof CompilerGoneError || isChannelDead(error)
+
+/**
+ * How the child ended, when that is knowable at the moment it is asked.
+ *
+ * Reached through `@typescript/api`'s internals, which are `unstable` and plain public fields
+ * rather than a supported surface — so every hop is optional and a shape this does not
+ * recognise contributes nothing. The status is worth the reach: `killed by signal SIGKILL` is
+ * the OOM killer and a non-zero exit is a panic, and those are different bugs with different
+ * fixes.
+ *
+ * It is often not there, and deliberately not faked when it is not. Node fills `exitCode` and
+ * `signalCode` when it *reaps* the child, which happens on the event loop — and an extraction
+ * pass is a synchronous loop over every file, so during the one case this error exists for both
+ * are still `null` however long ago the process died. A watch rebuild, which does turn the loop
+ * between passes, gets the real answer. Saying "still running" there, as a naive read of those
+ * two fields does, would point at the opposite of what happened.
+ */
+const exitStatusOf = (api: unknown): string => {
+  const child = (api as { client?: { channel?: { child?: { exitCode: number | null; signalCode: string | null } } } })
+    ?.client?.channel?.child
+  if (child?.signalCode) return `killed by signal ${child.signalCode}`
+  if (typeof child?.exitCode === 'number') return `exited with code ${child.exitCode}`
+  return 'exit status not collected yet'
+}
+
 const liveApis = new Set<{ close(): void }>()
 
 const closeQuietly = (api: { close(): void }): void => {
@@ -125,6 +197,40 @@ export class Project {
   #pending: { changed: Set<string>; created: Set<string>; deleted: Set<string> } | undefined
   #membershipMoved = false
 
+  /** The failure that ended this project's compiler, once one has. */
+  #gone: CompilerGoneError | undefined
+
+  /**
+   * Every touch of the compiler, contained.
+   *
+   * Two jobs, and the second is the one that matters. It translates a channel error into
+   * something a caller can act on — `EPIPE: broken pipe, write` names a syscall, not a cause —
+   * and it *remembers*, so the second request after a death costs a branch rather than another
+   * write to a pipe with no reader. A cold pass makes one request per file, so without the
+   * latch a project that lost its compiler on file 40 goes on to fail 4,000 more times, each
+   * one a syscall and a log line about a file that is perfectly fine.
+   */
+  #ask = <T>(request: () => T): T => {
+    if (this.#gone) throw this.#gone
+    try {
+      return request()
+    } catch (error) {
+      if (!isChannelDead(error)) throw error
+      this.#gone = new CompilerGoneError(
+        `The TypeScript compiler process bamboo parses through is gone (${exitStatusOf(this.#api)}). ` +
+          `Every file is parsed through it, so nothing after this point can be read and the pass ` +
+          `is over.\n\n` +
+          `It writes to its own stderr, which bamboo inherits: if it panicked, the trace is in ` +
+          `this log above. Ending with no trace is almost always the OOM killer, and the fix is ` +
+          `memory rather than source — the compiler holds a parse tree for every file bamboo ` +
+          `hands it, so narrowing \`include\` to the files that actually author styles is what ` +
+          `reduces it.`,
+        { cause: error },
+      )
+      throw this.#gone
+    }
+  }
+
   constructor(options: ProjectOptions) {
     // Absolute, always. A caller may hold a relative working directory — the fixtures use `''`
     // — and the compiler rejects a relative path outright: `vfs: path … is not absolute` is a
@@ -140,7 +246,7 @@ export class Project {
     reclaim.register(this, this.#api, this)
     installExitHook()
     this.#writeConfig()
-    this.#snapshot = this.#api.updateSnapshot({ openProjects: [this.#configPath] })
+    this.#snapshot = this.#ask(() => this.#api.updateSnapshot({ openProjects: [this.#configPath] }))
   }
 
   /**
@@ -216,11 +322,13 @@ export class Project {
    * answers `undefined` for exactly the files that needed opening in the first place.
    */
   #find(snapshot: ReturnType<API['updateSnapshot']>, path: string): SourceFile | undefined {
-    for (const project of snapshot.getProjects()) {
-      const found = project.program.getSourceFile(path)
-      if (found) return found as SourceFile
-    }
-    return undefined
+    return this.#ask(() => {
+      for (const project of snapshot.getProjects()) {
+        const found = project.program.getSourceFile(path)
+        if (found) return found as SourceFile
+      }
+      return undefined
+    })
   }
 
   /**
@@ -337,7 +445,7 @@ export class Project {
     this.#overlay.clear()
     // Everything queued is about to be re-read anyway.
     this.#pending = undefined
-    this.#snapshot = this.#api.updateSnapshot({ fileChanges: { invalidateAll: true } })
+    this.#snapshot = this.#ask(() => this.#api.updateSnapshot({ fileChanges: { invalidateAll: true } }))
   }
 
   /**
@@ -355,11 +463,13 @@ export class Project {
   getSyntacticDiagnosticCount(filePath: string): number {
     this.#flush()
     const path = this.#abs(filePath)
-    for (const project of this.#snapshot.getProjects()) {
-      if (!project.program.getSourceFile(path)) continue
-      return project.program.getSyntacticDiagnostics(path).length
-    }
-    return 0
+    return this.#ask(() => {
+      for (const project of this.#snapshot.getProjects()) {
+        if (!project.program.getSourceFile(path)) continue
+        return project.program.getSyntacticDiagnostics(path).length
+      }
+      return 0
+    })
   }
 
   /**
@@ -535,6 +645,14 @@ export class Project {
     this.#pending = undefined
     reclaim.unregister(this)
     closeQuietly(this.#api)
+    // Latched here too, so a call that arrives afterwards is told what actually happened. The
+    // channel's own answer to a closed fd is indistinguishable from a process that died, and
+    // being handed the OOM-killer explanation for a project this process deliberately closed
+    // sends the reader somewhere there is nothing to find.
+    this.#gone = new CompilerGoneError(
+      'This project has been disposed, and the compiler process behind it is closed. Nothing ' +
+        'can be parsed through it; build a new project instead.',
+    )
   }
 
   /**
@@ -618,17 +736,19 @@ export class Project {
     this.#membershipMoved = false
     if (membershipMoved) this.#writeConfig()
 
-    this.#snapshot = this.#api.updateSnapshot({
-      fileChanges: {
-        ...(pending.created.size ? { created: [...pending.created] } : {}),
-        changed: [...pending.changed, ...(membershipMoved ? [this.#configPath] : [])],
-        ...(pending.deleted.size ? { deleted: [...pending.deleted] } : {}),
-      },
-    })
+    this.#snapshot = this.#ask(() =>
+      this.#api.updateSnapshot({
+        fileChanges: {
+          ...(pending.created.size ? { created: [...pending.created] } : {}),
+          changed: [...pending.changed, ...(membershipMoved ? [this.#configPath] : [])],
+          ...(pending.deleted.size ? { deleted: [...pending.deleted] } : {}),
+        },
+      }),
+    )
   }
 
   #project() {
-    return this.#snapshot.getProjects()[0]
+    return this.#ask(() => this.#snapshot.getProjects()[0])
   }
 
   #onDisk(filePath: string): boolean {

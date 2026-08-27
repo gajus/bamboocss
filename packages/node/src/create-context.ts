@@ -4,6 +4,7 @@ import { Generator } from '@bamboocss/generator'
 import { logger } from '@bamboocss/logger'
 import { ParserResult, Project } from '@bamboocss/parser'
 import { BambooError, groupBy, truncateList, uniq } from '@bamboocss/shared'
+import { isCompilerGone } from '@bamboocss/ts-ast'
 import type { LoadConfigResult, Runtime, WatchOptions, WatcherEventType } from '@bamboocss/types'
 import { debounce } from 'perfect-debounce'
 import { createBox } from './cli-box'
@@ -381,6 +382,12 @@ export class BambooContext extends Generator {
       result = encoder.withOwner('extract', file, () => this.project.parseSourceFile(file, encoder))
       this.parseFailures.delete(file)
     } catch (error) {
+      // A compiler that has died is not a parse failure, and must not be recorded as one.
+      // Bamboo parses every file through one Go process, so once it is gone every remaining
+      // file fails identically — reporting each of them names a project's worth of perfectly
+      // good files as unparseable and buries the panic or the OOM kill above that explains
+      // them all. The pass stops here instead, on the first file to notice.
+      if (isCompilerGone(error)) throw error
       logger.caughtError('file:extract', `Failed to parse ${file}`, error)
       this.parseFailures.set(file, error)
     }

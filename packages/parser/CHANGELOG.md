@@ -1,5 +1,18 @@
 # @bamboocss/parser
 
+## 1.51.1
+
+### Patch Changes
+
+- Updated dependencies [52e0a17]
+  - @bamboocss/ts-ast@1.51.1
+  - @bamboocss/extractor@1.51.1
+  - @bamboocss/types@1.51.1
+  - @bamboocss/config@1.51.1
+  - @bamboocss/core@1.51.1
+  - @bamboocss/logger@1.51.1
+  - @bamboocss/shared@1.51.1
+
 ## 1.51.0
 
 ### Patch Changes

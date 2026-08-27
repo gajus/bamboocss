@@ -700,7 +700,9 @@ describe('css.raw spreading in variants', () => {
                 },
               },
               "slots": [
-                undefined,
+                "trigger",
+                "content",
+                "overlay",
               ],
               "variants": {
                 "size": {

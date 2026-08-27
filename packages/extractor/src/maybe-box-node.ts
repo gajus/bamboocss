@@ -176,11 +176,35 @@ function maybeBoxNodeUncached(
 
   // <ColorBox color={['red.300', 'green.400']} />
   if (Node.isArrayLiteralExpression(node)) {
-    const boxNodes = node.elements.map((element) => {
-      return maybeBoxNode(element, stack, ctx) ?? cache(box.unresolvable(element, stack))
-    }) as BoxNode[]
+    // `cache` answers `BoxNode | undefined`, so the collected list is narrowed once at the
+    // end rather than per push -- the same single cast the `.map` form carried.
+    const boxNodes: MaybeBoxNodeReturn[] = []
 
-    return cache(box.array(boxNodes, node, stack))
+    for (const element of node.elements) {
+      // `sva({ slots: [...parts] })`. Without this the spread falls through every branch below
+      // and boxes as unresolvable, so the array holds one dead entry where the spread's
+      // elements belong -- `[...parts]` read as `[null]` rather than as what `parts` contains.
+      // Object spread is already flattened this way in `get-object-literal-expression-prop-pairs`.
+      if (Node.isSpreadElement(element)) {
+        const spread = unwrapExpression(element.expression)
+        const maybeArray = maybeBoxNode(spread, stack, ctx)
+
+        // Flattened in place, exactly as the spelling means. A spread that resolves to
+        // anything else -- or to nothing -- stays one unresolvable entry, which is what a
+        // consumer reads as "do not trust this array".
+        if (box.isArray(maybeArray)) {
+          boxNodes.push(...maybeArray.value)
+          continue
+        }
+
+        boxNodes.push(cache(box.unresolvable(element, stack)))
+        continue
+      }
+
+      boxNodes.push(maybeBoxNode(element, stack, ctx) ?? cache(box.unresolvable(element, stack)))
+    }
+
+    return cache(box.array(boxNodes as BoxNode[], node, stack))
   }
 
   // <ColorBox color={staticColor} />

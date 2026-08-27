@@ -7493,8 +7493,7 @@ p.stack({ mt: "40px" })`
   `)
 })
 
-// TODO ? not useful as of now
-it.skip('extracts slots when spread', () => {
+it('extracts slots when spread', () => {
   const code = `import { sva } from 'styled-system/css';
 
   const parts = ['positioner', 'content']
@@ -7519,7 +7518,8 @@ it.skip('extracts slots when spread', () => {
                 },
               },
               "slots": [
-                undefined,
+                "positioner",
+                "content",
               ],
             },
           ],

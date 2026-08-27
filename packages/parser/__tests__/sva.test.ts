@@ -223,7 +223,9 @@ describe('ast parser / sva', () => {
     `)
   })
 
-  test('unresolvable slots - spread', () => {
+  // Resolvable since the array-spread fix: `[...parts]` flattens when `parts` boxes to an
+  // array. The sibling below stays unresolvable -- its spread is over a call result.
+  test('resolvable slots - spread', () => {
     const code = `
     import { sva } from 'styled-system/css'
     const parts = ['positioner', 'content']
@@ -249,7 +251,8 @@ describe('ast parser / sva', () => {
                 },
               },
               "slots": [
-                undefined,
+                "positioner",
+                "content",
               ],
             },
           ],
@@ -261,7 +264,7 @@ describe('ast parser / sva', () => {
 
     expect(result.css).toMatchInlineSnapshot(`
       "@layer recipes.slots {
-        .sva_lfWcAi__root {
+        .sva_fiLqSq__root {
           padding: var(--spacing-6);
       }
       }"

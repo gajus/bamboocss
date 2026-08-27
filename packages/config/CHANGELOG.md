@@ -1,5 +1,16 @@
 # @bamboocss/config
 
+## 1.50.0
+
+### Patch Changes
+
+- Updated dependencies [950df68]
+  - @bamboocss/shared@1.50.0
+  - @bamboocss/types@1.50.0
+  - @bamboocss/logger@1.50.0
+  - @bamboocss/preset-bamboo@1.50.0
+  - @bamboocss/preset-base@1.50.0
+
 ## 1.49.0
 
 ### Patch Changes

@@ -260,7 +260,7 @@ describe('re-adding a file the text it already holds', () => {
     const ctx = createProject({ 'app/src/styles.ts': source })
 
     const before = ctx.project.getSourceFile('app/src/styles.ts')!
-    const statement = before.getStatements()[0]!
+    const statement = before.statements[0]!
 
     const after = ctx.project.addSourceFile('app/src/styles.ts', source)
 

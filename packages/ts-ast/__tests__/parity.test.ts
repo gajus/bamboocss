@@ -59,6 +59,9 @@ beforeAll(() => {
   writeFileSync(path.join(root, 'src/recipes.ts'), `export const button = (o: unknown) => String(o)\n`)
 
   project = new Project({ cwd: root, tsConfigFilePath: path.join(root, 'tsconfig.json') })
+  // The same install ts-morph is given below. Both projects hold exactly what they are handed,
+  // which is what makes the comparison a comparison — see `Project#writeConfig`.
+  project.createSourceFile(file, SOURCE)
   morph = new MorphProject({
     skipAddingFilesFromTsConfig: true,
     skipFileDependencyResolution: true,
@@ -180,29 +183,6 @@ describe('the TypeScript 7 backend agrees with ts-morph', () => {
  * single-file component. Without this the backend could only read files as written, which would
  * have made it unusable for everything except the CLI.
  */
-describe('reading text that is not on disk', () => {
-  test('sees the override rather than the file', () => {
-    const overridden = `import { css } from 'styled-system/css'\nexport const only = css({ margin: '9' })\n`
-
-    const found = project.withText(file, overridden, (sf) => {
-      const literals: string[] = []
-      if (sf) forEachDescendant(sf, (node) => is.isStringLiteral(node) && literals.push(node.text as string))
-      return literals
-    })
-
-    expect(found).toContain('9')
-    expect(found).not.toContain('red.300')
-  })
-
-  test('releases the override, so the next read is the file again', () => {
-    project.withText(file, `export const nothing = 1\n`, () => undefined)
-
-    const literals: string[] = []
-    forEachDescendant(sourceFile(), (node) => is.isStringLiteral(node) && literals.push(node.text as string))
-
-    expect(literals).toContain('red.300')
-  })
-})
 
 /**
  * The predicates are also exported under ts-morph's spelling, because bamboo writes

@@ -56,6 +56,12 @@ beforeEach(() => {
   )
   write('src/app.ts', `export const a = 'original'\n`)
   project = new Project({ cwd: root, tsConfigFilePath: path.join(root, 'tsconfig.json') })
+  // Installed, not discovered. A project holds the files it is given — the compiler is opened
+  // on a config naming exactly those, so an `include` glob no longer populates it. That is the
+  // contract every caller already used: the parser has always set `skipAddingFilesFromTsConfig`
+  // and added its inventory itself, and letting the compiler adopt a tree instead costs about
+  // 2 GB per project. See `Project#writeConfig`.
+  project.createSourceFile(file('src/app.ts'))
 })
 
 afterEach(() => {
@@ -167,25 +173,6 @@ describe('addSourceFile', () => {
     project.reloadSourceFile(file('src/app.ts'))
 
     expect(literalsIn(file('src/app.ts'))).toEqual(['from disk'])
-  })
-})
-
-describe('withText alongside the overlay', () => {
-  test('a scoped read does not disturb installed content', () => {
-    project.addSourceFile(file('src/app.ts'), `export const a = 'installed'\n`)
-
-    const scoped = project.withText(file('src/app.ts'), `export const a = 'scoped'\n`, (sourceFile) => {
-      const found: string[] = []
-      if (sourceFile) {
-        forEachDescendant(sourceFile, (node) => {
-          if (is.isStringLiteral(node)) found.push(node.text)
-        })
-      }
-      return found
-    })
-
-    expect(scoped).toEqual(['scoped'])
-    expect(literalsIn(file('src/app.ts'))).toEqual(['installed'])
   })
 })
 

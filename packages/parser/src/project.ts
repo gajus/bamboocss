@@ -425,8 +425,9 @@ export class Project {
     const revision = this.#sourceFiles.revision
     this.#sourceFiles.phase = 'loading'
 
+    let candidate: TsProject | undefined
     try {
-      const candidate = createTsProject(this.#sourceFiles.projectOptions)
+      candidate = createTsProject(this.#sourceFiles.projectOptions)
       this.#assertSourceFilesTransaction(revision)
       let loaded = 0
 
@@ -462,6 +463,10 @@ export class Project {
       this.#sourceFiles.phase = 'ready'
       return
     } catch (error) {
+      // The candidate owns a compiler process, and an abandoned one is never reached again —
+      // it was private to this call, so nothing can be holding a node from it. Leaving it open
+      // costs a process and its program for the life of the build.
+      candidate?.dispose()
       this.#sourceFiles.project = undefined
       this.#sourceFiles.phase = 'pending'
       throw error

@@ -18,6 +18,43 @@ const readDirectory = (directoryName: string): { files: string[]; directories: s
 }
 
 /**
+ * Compiler processes still open, and the reclaim that closes them.
+ *
+ * Every `Project` owns a Go process — `new API()` spawns one, there is no pool — and a process
+ * that is never closed lives as long as this one does. bamboo builds projects freely: a
+ * config reload replaces one, a rebuild materializes a candidate, and a test suite makes
+ * hundreds. Nothing had been closing them, so a run held every compiler it had ever started.
+ *
+ * `dispose()` is the answer wherever a caller knows the project is finished. This is the
+ * answer everywhere else: once nothing can reach the `Project`, nothing can reach its trees
+ * either, and the process behind it is pure cost. Registration is keyed on the project so
+ * `dispose()` can unregister and the close happens exactly once.
+ *
+ * The exit hook is the last resort, for a process that ends while projects are still live.
+ */
+const liveApis = new Set<{ close(): void }>()
+
+const closeQuietly = (api: { close(): void }): void => {
+  liveApis.delete(api)
+  try {
+    api.close()
+  } catch {
+    // A compiler that has already gone is the outcome this wanted.
+  }
+}
+
+const reclaim = new FinalizationRegistry<{ close(): void }>(closeQuietly)
+
+let exitHookInstalled = false
+const installExitHook = () => {
+  if (exitHookInstalled || typeof process?.once !== 'function') return
+  exitHookInstalled = true
+  process.once('exit', () => {
+    for (const api of [...liveApis]) closeQuietly(api)
+  })
+}
+
+/**
  * A program, over TypeScript 7's Go compiler.
  *
  * The shape ts-morph's `Project` had, minus everything bamboo never called. The differences
@@ -63,6 +100,9 @@ export class Project {
   #cwd: string
   #fs: FileSystemDelegate | undefined
 
+  /** Where the synthesized config lives on the virtual disk — see `#writeConfig`. */
+  #configPath: string
+
   /** Paths this project has asked the compiler to hold open, so each is opened once. */
   #opened = new Set<string>()
 
@@ -73,19 +113,60 @@ export class Project {
     this.#cwd = options.cwd ?? process.cwd()
     this.#fs = options.fs
     this.#compilerOptions = (options as { compilerOptions?: Record<string, unknown> }).compilerOptions
-
-    // Only a config that is actually there. Opening one that is not appears to succeed and
-    // then poisons the session: the server has no such project, so every later
-    // `updateSnapshot` fails with `project not found for update` — including the first source
-    // this project is asked to hold. bamboo reaches here that way whenever a project has no
-    // tsconfig, which is an ordinary configuration rather than an error.
-    this.#tsConfigFilePath =
-      options.tsConfigFilePath && this.#onDisk(options.tsConfigFilePath) ? options.tsConfigFilePath : undefined
+    this.#tsConfigFilePath = options.tsConfigFilePath
+    this.#configPath = `${this.#cwd.replace(/\/$/, '')}/tsconfig.bamboo-compiler.json`
 
     this.#api = new API({ cwd: this.#cwd, fs: this.#delegate(options.fs) })
-    // No config is not an error. The snapshot simply starts with no configured project, and
-    // whatever is opened later lands in the inferred one.
-    this.#snapshot = this.#api.updateSnapshot(this.#tsConfigFilePath ? { openProjects: [this.#tsConfigFilePath] } : {})
+    liveApis.add(this.#api)
+    reclaim.register(this, this.#api, this)
+    installExitHook()
+    this.#writeConfig()
+    this.#snapshot = this.#api.updateSnapshot({ openProjects: [this.#configPath] })
+  }
+
+  /**
+   * The config the compiler is opened on: bamboo's, not the user's.
+   *
+   * The user's `tsconfig.json` describes a program to *typecheck* — every file its `include`
+   * reaches, every `@types` package, the standard library, and the transitive closure of every
+   * import. bamboo needs none of that. It never asks a type question (`no-language-service`
+   * pins that), and it resolves modules itself, so the only thing the compiler is here to do is
+   * parse the exact files bamboo hands it.
+   *
+   * Opening the user's config instead costs about **2 GB per project** on this repository, and
+   * one is paid per `Project` — which is what turned a test run into tens of gigabytes. The
+   * three options below are what remove it:
+   *
+   * - `files` names the installed set explicitly, so nothing is discovered by globbing.
+   * - `noResolve` stops the compiler following imports out of that set; bamboo already knows
+   *   every file it wants, because it resolved them.
+   * - `noLib` and `types: []` drop the standard library and the ambient type packages, which
+   *   only a checker would read.
+   *
+   * Measured on one file inside this checkout: 2023 MB opening the repository's config against
+   * **19 MB** here, with the same tree parsed either way.
+   *
+   * It is written to the virtual disk rather than to the user's, so nothing appears in their
+   * checkout and no watcher sees it.
+   */
+  #writeConfig(): void {
+    this.#disk.set(
+      this.#configPath,
+      JSON.stringify({
+        compilerOptions: {
+          allowJs: true,
+          jsx: 'preserve',
+          module: 'esnext',
+          moduleResolution: 'bundler',
+          noEmit: true,
+          noLib: true,
+          noResolve: true,
+          target: 'esnext',
+          types: [],
+        },
+        files: [...this.#opened],
+      }),
+    )
   }
 
   /** The file as the current snapshot sees it, or `undefined` when no project holds it. */
@@ -208,23 +289,6 @@ export class Project {
     // project was given read as absent until something added it back.
     this.#overlay.clear()
     this.#snapshot = this.#api.updateSnapshot({ fileChanges: { invalidateAll: true } })
-  }
-
-  /**
-   * Read a file as if it held `text`, without writing it or advancing the snapshot.
-   *
-   * The scoped counterpart to `addSourceFile`, for a caller that wants one answer about text it
-   * is not installing — the override is released when the callback returns, so nothing else in
-   * the build observes it.
-   */
-  withText<T>(filePath: string, text: string, read: (sourceFile: SourceFile | undefined) => T): T {
-    let result!: T
-    // `DocumentIdentifier` is the path itself, not a wrapper around one.
-    const path = this.#abs(filePath)
-    this.#api.runWithTemporaryFileUpdate(this.#snapshot, path, text, (snapshot) => {
-      result = read(this.#find(snapshot, path))
-    })
-    return result
   }
 
   /**
@@ -416,7 +480,8 @@ export class Project {
 
   /** Ends the compiler process. A project that is not closed keeps one alive. */
   dispose(): void {
-    this.#api.close()
+    reclaim.unregister(this)
+    closeQuietly(this.#api)
   }
 
   /**
@@ -432,18 +497,26 @@ export class Project {
    * ref-counted and persist, so each path is sent once.
    */
   #apply(changes: { changed?: string[]; created?: string[]; deleted?: string[] }): void {
-    const opening: string[] = []
+    let membershipMoved = false
     for (const path of [...(changes.created ?? []), ...(changes.changed ?? [])]) {
       if (this.#opened.has(path)) continue
       this.#opened.add(path)
-      opening.push(path)
+      membershipMoved = true
     }
-    for (const path of changes.deleted ?? []) this.#opened.delete(path)
+    for (const path of changes.deleted ?? []) membershipMoved = this.#opened.delete(path) || membershipMoved
+
+    // Membership is the config's `files` list, so a file joining or leaving the project is an
+    // edit to the config — announced alongside the file's own event so one round trip carries
+    // both.
+    //
+    // Deliberately not `openFiles`. That is the LSP's way in, and it searches ancestor
+    // directories for a tsconfig containing the file: inside any real checkout it finds the
+    // user's, loads that entire project, and the cost is the 2 GB `#writeConfig` describes.
+    // Naming the file here instead keeps the program exactly what bamboo installed.
+    if (membershipMoved) this.#writeConfig()
 
     this.#snapshot = this.#api.updateSnapshot({
-      fileChanges: changes,
-      ...(opening.length ? { openFiles: opening } : {}),
-      ...(changes.deleted?.length ? { closeFiles: changes.deleted } : {}),
+      fileChanges: membershipMoved ? { ...changes, changed: [...(changes.changed ?? []), this.#configPath] } : changes,
     })
   }
 
@@ -496,6 +569,18 @@ export class Project {
       }
     }
     return {
+      /**
+       * The spelling bamboo used, not the one the filesystem canonicalises to.
+       *
+       * The compiler resolves symlinks by default, so on macOS a project under `/var/folders`
+       * comes back as `/private/var/folders` — a different string for the same file. Every
+       * record bamboo keeps is keyed by path: the resolution ledger, dependency edges, the
+       * watcher's ids and the bundler's module ids, none of which canonicalise. ts-morph did
+       * not either, so the two agreed by default and now have to be made to.
+       *
+       * A caller that genuinely wants canonicalisation supplies its own `realpath` below.
+       */
+      realpath: (fileName: string) => fileName,
       ...fs,
       readFile(fileName) {
         const known = held(fileName)

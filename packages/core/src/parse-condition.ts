@@ -10,16 +10,24 @@ import type {
 import { AtRule } from 'postcss'
 import { safeParse } from './safe-parse'
 
-function parseAtRule(value: string): AtRuleCondition {
+function parseAtRule(value: string): AtRuleCondition | undefined {
   // TODO this creates a new postcss.root for each media query !
   const result = safeParse(value)
-  const rule = result.nodes[0] as AtRule
+  const rule = result.nodes[0]
+
+  // `safeParse` answers a malformed rule with an empty root rather than throwing, and postcss
+  // rejects more `@`-strings than it looks like it would -- `@`, `@;`, `@ media` and `@media {`
+  // are all parse errors. Reading `.name` off the missing node turned a typo'd condition into
+  // `Cannot read properties of undefined`, raised from whichever call site was unguarded.
+  if (rule?.type !== 'atrule') return undefined
+
+  const atRule = rule as AtRule
   return {
     type: 'at-rule',
-    name: rule.name,
-    value: rule.params,
+    name: atRule.name,
+    value: atRule.params,
     raw: value,
-    params: rule.params,
+    params: atRule.params,
   }
 }
 

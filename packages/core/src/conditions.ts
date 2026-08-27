@@ -62,7 +62,17 @@ export class Conditions {
     const breakpoints = new Breakpoints(breakpointValues)
     this.breakpoints = breakpoints
 
-    const entries = Object.entries(conditions).map(([key, value]) => [`_${key}`, parseCondition(value)])
+    // Dropped rather than stored as `undefined`: `has` answers from `hasOwnProperty`, so an
+    // unparseable condition kept here would report as present and then hand its `undefined`
+    // to `getSortedKeys`, which reads `.type` off it.
+    const entries = Object.entries(conditions).flatMap(([key, value]) => {
+      const parsed = parseCondition(value)
+      if (!parsed) {
+        logger.warn('core:condition', `Skipped unparseable condition "${key}": ${JSON.stringify(value)}`)
+        return []
+      }
+      return [[`_${key}`, parsed] as const]
+    })
 
     const containers = this.setupContainers()
     const themes = this.setupThemes()

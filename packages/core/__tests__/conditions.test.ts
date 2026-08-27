@@ -324,4 +324,30 @@ describe('Conditions', () => {
       ]
     `)
   })
+
+  test('a malformed at-rule condition is dropped, not thrown', () => {
+    // postcss rejects each of these, `safeParse` answers with an empty root, and reading the
+    // at-rule off it used to raise `Cannot read properties of undefined (reading 'name')`.
+    for (const query of ['@', '@;', '@}', '@ media', '@media {']) {
+      expect(() => new Conditions({ conditions: { busted: query }, breakpoints: {} })).not.toThrow()
+
+      const css = new Conditions({ conditions: { busted: query }, breakpoints: {} })
+      expect(css.has('_busted')).toBe(false)
+      expect(css.getRaw(query)).toBeUndefined()
+      expect(() => css.getSortedKeys()).not.toThrow()
+      expect(() => css.saveOne('busted', query)).not.toThrow()
+    }
+  })
+
+  test('a well-formed condition still parses beside a malformed one', () => {
+    const css = new Conditions({ conditions: { busted: '@', hover: '&:hover' }, breakpoints: {} })
+    expect(css.has('_busted')).toBe(false)
+    expect(css.getRaw('_hover')).toMatchInlineSnapshot(`
+      {
+        "raw": "&:hover",
+        "type": "self-nesting",
+        "value": "&:hover",
+      }
+    `)
+  })
 })

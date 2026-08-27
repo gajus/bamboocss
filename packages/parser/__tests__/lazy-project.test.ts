@@ -7,6 +7,29 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { Project } from '../src/project'
 
 /**
+ * Sources handed to the project, however they were handed over.
+ *
+ * A cold pass installs its whole inventory through `addSourceFiles`, one call carrying every
+ * file, because announcing them one at a time is a round trip each — see
+ * `Project#addSourceFiles`. Counting one method therefore no longer counts materialization;
+ * counting *files* does, and that is what these cases were always about.
+ */
+const spyOnInstalls = () => {
+  const bulk = vi.spyOn(TsProject.prototype, 'addSourceFiles')
+  const single = vi.spyOn(TsProject.prototype, 'createSourceFile')
+  return {
+    get count() {
+      const batched = bulk.mock.calls.reduce((total, [entries]) => total + [...(entries ?? [])].length, 0)
+      return batched + single.mock.calls.length
+    },
+    mockClear() {
+      bulk.mockClear()
+      single.mockClear()
+    },
+  }
+}
+
+/**
  * A project to hand over as a replacement, with nothing in it.
  *
  * ts-morph could conjure one from `useInMemoryFileSystem`. The TypeScript 7 backend is a
@@ -63,7 +86,7 @@ const projectFixture = (deferInitialSourceFiles: boolean, initialFiles = ['app/a
 
 describe('Project deferred initial sources', () => {
   test('standalone Projects remain eager by default', () => {
-    const createSourceFile = vi.spyOn(TsProject.prototype, 'createSourceFile')
+    const createSourceFile = spyOnInstalls()
     const contents = {
       'app/a.ts': 'export const a = 1',
       'app/b.ts': 'export const b = 2',
@@ -82,10 +105,10 @@ describe('Project deferred initial sources', () => {
 
     expect(getFiles).toHaveBeenCalledTimes(1)
     expect(readFile).toHaveBeenCalledTimes(2)
-    expect(createSourceFile).toHaveBeenCalledTimes(2)
+    expect(createSourceFile.count).toBe(2)
     expect(project.getSourceFile('app/a.ts')).toBeDefined()
     expect(readFile).toHaveBeenCalledTimes(2)
-    expect(createSourceFile).toHaveBeenCalledTimes(2)
+    expect(createSourceFile.count).toBe(2)
 
     const descriptor = Object.getOwnPropertyDescriptor(project, 'project')
     expect(descriptor).toEqual({
@@ -101,12 +124,12 @@ describe('Project deferred initial sources', () => {
   })
 
   test('the opt-in snapshots inventory but defers reads and ASTs until a graph operation', () => {
-    const createSourceFile = vi.spyOn(TsProject.prototype, 'createSourceFile')
+    const createSourceFile = spyOnInstalls()
     const { getFiles, project, readFile } = projectFixture(true)
 
     expect(getFiles).toHaveBeenCalledTimes(1)
     expect(readFile).not.toHaveBeenCalled()
-    expect(createSourceFile).not.toHaveBeenCalled()
+    expect(createSourceFile.count).toBe(0)
     expect(Object.getOwnPropertyDescriptor(project, 'project')).toMatchObject({
       configurable: false,
       enumerable: true,
@@ -119,46 +142,46 @@ describe('Project deferred initial sources', () => {
     expect(project.transformFile('app/a.ts', 'source')).toBe('source')
     expect(project.classify(new Map())).toBeDefined()
     expect(readFile).not.toHaveBeenCalled()
-    expect(createSourceFile).not.toHaveBeenCalled()
+    expect(createSourceFile.count).toBe(0)
 
     const first = project.getSourceFile('app/a.ts')
     expect(first).toBeDefined()
     expect(readFile).toHaveBeenCalledTimes(2)
-    expect(createSourceFile).toHaveBeenCalledTimes(2)
+    expect(createSourceFile.count).toBe(2)
     expect(project.getSourceFile('app/a.ts')).toBe(first)
     expect(readFile).toHaveBeenCalledTimes(2)
-    expect(createSourceFile).toHaveBeenCalledTimes(2)
+    expect(createSourceFile.count).toBe(2)
   })
 
   test('JSON parsing is graph-independent; direct ts-morph access is not', () => {
-    const createSourceFile = vi.spyOn(TsProject.prototype, 'createSourceFile')
+    const createSourceFile = spyOnInstalls()
     const { contents, parserOptions, project, readFile } = projectFixture(true, ['app/a.ts'])
     contents['cache.json'] = JSON.stringify(parserOptions.encoder.toJSON())
 
     expect(project.parseSourceFile('cache.json')?.filePath).toBe('cache.json')
     expect(readFile).toHaveBeenCalledTimes(1)
-    expect(createSourceFile).not.toHaveBeenCalled()
+    expect(createSourceFile.count).toBe(0)
 
     expect(project.project.getSourceFiles()).toHaveLength(1)
     expect(readFile).toHaveBeenCalledTimes(2)
-    expect(createSourceFile).toHaveBeenCalledTimes(1)
+    expect(createSourceFile.count).toBe(1)
   })
 
   test('freezing the deferred wrapper does not freeze its private loading state', () => {
-    const createSourceFile = vi.spyOn(TsProject.prototype, 'createSourceFile')
+    const createSourceFile = spyOnInstalls()
     const { project, readFile } = projectFixture(true)
 
     Object.freeze(project)
 
     expect(readFile).not.toHaveBeenCalled()
-    expect(createSourceFile).not.toHaveBeenCalled()
+    expect(createSourceFile.count).toBe(0)
     const first = project.getSourceFile('app/a.ts')
     expect(first).toBeDefined()
     expect(readFile).toHaveBeenCalledTimes(2)
-    expect(createSourceFile).toHaveBeenCalledTimes(2)
+    expect(createSourceFile.count).toBe(2)
     expect(project.getSourceFile('app/a.ts')).toBe(first)
     expect(readFile).toHaveBeenCalledTimes(2)
-    expect(createSourceFile).toHaveBeenCalledTimes(2)
+    expect(createSourceFile.count).toBe(2)
   })
 
   test('a frozen deferred wrapper does not mutate an alternate assignment receiver', () => {
@@ -176,7 +199,7 @@ describe('Project deferred initial sources', () => {
   })
 
   test('alternate-receiver raw-project assignment leaves the deferred wrapper untouched', () => {
-    const createSourceFile = vi.spyOn(TsProject.prototype, 'createSourceFile')
+    const createSourceFile = spyOnInstalls()
     const { project, readFile } = projectFixture(true)
     const replacement = standaloneProject()
     const receiver = {}
@@ -191,11 +214,11 @@ describe('Project deferred initial sources', () => {
     })
     expect(Object.getOwnPropertyDescriptor(project, 'project')).toEqual(before)
     expect(readFile).not.toHaveBeenCalled()
-    expect(createSourceFile).not.toHaveBeenCalled()
+    expect(createSourceFile.count).toBe(0)
 
     expect(project.getSourceFile('app/a.ts')).toBeDefined()
     expect(readFile).toHaveBeenCalledTimes(2)
-    expect(createSourceFile).toHaveBeenCalledTimes(2)
+    expect(createSourceFile.count).toBe(2)
   })
 
   test('raw project replacement cannot observe or overwrite an in-flight preload', () => {
@@ -324,7 +347,7 @@ describe('Project deferred initial sources', () => {
 
   test('cache invalidation cannot re-enter after the final preload revision check', () => {
     const { project, readFile } = projectFixture(true, ['app/a.ts'])
-    const createSourceFile = vi.spyOn(TsProject.prototype, 'createSourceFile')
+    const createSourceFile = spyOnInstalls()
     const originalClear = Map.prototype.clear
     let attack = true
     let reentryError: unknown
@@ -353,11 +376,11 @@ describe('Project deferred initial sources', () => {
     expect(reentryError).toBeInstanceOf(Error)
     expect(error).toBeInstanceOf(Error)
     expect(escaped).toBeUndefined()
-    expect(createSourceFile).toHaveBeenCalledTimes(1)
+    expect(createSourceFile.count).toBe(1)
     expect(project.getUnresolvedImporters()).toEqual([])
 
     expect(project.getSourceFile('app/a.ts')).toBeDefined()
-    expect(createSourceFile).toHaveBeenCalledTimes(2)
+    expect(createSourceFile.count).toBe(2)
     expect(readFile).toHaveBeenCalledTimes(2)
   })
 
@@ -443,7 +466,7 @@ describe('Project deferred initial sources', () => {
       useInMemoryFileSystem: true,
     })
     capturedParser = project.parser
-    const createSourceFile = vi.spyOn(TsProject.prototype, 'createSourceFile')
+    const createSourceFile = spyOnInstalls()
 
     let escaped
     expect(() => {
@@ -451,12 +474,12 @@ describe('Project deferred initial sources', () => {
     }).toThrow(/already being initialized/i)
     expect(innerError).toBeInstanceOf(Error)
     expect(escaped).toBeUndefined()
-    expect(createSourceFile).not.toHaveBeenCalled()
+    expect(createSourceFile.count).toBe(0)
     expect(JSON.stringify(parserOptions.encoder.toJSON())).toBe(encoderBefore)
     expect(project.getUnresolvedImporters()).toEqual([])
 
     expect(project.getSourceFile('app/candidate.ts')).toBeDefined()
-    expect(createSourceFile).toHaveBeenCalledTimes(1)
+    expect(createSourceFile.count).toBe(1)
     expect(project.getDependents('ghost/dependency.ts')).toEqual([])
     expect(project.project).not.toBe(replacement)
     expect(project.project.getSourceFile(importer.fileName)).toBeUndefined()

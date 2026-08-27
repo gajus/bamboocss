@@ -14,6 +14,29 @@ import { BambooContext } from '../src/create-context'
 import { nodeRuntime } from '../src/node-runtime'
 
 /**
+ * Sources handed to the project, however they were handed over.
+ *
+ * A cold pass installs its whole inventory through `addSourceFiles`, one call carrying every
+ * file, because announcing them one at a time is a round trip each — see
+ * `Project#addSourceFiles`. Counting one method therefore no longer counts materialization;
+ * counting *files* does, and that is what these cases were always about.
+ */
+const spyOnInstalls = () => {
+  const bulk = vi.spyOn(TsProject.prototype, 'addSourceFiles')
+  const single = vi.spyOn(TsProject.prototype, 'createSourceFile')
+  return {
+    get count() {
+      const batched = bulk.mock.calls.reduce((total, [entries]) => total + [...(entries ?? [])].length, 0)
+      return batched + single.mock.calls.length
+    },
+    mockClear() {
+      bulk.mockClear()
+      single.mockClear()
+    },
+  }
+}
+
+/**
  * An empty project to hand over as a replacement.
  *
  * The TypeScript 7 backend is a compiler in another process, so even an empty project needs
@@ -93,7 +116,7 @@ const sourceStyles = (context: BambooContext, file: string) =>
 describe('BambooContext.project materialization', () => {
   test('project starts as the legacy native data property', () => {
     const read = vi.spyOn(nodeRuntime.fs, 'readFileSync')
-    const createSourceFile = vi.spyOn(TsProject.prototype, 'createSourceFile')
+    const createSourceFile = spyOnInstalls()
     const { context } = contextFor({ 'src/a.ts': 'export const a = 1' })
     const descriptor = Object.getOwnPropertyDescriptor(context, 'project')!
 
@@ -106,12 +129,12 @@ describe('BambooContext.project materialization', () => {
     expect('get' in descriptor).toBe(false)
     expect('set' in descriptor).toBe(false)
     expect(read).not.toHaveBeenCalled()
-    expect(createSourceFile).not.toHaveBeenCalled()
+    expect(createSourceFile.count).toBe(0)
   })
 
   test('reads the real wrapper for free, then loads the full graph on its first source operation', () => {
     const read = vi.spyOn(nodeRuntime.fs, 'readFileSync')
-    const createSourceFile = vi.spyOn(TsProject.prototype, 'createSourceFile')
+    const createSourceFile = spyOnInstalls()
     const { context, directory } = contextFor({
       'src/a.ts': 'export const a = 1',
       'src/b.tsx': 'export const b = <div />',
@@ -129,18 +152,18 @@ describe('BambooContext.project materialization', () => {
     })
     expect(initialDescriptor.value).toBe(project)
     expect(read).not.toHaveBeenCalled()
-    expect(createSourceFile).not.toHaveBeenCalled()
+    expect(createSourceFile.count).toBe(0)
     expect(context.project).toBe(project)
     expect(read).not.toHaveBeenCalled()
-    expect(createSourceFile).not.toHaveBeenCalled()
+    expect(createSourceFile.count).toBe(0)
 
     expect(project.getSourceFile(path.join(directory, 'src/a.ts'))).toBeDefined()
 
     expect(sourceReads(read, directory)).toBe(3)
-    expect(createSourceFile).toHaveBeenCalledTimes(3)
+    expect(createSourceFile.count).toBe(3)
     expect(project.getSourceFile(path.join(directory, 'src/b.tsx'))).toBeDefined()
     expect(sourceReads(read, directory)).toBe(3)
-    expect(createSourceFile).toHaveBeenCalledTimes(3)
+    expect(createSourceFile.count).toBe(3)
     const loadedDescriptor = Object.getOwnPropertyDescriptor(context, 'project')!
     expect(loadedDescriptor).toMatchObject({
       configurable: true,
@@ -156,7 +179,7 @@ describe('BambooContext.project materialization', () => {
 
   test('direct ts-morph project access is a materializing source operation', () => {
     const read = vi.spyOn(nodeRuntime.fs, 'readFileSync')
-    const createSourceFile = vi.spyOn(TsProject.prototype, 'createSourceFile')
+    const createSourceFile = spyOnInstalls()
     const { context, directory } = contextFor({
       'src/a.ts': 'export const a = 1',
       'src/b.ts': 'export const b = 2',
@@ -166,15 +189,15 @@ describe('BambooContext.project materialization', () => {
     expect(read).not.toHaveBeenCalled()
     expect(wrapper.project.getSourceFiles()).toHaveLength(2)
     expect(sourceReads(read, directory)).toBe(2)
-    expect(createSourceFile).toHaveBeenCalledTimes(2)
+    expect(createSourceFile.count).toBe(2)
     expect(wrapper.project.getSourceFiles()).toHaveLength(2)
     expect(sourceReads(read, directory)).toBe(2)
-    expect(createSourceFile).toHaveBeenCalledTimes(2)
+    expect(createSourceFile.count).toBe(2)
   })
 
   test('an injected project prevents construction', () => {
     const read = vi.spyOn(nodeRuntime.fs, 'readFileSync')
-    const createSourceFile = vi.spyOn(TsProject.prototype, 'createSourceFile')
+    const createSourceFile = spyOnInstalls()
     const { context } = contextFor({ 'src/a.ts': 'export const a = 1' })
     const injected = { files: ['injected'] } as unknown as BambooProject
 
@@ -182,13 +205,13 @@ describe('BambooContext.project materialization', () => {
 
     expect(context.project).toBe(injected)
     expect(read).not.toHaveBeenCalled()
-    expect(createSourceFile).not.toHaveBeenCalled()
+    expect(createSourceFile.count).toBe(0)
     expect(Object.getOwnPropertyDescriptor(context, 'project')).toMatchObject({ value: injected, writable: true })
   })
 
   test('preventExtensions preserves native writes, deletion, and failed re-addition', () => {
     const read = vi.spyOn(nodeRuntime.fs, 'readFileSync')
-    const createSourceFile = vi.spyOn(TsProject.prototype, 'createSourceFile')
+    const createSourceFile = spyOnInstalls()
     const { context } = contextFor({ 'src/a.ts': 'export const a = 1' })
     const replacement = {} as BambooProject
 
@@ -199,12 +222,12 @@ describe('BambooContext.project materialization', () => {
     expect(Object.hasOwn(context, 'project')).toBe(false)
     expect(Reflect.set(context, 'project', replacement)).toBe(false)
     expect(read).not.toHaveBeenCalled()
-    expect(createSourceFile).not.toHaveBeenCalled()
+    expect(createSourceFile.count).toBe(0)
   })
 
   test('delete and redefine use ordinary data-property descriptors without source work', () => {
     const read = vi.spyOn(nodeRuntime.fs, 'readFileSync')
-    const createSourceFile = vi.spyOn(TsProject.prototype, 'createSourceFile')
+    const createSourceFile = spyOnInstalls()
     const { context } = contextFor({ 'src/a.ts': 'export const a = 1' })
     const replacement = {} as BambooProject
 
@@ -223,12 +246,12 @@ describe('BambooContext.project materialization', () => {
       writable: false,
     })
     expect(read).not.toHaveBeenCalled()
-    expect(createSourceFile).not.toHaveBeenCalled()
+    expect(createSourceFile.count).toBe(0)
   })
 
   test('alternate-receiver assignment leaves the lazy context untouched', () => {
     const read = vi.spyOn(nodeRuntime.fs, 'readFileSync')
-    const createSourceFile = vi.spyOn(TsProject.prototype, 'createSourceFile')
+    const createSourceFile = spyOnInstalls()
     const { context } = contextFor({ 'src/a.ts': 'export const a = 1' })
     const injected = {} as BambooProject
     const receiver = {}
@@ -243,12 +266,12 @@ describe('BambooContext.project materialization', () => {
     })
     expect(Object.getOwnPropertyDescriptor(context, 'project')).toEqual(before)
     expect(read).not.toHaveBeenCalled()
-    expect(createSourceFile).not.toHaveBeenCalled()
+    expect(createSourceFile.count).toBe(0)
   })
 
   test('alternate-receiver assignment updates writable data and inherited receivers', () => {
     const read = vi.spyOn(nodeRuntime.fs, 'readFileSync')
-    const createSourceFile = vi.spyOn(TsProject.prototype, 'createSourceFile')
+    const createSourceFile = spyOnInstalls()
     const { context } = contextFor({ 'src/a.ts': 'export const a = 1' })
     const before = Object.getOwnPropertyDescriptor(context, 'project')
     const writableReceiver = {}
@@ -280,12 +303,12 @@ describe('BambooContext.project materialization', () => {
     })
     expect(Object.getOwnPropertyDescriptor(context, 'project')).toEqual(before)
     expect(read).not.toHaveBeenCalled()
-    expect(createSourceFile).not.toHaveBeenCalled()
+    expect(createSourceFile.count).toBe(0)
   })
 
   test('rejected alternate receivers remain unchanged without materializing the context', () => {
     const read = vi.spyOn(nodeRuntime.fs, 'readFileSync')
-    const createSourceFile = vi.spyOn(TsProject.prototype, 'createSourceFile')
+    const createSourceFile = spyOnInstalls()
     const { context } = contextFor({ 'src/a.ts': 'export const a = 1' })
     const before = Object.getOwnPropertyDescriptor(context, 'project')
     const injected = {} as BambooProject
@@ -341,12 +364,12 @@ describe('BambooContext.project materialization', () => {
     expect(Object.hasOwn(nonExtensible, 'project')).toBe(false)
     expect(Object.getOwnPropertyDescriptor(context, 'project')).toEqual(before)
     expect(read).not.toHaveBeenCalled()
-    expect(createSourceFile).not.toHaveBeenCalled()
+    expect(createSourceFile.count).toBe(0)
   })
 
   test('a context frozen before source access keeps native read-only data semantics', () => {
     const read = vi.spyOn(nodeRuntime.fs, 'readFileSync')
-    const createSourceFile = vi.spyOn(TsProject.prototype, 'createSourceFile')
+    const createSourceFile = spyOnInstalls()
     const { context, directory } = contextFor({ 'src/a.ts': 'export const a = 1' })
     const project = context.project
     Object.freeze(context)
@@ -363,13 +386,13 @@ describe('BambooContext.project materialization', () => {
     expect(Reflect.set(context, 'project', {} as BambooProject, alternateReceiver)).toBe(false)
     expect(Object.hasOwn(alternateReceiver, 'project')).toBe(false)
     expect(read).not.toHaveBeenCalled()
-    expect(createSourceFile).not.toHaveBeenCalled()
+    expect(createSourceFile.count).toBe(0)
 
     expect(context.project).toBe(project)
     expect(read).not.toHaveBeenCalled()
     expect(project.getSourceFile(path.join(directory, 'src/a.ts'))).toBeDefined()
     expect(sourceReads(read, directory)).toBe(1)
-    expect(createSourceFile).toHaveBeenCalledTimes(1)
+    expect(createSourceFile.count).toBe(1)
     const loadedFrozenDescriptor = Object.getOwnPropertyDescriptor(context, 'project')!
     expect(loadedFrozenDescriptor).toMatchObject({
       configurable: false,
@@ -385,7 +408,7 @@ describe('BambooContext.project materialization', () => {
 
   test('a context sealed before source access keeps native writable data semantics', () => {
     const read = vi.spyOn(nodeRuntime.fs, 'readFileSync')
-    const createSourceFile = vi.spyOn(TsProject.prototype, 'createSourceFile')
+    const createSourceFile = spyOnInstalls()
     const { context, directory } = contextFor({ 'src/a.ts': 'export const a = 1' })
     const project = context.project
     Object.seal(context)
@@ -394,7 +417,7 @@ describe('BambooContext.project materialization', () => {
     expect(read).not.toHaveBeenCalled()
     expect(project.getSourceFile(path.join(directory, 'src/a.ts'))).toBeDefined()
     expect(sourceReads(read, directory)).toBe(1)
-    expect(createSourceFile).toHaveBeenCalledTimes(1)
+    expect(createSourceFile.count).toBe(1)
     expect(Object.isSealed(context)).toBe(true)
     expect(Object.isFrozen(context)).toBe(false)
     expect(Object.getOwnPropertyDescriptor(context, 'project')).toMatchObject({
@@ -408,12 +431,12 @@ describe('BambooContext.project materialization', () => {
     context.project = replacement
     expect(context.project).toBe(replacement)
     expect(sourceReads(read, directory)).toBe(1)
-    expect(createSourceFile).toHaveBeenCalledTimes(1)
+    expect(createSourceFile.count).toBe(1)
   })
 
   test('a deferred Project wrapper frozen before source access still loads once', () => {
     const read = vi.spyOn(nodeRuntime.fs, 'readFileSync')
-    const createSourceFile = vi.spyOn(TsProject.prototype, 'createSourceFile')
+    const createSourceFile = spyOnInstalls()
     const { context, directory } = contextFor({
       'src/a.ts': 'export const a = 1',
       'src/b.ts': 'export const b = 2',
@@ -423,14 +446,14 @@ describe('BambooContext.project materialization', () => {
     Object.freeze(project)
 
     expect(read).not.toHaveBeenCalled()
-    expect(createSourceFile).not.toHaveBeenCalled()
+    expect(createSourceFile.count).toBe(0)
     const first = project.getSourceFile(path.join(directory, 'src/a.ts'))
     expect(first).toBeDefined()
     expect(sourceReads(read, directory)).toBe(2)
-    expect(createSourceFile).toHaveBeenCalledTimes(2)
+    expect(createSourceFile.count).toBe(2)
     expect(project.getSourceFile(path.join(directory, 'src/a.ts'))).toBe(first)
     expect(sourceReads(read, directory)).toBe(2)
-    expect(createSourceFile).toHaveBeenCalledTimes(2)
+    expect(createSourceFile.count).toBe(2)
     expect(() => {
       // A project still needs somewhere to be rooted; what is under test is that assigning one
       // through the frozen handle throws before it is ever built.
@@ -440,7 +463,7 @@ describe('BambooContext.project materialization', () => {
 
   test('a project injected before freezing still prevents construction', () => {
     const read = vi.spyOn(nodeRuntime.fs, 'readFileSync')
-    const createSourceFile = vi.spyOn(TsProject.prototype, 'createSourceFile')
+    const createSourceFile = spyOnInstalls()
     const { context } = contextFor({ 'src/a.ts': 'export const a = 1' })
     const injected = {} as BambooProject
 
@@ -449,7 +472,7 @@ describe('BambooContext.project materialization', () => {
 
     expect(context.project).toBe(injected)
     expect(read).not.toHaveBeenCalled()
-    expect(createSourceFile).not.toHaveBeenCalled()
+    expect(createSourceFile.count).toBe(0)
     expect(Object.getOwnPropertyDescriptor(context, 'project')).toMatchObject({
       configurable: false,
       enumerable: true,
@@ -463,7 +486,7 @@ describe('BambooContext.project materialization', () => {
 
   test('two microtasks share one synchronous construction', async () => {
     const read = vi.spyOn(nodeRuntime.fs, 'readFileSync')
-    const createSourceFile = vi.spyOn(TsProject.prototype, 'createSourceFile')
+    const createSourceFile = spyOnInstalls()
     const { context, directory } = contextFor({ 'src/a.ts': 'export const a = 1' })
     const file = path.join(directory, 'src/a.ts')
 
@@ -474,7 +497,7 @@ describe('BambooContext.project materialization', () => {
 
     expect(second).toBe(first)
     expect(sourceReads(read, directory)).toBe(1)
-    expect(createSourceFile).toHaveBeenCalledTimes(1)
+    expect(createSourceFile.count).toBe(1)
   })
 
   test('a failed preload leaves the wrapper intact and retries a fresh project', () => {
@@ -495,7 +518,7 @@ describe('BambooContext.project materialization', () => {
       }
       return realRead(file)
     })
-    const createSourceFile = vi.spyOn(TsProject.prototype, 'createSourceFile')
+    const createSourceFile = spyOnInstalls()
 
     const project = context.project
     expect(() => project.getSourceFile(path.join(directory, 'src/a.ts'))).toThrow('synthetic read failure')
@@ -506,23 +529,30 @@ describe('BambooContext.project materialization', () => {
     expect(project.getSourceFile(path.join(directory, 'src/a.ts'))).toBeDefined()
     expect(project.getSourceFile(path.join(directory, 'src/b.ts'))).toBeDefined()
     expect(sourceReads(read, directory)).toBe(4)
-    // One file entered the discarded Project; both entered the successful retry.
-    expect(createSourceFile).toHaveBeenCalledTimes(3)
+    // Both entered the successful retry, and *none* entered the discarded one. The inventory is
+    // collected before any of it is installed, so a read that throws part-way through abandons
+    // a project that was never populated — where installing file by file left the first file in
+    // a program about to be thrown away.
+    expect(createSourceFile.count).toBe(2)
   })
 
   test('an AST construction failure also retries without caching the partial Project', () => {
-    const originalCreateSourceFile = TsProject.prototype.createSourceFile
+    // Thrown from the install itself, which is where a tree is built. That is `addSourceFiles`
+    // now: the inventory arrives in one call, so a failure there is a whole failed
+    // materialization rather than one file's.
+    const original = TsProject.prototype.addSourceFiles
     let fail = true
-    const createSourceFile = vi.spyOn(TsProject.prototype, 'createSourceFile').mockImplementation(function (
+    vi.spyOn(TsProject.prototype, 'addSourceFiles').mockImplementation(function (
       this: TsProject,
-      ...args
+      ...args: Parameters<TsProject['addSourceFiles']>
     ) {
       if (fail) {
         fail = false
         throw new Error('synthetic AST failure')
       }
-      return originalCreateSourceFile.apply(this, args)
+      return original.apply(this, args)
     })
+    const createSourceFile = spyOnInstalls()
     const read = vi.spyOn(nodeRuntime.fs, 'readFileSync')
     const { context, directory } = contextFor({ 'src/a.ts': 'export const a = 1' })
     const project = context.project
@@ -533,7 +563,7 @@ describe('BambooContext.project materialization', () => {
     expect(descriptor.value).toBe(project)
     expect(project.getSourceFile(path.join(directory, 'src/a.ts'))).toBeDefined()
     expect(sourceReads(read, directory)).toBe(2)
-    expect(createSourceFile).toHaveBeenCalledTimes(2)
+    expect(createSourceFile.count).toBe(2)
   })
 
   test('a true reentrant source operation fails cleanly and remains retryable', () => {
@@ -561,7 +591,7 @@ describe('BambooContext.project materialization', () => {
 
   test('an included file disappearing before first access is still an ENOENT skip', () => {
     const read = vi.spyOn(nodeRuntime.fs, 'readFileSync')
-    const createSourceFile = vi.spyOn(TsProject.prototype, 'createSourceFile')
+    const createSourceFile = spyOnInstalls()
     const { context, directory } = contextFor({ 'src/gone.ts': 'export const gone = true' })
     const file = path.join(directory, 'src/gone.ts')
     unlinkSync(file)
@@ -570,7 +600,7 @@ describe('BambooContext.project materialization', () => {
 
     expect(project.getSourceFile(file)).toBeUndefined()
     expect(sourceReads(read, directory)).toBe(1)
-    expect(createSourceFile).not.toHaveBeenCalled()
+    expect(createSourceFile.count).toBe(0)
 
     writeFileSync(file, 'export const back = true')
     project.reloadSourceFiles()
@@ -578,14 +608,14 @@ describe('BambooContext.project materialization', () => {
   })
 
   test('the initial inventory glob and its errors remain at context construction', () => {
-    const createSourceFile = vi.spyOn(TsProject.prototype, 'createSourceFile')
+    const createSourceFile = spyOnInstalls()
     vi.spyOn(nodeRuntime.fs, 'glob').mockImplementation(() => {
       throw new Error('synthetic glob failure')
     })
     const directory = createFiles({ 'src/a.ts': 'export const a = 1' })
 
     expect(() => new BambooContext(createConfig(directory))).toThrow('synthetic glob failure')
-    expect(createSourceFile).not.toHaveBeenCalled()
+    expect(createSourceFile.count).toBe(0)
   })
 })
 
@@ -593,7 +623,7 @@ describe('eager-equivalent snapshots', () => {
   test('freezes the initial inventory and tsconfig values while later file queries stay live', () => {
     const directory = createFiles({ 'src/a.ts': 'export const a = 1' })
     const read = vi.spyOn(nodeRuntime.fs, 'readFileSync')
-    const createSourceFile = vi.spyOn(TsProject.prototype, 'createSourceFile')
+    const createSourceFile = spyOnInstalls()
     const compilerOptions = { target: 'ES5' } satisfies NonNullable<TSConfig['compilerOptions']>
     const conf = createConfig(directory, { include: ['src/*.ts'], tsconfig: { compilerOptions } })
     const context = new BambooContext(conf)
@@ -612,7 +642,7 @@ describe('eager-equivalent snapshots', () => {
     // Inventory queries remain live and do not need a ts-morph source graph.
     expect(project.files).toEqual([b])
     expect(read).not.toHaveBeenCalled()
-    expect(createSourceFile).not.toHaveBeenCalled()
+    expect(createSourceFile.count).toBe(0)
 
     expect(project.getSourceFile(a)).toBeDefined()
     expect(project.getSourceFile(a)?.getFullText()).toContain('a = 9')
@@ -631,13 +661,13 @@ describe('eager-equivalent snapshots', () => {
 describe('transparent Project consumers', () => {
   test('codegen does not materialize the source project', async () => {
     const read = vi.spyOn(nodeRuntime.fs, 'readFileSync')
-    const createSourceFile = vi.spyOn(TsProject.prototype, 'createSourceFile')
+    const createSourceFile = spyOnInstalls()
     const { context } = contextFor({ 'src/a.ts': 'export const a = 1' })
 
     await codegen(context)
 
     expect(read).not.toHaveBeenCalled()
-    expect(createSourceFile).not.toHaveBeenCalled()
+    expect(createSourceFile.count).toBe(0)
   })
 
   test('parses JSON without materializing the TypeScript source graph', () => {
@@ -647,7 +677,7 @@ describe('transparent Project consumers', () => {
       'src/styles.json': JSON.stringify(donor.encoder.toJSON()),
     })
     const read = vi.spyOn(nodeRuntime.fs, 'readFileSync')
-    const createSourceFile = vi.spyOn(TsProject.prototype, 'createSourceFile')
+    const createSourceFile = spyOnInstalls()
     const context = new BambooContext(createConfig(directory))
     const file = path.join(directory, 'src/styles.json')
     const source = path.join(directory, 'src/a.ts')
@@ -659,11 +689,11 @@ describe('transparent Project consumers', () => {
     const result = context.parseFile(file)
     expect(result?.filePath).toBe(file)
     expect(sourceReads(read, directory)).toBe(1)
-    expect(createSourceFile).not.toHaveBeenCalled()
+    expect(createSourceFile.count).toBe(0)
 
     expect(context.project.getSourceFile(source)).toBeDefined()
     expect(sourceReads(read, directory)).toBe(3)
-    expect(createSourceFile).toHaveBeenCalledTimes(2)
+    expect(createSourceFile.count).toBe(2)
   })
 
   test.each([

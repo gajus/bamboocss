@@ -430,14 +430,16 @@ export class Project {
       this.#assertSourceFilesTransaction(revision)
       let loaded = 0
 
+      // Collected, then installed in one call. Each install is a round trip to the compiler,
+      // and announcing the inventory a file at a time makes a cold build quadratic in the size
+      // of the project — see `Project#addSourceFiles`.
+      const entries: Array<readonly [string, string]> = []
+
       for (const [index, file] of this.#sourceFiles.initialFiles.entries()) {
         try {
           const content = read(file, index)
           this.#assertSourceFilesTransaction(revision)
-          candidate.createSourceFile(file, content, {
-            overwrite: true,
-            scriptKind: scriptKindFor(file),
-          })
+          entries.push([file, content])
           this.#assertSourceFilesTransaction(revision)
           loaded++
         } catch (error) {
@@ -450,6 +452,7 @@ export class Project {
         }
       }
 
+      candidate.addSourceFiles(entries)
       this.#assertSourceFilesTransaction(revision)
       if (loaded > 0) invalidateResolutions()
       // Global invalidation dispatches into other packages and, ultimately, built-ins such as

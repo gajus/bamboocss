@@ -108,6 +108,10 @@ export class Project {
   /** Options supplied by the caller, which outrank the compiler's own reading — see below. */
   #compilerOptions: Record<string, unknown> | undefined
 
+  /** Changes announced but not yet sent, and whether they move the project's membership. */
+  #pending: { changed: Set<string>; created: Set<string>; deleted: Set<string> } | undefined
+  #membershipMoved = false
+
   constructor(options: ProjectOptions) {
     // Absolute, always. A caller may hold a relative working directory — the fixtures use `''`
     // — and the compiler rejects a relative path outright: `vfs: path … is not absolute` is a
@@ -173,6 +177,7 @@ export class Project {
 
   /** The file as the current snapshot sees it, or `undefined` when no project holds it. */
   getSourceFile(filePath: string): SourceFile | undefined {
+    this.#flush()
     return this.#find(this.#snapshot, this.#abs(filePath))
   }
 
@@ -244,6 +249,33 @@ export class Project {
   }
 
   /**
+   * Install many sources, and tell the compiler once.
+   *
+   * The bulk counterpart to `addSourceFile`, and the shape a cold pass actually has: the parser
+   * hands over its whole inventory before reading any of it. Doing that one file at a time is
+   * what `#flush` describes — a round trip each, carrying a `files` list one entry longer than
+   * the last — and it measured **65x slower than ts-morph** on 2,000 files. Batched, the same
+   * work is a single update.
+   *
+   * Returns nothing on purpose. Handing back the installed trees would mean reading the
+   * snapshot, and reading is exactly what defers no longer.
+   */
+  addSourceFiles(entries: Iterable<readonly [string, string]>): void {
+    const created: string[] = []
+    const changed: string[] = []
+
+    for (const [filePath, content] of entries) {
+      const path = this.#abs(filePath)
+      if (this.#overlay.get(path) === content && this.#opened.has(path)) continue
+      const existed = this.#opened.has(path) || this.#overlay.has(path) || this.#onDisk(path)
+      this.#overlay.set(path, content)
+      ;(existed ? changed : created).push(path)
+    }
+
+    if (created.length || changed.length) this.#apply({ created, changed })
+  }
+
+  /**
    * A file appeared, optionally with content this process is supplying.
    *
    * Keeps ts-morph's `(path, content?, options?)` shape. The options it took — `overwrite`,
@@ -290,6 +322,8 @@ export class Project {
     // you hold", not "you hold nothing" — dropping the opened set would make every file this
     // project was given read as absent until something added it back.
     this.#overlay.clear()
+    // Everything queued is about to be re-read anyway.
+    this.#pending = undefined
     this.#snapshot = this.#api.updateSnapshot({ fileChanges: { invalidateAll: true } })
   }
 
@@ -306,6 +340,7 @@ export class Project {
    * `getPreEmitDiagnostics` would.
    */
   getSyntacticDiagnosticCount(filePath: string): number {
+    this.#flush()
     const path = this.#abs(filePath)
     for (const project of this.#snapshot.getProjects()) {
       if (!project.program.getSourceFile(path)) continue
@@ -325,6 +360,7 @@ export class Project {
    * of them a source bamboo asked about.
    */
   getSourceFiles(): SourceFile[] {
+    this.#flush()
     const found: SourceFile[] = []
     for (const path of this.#opened) {
       const source = this.#find(this.#snapshot, path)
@@ -344,6 +380,7 @@ export class Project {
    * invisible here. The compiler's answer still fills in everything not spoken for.
    */
   getCompilerOptions() {
+    this.#flush()
     const reported = this.#project()?.program.getCompilerOptions()
     if (!this.#compilerOptions) return reported
     return { ...reported, ...this.#compilerOptions }
@@ -482,6 +519,7 @@ export class Project {
 
   /** Ends the compiler process. A project that is not closed keeps one alive. */
   dispose(): void {
+    this.#pending = undefined
     reclaim.unregister(this)
     closeQuietly(this.#api)
   }
@@ -515,10 +553,64 @@ export class Project {
     // directories for a tsconfig containing the file: inside any real checkout it finds the
     // user's, loads that entire project, and the cost is the 2 GB `#writeConfig` describes.
     // Naming the file here instead keeps the program exactly what bamboo installed.
+    // A path may not sit in two categories at once, and the batch is a set per category — so a
+    // path arriving under a different heading than it already holds ends the batch. That is
+    // rare (a file created and then deleted before anything read it) and keeps the merge from
+    // having to decide which event wins.
+    for (const [category, paths] of [
+      ['created', changes.created],
+      ['changed', changes.changed],
+      ['deleted', changes.deleted],
+    ] as const) {
+      for (const path of paths ?? []) {
+        const elsewhere = (['created', 'changed', 'deleted'] as const).some(
+          (other) => other !== category && this.#pending?.[other].has(path),
+        )
+        if (elsewhere) this.#flush()
+        const batch = (this.#pending ??= { changed: new Set(), created: new Set(), deleted: new Set() })
+        batch[category].add(path)
+      }
+    }
+
+    if (membershipMoved) this.#membershipMoved = true
+  }
+
+  /**
+   * Send everything announced since the last read, in one round trip.
+   *
+   * bamboo installs its inventory a file at a time — the parser loops over `getFiles()` and
+   * calls `createSourceFile` for each — and every one of those is a change the compiler has to
+   * be told about. Told one at a time, a 2,000-file project is 2,000 round trips, each carrying
+   * a `files` list one entry longer than the last: quadratic in the size of the project, and
+   * paid on every cold build.
+   *
+   * Nothing can observe a snapshot until something reads from it, so the announcements can wait
+   * until then. Every reader flushes first, which makes a bulk install a single update and
+   * leaves one edit exactly as immediate as it was.
+   */
+  #flush(): void {
+    const pending = this.#pending
+    if (!pending) return
+    this.#pending = undefined
+
+    // Membership is the config's `files` list, so a file joining or leaving the project is an
+    // edit to the config — announced alongside the files' own events so one round trip carries
+    // both.
+    //
+    // Deliberately not `openFiles`. That is the LSP's way in, and it searches ancestor
+    // directories for a tsconfig containing the file: inside any real checkout it finds the
+    // user's, loads that entire project, and the cost is the 2 GB `#writeConfig` describes.
+    // Naming the files here instead keeps the program exactly what bamboo installed.
+    const membershipMoved = this.#membershipMoved
+    this.#membershipMoved = false
     if (membershipMoved) this.#writeConfig()
 
     this.#snapshot = this.#api.updateSnapshot({
-      fileChanges: membershipMoved ? { ...changes, changed: [...(changes.changed ?? []), this.#configPath] } : changes,
+      fileChanges: {
+        ...(pending.created.size ? { created: [...pending.created] } : {}),
+        changed: [...pending.changed, ...(membershipMoved ? [this.#configPath] : [])],
+        ...(pending.deleted.size ? { deleted: [...pending.deleted] } : {}),
+      },
     })
   }
 

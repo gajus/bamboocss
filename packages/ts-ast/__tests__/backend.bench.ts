@@ -92,6 +92,10 @@ describe(`${FILES} files x ${CALLS} css() calls — build a program and walk eve
         nodes++
         node.forEachChild(walk)
       }
+      // Installed, then walked — the same two halves the ts-morph case pays for above, and
+      // what a cold pass actually does: the parser hands the project its whole inventory and
+      // then reads it. A project holds the files it is given, not the ones a glob reaches.
+      project.addSourceFiles(files.map((file) => [file, readFileSync(file, 'utf8')] as const))
       for (const file of files) project.getSourceFile(file)?.forEachChild(walk)
       project.dispose()
       if (!nodes) throw new Error('walked nothing')

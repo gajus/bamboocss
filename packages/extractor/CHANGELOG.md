@@ -1,5 +1,13 @@
 # @bamboocss/extractor
 
+## 1.51.2
+
+### Patch Changes
+
+- Updated dependencies [b8236e1]
+  - @bamboocss/ts-ast@1.51.2
+  - @bamboocss/shared@1.51.2
+
 ## 1.51.1
 
 ### Patch Changes

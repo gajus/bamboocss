@@ -146,7 +146,11 @@ export const cls = css({ color: 'red.300', ...shared })
     // The literal now depends on a file this module only imports. Without the edge, editing
     // it would leave the old class behind — which is the whole reason the fold reports
     // dependencies at all.
-    expect(result.dependencies).toContain('/app/styles.ts')
+    //
+    // Matched by suffix, because the edge carries a real path. ts-morph's in-memory filesystem
+    // rooted everything at `/`, so a relative source became `/app/styles.ts`; a relative path
+    // now resolves against the project's working directory, as it does everywhere else.
+    expect(result.dependencies.some((file) => file.endsWith('/app/styles.ts'))).toBe(true)
   })
 
   test.each([

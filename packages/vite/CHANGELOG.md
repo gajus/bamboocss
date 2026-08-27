@@ -1,5 +1,18 @@
 # @bamboocss/vite
 
+## 1.51.3
+
+### Patch Changes
+
+- @bamboocss/node@1.51.3
+- @bamboocss/config@1.51.3
+- @bamboocss/core@1.51.3
+- @bamboocss/extractor@1.51.3
+- @bamboocss/logger@1.51.3
+- @bamboocss/shared@1.51.3
+- @bamboocss/ts-ast@1.51.3
+- @bamboocss/types@1.51.3
+
 ## 1.51.2
 
 ### Patch Changes

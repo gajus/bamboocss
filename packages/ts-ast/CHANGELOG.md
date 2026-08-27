@@ -1,5 +1,7 @@
 # @bamboocss/ts-ast
 
+## 1.51.3
+
 ## 1.51.2
 
 ### Patch Changes

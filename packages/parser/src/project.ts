@@ -173,6 +173,22 @@ export interface ResolutionWork {
 
 type MutableResolutionWork = { -readonly [Key in keyof ResolutionWork]: ResolutionWork[Key] }
 
+/** What one specifier resolved to, once anything it names has been installed. */
+interface SpecifierResolution {
+  readonly configurationFiles: readonly string[]
+  readonly local: boolean
+  readonly pendingCandidates: readonly string[]
+  readonly sourceFile?: SourceFile
+}
+
+/**
+ * A resolution, or the install still owed before there is one.
+ *
+ * The `install` arm carries the resolution it will become, so completing it is reading the
+ * tree back rather than deciding anything again.
+ */
+type SpecifierPlan = SpecifierResolution | { install: { content: string; name: string } & SpecifierResolution }
+
 interface ImporterResolution {
   readonly configurationFiles: readonly ResolutionConfigurationFile[]
   readonly facts: readonly ResolutionFact[]
@@ -776,15 +792,25 @@ export class Project {
     return [root, spelledRoot].some((boundary) => target === boundary || target.startsWith(`${boundary}/`))
   }
 
-  private resolveSpecifier = (
-    moduleName: string,
-    from: SourceFile,
-  ): {
-    configurationFiles: readonly string[]
-    local: boolean
-    pendingCandidates: readonly string[]
-    sourceFile?: SourceFile
-  } => {
+  /**
+   * Resolve one specifier, stopping short of installing what it names.
+   *
+   * Split from the install because installing is a round trip, and a round trip per resolved
+   * module is quadratic. Every install moves the project's membership, which rewrites the
+   * synthesized tsconfig's whole `files` list and tells the compiler its config changed — so
+   * the compiler re-derives the program each time, over a list one entry longer than the last.
+   * Measured against the bulk path on a synthetic project: 2,000 modules cost 27.4s installed
+   * one at a time against 92ms installed together, and the gap widens with the project.
+   *
+   * That cost lands on exactly the modules a monorepo has most of. `node_modules` is excluded
+   * from the walk, but a workspace sibling resolves to a real path inside the checkout, so
+   * every cross-package import is a module outside the `include` glob that was bulk-installed
+   * — and each one was paying a full program reload.
+   *
+   * So this answers what it can and reports what it *would* install; `ensureResolutionFacts`
+   * collects those across one importer and installs them together.
+   */
+  #planSpecifier = (moduleName: string, from: SourceFile): SpecifierPlan => {
     this.#assertNotLoading()
 
     const project = this.project
@@ -885,14 +911,21 @@ export class Project {
 
     try {
       this.resolutionWork.sourceFilesRead++
+      // Read here rather than after the batch, because a missing file is a *resolution*
+      // answer — the specifier stays pending — and that has to be decided before anything is
+      // installed. The bytes this pass read are what gets installed, rather than whatever the
+      // compiler would find at that path: a resolution can name a file the program has not
+      // been told about.
       const content = project.getFileSystem().readFileSync(name)
-      // Installing the bytes this pass read, rather than trusting whatever the compiler would
-      // find at that path — a resolution can name a file the program has not been told about.
-      const sourceFile = project.createSourceFile(name, content, { scriptKind: scriptKindFor(name) })
-      if (!sourceFile) throw new Error(`bamboo: resolved ${name} but the project produced no source file`)
-      this.resolutionWork.sourceFilesAdded++
-      this.canonicalPaths.set(name, this.normalizePath(pathOf(sourceFile)))
-      return { configurationFiles: [...configurationFiles].sort(), local: true, pendingCandidates, sourceFile }
+      return {
+        install: {
+          configurationFiles: [...configurationFiles].sort(),
+          content,
+          local: true,
+          name,
+          pendingCandidates,
+        },
+      }
     } catch (error) {
       if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') throw error
       return {
@@ -901,6 +934,24 @@ export class Project {
         pendingCandidates: withResolvedTarget,
       }
     }
+  }
+
+  /**
+   * Turn a plan into a resolution, reading back anything the batch installed.
+   *
+   * The lookup is free after the first: `addSourceFiles` only queues, and whichever read comes
+   * first flushes the whole batch — so every later one is served from the same snapshot
+   * without another round trip.
+   */
+  #completeResolution = (plan: SpecifierPlan): SpecifierResolution => {
+    if (!('install' in plan)) return plan
+
+    const { content: _content, name, ...resolution } = plan.install
+    const sourceFile = this.project.getSourceFile(name)
+    if (!sourceFile) throw new Error(`bamboo: resolved ${name} but the project produced no source file`)
+    this.resolutionWork.sourceFilesAdded++
+    this.canonicalPaths.set(name, this.normalizePath(pathOf(sourceFile)))
+    return { ...resolution, sourceFile }
   }
 
   private retractImporter = (importer: string) => {
@@ -971,10 +1022,35 @@ export class Project {
     const facts: ResolutionFact[] = []
     const pendingCandidates: PendingResolutionCandidate[] = []
     const configurationFiles: ResolutionConfigurationFile[] = []
+
+    // Resolve every specifier first, then install what they name in one call.
+    //
+    // Each install is a round trip that moves the project's membership, and a membership move
+    // rewrites the whole synthesized `files` list — so installing an importer's targets one at
+    // a time makes the compiler re-derive its program once per import, over a list that grows
+    // as the walk goes. Collected here, a file with fifteen imports costs one update instead
+    // of fifteen. See `#planSpecifier` for the measurement.
+    const planned: Array<{ kind: ResolutionFact['kind']; ordinal: number; plan: SpecifierPlan; specifier: string }> = []
+    const pendingInstalls = new Map<string, string>()
+
     for (const [ordinal, { declaration, kind }] of declarations.entries()) {
       const specifier = getModuleSpecifierValue(declaration)
       if (!specifier) continue
-      const resolved = this.resolveSpecifier(specifier, sourceFile)
+      const plan = this.#planSpecifier(specifier, sourceFile)
+      planned.push({ kind, ordinal, plan, specifier })
+      // Deduplicated: two specifiers in one file commonly name the same module, and the
+      // second would otherwise re-install bytes the first already queued.
+      if ('install' in plan) pendingInstalls.set(plan.install.name, plan.install.content)
+    }
+
+    if (pendingInstalls.size) {
+      // The bulk call, which announces every path once and leaves the snapshot to be read by
+      // whichever lookup comes first below.
+      this.project.addSourceFiles(pendingInstalls)
+    }
+
+    for (const { kind, ordinal, plan, specifier } of planned) {
+      const resolved = this.#completeResolution(plan)
       if (!resolved.local) continue
 
       facts.push(

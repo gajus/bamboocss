@@ -14,12 +14,13 @@ and every CI run pay:
 
 | backend                    | mean   |
 | -------------------------- | ------ |
-| ts-morph (today)           | 502 ms |
-| TypeScript 7 (Go compiler) | 178 ms |
+| ts-morph (today)           | 482 ms |
+| TypeScript 7 (Go compiler) | 206 ms |
 
-**2.82x**, with both walks reaching an identical 534,000 nodes. The existing `parser/__tests__/ast-backend.bench.ts`
-reports 1.78x for the same swap because it times the walk with a program already built — the steady state a watching dev
-server sees. This package's benchmark includes building the program, where TypeScript 7 wins by more.
+**2.34x**, with both walks reaching an identical 534,000 nodes, and both paying to install the files first.
+`parser/__tests__/ast-backend.bench.ts` reports 1.93x for the same swap because it times the walk with a program already
+built — the steady state a watching dev server sees. This package's benchmark includes building the program, where
+TypeScript 7 wins by more.
 
 Nothing wraps a node. The predicates are rebound from `unstable/ast/is` under the spelling the extractor already uses,
 and everything else is a function over a node, so the views pass through untouched and the win survives.
@@ -30,11 +31,9 @@ Two differences from ts-morph come from the compiler living in another process, 
   project rooted at a `tsconfig.json`, and a file's content is supplied by delegating the filesystem — which bamboo
   already does, since its runtime has always read through `runtime.fs` rather than `node:fs`.
 - **A snapshot is a point in time.** Reading text that is not on disk — a module Vite has transformed, a `<script>`
-  block lifted from a `.vue` file — goes through `withText`, which layers one file's content over a snapshot for the
-  duration of a callback and then drops it.
+  block lifted from a `.vue` file — means installing it into the project's overlay, which the delegate consults ahead of
+  the disk, and telling the compiler the file moved.
 
 The parity suite checks this backend against ts-morph on the same source rather than against hardcoded expectations:
 identical node counts, identical `pos`/`end` offsets, the same imports, call expressions, string literals and property
-names, working parent pointers, and that `withText` both applies and releases its override.
-
-This package is not yet wired into the extractor. It is the backend; moving the call sites onto it is separate.
+names, and working parent pointers.

@@ -55,6 +55,19 @@ const installExitHook = () => {
 }
 
 /**
+ * Close every compiler this process still has open.
+ *
+ * @internal For a test run, which builds far more projects than a build does and holds them for
+ * as long as its worker lives. A compiler is ~20-35 MB and 20-odd threads, so a few hundred of
+ * them starve the machine of CPU long before they run it out of memory — and the failures that
+ * causes are timeouts in unrelated suites. Called once per test file, where nothing can
+ * outlive the call.
+ */
+export const disposeAllProjects = (): void => {
+  for (const api of [...liveApis]) closeQuietly(api)
+}
+
+/**
  * A program, over TypeScript 7's Go compiler.
  *
  * The shape ts-morph's `Project` had, minus everything bamboo never called. The differences

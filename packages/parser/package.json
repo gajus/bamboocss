@@ -44,13 +44,13 @@
     "@bamboocss/shared": "workspace:*",
     "@bamboocss/ts-ast": "workspace:*",
     "@bamboocss/types": "workspace:*",
-    "ts-morph": "28.0.0",
     "ts-pattern": "5.9.0"
   },
   "devDependencies": {
     "@bamboocss/generator": "workspace:*",
     "@bamboocss/plugin-svelte": "workspace:*",
     "@bamboocss/plugin-vue": "workspace:*",
-    "@typescript/api": "npm:typescript@7.1.0-dev.20260826.1"
+    "@typescript/api": "npm:typescript@7.1.0-dev.20260826.1",
+    "ts-morph": "28.0.0"
   }
 }

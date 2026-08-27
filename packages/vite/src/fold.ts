@@ -24,7 +24,6 @@ import {
   getNamedImports,
   getNamespaceExport,
   getNamespaceImport,
-  is,
   isStarExport,
   isTypeOnly,
   literalValueOf,
@@ -32,13 +31,7 @@ import {
   stringLiteralValue,
   pathOf,
 } from '@bamboocss/ts-ast'
-import type {
-  CallExpression,
-  Identifier,
-  ImportEqualsDeclaration,
-  ShorthandPropertyAssignment,
-  SourceFile,
-} from '@bamboocss/ts-ast'
+import type { CallExpression, ImportEqualsDeclaration, SourceFile } from '@bamboocss/ts-ast'
 import {
   AMBIGUOUS,
   collectRecipeConfigs,

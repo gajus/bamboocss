@@ -9,7 +9,6 @@ import {
   nameNodeOf,
 } from '@bamboocss/ts-ast'
 import type { SourceFile } from '@bamboocss/ts-ast'
-import { getModuleSpecifierValue } from './get-module-specifier-value'
 
 export function getImportDeclarations(context: ParserOptions, sourceFile: SourceFile) {
   const { imports, tsOptions } = context

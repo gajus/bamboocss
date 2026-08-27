@@ -1,7 +1,6 @@
 import type { ImportMap } from '@bamboocss/core'
 import type { ResolveModule } from '@bamboocss/extractor'
 import {
-  Project,
   getAliasNode,
   getExportDeclarations,
   getImportDeclarations,
@@ -16,7 +15,6 @@ import {
   pathOf,
 } from '@bamboocss/ts-ast'
 import type { SourceFile } from '@bamboocss/ts-ast'
-import { getModuleSpecifierValue } from './get-module-specifier-value'
 
 /**
  * Recipe bindings a file imports rather than declares.

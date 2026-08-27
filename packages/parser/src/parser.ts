@@ -3,7 +3,7 @@ import { BoxNodeMap, box, extract, unbox, type EvaluateOptions, type Unboxed } f
 import type { Generator } from '@bamboocss/generator'
 import { logger } from '@bamboocss/logger'
 import type { ParserResultConfigureOptions } from '@bamboocss/types'
-import { Node, getLineAndColumnAtPos, getName, ts, pathOf } from '@bamboocss/ts-ast'
+import { Node, getLineAndColumnAtPos, ts, pathOf } from '@bamboocss/ts-ast'
 import type { SourceFile } from '@bamboocss/ts-ast'
 import { match } from 'ts-pattern'
 import { getImportDeclarations } from './get-import-declarations'

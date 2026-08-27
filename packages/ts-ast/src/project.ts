@@ -73,7 +73,6 @@ const installExitHook = () => {
 export class Project {
   #api: API
   #snapshot: ReturnType<API['updateSnapshot']>
-  #tsConfigFilePath: string | undefined
 
   /**
    * Content this project holds that is not on disk, or differs from what is.
@@ -117,7 +116,6 @@ export class Project {
     this.#cwd = resolve(options.cwd ?? process.cwd())
     this.#fs = options.fs
     this.#compilerOptions = (options as { compilerOptions?: Record<string, unknown> }).compilerOptions
-    this.#tsConfigFilePath = options.tsConfigFilePath
     this.#configPath = resolve(this.#cwd, 'tsconfig.bamboo-compiler.json')
 
     this.#api = new API({ cwd: this.#cwd, fs: this.#delegate(options.fs) })

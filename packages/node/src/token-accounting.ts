@@ -14,14 +14,12 @@ import {
   getModuleSpecifierValue,
   getNamedImports,
   getNamespaceImport,
-  getParent,
   isTypeOnly,
-  literalValueOf,
   nameNodeOf,
   stringLiteralValue,
   ts,
 } from '@bamboocss/ts-ast'
-import type { Identifier, PropertyAssignment, ShorthandPropertyAssignment, SourceFile } from '@bamboocss/ts-ast'
+import type { Identifier, SourceFile } from '@bamboocss/ts-ast'
 import type { BambooContext } from './create-context'
 import { type SourceSnapshot, sourceSnapshots } from './source-snapshots'
 

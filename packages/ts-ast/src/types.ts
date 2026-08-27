@@ -41,12 +41,15 @@ export interface ProjectOptions {
   cwd?: string
   /** The `tsconfig.json` whose `include` decides the program's files. */
   /**
-   * The config the compiler opens this project on, when there is one.
+   * The project's `tsconfig.json`, accepted and deliberately not opened.
    *
-   * Optional because bamboo's parser is routinely constructed from compiler options with no
-   * file behind them — a standalone project, or a caller supplying options directly. TypeScript
-   * 7 has a shape for that: with no configured project, an opened file is loaded into an
-   * *inferred* one, which is what ts-morph's bag-of-files amounted to.
+   * bamboo reads this config itself — `loadTsConfig` follows solution references and `extends`,
+   * and hands the result down as `compilerOptions` — and the compiler is opened on a config of
+   * bamboo's own making instead. Opening the user's would build the program it describes:
+   * every file its `include` reaches, every `@types` package and the standard library, which is
+   * about 2 GB per project and none of it read. See `Project#writeConfig`.
+   *
+   * Kept in the shape because callers hold it and it names the project for everything else.
    */
   tsConfigFilePath?: string
   /** Reads delegated to bamboo's runtime rather than to the disk. */

@@ -1,4 +1,4 @@
-import { Node, Project, forEachDescendant, getAliasNode, nameNodeOf, ts } from '@bamboocss/ts-ast'
+import { Node, forEachDescendant, getAliasNode, nameNodeOf } from '@bamboocss/ts-ast'
 import type {
   BindingElement,
   EnumDeclaration,

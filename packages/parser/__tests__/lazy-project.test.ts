@@ -20,6 +20,19 @@ const standaloneProject = () => {
   return new TsProject({ cwd: root, tsConfigFilePath: path.join(root, 'tsconfig.json') })
 }
 
+/**
+ * A fixture source, installed.
+ *
+ * `createSourceFile` reports a miss rather than throwing, because a project can legitimately
+ * decline a path. Here it cannot: every one of these is a fixture the case depends on, so an
+ * absent file is a broken fixture and worth saying so at the point it happens.
+ */
+const install = (project: TsProject, filePath: string, source: string) => {
+  const file = project.createSourceFile(filePath, source)
+  if (!file) throw new Error(`bamboo: the fixture project did not accept ${filePath}`)
+  return file
+}
+
 afterEach(() => {
   vi.restoreAllMocks()
 })
@@ -217,8 +230,9 @@ describe('Project deferred initial sources', () => {
     const parserOptions = createContext().parserOptions
     const encoderBefore = JSON.stringify(parserOptions.encoder.toJSON())
     const replacement = standaloneProject()
-    const dependency = replacement.createSourceFile('ghost/dependency.ts', 'export const dependency = true')
-    const importer = replacement.createSourceFile(
+    const dependency = install(replacement, 'ghost/dependency.ts', 'export const dependency = true')
+    const importer = install(
+      replacement,
       'ghost/importer.ts',
       [
         "import { css } from '@bamboocss/css'",
@@ -354,7 +368,7 @@ describe('Project deferred initial sources', () => {
         project: Project,
         resources: {
           capturedParser: Project['parser']
-          importer: ReturnType<TsProject['createSourceFile']>
+          importer: NonNullable<ReturnType<TsProject['createSourceFile']>>
           replacement: TsProject
         },
       ) => unknown,
@@ -392,8 +406,9 @@ describe('Project deferred initial sources', () => {
     const parserOptions = createContext().parserOptions
     const encoderBefore = JSON.stringify(parserOptions.encoder.toJSON())
     const replacement = standaloneProject()
-    replacement.createSourceFile('ghost/dependency.ts', 'export const dependency = true')
-    const importer = replacement.createSourceFile(
+    install(replacement, 'ghost/dependency.ts', 'export const dependency = true')
+    const importer = install(
+      replacement,
       'ghost/importer.ts',
       [
         "import { css } from '@bamboocss/css'",
@@ -478,8 +493,9 @@ describe('Project deferred initial sources', () => {
       const parserOptions = createContext().parserOptions
       const encoderBefore = JSON.stringify(parserOptions.encoder.toJSON())
       const replacement = standaloneProject()
-      const dependency = replacement.createSourceFile('ghost/dependency.ts', 'export const dependency = true')
-      const importer = replacement.createSourceFile(
+      const dependency = install(replacement, 'ghost/dependency.ts', 'export const dependency = true')
+      const importer = install(
+        replacement,
         'ghost/importer.ts',
         [
           "import { css } from '@bamboocss/css'",

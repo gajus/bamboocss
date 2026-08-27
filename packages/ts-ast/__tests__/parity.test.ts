@@ -85,7 +85,9 @@ const sourceFile = (): SourceFile => {
 describe('the TypeScript 7 backend agrees with ts-morph', () => {
   test('on the number of nodes in the tree', () => {
     let seven = 0
-    forEachDescendant(sourceFile(), () => seven++)
+    forEachDescendant(sourceFile(), () => {
+      seven++
+    })
 
     let sixth = 0
     // The braces matter: ts-morph halts the walk when the callback returns something

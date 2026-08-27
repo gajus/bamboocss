@@ -1,4 +1,4 @@
-import { SyntaxKind, kindNameOf } from '@bamboocss/ts-ast'
+import { kindNameOf } from '@bamboocss/ts-ast'
 import type { Node } from '@bamboocss/ts-ast'
 import type { EvaluatedObjectResult, PrimitiveType } from './types'
 import { getNodeRange } from './get-node-range'

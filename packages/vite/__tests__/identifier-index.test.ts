@@ -2,7 +2,7 @@ import { execSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { type Node, Project, type SourceFile, SyntaxKind, getDescendantsOfKind } from '@bamboocss/ts-ast'
+import { type Node, Project, type SourceFile, SyntaxKind } from '@bamboocss/ts-ast'
 import { expect, test } from 'vitest'
 import { identifierIndex } from '../src/fold-analysis'
 

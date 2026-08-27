@@ -1,4 +1,7 @@
-import { Project, ts, type SourceFile } from 'ts-morph'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import { Project, getVariableDeclarations, type Expression, type SourceFile } from '@bamboocss/ts-ast'
 import { bench, describe } from 'vitest'
 import { maybeBoxNode } from '../src/maybe-box-node'
 
@@ -30,10 +33,17 @@ import { maybeBoxNode } from '../src/maybe-box-node'
 const FILES = 60
 
 const createProject = (crossFile: boolean) => {
-  const project = new Project({ useInMemoryFileSystem: true })
+  const root = mkdtempSync(path.join(tmpdir(), 'bamboo-cross-file-cost-'))
+  mkdirSync(root, { recursive: true })
+  writeFileSync(
+    path.join(root, 'tsconfig.json'),
+    JSON.stringify({ compilerOptions: { allowJs: true, noEmit: true, noLib: true, target: 'esnext' } }),
+  )
+  const project = new Project({ cwd: root, tsConfigFilePath: path.join(root, 'tsconfig.json') })
+  const at = (name: string) => path.join(root, name)
 
   project.createSourceFile(
-    '/helpers.ts',
+    at('helpers.ts'),
     `const defaults = { color: 'gray.90', width: '2px' }
      export const focusRing = (options: any = {}) => {
        const { color, width } = { ...defaults, ...options }
@@ -45,7 +55,7 @@ const createProject = (crossFile: boolean) => {
   for (let index = 0; index < FILES; index++) {
     files.push(
       project.createSourceFile(
-        `/component-${index}.ts`,
+        at(`component-${index}.ts`),
         crossFile
           ? `import { focusRing } from './helpers'
              export const a = { ...focusRing({ color: 'red.${index}' }), padding: '${index % 9}' }`
@@ -54,20 +64,14 @@ const createProject = (crossFile: boolean) => {
     )
   }
 
-  const compilerOptions = project.getCompilerOptions()
-  const resolutionCache = ts.createModuleResolutionCache('/', (file) => file, compilerOptions)
-  const resolveModule = (specifier: string, from: SourceFile) => {
-    const resolved = ts.resolveModuleName(
-      specifier,
-      from.getFilePath(),
-      compilerOptions,
-      project.getModuleResolutionHost(),
-      resolutionCache,
-    ).resolvedModule
-    return resolved ? project.getSourceFile(resolved.resolvedFileName) : undefined
-  }
+  // The one specifier this fixture writes. Resolution is not what is being measured here, and
+  // routing it through the real resolver would put its cost inside a benchmark about
+  // extraction — the regression this exists to catch was the *evaluator* binding a program,
+  // not a resolver walking a filesystem.
+  const resolveModule = (specifier: string, _from: SourceFile) =>
+    specifier === './helpers' ? project.getSourceFile(at('helpers.ts')) : undefined
 
-  return { files, resolveModule }
+  return { files: files.filter((file): file is SourceFile => !!file), resolveModule }
 }
 
 const local = createProject(false)
@@ -75,8 +79,8 @@ const crossFile = createProject(true)
 
 const boxEvery = ({ files, resolveModule }: ReturnType<typeof createProject>) => {
   for (const file of files) {
-    for (const declaration of file.getVariableDeclarations()) {
-      const initializer = declaration.getInitializer()
+    for (const declaration of getVariableDeclarations(file)) {
+      const initializer = (declaration as { initializer?: Expression }).initializer
       if (initializer) maybeBoxNode(initializer, [], { flags: { skipTraverseFiles: false }, resolveModule })
     }
   }

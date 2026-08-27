@@ -12,7 +12,6 @@ import {
   nameNodeOf,
   stringLiteralValue,
 } from '@bamboocss/ts-ast'
-import type { PropertyAssignment } from '@bamboocss/ts-ast'
 import type { ParserResultInterface, ResultItem } from '@bamboocss/types'
 import { declaredAtModuleScope } from './fold-analysis'
 import type { StaticStyleSetCompiler, StyleSetRecipeConfig } from './style-set'

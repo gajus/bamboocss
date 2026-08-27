@@ -13,7 +13,6 @@ import {
   getExportDeclarations,
   getImportDeclarations,
   getModuleSpecifierValue,
-  ts,
   pathOf,
 } from '@bamboocss/ts-ast'
 import type { CompilerOptions, ProjectOptions as TsProjectOptions, SourceFile } from '@bamboocss/ts-ast'

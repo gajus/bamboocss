@@ -112,7 +112,8 @@ const compat = {
    * A `BindingElement` without a name is exactly and only a hole: `name` is required for every
    * element that binds anything.
    */
-  isOmittedExpression: (node: Node): boolean => predicates.isOmittedExpression(node) || isHole(node),
+  isOmittedExpression: ((node: Node): boolean =>
+    predicates.isOmittedExpression(node) || isHole(node)) as typeof predicates.isOmittedExpression,
 
   /**
    * A hole is not a binding element, which is the half that actually matters.
@@ -123,7 +124,8 @@ const compat = {
    * for it — and it is faithful, not a workaround: in the tree ts-evaluator was written
    * against, a hole was never a `BindingElement` in the first place.
    */
-  isBindingElement: (node: Node): boolean => predicates.isBindingElement(node) && !isHole(node),
+  isBindingElement: ((node: Node): boolean =>
+    predicates.isBindingElement(node) && !isHole(node)) as typeof predicates.isBindingElement,
 
   /**
    * A statement that is not also a declaration.

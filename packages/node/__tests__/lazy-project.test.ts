@@ -14,6 +14,19 @@ import { BambooContext } from '../src/create-context'
 import { nodeRuntime } from '../src/node-runtime'
 
 /**
+ * An empty project to hand over as a replacement.
+ *
+ * The TypeScript 7 backend is a compiler in another process, so even an empty project needs
+ * somewhere to be rooted and a config to be opened on. What the case wants is only that
+ * assigning one is rejected.
+ */
+const standaloneProject = () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'bamboo-standalone-'))
+  writeFileSync(path.join(root, 'tsconfig.json'), JSON.stringify({ compilerOptions: { noEmit: true, noLib: true } }))
+  return new TsProject({ cwd: root, tsConfigFilePath: path.join(root, 'tsconfig.json') })
+}
+
+/**
  * Reads of the fixture's own files.
  *
  * These counts were always about bamboo's sources — how many the wrapper materialized, and that
@@ -419,7 +432,9 @@ describe('BambooContext.project materialization', () => {
     expect(sourceReads(read, directory)).toBe(2)
     expect(createSourceFile).toHaveBeenCalledTimes(2)
     expect(() => {
-      project.project = new TsProject()
+      // A project still needs somewhere to be rooted; what is under test is that assigning one
+      // through the frozen handle throws before it is ever built.
+      project.project = standaloneProject()
     }).toThrow(TypeError)
   })
 

@@ -110,11 +110,15 @@ export class Project {
   #compilerOptions: Record<string, unknown> | undefined
 
   constructor(options: ProjectOptions) {
-    this.#cwd = options.cwd ?? process.cwd()
+    // Absolute, always. A caller may hold a relative working directory — the fixtures use `''`
+    // — and the compiler rejects a relative path outright: `vfs: path … is not absolute` is a
+    // panic, not a resolution failure. Resolving here also leaves `#abs` answering exactly as
+    // it did, since `resolve('', x)` and `resolve(process.cwd(), x)` are the same path.
+    this.#cwd = resolve(options.cwd ?? process.cwd())
     this.#fs = options.fs
     this.#compilerOptions = (options as { compilerOptions?: Record<string, unknown> }).compilerOptions
     this.#tsConfigFilePath = options.tsConfigFilePath
-    this.#configPath = `${this.#cwd.replace(/\/$/, '')}/tsconfig.bamboo-compiler.json`
+    this.#configPath = resolve(this.#cwd, 'tsconfig.bamboo-compiler.json')
 
     this.#api = new API({ cwd: this.#cwd, fs: this.#delegate(options.fs) })
     liveApis.add(this.#api)

@@ -22,9 +22,9 @@ const withFile = (path: string, code: string) => {
 
   const add = (at: string, source: string) => {
     const file = abs(ctx, at)
-    const existing = ctx.project.getSourceFile(file)
-    if (existing) existing.replaceWithText(source)
-    else ctx.project.addSourceFile(file, source)
+    // One call either way. ts-morph could be told to rewrite a node's text in place; the
+    // TypeScript 7 tree belongs to another process, so installing the new text *is* the edit.
+    ctx.project.addSourceFile(file, source)
     if (!files.includes(file)) files.push(file)
   }
 

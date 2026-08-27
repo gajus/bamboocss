@@ -1,5 +1,82 @@
 # @bamboocss/core
 
+## 1.50.0
+
+### Minor Changes
+
+- f0a9265: Derive an atom's identity from a canonical value spelling, so one declaration is one class.
+
+  An atom's identity came from the value as it was _written_, while the sheet ships the value as it was _optimized_.
+  Those are different strings, so two spellings of one value minted two atoms that became byte-identical only after
+  minification — long after the class names were compiled into the bundle. Measured on one production sheet: 288 of
+  4,578 atoms were redundant this way, with `background:#fff` carrying three class names and
+  `box-shadow:-2px 5px 12px #0000001a` five.
+
+  The value is now folded to one spelling before it becomes either a cache key or a transform input, so the class name
+  and the declaration agree by construction. `#fff`, `#ffffff` and `#FFFFFF` are one atom; so are `0.15s` and `.15s`,
+  and `'0  16px'` and `'0 16px'`.
+
+  **This changes emitted CSS.** Values written without a leading zero gain one, and hex colours are lowercased and
+  contracted:
+  - `transition: all .3s ease-in-out` → `all 0.3s ease-in-out`
+  - `rgb(200 200 200 / .4)` → `rgb(200 200 200 / 0.4)`
+  - `rgba(0,0,0,.02)` → `rgba(0,0,0,0.02)`
+
+  All of these are the same value, and the optimizer strips the zero again on the way out, so nothing reaches the
+  browser larger. Class names change for the affected values only — `trs_all_.3s_ease-in-out` becomes
+  `trs_all_0.3s_ease-in-out` — which under `hash: true` means those names are new and their cached stylesheet is stale
+  once.
+
+  The fold is deliberately lexical. It rewrites spellings that denote the same token and never converts between forms:
+  `rgba(0, 0, 0, 0.1)` is not folded to `#0000001a`, and `150ms` is not folded to `0.15s`. Those conversions belong to
+  the optimizer, whose choices differ between the PostCSS and Lightning CSS paths — deriving a class name from them
+  would make the name depend on which optimizer a project installed. A value containing a quoted string or a `url()` is
+  left exactly as written.
+
+- 950df68: Fail the build when two declarations hash to the same class name, instead of shipping both.
+
+  Class names go through a 32-bit hash rendered into letters, so distinct declarations can land on the same name.
+  Nothing noticed. The stylesheet emitted two rules under one selector:
+
+  ```css
+  .bRzHLW {
+    transition: 192009px;
+  }
+  .bRzHLW {
+    width: 114360px;
+  }
+  ```
+
+  and both `css()` calls compiled to that same literal, so every element carrying it received a declaration its source
+  never mentions. Exit code 0, no warning — and undiagnosable from the symptom, which is a component styled by a
+  property that appears nowhere in its source.
+
+  The odds are per build and grow with the square of the atom count. Measured: the 6,254 distinct declarations in one
+  production sheet produce none, and a synthetic 100,000-atom set produces one, matching the birthday prediction —
+  roughly 0.5% at 6,000 atoms, 5% at 20,000, 25% at 50,000. Rare enough never to have been reported, common enough to be
+  someone's afternoon.
+
+  Now it throws, naming both declarations rather than only the class they share. That is what this codebase already does
+  everywhere a name is derived twice and the two halves only meet in the DOM — see `checkNamingAgreement`, whose
+  reasoning is the same: failing now costs a build, not failing ships the wrong styles.
+
+  Only reachable under `hash: true`. Readable class names carry the declaration that produced them, so they are unique
+  by construction and are unaffected.
+
+  `toHash` itself is untouched and stays a pure, self-contained expression — `generateCva` and `generateRecipe`
+  serialize it into the styled-system runtime, so anything it closed over would be a free variable in the browser. The
+  check is a separate build-time step at the two sites that assign a name.
+
+### Patch Changes
+
+- Updated dependencies [98b77a1]
+- Updated dependencies [950df68]
+  - @bamboocss/token-dictionary@1.50.0
+  - @bamboocss/shared@1.50.0
+  - @bamboocss/types@1.50.0
+  - @bamboocss/is-valid-prop@1.50.0
+  - @bamboocss/logger@1.50.0
+
 ## 1.49.0
 
 ### Patch Changes

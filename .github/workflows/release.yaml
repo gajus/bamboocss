@@ -55,6 +55,21 @@ jobs:
       - name: Build packages
         run: pnpm build
 
+      # A package npm has never seen cannot be published by this job. Trusted publishing
+      # binds a publisher to an *existing* package, so the first release of a new one is a
+      # `PUT` that creates it -- and the registry refuses that under OIDC with the same bare
+      # `E404 Not Found` an unauthenticated publish gives. Nothing in the message says the
+      # package is new.
+      #
+      # It half-ships the release when it happens: every other package publishes, and the new
+      # one is left missing while its dependents already pin the version that does not exist.
+      # `@bamboocss/ts-ast@1.50.0` went out that way -- 23 packages published against a
+      # dependency that was not there.
+      #
+      # So a new package is published once by hand, `npm publish --access public` with a
+      # token, at the version this repository is about to release. After that it exists, this
+      # job can update it, and it needs the trusted publisher configured on npmjs.com --
+      # repository, workflow filename and environment all matching exactly.
       - name: Publish packages
         uses: changesets/action@v1
         with:

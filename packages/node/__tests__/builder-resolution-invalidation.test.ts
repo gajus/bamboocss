@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { afterEach, describe, expect, test, vi } from 'vitest'
@@ -7,7 +7,11 @@ import { Builder } from '../src/builder'
 const roots: string[] = []
 
 const project = (files: Record<string, string>) => {
-  const root = mkdtempSync(join(tmpdir(), 'bamboo-builder-resolution-'))
+  // Canonicalised, because the compiler canonicalises. On macOS `mkdtemp` hands back a path
+  // under `/var`, which is a symlink to `/private/var`, and the paths that come back out of a
+  // resolution are the real ones — so a fixture that keeps the symlinked spelling is comparing
+  // two names for the same file and finding them different.
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'bamboo-builder-resolution-')))
   roots.push(root)
 
   for (const [file, contents] of Object.entries({

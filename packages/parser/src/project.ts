@@ -16,7 +16,7 @@ import {
   isTypeOnly,
   pathOf,
 } from '@bamboocss/ts-ast'
-import type { CompilerOptions, ProjectOptions as TsProjectOptions, SourceFile } from '@bamboocss/ts-ast'
+import type { CompilerOptions, ResolvedModule, ProjectOptions as TsProjectOptions, SourceFile } from '@bamboocss/ts-ast'
 import { clearBoxNodeCache, invalidateDependencyPath } from '@bamboocss/extractor'
 import { classifyProject } from './classify'
 import { clearImportedRecipeCache } from './imported-recipes'
@@ -728,6 +728,7 @@ export class Project {
 
     invalidateResolutions()
     this.#resolver = undefined
+    this.#checkoutBoundaries = undefined
     this.#fileTreeRevision++
     this.sourcePreparations.clear()
   }
@@ -741,6 +742,29 @@ export class Project {
       if (wildcard === -1) return pattern === specifier
       return specifier.startsWith(pattern.slice(0, wildcard)) && specifier.endsWith(pattern.slice(wildcard + 1))
     })
+  }
+
+  /**
+   * Local candidates per *resolution*, rather than per importer that asks for one.
+   *
+   * `createResolver` memoizes by importing directory and specifier and hands back the same
+   * `ResolvedModule` to every caller that lands on it — so the object identity is exactly the
+   * unit this answer belongs to. Deriving it again per importer re-walked every failed lookup
+   * a specifier produced, and canonicalised each one to place it in the checkout: a specifier
+   * with fifty probes, imported by five hundred files, is twenty-five thousand repetitions of
+   * a list that could not have changed.
+   *
+   * Keyed weakly so it lasts exactly as long as the resolution it describes; when the resolver
+   * clears its memo the entries here become unreachable with it.
+   */
+  #localCandidates = new WeakMap<object, string[]>()
+
+  private localCandidatesOf = (resolved: ResolvedModule): string[] => {
+    const remembered = this.#localCandidates.get(resolved)
+    if (remembered) return remembered
+    const derived = this.getLocalFailedLookupCandidates(resolved.failedLookups)
+    this.#localCandidates.set(resolved, derived)
+    return derived
   }
 
   private getLocalFailedLookupCandidates = (failedLookupLocations: readonly string[] | undefined): string[] => {
@@ -767,14 +791,33 @@ export class Project {
     this.isLocalAlias(specifier) ||
     pendingCandidates.length > 0
 
+  /**
+   * The checkout's two spellings, resolved once.
+   *
+   * Both are fixed for the life of the project — they come from `cwd` — and canonicalising the
+   * root is a `realpath`, which is a `lstat` per path component. `isInCheckout` is asked once
+   * per failed lookup a resolution produced, so recomputing the boundary there made half of
+   * every such question a syscall walk over a path that had not moved since the last one.
+   *
+   * Invalidated wherever the resolver is, since a retargeted `cwd` moves the boundary too.
+   */
+  #checkoutBoundaries: readonly [string, string] | undefined
+
+  private getCheckoutBoundaries = (): readonly [string, string] => {
+    if (this.#checkoutBoundaries) return this.#checkoutBoundaries
+    const fileSystem = this.project.getFileSystem()
+    const configured = this.options.parserOptions.config.cwd
+    const spelledRoot = this.normalizePath(configured || fileSystem.getCurrentDirectory()).replace(/\/$/, '')
+    const root = this.normalizePath(fileSystem.realpathSync(spelledRoot)).replace(/\/$/, '')
+    return (this.#checkoutBoundaries = [root, spelledRoot])
+  }
+
   private isInCheckout = (filePath: string): boolean => {
     if (this.#sourceFiles.projectOptions.useInMemoryFileSystem) return true
 
     const project = this.project
     const fileSystem = project.getFileSystem()
-    const configured = this.options.parserOptions.config.cwd
-    const spelledRoot = this.normalizePath(configured || fileSystem.getCurrentDirectory()).replace(/\/$/, '')
-    const root = this.normalizePath(fileSystem.realpathSync(spelledRoot)).replace(/\/$/, '')
+    const [root, spelledRoot] = this.getCheckoutBoundaries()
     let target: string
     try {
       target = this.normalizePath(fileSystem.realpathSync(filePath))
@@ -790,7 +833,9 @@ export class Project {
     // A missing target cannot itself be realpathed. Keep the checkout spelling as a second
     // boundary so a symlinked ancestor (macOS `/var` -> `/private/var`, for example) does not
     // make a genuine failed local candidate look external until it appears.
-    return [root, spelledRoot].some((boundary) => target === boundary || target.startsWith(`${boundary}/`))
+    return (
+      target === root || target.startsWith(`${root}/`) || target === spelledRoot || target.startsWith(`${spelledRoot}/`)
+    )
   }
 
   /**
@@ -861,7 +906,7 @@ export class Project {
     })
 
     for (const filePath of resolved.affectingFiles) recordConfigurationFile(filePath)
-    const pendingCandidates = this.getLocalFailedLookupCandidates(resolved.failedLookups)
+    const pendingCandidates = this.localCandidatesOf(resolved)
 
     const module = resolved.path
       ? { resolvedFileName: resolved.path, isExternalLibraryImport: resolved.path.includes('/node_modules/') }

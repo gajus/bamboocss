@@ -144,7 +144,21 @@ export const createResolver = (options: { cwd: string; fs?: FileSystemDelegate }
     }
 
     try {
-      if (options.fs?.fileExists?.(filePath) === true) return true
+      // A delegate that answers at all is authoritative, and asking it is the whole point of
+      // having one. Reading the file instead — which is what happens when `fileExists` is
+      // merely consulted for `true` and otherwise fallen past — turns every miss into a full
+      // read of a file that is not there.
+      //
+      // Resolution is made of misses. A single specifier probes nine extensions, then the same
+      // nine under `/index`, then repeats the set at every `node_modules` above the importer,
+      // and all but one of those paths is absent by construction. Paying a content read for
+      // each is what made the filesystem, rather than the compiler, the largest share of an
+      // extraction pass.
+      //
+      // The read stays for a delegate that supplies no `fileExists`, which is the only case
+      // that cannot answer any other way.
+      const answered = options.fs?.fileExists?.(filePath)
+      if (answered !== undefined) return answered
       const read = options.fs?.readFile?.(filePath)
       return read !== undefined && read !== null
     } catch {

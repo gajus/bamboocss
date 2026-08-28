@@ -136,6 +136,25 @@ const localTargetOf = (specifier: string, importer: string, options: Extractable
   return undefined
 }
 
+export interface ExtractableSelection {
+  /** Files that could hold a call, and so have to be parsed. */
+  extractable: string[]
+  /**
+   * Local modules something imports that `include` never matched.
+   *
+   * Not parsed — nothing in them can *originate* a call, or they would be in `extractable`.
+   * They are named because the resolution walk demands them one at a time, and each arrival is
+   * a membership change: the synthesized config is rewritten and the compiler re-derives its
+   * whole program, which measured **409ms** on a real application. Six hundred of those, one
+   * per importer that reached outside the inventory, is four minutes of a build spent telling
+   * the compiler about files it could have been handed at the start.
+   *
+   * A generated tree is where they come from — an `exclude` that keeps Relay artifacts and
+   * generated icons out of extraction does not stop the app importing them.
+   */
+  auxiliary: string[]
+}
+
 /**
  * The subset of `files` that could hold a call to something bamboo owns.
  *
@@ -143,8 +162,12 @@ const localTargetOf = (specifier: string, importer: string, options: Extractable
  * records where each file's other imports point; the second walks those edges backwards from
  * the marked set, because a file that imports a module carrying bamboo bindings may be using
  * one — a recipe defined with `cva` in one file and called in another is exactly that shape.
+ *
+ * The edges are worth more than the walk they were built for. Every one of them names a module
+ * that is *going* to be demanded, so the same scan that decides what to parse also says what to
+ * install — see `auxiliary`.
  */
-export const selectExtractable = (files: readonly string[], options: ExtractableOptions): string[] => {
+export const selectExtractable = (files: readonly string[], options: ExtractableOptions): ExtractableSelection => {
   const keep = new Set<string>()
   const importers = new Map<string, string[]>()
 
@@ -159,10 +182,12 @@ export const selectExtractable = (files: readonly string[], options: Extractable
     // specifier, so a file this keeps is one bamboo would have recognised anyway. Applied to
     // the whole text rather than to the scanned specifiers, so a name split across lines by a
     // formatter is still caught.
-    if (options.entrypoints.some((entrypoint) => text.includes(entrypoint))) {
-      keep.add(file)
-      continue
-    }
+    //
+    // Marking does not end this file's turn. Its imports still have to be recorded, because
+    // `auxiliary` is built from the edges — and a file that names an entrypoint is exactly the
+    // one likely to import a generated module the inventory never matched. Returning early here
+    // left those edges unrecorded and `auxiliary` empty on the codebases that needed it most.
+    if (options.entrypoints.some((entrypoint) => text.includes(entrypoint))) keep.add(file)
 
     const specifiers = scanSpecifiers(text)
     if (specifiers === undefined) {
@@ -192,5 +217,10 @@ export const selectExtractable = (files: readonly string[], options: Extractable
     frontier = next
   }
 
-  return files.filter((file) => keep.has(file))
+  // Everything an edge pointed at that the inventory does not already hold. Ordered by first
+  // sighting, so a build installs them in the order the walk would have asked for them.
+  const inventory = new Set(files)
+  const auxiliary = [...importers.keys()].filter((target) => !inventory.has(target))
+
+  return { auxiliary, extractable: files.filter((file) => keep.has(file)) }
 }

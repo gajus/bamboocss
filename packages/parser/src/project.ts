@@ -1563,6 +1563,36 @@ export class Project {
     }
   }
 
+  /**
+   * Install many sources at once, for the walk to find rather than for anything to parse.
+   *
+   * One membership change for the batch instead of one per file. That distinction is the whole
+   * point: a file arriving on its own rewrites the synthesized config and makes the compiler
+   * re-derive its program, which measured 409ms on a real application — so six hundred modules
+   * reached by resolution cost four minutes that one bulk update would not.
+   *
+   * Files already held are skipped rather than overwritten, so this cannot displace text a
+   * bundler installed or a hook rewrote. Nothing here is parsed; `parseSourceFile` still decides
+   * that, and a caller that wants a file *extracted* puts it in `include`.
+   */
+  addSourceFiles = (entries: Iterable<readonly [string, string]>): void => {
+    this.#assertNotLoading()
+    this.#ensureSourceFiles()
+
+    const installed: Array<readonly [string, string]> = []
+    for (const [filePath, content] of entries) {
+      if (this.project.has(filePath)) continue
+      installed.push([filePath, content])
+      this.removedSourcePaths.delete(this.normalizePath(filePath))
+    }
+    if (!installed.length) return
+
+    this.project.addSourceFiles(installed)
+    // Once for the batch. The set of files moved, which is what a resolution that previously
+    // failed has to be told about — see `invalidate`.
+    this.invalidate(true)
+  }
+
   addSourceFile = (filePath: string, content: string, options: AddSourceFileOptions = {}): SourceFile => {
     this.#assertNotLoading()
     this.#ensureSourceFiles()

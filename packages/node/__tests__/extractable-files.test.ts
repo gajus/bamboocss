@@ -20,6 +20,16 @@ const select = (sources: Record<string, string | undefined>, options?: Partial<E
     fileExists: (filePath) => filePath in sources,
     readFile: (filePath) => sources[filePath],
     ...options,
+  }).extractable
+
+/** The same call, kept whole, for the assertions about what gets installed rather than parsed. */
+const selection = (sources: Record<string, string | undefined>, options?: Partial<ExtractableOptions>) =>
+  selectExtractable(Object.keys(sources), {
+    cwd: CWD,
+    entrypoints: ENTRYPOINTS,
+    fileExists: (filePath) => filePath in sources,
+    readFile: (filePath) => sources[filePath],
+    ...options,
   })
 
 describe('a file that names an entrypoint', () => {
@@ -114,5 +124,36 @@ describe('a path mapping', () => {
     expect(kept).toContain('/repo/uses.tsx')
     // The alias resolved to nothing on disk, so there is no module to carry a binding.
     expect(kept).not.toContain('/repo/free.tsx')
+  })
+})
+
+describe('a local module the inventory never matched', () => {
+  test('is reported for installing, without being parsed', () => {
+    // A generated tree is the case: `exclude` keeps it out of extraction, and the app imports it
+    // anyway. Handing these over in one batch is what stops the resolution walk demanding them
+    // one at a time, each arrival costing a full program re-derivation.
+    const sources: Record<string, string> = {
+      '/repo/app.tsx': `import { icon } from './generated/icon'\nimport { css } from 'styled-system/css'\nexport const A = css({})`,
+      '/repo/generated/icon.ts': `export const icon = 'x'`,
+    }
+    // Only the entry is in the inventory; the generated module is resolvable beside it.
+    const result = selectExtractable(['/repo/app.tsx'], {
+      cwd: CWD,
+      entrypoints: ENTRYPOINTS,
+      fileExists: (filePath) => filePath in sources,
+      readFile: (filePath) => sources[filePath],
+    })
+
+    expect(result.extractable).toEqual(['/repo/app.tsx'])
+    expect(result.auxiliary).toEqual(['/repo/generated/icon.ts'])
+  })
+
+  test('is not reported when the inventory already holds it', () => {
+    const sources = {
+      '/repo/a.tsx': `import { b } from './b'\nimport { css } from 'styled-system/css'\nexport const A = css({})`,
+      '/repo/b.ts': `export const b = 1`,
+    }
+    // Both are in the inventory, so there is nothing extra to install.
+    expect(selection(sources).auxiliary).toEqual([])
   })
 })

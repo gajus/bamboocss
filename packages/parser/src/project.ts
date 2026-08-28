@@ -13,6 +13,7 @@ import {
   getExportDeclarations,
   getImportDeclarations,
   getModuleSpecifierValue,
+  isTypeOnly,
   pathOf,
 } from '@bamboocss/ts-ast'
 import type { CompilerOptions, ProjectOptions as TsProjectOptions, SourceFile } from '@bamboocss/ts-ast'
@@ -1017,6 +1018,23 @@ export class Project {
       ...getExportDeclarations(sourceFile).map((declaration) => ({ declaration, kind: 'export' as const })),
     ]
       .filter(({ declaration }) => getModuleSpecifierValue(declaration) !== undefined)
+      // `import type { X } from './x'` is erased before anything runs, so the module behind it
+      // cannot contribute a declaration to any stylesheet. Resolving it installs a file into the
+      // compiler and parses it for an answer that is known in advance to be nothing.
+      //
+      // The recipe walk already knew this — `imported-recipes.ts` skips a type-only declaration
+      // at every level it descends. This path did not, so the walk declined to *read* those
+      // modules while resolution went on *loading* them.
+      //
+      // What that costs is set by how a codebase generates its types, not by how it writes its
+      // styles. An app whose components each import a generated artifact type-only — a Relay
+      // fragment key, a GraphQL operation type — pulls the whole generated tree into the
+      // program: on the codebase this was found in, 2,945 files and 35.7 MB of them, none of
+      // which could ever hold a style.
+      //
+      // Only the declaration form is skipped. `import { type A, B }` is a value import that
+      // happens to name a type, and the module behind it still has to be read for `B`.
+      .filter(({ declaration }) => !isTypeOnly(declaration))
       .sort((left, right) => left.declaration.getStart() - right.declaration.getStart())
 
     const facts: ResolutionFact[] = []

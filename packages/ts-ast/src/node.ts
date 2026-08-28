@@ -188,10 +188,12 @@ export const getLineAndColumnAtPos = (sourceFile: SourceFile, pos: number): { li
  * silently reading `undefined.namedBindings` off it reports a file with no imports at all.
  * Accepting both is one comparison and removes a whole class of caller-side mistake.
  */
-const clauseOf = (node: Node): { name?: Node; namedBindings?: Node } | undefined => {
-  const declared = (node as { importClause?: { name?: Node; namedBindings?: Node } }).importClause
+const clauseOf = (node: Node): { isTypeOnly?: boolean; name?: Node; namedBindings?: Node } | undefined => {
+  const declared = (node as { importClause?: { isTypeOnly?: boolean; name?: Node; namedBindings?: Node } }).importClause
   if (declared) return declared
-  return predicates.isImportClause(node) ? (node as { name?: Node; namedBindings?: Node }) : undefined
+  return predicates.isImportClause(node)
+    ? (node as { isTypeOnly?: boolean; name?: Node; namedBindings?: Node })
+    : undefined
 }
 
 export const getNamedImports = (declaration: Node): Node[] => {
@@ -208,8 +210,28 @@ export const getNamespaceImport = (declaration: Node): Node | undefined => {
   return bindings && predicates.isNamespaceImport(bindings) ? (bindings as { name?: Node }).name : undefined
 }
 
-/** Whether an import or export specifier is `type`-only — `import { type A }`. */
-export const isTypeOnly = (specifier: Node): boolean => (specifier as { isTypeOnly?: boolean }).isTypeOnly === true
+/**
+ * Whether a declaration or specifier is `type`-only, in any of the three places it is spelled.
+ *
+ * Two of them carry the flag themselves: a specifier — `import { type A }`, `export { type A }`
+ * — and an export declaration, `export type { A } from './a'`. An **import** declaration does
+ * not. `import type { A } from './a'` puts it on the import clause, so reading it off the
+ * declaration answers `false` for every type-only import there is.
+ *
+ * That silence is the whole reason this is written out. Callers guarding with
+ * `if (isTypeOnly(declaration)) continue` looked correct and did nothing on the import side, so
+ * the recipe walk descended into modules it had already decided not to read, and resolution
+ * installed and parsed them. What that costs is set by how a codebase generates its types: an
+ * app whose components each import a generated artifact type-only pulls the whole generated
+ * tree into the compiler's program, for an answer that is nothing by construction.
+ *
+ * A clause-less import — `import './a'` for its side effects — has no flag anywhere and is not
+ * type-only, which is the right answer: it names a module that must still be loaded.
+ */
+export const isTypeOnly = (node: Node): boolean => {
+  if ((node as { isTypeOnly?: boolean }).isTypeOnly === true) return true
+  return clauseOf(node)?.isTypeOnly === true
+}
 
 /** The local alias of a specifier — the `b` in `import { a as b }` — or `undefined`. */
 export const getAliasNode = (specifier: Node): Node | undefined => {

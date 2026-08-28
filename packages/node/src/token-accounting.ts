@@ -157,6 +157,18 @@ export function accountSnapshot(ctx: BambooContext, snapshot: SourceSnapshot, ac
       return
     }
 
+    // A file that cannot name the artifact has nothing to account for, and the walk below costs
+    // a full identifier traversal to discover that. It is the common case by a wide margin —
+    // `sandbox/vite-ts` has six files under `include` and not one of them spells `token` — and
+    // paying for it everywhere is what made the accounting look like something to opt into.
+    //
+    // Asked *before* the syntax check below, which is a round trip to the compiler. Both
+    // branches under that check return without recording anything for a file that cannot name
+    // the artifact, so ordering the cheap test first decides the same thing without asking. On
+    // one real application 195 of 6,868 files spell `token`, and the other 6,673 were each
+    // costing a request that could not change the outcome.
+    if (!mentionsToken(ctx, parsed)) return
+
     // Matching text is not the same as a usable tree. A file whose parse produced syntax
     // errors gives an ast that silently stops early — a construct valid in one script kind and
     // not another parses as a `JsxElement` whose children swallow the rest of the file. The
@@ -167,16 +179,9 @@ export function accountSnapshot(ctx: BambooContext, snapshot: SourceSnapshot, ac
     // the parser could not read as written. That the check is coarse is the safe direction, and
     // the report says which file to look at.
     if (ctx.project.getSyntacticDiagnosticCount(filePath)) {
-      if (!mentionsToken(ctx, parsed)) return
       declined.push({ filePath, line: 1, reason: 'unparsed' })
       return
     }
-
-    // A file that cannot name the artifact has nothing to account for, and the walk below costs
-    // a full identifier traversal to discover that. It is the common case by a wide margin —
-    // `sandbox/vite-ts` has six files under `include` and not one of them spells `token` — and
-    // paying for it everywhere is what made the accounting look like something to opt into.
-    if (!mentionsToken(ctx, parsed)) return
 
     accountFile(ctx, sourceFile!, filePath, paths, prefixes, declined)
   }

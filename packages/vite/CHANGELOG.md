@@ -1,5 +1,19 @@
 # @bamboocss/vite
 
+## 1.51.5
+
+### Patch Changes
+
+- Updated dependencies [c34c5c6]
+  - @bamboocss/ts-ast@1.51.5
+  - @bamboocss/extractor@1.51.5
+  - @bamboocss/node@1.51.5
+  - @bamboocss/types@1.51.5
+  - @bamboocss/config@1.51.5
+  - @bamboocss/core@1.51.5
+  - @bamboocss/logger@1.51.5
+  - @bamboocss/shared@1.51.5
+
 ## 1.51.4
 
 ### Patch Changes

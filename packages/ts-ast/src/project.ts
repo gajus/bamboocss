@@ -201,6 +201,39 @@ export class Project {
   #gone: CompilerGoneError | undefined
 
   /**
+   * Advance to a new snapshot, and let go of the one it replaces.
+   *
+   * `updateSnapshot` carries the previous snapshot's cache entries forward for every file that
+   * did not change, and then releases that snapshot's own references **only if it has been
+   * disposed**. Nothing here disposed one, so every snapshot this project ever made stayed
+   * live: the client keeps a per-snapshot set naming every path fetched through it, and each
+   * new snapshot inherits the paths of the last — so the sets grow as the square of the number
+   * of updates, and the compiler is never told to release its side either.
+   *
+   * Measured over a project of 400 files, one update each: 213 MB of client heap undisposed
+   * against 140 MB disposed. At 1,600 it is 941 MB against 309 MB, and the gap keeps widening
+   * because only one side of it is quadratic. A cold build on a large repository makes far
+   * more updates than that, which is how a build that fits in memory stops fitting.
+   *
+   * Disposing after the new snapshot exists is what makes it safe. The carry-forward has
+   * already happened by then, so a file still in the program keeps its cached tree — and a
+   * node taken from the older snapshot stays readable, because what it reads is a buffer this
+   * process already holds rather than anything the snapshot owns.
+   */
+  #advance(request: () => ReturnType<API['updateSnapshot']>): void {
+    const previous = this.#snapshot as ReturnType<API['updateSnapshot']> | undefined
+    this.#snapshot = this.#ask(request)
+    if (!previous || previous === this.#snapshot) return
+    try {
+      previous.dispose()
+    } catch {
+      // `dispose` tells the compiler to release its side, so it fails when the compiler is
+      // already gone. That is the outcome this wanted, and the caller is about to be told
+      // about the death by its own request rather than by this one.
+    }
+  }
+
+  /**
    * Every touch of the compiler, contained.
    *
    * Two jobs, and the second is the one that matters. It translates a channel error into
@@ -445,7 +478,7 @@ export class Project {
     this.#overlay.clear()
     // Everything queued is about to be re-read anyway.
     this.#pending = undefined
-    this.#snapshot = this.#ask(() => this.#api.updateSnapshot({ fileChanges: { invalidateAll: true } }))
+    this.#advance(() => this.#api.updateSnapshot({ fileChanges: { invalidateAll: true } }))
   }
 
   /**
@@ -736,7 +769,7 @@ export class Project {
     this.#membershipMoved = false
     if (membershipMoved) this.#writeConfig()
 
-    this.#snapshot = this.#ask(() =>
+    this.#advance(() =>
       this.#api.updateSnapshot({
         fileChanges: {
           ...(pending.created.size ? { created: [...pending.created] } : {}),

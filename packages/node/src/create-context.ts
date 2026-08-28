@@ -4,6 +4,7 @@ import { Generator } from '@bamboocss/generator'
 import { logger } from '@bamboocss/logger'
 import { ParserResult, Project } from '@bamboocss/parser'
 import { BambooError, groupBy, truncateList, uniq } from '@bamboocss/shared'
+import { selectExtractable } from './extractable-files'
 import { isCompilerGone } from '@bamboocss/ts-ast'
 import type { LoadConfigResult, Runtime, WatchOptions, WatcherEventType } from '@bamboocss/types'
 import { debounce } from 'perfect-debounce'
@@ -413,10 +414,57 @@ export class BambooContext extends Generator {
    * disagree about what a failure means. This one used to let the first throw out, which is
    * why `cssgen` and a bundler build reported different things about the same source.
    */
+  /**
+   * The entrypoint specifiers, as `ImportMap` matches them.
+   *
+   * Every `mods` list at once rather than the `css` one alone: a file whose only bamboo import
+   * is a recipe, a pattern or `token` originates calls just as surely, and leaving those out
+   * would skip it.
+   */
+  private get entrypointSpecifiers(): string[] {
+    return uniq(Object.values(this.imports.matchers).flatMap((matcher) => matcher.mods))
+  }
+
+  /**
+   * The files this pass has to read, out of everything `include` matched.
+   *
+   * See `selectExtractable`. Kept behind a method so the reasons live in one place and a caller
+   * that wants the whole inventory — the watcher, the token scan — is unaffected: this narrows
+   * what is *parsed*, not what the project holds.
+   */
+  extractableFiles = (files: readonly string[]): string[] => {
+    const { baseUrl, paths } = this.project.resolutionOptions
+    const measure = logger.time.debug('Selected extractable files')
+    const extractable = selectExtractable(files, {
+      baseUrl,
+      cwd: this.config.cwd,
+      entrypoints: this.entrypointSpecifiers,
+      paths,
+      readFile: (filePath) => {
+        try {
+          return this.runtime.fs.readFileSync(filePath)
+        } catch {
+          // Unreadable is not "contributes nothing"; `selectExtractable` keeps it.
+          return undefined
+        }
+      },
+    })
+
+    // The first question to ask of a rule that went missing is whether its file was read at
+    // all, so the count is reachable without a debugger — `BAMBOO_DEBUG=file:extract`.
+    logger.debug(
+      'file:extract',
+      `${extractable.length} of ${files.length} file(s) can reach a bamboo entrypoint; ` +
+        `${files.length - extractable.length} cannot and are not parsed`,
+    )
+    measure()
+    return extractable
+  }
+
   parseFiles = (styleEncoder?: StyleEncoder) => {
     const encoder = styleEncoder || this.parserOptions.encoder
 
-    const files = this.getFiles()
+    const files = this.extractableFiles(this.getFiles())
     const filesWithCss = [] as string[]
     const results = [] as ParserResult[]
 

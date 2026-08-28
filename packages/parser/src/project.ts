@@ -300,6 +300,22 @@ export class Project {
     return this.options.parserOptions
   }
 
+  /**
+   * `paths` and `baseUrl` as this project was configured with them, without opening a compiler.
+   *
+   * The same values `#planSpecifier` resolves against — read off the options the project was
+   * built from rather than off the program, precisely so asking does not materialize one. A
+   * caller that needs to know where a specifier could point *before* deciding what to install
+   * has no compiler yet, and forcing one into existence to answer is the cost it is trying to
+   * avoid.
+   */
+  get resolutionOptions(): { baseUrl?: string; paths?: Record<string, string[]> } {
+    const configured = this.#sourceFiles.projectOptions.compilerOptions as
+      | { baseUrl?: string; paths?: Record<string, string[]> }
+      | undefined
+    return { baseUrl: configured?.baseUrl, paths: configured?.paths }
+  }
+
   constructor(options: ProjectOptions) {
     const { deferInitialSourceFiles, getFiles, parserOptions } = options
     const tsProjectOptions = { ...options }

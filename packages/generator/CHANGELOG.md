@@ -1,5 +1,16 @@
 # @bamboocss/generator
 
+## 1.53.0
+
+### Patch Changes
+
+- @bamboocss/core@1.53.0
+- @bamboocss/is-valid-prop@1.53.0
+- @bamboocss/logger@1.53.0
+- @bamboocss/shared@1.53.0
+- @bamboocss/token-dictionary@1.53.0
+- @bamboocss/types@1.53.0
+
 ## 1.52.0
 
 ### Patch Changes

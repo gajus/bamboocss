@@ -14,47 +14,201 @@ const normalize = (condition: ConditionQuery | undefined) =>
   typeof condition === 'string' ? condition.replace(/\s+/g, ' ').trim() : undefined
 
 /**
- * Does this value carry a comma at the top level?
+ * Split a value on its top-level `separator`, ignoring one nested inside a function or a
+ * string.
  *
- * `light-dark()` takes exactly two arguments, and CSS offers no way to group a
- * comma-separated value into one of them — there is no parenthesized form of a shadow list.
- * So a token whose light or dark arm is itself a list cannot be folded: the arms splat into
- * three or more arguments, the function is invalid, and the browser drops the whole
- * declaration. That failure is silent and total — a `--shadows-sm` carrying two shadows
- * emitted `light-dark(a, b, c)` and every element referencing it rendered with no shadow at
- * all, while the class naming it looked perfectly correct.
- *
- * Multi-part `box-shadow` is the shape that bites, since a realistic elevation token is
- * almost always two shadows; `transition` and `background` lists are the same story.
- *
- * Depth-aware, so `rgb(16, 19, 26)` still folds — its commas are the function's own.
- * Quote-aware, so a font stack's `"Foo, Bar"` is not mistaken for a separator.
+ * Depth-aware, so `rgb(16, 19, 26)` is one part rather than three — its commas are the
+ * function's own. Quote-aware, so a font stack's `"Foo, Bar"` is not mistaken for a
+ * separator. Splitting on `' '` collapses runs of whitespace, which is what makes
+ * `0  1px 2px red` and `0 1px 2px red` compare component for component.
  */
-const hasTopLevelComma = (value: string) => {
+function splitTopLevel(value: string, separator: ',' | ' '): string[] {
+  const parts: string[] = []
+  let current = ''
   let depth = 0
   let quote: string | undefined
+
+  const isSeparator = (char: string) =>
+    separator === ',' ? char === ',' : char === ' ' || char === '\t' || char === '\n' || char === '\r'
 
   for (let index = 0; index < value.length; index++) {
     const char = value[index]
 
     if (quote) {
-      // Skip the escaped character rather than inspecting it, so `"a\",b"` stays one string.
-      if (char === '\\') index++
-      else if (char === quote) quote = undefined
+      current += char
+      // Take the escaped character verbatim rather than inspecting it, so `"a\",b"` stays
+      // one string.
+      if (char === '\\') {
+        current += value[index + 1] ?? ''
+        index++
+      } else if (char === quote) {
+        quote = undefined
+      }
       continue
     }
 
-    if (char === '"' || char === "'") quote = char
-    else if (char === '(') depth++
+    if (char === '"' || char === "'") {
+      quote = char
+      current += char
+      continue
+    }
+
+    if (char === '(') depth++
     else if (char === ')') depth--
-    else if (char === ',' && depth === 0) return true
+    else if (depth === 0 && isSeparator(char)) {
+      // A comma's arity is load-bearing -- a mismatch between the two arms is what makes a
+      // token unfoldable -- so empty parts are kept. Whitespace runs produce empties by
+      // construction and are not arity at all.
+      if (separator === ',' || current.trim()) parts.push(current.trim())
+      current = ''
+      continue
+    }
+
+    current += char
   }
 
-  return false
+  if (separator === ',' || current.trim()) parts.push(current.trim())
+  return parts
+}
+
+/** Functions whose result is a `<color>`. */
+const COLOR_FUNCTIONS = new Set([
+  'color',
+  'color-mix',
+  'device-cmyk',
+  'hsl',
+  'hsla',
+  'hwb',
+  'lab',
+  'lch',
+  'light-dark',
+  'oklab',
+  'oklch',
+  'rgb',
+  'rgba',
+])
+
+/** Keywords that are a `<color>`: the named set, the system set, and the two specials. */
+const COLOR_KEYWORDS = new Set(
+  `transparent currentcolor
+   aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue
+   blueviolet brown burlywood cadetblue chartreuse chocolate coral cornflowerblue cornsilk
+   crimson cyan darkblue darkcyan darkgoldenrod darkgray darkgreen darkgrey darkkhaki
+   darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen
+   darkslateblue darkslategray darkslategrey darkturquoise darkviolet deeppink deepskyblue
+   dimgray dimgrey dodgerblue firebrick floralwhite forestgreen fuchsia gainsboro ghostwhite
+   gold goldenrod gray green greenyellow grey honeydew hotpink indianred indigo ivory khaki
+   lavender lavenderblush lawngreen lemonchiffon lightblue lightcoral lightcyan
+   lightgoldenrodyellow lightgray lightgreen lightgrey lightpink lightsalmon lightseagreen
+   lightskyblue lightslategray lightslategrey lightsteelblue lightyellow lime limegreen linen
+   magenta maroon mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen
+   mediumslateblue mediumspringgreen mediumturquoise mediumvioletred midnightblue mintcream
+   mistyrose moccasin navajowhite navy oldlace olive olivedrab orange orangered orchid
+   palegoldenrod palegreen paleturquoise palevioletred papayawhip peachpuff peru pink plum
+   powderblue purple rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown
+   seagreen seashell sienna silver skyblue slateblue slategray slategrey snow springgreen
+   steelblue tan teal thistle tomato turquoise violet wheat white whitesmoke yellow
+   yellowgreen
+   accentcolor accentcolortext activetext buttonborder buttonface buttontext canvas canvastext
+   field fieldtext graytext highlight highlighttext linktext mark marktext selecteditem
+   selecteditemtext visitedtext`
+    .trim()
+    .split(/\s+/),
+)
+
+const HEX_COLOR = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i
+
+/** One value, rather than a list or a space-separated shorthand. */
+const isSingleComponent = (value: string) =>
+  splitTopLevel(value, ',').length === 1 && splitTopLevel(value, ' ').length === 1
+
+/**
+ * Is this single component provably a `<color>`?
+ *
+ * Provably, not plausibly. A false negative costs a fold; a false positive emits CSS the
+ * browser drops on the floor without a word, which is the failure this whole file is written
+ * around. So anything unrecognised is not a color.
+ *
+ * A `var()` is only a color when it names a token bamboo emitted from the `colors` category —
+ * the reference itself says nothing about its type, and guessing wrong is exactly the
+ * silent-drop case.
+ */
+function isColorValue(value: string, colorVars: ReadonlySet<string>): boolean {
+  if (value.startsWith('#')) return HEX_COLOR.test(value)
+
+  const open = value.indexOf('(')
+  if (open === -1) return COLOR_KEYWORDS.has(value.toLowerCase())
+  if (!value.endsWith(')')) return false
+
+  const fn = value.slice(0, open).toLowerCase()
+  if (fn !== 'var') return COLOR_FUNCTIONS.has(fn)
+
+  // `var(--x)` and `var(--x, fallback)` alike: a registered color token is always defined, so
+  // the fallback cannot be what resolves.
+  const [name] = splitTopLevel(value.slice(open + 1, -1), ',')
+  return name !== undefined && colorVars.has(name)
 }
 
 /**
- * Collapse a token's `base`/`_osDark` pair into a single `light-dark()` declaration.
+ * Merge a token's light and dark values into one, folding only the parts that differ.
+ *
+ * `light-dark()` is a `<color>` function — `light-dark() = light-dark(<color>, <color>)` in
+ * CSS Color 5 — and that is the whole constraint here. It cannot carry a shadow, a border
+ * shorthand or a length, and a browser handed one drops the declaration outright: verified in
+ * Chrome, `--t: light-dark(0 1px 2px red, 0 1px 2px black)` computes `box-shadow: none`,
+ * `light-dark(4px, 8px)` computes `padding-top: 0px`. Nothing warns. The token is still in the
+ * sheet and the class naming it still looks correct.
+ *
+ * So a value is folded component by component rather than whole. `0 1px 2px red` against
+ * `0 1px 2px black` differs in one place, that place is a color, and the result keeps the
+ * geometry outside the function where it parses:
+ *
+ *     0 1px 2px light-dark(red, black)
+ *
+ * That is also what makes a list foldable, which folding whole never could: `light-dark()`
+ * takes exactly two arguments and CSS offers no way to group a comma-separated value into one
+ * of them, so a two-shadow token splatted into `light-dark(a, b, c)` and was dropped. Per-item
+ * folding sidesteps the arity problem entirely, because the commas stay in the value where
+ * they belong. A list of whole `light-dark()` calls does *not* work and was measured not to —
+ * the arms have to be colors either way.
+ *
+ * Bails to `undefined` — keep the `@media` block, which expresses anything — whenever the two
+ * arms do not line up part for part, or a differing part is not provably a color.
+ */
+function foldValue(light: string, dark: string, colorVars: ReadonlySet<string>): string | undefined {
+  const lightItems = splitTopLevel(light, ',')
+  const darkItems = splitTopLevel(dark, ',')
+  if (lightItems.length !== darkItems.length) return
+
+  const items: string[] = []
+
+  for (let index = 0; index < lightItems.length; index++) {
+    const lightParts = splitTopLevel(lightItems[index], ' ')
+    const darkParts = splitTopLevel(darkItems[index], ' ')
+    // A shadow that names a color in one mode and inherits `currentColor` in the other is not
+    // a component-wise edit of the same value, and nothing here can express the difference.
+    if (lightParts.length !== darkParts.length) return
+
+    const merged: string[] = []
+    for (let part = 0; part < lightParts.length; part++) {
+      const lightPart = lightParts[part]
+      const darkPart = darkParts[part]
+      if (lightPart === darkPart) {
+        merged.push(lightPart)
+        continue
+      }
+      if (!isColorValue(lightPart, colorVars) || !isColorValue(darkPart, colorVars)) return
+      merged.push(`light-dark(${lightPart}, ${darkPart})`)
+    }
+
+    items.push(merged.join(' '))
+  }
+
+  return items.join(', ')
+}
+
+/**
+ * Collapse a token's `base`/`_osDark` pair into a single declaration.
  *
  * Two declarations and a whole `@media (prefers-color-scheme: dark)` block become one line,
  * which for a design system carrying a few hundred `_osDark` semantic tokens is the largest
@@ -64,7 +218,9 @@ const hasTopLevelComma = (value: string) => {
  * `[data-theme=dark]` selector is not, so the two are independent mechanisms that resolve
  * against each other by source order. `light-dark()` reads `color-scheme`, which is an
  * ordinary inherited property — so a toggle is `color-scheme: dark` on a subtree rather than
- * a second copy of every token.
+ * a second copy of every token. That argument is why the fold has to reach past colors: a
+ * sheet that folds its colors and leaves its shadows on the media query gives a subtree
+ * toggle half a theme, with the shadows still following the OS.
  *
  * A var carrying `_osLight` as well is left alone. Folding it would put the light arm of
  * `light-dark()` and an `@media (prefers-color-scheme: light)` block in play for the same
@@ -73,7 +229,7 @@ const hasTopLevelComma = (value: string) => {
  *
  * `view.vars` is shared with the JS theme artifacts, so this copies rather than mutates.
  */
-function foldLightDark(vars: Map<string, Map<string, string>>, conditions: Conditions) {
+function foldLightDark(vars: Map<string, Map<string, string>>, conditions: Conditions, colorVars: ReadonlySet<string>) {
   const base = vars.get(BASE)
   const osDark = vars.get(OS_DARK)
   if (!base || !osDark) return { vars, folded: false }
@@ -91,10 +247,19 @@ function foldLightDark(vars: Map<string, Map<string, string>>, conditions: Condi
   for (const [name, darkValue] of osDark) {
     const lightValue = base.get(name)
     if (lightValue === undefined || osLight?.has(name)) continue
-    // Either arm being a list makes the folded function invalid. Such a token keeps the
-    // `@media` mechanism, which expresses a list perfectly well.
-    if (hasTopLevelComma(lightValue) || hasTopLevelComma(darkValue)) continue
-    nextBase.set(name, `light-dark(${lightValue}, ${darkValue})`)
+
+    // A `colors` token is a color however it is spelled, including a raw `var()` a user
+    // pointed at a property bamboo never emitted. Its whole value folds without having to be
+    // recognised, which keeps this path exactly as capable as it was before the component
+    // walk below existed. Still only when the value really is one component: a color is a
+    // keyword, a hex or a single function call, never a list or a space-separated shorthand,
+    // and folding one of those whole is the arity bug all over again.
+    const whole = colorVars.has(name) && isSingleComponent(lightValue) && isSingleComponent(darkValue)
+
+    const folded = whole ? `light-dark(${lightValue}, ${darkValue})` : foldValue(lightValue, darkValue, colorVars)
+    if (folded === undefined) continue
+
+    nextBase.set(name, folded)
     nextDark.delete(name)
   }
 
@@ -108,6 +273,15 @@ function foldLightDark(vars: Map<string, Map<string, string>>, conditions: Condi
   return { vars: next, folded: true }
 }
 
+/** The custom properties bamboo emitted for `colors` tokens, by var name. */
+function getColorVars(tokens: Context['tokens']): ReadonlySet<string> {
+  const names = new Set<string>()
+  for (const token of tokens.view.categoryMap.get('colors')?.values() ?? []) {
+    names.add(token.extensions.var)
+  }
+  return names
+}
+
 export function generateTokenCss(ctx: Context, sheet: Stylesheet) {
   const { config, conditions, tokens } = ctx
   const { cssVarRoot, staticCss } = config
@@ -116,7 +290,7 @@ export function generateTokenCss(ctx: Context, sheet: Stylesheet) {
 
   const results: string[] = []
 
-  const { vars: tokenVars, folded } = foldLightDark(tokens.view.vars, conditions)
+  const { vars: tokenVars, folded } = foldLightDark(tokens.view.vars, conditions, getColorVars(tokens))
 
   /**
    * `light-dark()` returns the light value unless `color-scheme` names both, and a stylesheet

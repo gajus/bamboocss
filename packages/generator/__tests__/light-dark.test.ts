@@ -41,13 +41,11 @@ describe('light-dark()', () => {
   })
 
   /**
-   * `light-dark()` takes exactly two arguments and CSS cannot group a list into one of them,
-   * so folding a multi-part shadow produced `light-dark(a, b, c)` — invalid, dropped by the
-   * browser, and silent. Every element carrying the token rendered unshadowed while its class
-   * looked right. A realistic elevation token is almost always two shadows, so this hit whole
-   * design systems at once rather than an edge case.
+   * A list folds per item, so what makes these two unfoldable is that the arms disagree about
+   * how many items there are. Nothing can pair a two-shadow light value with a one-shadow dark
+   * one, and `light-dark()` cannot express the difference between "two shadows" and "one".
    */
-  test('leaves a token whose light arm is a comma-separated list alone', () => {
+  test('leaves a token alone when the light arm has more list items than the dark', () => {
     const css = tokenCss({
       theme: {
         extend: {
@@ -69,7 +67,7 @@ describe('light-dark()', () => {
     expect(css).toContain('prefers-color-scheme: dark')
   })
 
-  test('leaves a token whose dark arm is a comma-separated list alone', () => {
+  test('leaves a token alone when the dark arm has more list items than the light', () => {
     const css = tokenCss({
       theme: {
         extend: {
@@ -97,7 +95,7 @@ describe('light-dark()', () => {
   })
 
   /** A token that cannot fold must not suppress folding for one that can. */
-  test('folds the foldable token and leaves the list token on the media block', () => {
+  test('folds the foldable token and leaves the mismatched token on the media block', () => {
     const css = tokenCss({
       theme: {
         extend: {
@@ -166,5 +164,141 @@ describe('light-dark()', () => {
     expect(css).toContain('--colors-panel: light-dark(#ffffff, #131211)')
     expect(css).toContain('prefers-color-scheme: dark')
     expect(css).toContain('--colors-ink: blue')
+  })
+})
+
+/**
+ * `light-dark() = light-dark(<color>, <color>)` — CSS Color 5. It is not a general conditional
+ * and cannot carry a shadow, a border shorthand or a length.
+ *
+ * This fold used to hand it whole token values regardless of category, so a single-shadow
+ * `_osDark` token emitted `light-dark(0 1px 2px red, 0 1px 2px black)` and every element
+ * carrying it rendered with `box-shadow: none`; a `sizes` token emitted `light-dark(4px, 8px)`
+ * and computed `0px`. Verified in Chrome, both silent — same symptom as the arity bug, and
+ * the arity guard could not see it because two arguments were exactly what it got.
+ *
+ * The fix folds the parts that differ rather than the value, which is also what finally makes
+ * a list foldable: the commas stay in the value where they parse instead of splatting into
+ * the function's argument list.
+ */
+describe('light-dark() folds at the color, not the value', () => {
+  const shadow = (light: string, dark: string, category = 'shadows') =>
+    tokenCss({
+      theme: { extend: { semanticTokens: { [category]: { tk: { value: { base: light, _osDark: dark } } } } } },
+    } as Config)
+
+  test('folds a single shadow at its color component', () => {
+    const css = shadow('0 1px 2px red', '0 1px 2px black')
+
+    expect(css).toContain('--shadows-tk: 0 1px 2px light-dark(red, black)')
+    expect(css).not.toContain('prefers-color-scheme: dark')
+  })
+
+  test('folds every item of a shadow list independently', () => {
+    const css = shadow('0 1px 2px red, 0 2px 4px blue', '0 1px 2px black, 0 2px 4px white')
+
+    expect(css).toContain('--shadows-tk: 0 1px 2px light-dark(red, black), 0 2px 4px light-dark(blue, white)')
+    expect(css).not.toContain('prefers-color-scheme: dark')
+  })
+
+  /** The shape a real elevation token takes: two shadows, alpha colors, function-internal commas. */
+  test('folds a realistic two-part elevation token', () => {
+    const css = shadow(
+      '0 1px 2px rgb(16 19 26 / 0.06), 0 1px 3px rgb(16 19 26 / 0.04)',
+      '0 1px 2px rgb(0 0 0 / 0.3), 0 1px 3px rgb(0 0 0 / 0.2)',
+    )
+
+    expect(css).toContain(
+      '--shadows-tk: 0 1px 2px light-dark(rgb(16 19 26 / 0.06), rgb(0 0 0 / 0.3)), ' +
+        '0 1px 3px light-dark(rgb(16 19 26 / 0.04), rgb(0 0 0 / 0.2))',
+    )
+    expect(css).not.toContain('prefers-color-scheme: dark')
+  })
+
+  test('keeps a leading keyword outside the function', () => {
+    expect(shadow('inset 0 1px 2px red', 'inset 0 1px 2px black')).toContain(
+      '--shadows-tk: inset 0 1px 2px light-dark(red, black)',
+    )
+  })
+
+  test('folds a border shorthand at its color component', () => {
+    expect(shadow('1px solid red', '1px solid black', 'borders')).toContain(
+      '--borders-tk: 1px solid light-dark(red, black)',
+    )
+  })
+
+  test('folds a token reference, which resolves to a color var', () => {
+    const css = tokenCss({
+      theme: {
+        extend: {
+          semanticTokens: {
+            shadows: {
+              tk: {
+                value: { base: '0 1px 2px token(colors.red.300)', _osDark: '0 1px 2px token(colors.red.500)' },
+              },
+            },
+          },
+        },
+      },
+    } as Config)
+
+    expect(css).toContain('--shadows-tk: 0 1px 2px light-dark(var(--colors-red-300), var(--colors-red-500))')
+  })
+
+  /**
+   * The regression that motivated the color gate. A length is not a color, and folding one
+   * produced CSS the browser drops without a word.
+   */
+  test('leaves a token whose differing part is a length alone', () => {
+    const css = shadow('4px', '8px', 'sizes')
+
+    expect(css).not.toContain('light-dark(')
+    expect(css).toContain('--sizes-tk: 8px')
+    expect(css).toContain('prefers-color-scheme: dark')
+  })
+
+  test('leaves a shadow whose geometry differs alone', () => {
+    const css = shadow('0 1px 2px red', '0 4px 8px black')
+
+    expect(css).not.toContain('light-dark(')
+    expect(css).toContain('prefers-color-scheme: dark')
+  })
+
+  /** Component counts have to line up: one arm naming a color and the other not is not an edit. */
+  test('leaves a shadow that omits its color in one arm alone', () => {
+    const css = shadow('0 1px 2px red', '0 1px 2px')
+
+    expect(css).not.toContain('light-dark(')
+    expect(css).toContain('prefers-color-scheme: dark')
+  })
+
+  /**
+   * A `var()` says nothing about its own type. Only a reference bamboo emitted for a `colors`
+   * token is provably a color — anything else is the silent-drop case again.
+   */
+  test('leaves a shadow referencing an unknown custom property alone', () => {
+    const css = shadow('0 1px 2px var(--brand-light)', '0 1px 2px var(--brand-dark)')
+
+    expect(css).not.toContain('light-dark(')
+    expect(css).toContain('prefers-color-scheme: dark')
+  })
+
+  /**
+   * A `colors` token is a color whatever it is spelled as, so the whole-value path still folds
+   * a raw `var()` the component walk could never prove. This is the capability the gate must
+   * not cost.
+   */
+  test('still folds a colors token pointed at an unknown custom property', () => {
+    const css = tokenCss(semantic({ brand: { value: { base: 'var(--brand-light)', _osDark: 'var(--brand-dark)' } } }))
+
+    expect(css).toContain('--colors-brand: light-dark(var(--brand-light), var(--brand-dark))')
+  })
+
+  /** Quote-aware: a font stack's commas are not list separators, and a family is not a color. */
+  test('leaves a quoted font stack alone', () => {
+    const css = shadow('"Foo, Bar", serif', '"Baz, Qux", serif', 'fonts')
+
+    expect(css).not.toContain('light-dark(')
+    expect(css).toContain('prefers-color-scheme: dark')
   })
 })

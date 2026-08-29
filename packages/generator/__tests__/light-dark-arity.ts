@@ -76,16 +76,61 @@ export const lightDarkArgs = (css: string): string[][] => {
   return calls
 }
 
-/** Throw if any `light-dark()` in `css` carries other than two arguments. */
+/**
+ * Is this argument definitely not a `<color>`?
+ *
+ * `light-dark() = light-dark(<color>, <color>)` — CSS Color 5 — so an arm that is a shadow, a
+ * border shorthand or a length is as fatal as the wrong arity and just as quiet. Chrome
+ * computes `box-shadow: none` for `light-dark(0 1px 2px red, 0 1px 2px black)` and
+ * `padding-top: 0px` for `light-dark(4px, 8px)`.
+ *
+ * Deliberately the cheap half of the test rather than a second color allowlist, which would
+ * be the generator's table copied and free to drift. Two structural facts settle every case
+ * that has actually gone wrong here: a color is one component, so a top-level space rules it
+ * out; and a color is never a bare number or dimension. Both are decidable without knowing
+ * which color keywords exist.
+ */
+const isNotColor = (arg: string) => {
+  let depth = 0
+  let quote: string | undefined
+
+  for (let index = 0; index < arg.length; index++) {
+    const char = arg[index]
+    if (quote) {
+      if (char === '\\') index++
+      else if (char === quote) quote = undefined
+      continue
+    }
+    if (char === '"' || char === "'") quote = char
+    else if (char === '(') depth++
+    else if (char === ')') depth--
+    else if (depth === 0 && /\s/.test(char)) return true
+  }
+
+  return /^[+-]?(?:\d+\.?\d*|\.\d+)[a-z%]*$/i.test(arg)
+}
+
+/** Throw if any `light-dark()` in `css` carries other than two arguments, or a non-color one. */
 export const assertValidLightDark = (css: string) => {
   for (const args of lightDarkArgs(css)) {
-    if (args.length === 2) continue
-    throw new Error(
-      `light-dark() takes 2 arguments, found ${args.length}. The browser drops this ` +
-        `declaration and the element renders unstyled:\n\n  light-dark(${args.join(', ')})\n\n` +
-        `An arm carrying a top-level comma cannot be folded — it must keep its ` +
-        `\`@media (prefers-color-scheme: dark)\` block.`,
-    )
+    if (args.length !== 2) {
+      throw new Error(
+        `light-dark() takes 2 arguments, found ${args.length}. The browser drops this ` +
+          `declaration and the element renders unstyled:\n\n  light-dark(${args.join(', ')})\n\n` +
+          `An arm carrying a top-level comma cannot be folded — it must keep its ` +
+          `\`@media (prefers-color-scheme: dark)\` block.`,
+      )
+    }
+
+    const offender = args.find(isNotColor)
+    if (offender !== undefined) {
+      throw new Error(
+        `light-dark() takes two <color> arguments, found \`${offender}\`. The browser drops ` +
+          `this declaration and the element renders unstyled:\n\n  light-dark(${args.join(', ')})\n\n` +
+          `A shadow, border or length has to be folded at its color component — ` +
+          `\`0 1px 2px light-dark(red, black)\` — not as a whole value.`,
+      )
+    }
   }
 
   return css

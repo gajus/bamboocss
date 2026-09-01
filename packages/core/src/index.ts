@@ -29,4 +29,5 @@ export { StyleEncoder } from './style-encoder'
 export { Stylesheet } from './stylesheet'
 export type { CssOptions, ParserOptions, RecipeNode, StylesheetContext, TransformResult } from './types'
 export { Utility, type UnresolvedTokenRef } from './utility'
+export { findInvalidDeclarations, type InvalidDeclaration } from './validate-declarations'
 export { messages }

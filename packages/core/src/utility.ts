@@ -26,6 +26,7 @@ import type {
   PropertyTransform,
   TokenDataTypes,
   TransformArgs,
+  InvalidDeclarationSeverity,
   UnresolvedTokenSeverity,
   UtilityConfig,
 } from '@bamboocss/types'
@@ -107,6 +108,7 @@ export interface UtilityOptions {
   strictValues?: boolean
   keyframes?: CssKeyframes
   unresolvedToken?: UnresolvedTokenSeverity | { token?: UnresolvedTokenSeverity; grammar?: UnresolvedTokenSeverity }
+  invalidDeclaration?: InvalidDeclarationSeverity
 }
 
 export class Utility {
@@ -185,14 +187,28 @@ export class Utility {
     grammar: 'warn',
   }
 
+  /** @see UserConfig.invalidDeclaration */
+  invalidDeclaration: InvalidDeclarationSeverity = 'warn'
+
   constructor(private options: UtilityOptions) {
-    const { tokens, config = {}, separator, prefix, shorthands, strictValues, unresolvedToken } = options
+    const {
+      tokens,
+      config = {},
+      separator,
+      prefix,
+      shorthands,
+      strictValues,
+      unresolvedToken,
+      invalidDeclaration,
+    } = options
 
     if (unresolvedToken) {
       this.unresolvedToken = isString(unresolvedToken)
         ? { token: unresolvedToken, grammar: unresolvedToken }
         : { token: unresolvedToken.token ?? 'error', grammar: unresolvedToken.grammar ?? 'warn' }
     }
+
+    if (invalidDeclaration) this.invalidDeclaration = invalidDeclaration
 
     this.tokens = tokens
     this.config = this.normalizeConfig(config)
@@ -887,11 +903,24 @@ export class Utility {
    * `textStyle` is not a CSS property, and neither is `--foo`.
    */
   private isUnknownKeyword = (key: string, bare: string) => {
-    const property = this.configs.get(key)?.property ?? key
-    return !this.matchesCssGrammar(hypenateProperty(property), bare)
+    return !this.matchesCssGrammar(this.cssPropertyOf(key), bare)
   }
 
   /**
+   * The CSS property a utility key emits under, spelled as the sheet spells it. `background`
+   * emits itself; a utility with a `property` of its own emits that. It is what the grammar is
+   * asked about here, and what the emitted-sheet check keys a finding on, so the two describe
+   * one declaration the same way.
+   */
+  cssPropertyOf = (key: string) => hypenateProperty(this.configs.get(key)?.property ?? key)
+
+  /**
+   * Whether `value` is something the grammar of `property` accepts — or something the grammar
+   * has no opinion on, which counts as yes.
+   *
+   * Shared with the emitted-sheet check, `findInvalidDeclarations`, so the two cannot disagree
+   * about one value. This is also where the deprecated-system-colour allowance lives.
+   *
    * Memoised per `property:value`.
    *
    * A match is ~1µs, which is nothing beside a build but not nothing per declaration — and the
@@ -900,7 +929,7 @@ export class Utility {
    */
   private grammarMatches = new Map<string, boolean>()
 
-  private matchesCssGrammar = (property: string, value: string) => {
+  matchesCssGrammar = (property: string, value: string) => {
     // CSS Color 4 removed these and browsers still honour them for compatibility, so the lexer
     // rejects a declaration that is not in fact dropped — which is the one thing this diagnostic
     // claims. A closed set, named as such by csstype (`DeprecatedSystemColor`) and frozen by
@@ -983,10 +1012,15 @@ export class Utility {
    * styles never enter. A bad token in `globalCss` warned with the option unset and then
    * went silent, exit 0, the dead declaration still in `styles.css`, the moment the option
    * was set to the value that exists to escalate it.
+   *
+   * Recorded under `off` as well, and only reported under the others. The record is how the
+   * emitted-sheet check (`invalidDeclaration`) knows a declaration is this check's to judge:
+   * `background: accent.default` is a token that does not exist *and* a value the grammar
+   * rejects, and `off` here has to mean silence about it rather than the same mistake
+   * reported in the other check's voice. `assertNoUnresolvedTokens` reads the record through
+   * each half's severity, so an `off` entry never fails a build.
    */
   private recordUnresolvedToken = (key: string, value: string) => {
-    if (this.unresolvedToken.token === 'off' && this.unresolvedToken.grammar === 'off') return
-
     if (!this.isUnresolvedTokenValue(key, value)) return
 
     // One record per mistake, keyed on the path rather than on the value as written: the same
@@ -998,14 +1032,11 @@ export class Utility {
     if (this.unresolvedTokens.has(id)) return
 
     const ref = this.unresolvedTokenRef(key, bare)
-    const severity = this.unresolvedToken[ref.kind]
-    if (severity === 'off') return
-
     this.unresolvedTokens.set(id, ref)
 
     // `error` reports the whole set at the end of the build instead — warning here as well
     // would print every finding twice and bury the line that failed it.
-    if (severity !== 'warn') return
+    if (this.unresolvedToken[ref.kind] !== 'warn') return
 
     logger.warn('utility', this.explainUnresolvedToken(ref))
   }

@@ -4,6 +4,7 @@ import {
   prunePreflight,
   prunesPreflight,
   pruneTokenVars,
+  type InvalidDeclaration,
   type StyleDecoder,
   type Stylesheet,
   type UnresolvedTokenRef,
@@ -376,6 +377,7 @@ export class Generator extends Context {
 
     this.assertNoUnresolvedTokens()
     this.reportRawValues()
+    this.reportInvalidDeclarations(sheet)
 
     return css
   }
@@ -526,6 +528,79 @@ export class Generator extends Context {
         `simply absent from the element, which surfaces as "this never applied" a long way from ` +
         `the typo that caused it. Write \`[value]\` to mark one as a literal, or set ` +
         `\`unresolvedToken: 'warn'\` to report these without failing.`,
+    )
+  }
+
+  /**
+   * The findings `warn` has already printed, keyed `property:value`.
+   *
+   * A dev server emits the sheet on every edit, and extraction is additive within a watch, so
+   * a finding that warned on every rebuild would bury the edit that introduced the next one.
+   * Per process, like the sheet it describes.
+   */
+  private reportedInvalidDeclarations = new Set<string>()
+
+  /**
+   * Report every declaration in the sheet just emitted that its property's grammar rejects.
+   *
+   * The other side of `assertNoUnresolvedTokens`. That one reads the *values* the source asked
+   * for; this reads what the sheet *contains*, after every utility transform, mixin and recipe
+   * has had its say — which is the only place a transform that handed a value through
+   * unchanged, or a `[…]` literal that was never valid CSS, can be seen at all. Collected by
+   * `Stylesheet.toCss`, where the finished tree exists; graded here, where the sheet is
+   * emitted.
+   *
+   * A finding the unresolved-token pass owns is left to it, whatever that pass is set to, so
+   * one mistake is one report and `unresolvedToken: 'off'` means silence rather than the same
+   * value reported in this check's voice: `display: 'flexx'` is that pass's grammar half, and
+   * would otherwise be rejected again here as the declaration it became. Keyed on the
+   * property the utility *emits*, because that is how the sheet spells it.
+   *
+   * `warn` reports each distinct declaration once per process. `error` lists everything the
+   * sheet holds each time, because each time the build is failing on it.
+   */
+  reportInvalidDeclarations = (sheet: Stylesheet) => {
+    const severity = this.utility.invalidDeclaration
+    if (severity === 'off') return
+
+    const owned = new Set<string>()
+    for (const ref of this.utility.unresolvedTokens.values()) {
+      owned.add(`${this.utility.cssPropertyOf(ref.prop)}:${ref.value}`)
+    }
+
+    const id = (finding: InvalidDeclaration) => `${finding.prop}:${finding.value}`
+    const findings = sheet.invalidDeclarations.filter((finding) => !owned.has(id(finding)))
+    if (!findings.length) return
+
+    const describe = ({ prop, value, selector, layer, count }: InvalidDeclaration) => {
+      const where = selector ? ` in \`${selector}\`` : ''
+      const under = layer ? `, \`@layer ${layer}\`` : ''
+      const rules = count > 1 ? ` (${count} rules)` : ''
+      return `- \`${prop}: ${value}\`${where}${under}${rules}`
+    }
+
+    const dropped =
+      `Each parses, so the stylesheet is valid and nothing downstream objects. The browser drops the ` +
+      `declaration at compute time and the style is simply absent from the element.`
+
+    if (severity === 'error') {
+      const detail = truncateList(findings.map(describe), { limit: 25, unit: 'declaration', separator: '\n' })
+      throw new BambooError(
+        'INVALID_DECLARATION',
+        `${findings.length} declaration(s) in the stylesheet are not valid CSS for their property:\n\n${detail}\n\n` +
+          `${dropped} Fix the value, or set \`invalidDeclaration: 'warn'\` to report these without failing.`,
+      )
+    }
+
+    const fresh = findings.filter((finding) => !this.reportedInvalidDeclarations.has(id(finding)))
+    if (!fresh.length) return
+    for (const finding of fresh) this.reportedInvalidDeclarations.add(id(finding))
+
+    const detail = truncateList(fresh.map(describe), { limit: 25, unit: 'declaration', separator: '\n' })
+    logger.warn(
+      'sheet',
+      `${fresh.length} declaration(s) in the stylesheet are not valid CSS for their property:\n\n${detail}\n\n` +
+        `${dropped} Set \`invalidDeclaration: 'error'\` to fail the build on these, or \`'off'\` to stop reporting them.`,
     )
   }
 

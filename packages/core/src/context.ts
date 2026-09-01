@@ -278,6 +278,7 @@ export class Context {
       strictValues: config.strictValues,
       keyframes: config.theme?.keyframes,
       unresolvedToken: config.unresolvedToken,
+      invalidDeclaration: config.invalidDeclaration,
     })
   }
 

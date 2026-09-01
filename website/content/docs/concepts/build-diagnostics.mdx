@@ -107,6 +107,27 @@ The default is `warn` because the test is a _shape_: a dotted value against the 
 That is right about a mistyped token and cannot be certain about a literal. A property that enumerates nothing is never
 reported, and `[accent.default]` marks a value as literal.
 
+### A declaration the browser would drop
+
+[`invalidDeclaration`](/docs/references/config#invaliddeclaration) — `off` | `warn` | `error`, default `warn`
+
+The other end of the pipeline from the token check. That one reads the values your source asked for; this one reads what
+the finished sheet contains, after every utility transform, mixin and recipe has had its say — which is the only place a
+transform that handed a value through unchanged, or a `[…]` literal that was never valid CSS, can be seen at all.
+
+```
+1 declaration(s) in the stylesheet are not valid CSS for their property:
+
+- `background-image: 65deg` in `.bg-linear_65deg`, `@layer utilities`
+```
+
+Every declaration is matched against its property's value grammar. One the grammar knows and rejects is reported; one it
+has never heard of is left alone, and so is any value reading `var()`, `env()`, `attr()` or `if()`, because what the
+declaration will hold is not in the text.
+
+The default is `warn` because the grammar's data lags the spec — `display: masonry` is valid CSS it has not caught up
+with — so a build is never failed by how fresh a grammar is until you say so.
+
 ### A call the build could not fully see
 
 Always a warning, on the `css` and `recipe` log channels.

@@ -1197,6 +1197,43 @@ asked for.
 
 A **binding that does not exist** is not graded here and always fails the build; see below.
 
+### invalidDeclaration
+
+**Type**: `'off' | 'warn' | 'error'`
+
+**Default**: `warn`
+
+What to do about a declaration in the emitted stylesheet that is not valid CSS for its property.
+
+- `off` says nothing.
+- `warn` logs each one, once, the first time a sheet is emitted with it.
+- `error` fails the build, listing every one the sheet holds.
+
+This is asked of the finished sheet rather than of the styles that built it, so it sees what a utility transform, a
+mixin, a config recipe, the `[…]` escape hatch and the preset's own reset actually emitted. `bgLinear: '65deg'` reaches
+the sheet as `background-image: 65deg`, and `width: '[10px 20px]'` as `width: 10px 20px`. Both parse, so the stylesheet
+is valid and nothing downstream objects; the browser drops the declaration at compute time and the style is simply
+absent.
+
+```
+2 declaration(s) in the stylesheet are not valid CSS for their property:
+
+- `background-image: 65deg` in `.bg-linear_65deg`, `@layer utilities`
+- `width: 10px 20px` in `.w_\[10px_20px\]`, `@layer utilities`
+```
+
+A value that reads a variable — `var()`, `env()`, `attr()`, `if()` — is not checked, because the grammar cannot see what
+will be substituted. In a token-backed sheet that is most declarations: across the generated stylesheets in this
+repository it was 273 of 1,527. A property the grammar has never heard of is not reported either; only a value the
+grammar knows and rejects is.
+
+The default is `warn` because the judge is the CSS grammar, whose data lags the spec. `display: 'masonry'`,
+`containerType: 'scroll-state'`, `calc-size()` and `contrast-color()` are valid CSS it has not caught up with and would
+be reported. Escalate once the sheet is known to be clean.
+
+A value naming a token that does not exist belongs to [`unresolvedToken`](#unresolvedtoken), whatever that is set to,
+and is never reported here — so turning that check off is not answered by this one.
+
 ### Calls to a binding that does not exist
 
 Not an option — there is no setting under which it is what someone meant.

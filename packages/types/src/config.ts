@@ -373,6 +373,9 @@ interface CssgenOptions {
 
 export type UnresolvedTokenSeverity = 'off' | 'warn' | 'error'
 
+/** @see UserConfig.invalidDeclaration */
+export type InvalidDeclarationSeverity = 'off' | 'warn' | 'error'
+
 /** `'auto'` hashes in production and leaves names readable in development. */
 export type HashSetting = boolean | 'auto'
 
@@ -754,6 +757,36 @@ export interface Config
    * @default { token: 'error', grammar: 'warn' }
    */
   unresolvedToken?: UnresolvedTokenSeverity | { token?: UnresolvedTokenSeverity; grammar?: UnresolvedTokenSeverity }
+
+  /**
+   * What to do about a declaration in the emitted stylesheet that is not valid CSS for its
+   * property.
+   *
+   * - `off` says nothing.
+   * - `warn` logs each one, once, the first time a sheet is emitted with it.
+   * - `error` fails the build, listing every one the sheet holds.
+   *
+   * Asked of the finished sheet rather than of the styles that built it, so it sees what a
+   * utility transform, a mixin, a config recipe, the `[…]` escape hatch and the preset's own
+   * reset actually emitted. `bgLinear: '65deg'` reaches the sheet as `background-image: 65deg`
+   * and `width: '[10px 20px]'` as `width: 10px 20px`; both parse, so the stylesheet is valid
+   * and nothing downstream objects, and the browser drops the declaration at compute time.
+   *
+   * A value that reads a variable — `var()`, `env()`, `attr()`, `if()` — is not checked,
+   * because the grammar cannot see what will be substituted; in a token-backed sheet that is
+   * most declarations. A property the grammar has never heard of is not reported either. Only
+   * a value the grammar knows and rejects is.
+   *
+   * `warn` is the default because the judge is the CSS grammar, whose data lags the spec:
+   * `display: 'masonry'` and `containerType: 'scroll-state'` are valid CSS it has not caught
+   * up with. Escalate once the sheet is known to be clean.
+   *
+   * A value naming a token that does not exist belongs to {@link unresolvedToken}, whatever
+   * that is set to, and is never reported here.
+   *
+   * @default 'warn'
+   */
+  invalidDeclaration?: InvalidDeclarationSeverity
 }
 
 export interface Preset extends ExtendableOptions, PresetOptions {

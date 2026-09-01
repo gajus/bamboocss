@@ -105,8 +105,10 @@ unfolded build to compare against, so it went along with its fixtures, the `play
 What carries the guarantee it existed for — that a class the transform emits actually has a rule behind it — is now
 static: `sandbox/runtime-perf/__tests__/vite-plugin.test.ts` proves the CSS and Vite source graphs agree, and
 `packages/vite/__tests__/strict-compiler.test.ts` covers the calls the compiler must reject. Both run in `pnpm test`, so
-there is no separate command to remember. Neither observes rendering, so a rule that is emitted but _wrong_ still passes
-everything.
+there is no separate command to remember. Neither observes rendering. What is emitted is checked against the CSS grammar
+— `invalidDeclaration`, collected by `Stylesheet.toCss` and graded in `Generator.getCss` — so a declaration the browser
+would drop is reported. A rule that is valid CSS and still not what was meant passes everything, and so does any value
+reading a variable, which the grammar cannot judge.
 
 **Where the framework-runtime guarantees actually live.** Per-framework _test suites_ no longer exist — they were
 removed with the JSX factory in `f2d5df251`, and the `sandbox/*` framework apps that remain are integration examples,

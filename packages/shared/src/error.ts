@@ -22,6 +22,7 @@ export type BambooErrorCode =
   | 'UNRESOLVED_TOKEN'
   | 'STRICT_VALUES'
   | 'HASH_COLLISION'
+  | 'INVALID_DECLARATION'
 
 export class BambooError extends Error {
   readonly code: string

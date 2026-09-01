@@ -10,9 +10,20 @@ import { sortStyleRules } from './sort-style-rules'
 import { stringify } from './stringify'
 import type { StyleDecoder } from './style-decoder'
 import type { CssOptions, LayerName, ProcessOptions, StylesheetContext } from './types'
+import { findInvalidDeclarations, type InvalidDeclaration } from './validate-declarations'
 
 export class Stylesheet {
   constructor(private context: StylesheetContext) {}
+
+  /**
+   * What the last `toCss` found the grammar rejecting, one entry per distinct declaration.
+   *
+   * Collected here because this is the one place the finished tree exists before the
+   * optimizer consumes it; graded by `Generator.getCss`, which is where the sheet is emitted
+   * and the severity is known. Empty under `invalidDeclaration: 'off'`, and before the first
+   * `toCss`.
+   */
+  invalidDeclarations: InvalidDeclaration[] = []
 
   get layers() {
     return this.context.layers
@@ -196,6 +207,13 @@ export class Stylesheet {
       // above exists to be consumed. Serializing it for `optimizeCss` to parse straight back
       // cost 13.0ms against the clone's 6.8ms on a 432 kB sheet.
       const result = postcss(plugins).process(root)
+
+      // Asked of the tree the optimizer is about to consume: the breakpoints are expanded, so
+      // every declaration a utility, mixin, recipe or the reset emitted is present, and
+      // nothing the optimizer does afterwards invents a value.
+      const { utility } = this.context
+      this.invalidDeclarations =
+        utility.invalidDeclaration === 'off' ? [] : findInvalidDeclarations(result.root, utility.matchesCssGrammar)
 
       return optimizeCssRoot(result.root, {
         minify,

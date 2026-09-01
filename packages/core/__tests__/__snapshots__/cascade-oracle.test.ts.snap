@@ -1,0 +1,1582 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`the precedence contract > is what the emitted stylesheet ranks to 1`] = `
+{
+  "--animations-bounce": [
+    ":where(html)",
+  ],
+  "--animations-ping": [
+    ":where(html)",
+  ],
+  "--animations-pulse": [
+    ":where(html)",
+  ],
+  "--animations-spin": [
+    ":where(html)",
+  ],
+  "--aspect-ratios-golden": [
+    ":where(html)",
+  ],
+  "--aspect-ratios-landscape": [
+    ":where(html)",
+  ],
+  "--aspect-ratios-portrait": [
+    ":where(html)",
+  ],
+  "--aspect-ratios-square": [
+    ":where(html)",
+  ],
+  "--aspect-ratios-ultrawide": [
+    ":where(html)",
+  ],
+  "--aspect-ratios-wide": [
+    ":where(html)",
+  ],
+  "--blurs-2xl": [
+    ":where(html)",
+  ],
+  "--blurs-3xl": [
+    ":where(html)",
+  ],
+  "--blurs-lg": [
+    ":where(html)",
+  ],
+  "--blurs-md": [
+    ":where(html)",
+  ],
+  "--blurs-sm": [
+    ":where(html)",
+  ],
+  "--blurs-xl": [
+    ":where(html)",
+  ],
+  "--blurs-xs": [
+    ":where(html)",
+  ],
+  "--borders-none": [
+    ":where(html)",
+  ],
+  "--breakpoints-2xl": [
+    ":where(html)",
+  ],
+  "--breakpoints-lg": [
+    ":where(html)",
+  ],
+  "--breakpoints-md": [
+    ":where(html)",
+  ],
+  "--breakpoints-sm": [
+    ":where(html)",
+  ],
+  "--breakpoints-xl": [
+    ":where(html)",
+  ],
+  "--colors-amber-100": [
+    ":where(html)",
+  ],
+  "--colors-amber-200": [
+    ":where(html)",
+  ],
+  "--colors-amber-300": [
+    ":where(html)",
+  ],
+  "--colors-amber-400": [
+    ":where(html)",
+  ],
+  "--colors-amber-50": [
+    ":where(html)",
+  ],
+  "--colors-amber-500": [
+    ":where(html)",
+  ],
+  "--colors-amber-600": [
+    ":where(html)",
+  ],
+  "--colors-amber-700": [
+    ":where(html)",
+  ],
+  "--colors-amber-800": [
+    ":where(html)",
+  ],
+  "--colors-amber-900": [
+    ":where(html)",
+  ],
+  "--colors-amber-950": [
+    ":where(html)",
+  ],
+  "--colors-black": [
+    ":where(html)",
+  ],
+  "--colors-blue-100": [
+    ":where(html)",
+  ],
+  "--colors-blue-200": [
+    ":where(html)",
+  ],
+  "--colors-blue-300": [
+    ":where(html)",
+  ],
+  "--colors-blue-400": [
+    ":where(html)",
+  ],
+  "--colors-blue-50": [
+    ":where(html)",
+  ],
+  "--colors-blue-500": [
+    ":where(html)",
+  ],
+  "--colors-blue-600": [
+    ":where(html)",
+  ],
+  "--colors-blue-700": [
+    ":where(html)",
+  ],
+  "--colors-blue-800": [
+    ":where(html)",
+  ],
+  "--colors-blue-900": [
+    ":where(html)",
+  ],
+  "--colors-blue-950": [
+    ":where(html)",
+  ],
+  "--colors-button-card-body": [
+    ":where(html)",
+    ":where([data-theme=dark], .dark)",
+  ],
+  "--colors-button-card-heading": [
+    ":where(html)",
+    ":where([data-theme=dark], .dark)",
+  ],
+  "--colors-button-thick": [
+    ":where(html)",
+    ":where([data-theme=dark], .dark)",
+  ],
+  "--colors-complex": [
+    ":where(html)",
+    "@media (forced-colors: active) :where([data-theme=dark], .dark)",
+  ],
+  "--colors-current": [
+    ":where(html)",
+  ],
+  "--colors-cyan-100": [
+    ":where(html)",
+  ],
+  "--colors-cyan-200": [
+    ":where(html)",
+  ],
+  "--colors-cyan-300": [
+    ":where(html)",
+  ],
+  "--colors-cyan-400": [
+    ":where(html)",
+  ],
+  "--colors-cyan-50": [
+    ":where(html)",
+  ],
+  "--colors-cyan-500": [
+    ":where(html)",
+  ],
+  "--colors-cyan-600": [
+    ":where(html)",
+  ],
+  "--colors-cyan-700": [
+    ":where(html)",
+  ],
+  "--colors-cyan-800": [
+    ":where(html)",
+  ],
+  "--colors-cyan-900": [
+    ":where(html)",
+  ],
+  "--colors-cyan-950": [
+    ":where(html)",
+  ],
+  "--colors-deep-test-pool-poller": [
+    ":where(html)",
+  ],
+  "--colors-deep-test-pool-tall": [
+    ":where(html)",
+  ],
+  "--colors-deep-test-yam": [
+    ":where(html)",
+  ],
+  "--colors-emerald-100": [
+    ":where(html)",
+  ],
+  "--colors-emerald-200": [
+    ":where(html)",
+  ],
+  "--colors-emerald-300": [
+    ":where(html)",
+  ],
+  "--colors-emerald-400": [
+    ":where(html)",
+  ],
+  "--colors-emerald-50": [
+    ":where(html)",
+  ],
+  "--colors-emerald-500": [
+    ":where(html)",
+  ],
+  "--colors-emerald-600": [
+    ":where(html)",
+  ],
+  "--colors-emerald-700": [
+    ":where(html)",
+  ],
+  "--colors-emerald-800": [
+    ":where(html)",
+  ],
+  "--colors-emerald-900": [
+    ":where(html)",
+  ],
+  "--colors-emerald-950": [
+    ":where(html)",
+  ],
+  "--colors-fuchsia-100": [
+    ":where(html)",
+  ],
+  "--colors-fuchsia-200": [
+    ":where(html)",
+  ],
+  "--colors-fuchsia-300": [
+    ":where(html)",
+  ],
+  "--colors-fuchsia-400": [
+    ":where(html)",
+  ],
+  "--colors-fuchsia-50": [
+    ":where(html)",
+  ],
+  "--colors-fuchsia-500": [
+    ":where(html)",
+  ],
+  "--colors-fuchsia-600": [
+    ":where(html)",
+  ],
+  "--colors-fuchsia-700": [
+    ":where(html)",
+  ],
+  "--colors-fuchsia-800": [
+    ":where(html)",
+  ],
+  "--colors-fuchsia-900": [
+    ":where(html)",
+  ],
+  "--colors-fuchsia-950": [
+    ":where(html)",
+  ],
+  "--colors-gray-100": [
+    ":where(html)",
+  ],
+  "--colors-gray-200": [
+    ":where(html)",
+  ],
+  "--colors-gray-300": [
+    ":where(html)",
+  ],
+  "--colors-gray-400": [
+    ":where(html)",
+  ],
+  "--colors-gray-50": [
+    ":where(html)",
+  ],
+  "--colors-gray-500": [
+    ":where(html)",
+  ],
+  "--colors-gray-600": [
+    ":where(html)",
+  ],
+  "--colors-gray-700": [
+    ":where(html)",
+  ],
+  "--colors-gray-800": [
+    ":where(html)",
+  ],
+  "--colors-gray-900": [
+    ":where(html)",
+  ],
+  "--colors-gray-950": [
+    ":where(html)",
+  ],
+  "--colors-green-100": [
+    ":where(html)",
+  ],
+  "--colors-green-200": [
+    ":where(html)",
+  ],
+  "--colors-green-300": [
+    ":where(html)",
+  ],
+  "--colors-green-400": [
+    ":where(html)",
+  ],
+  "--colors-green-50": [
+    ":where(html)",
+  ],
+  "--colors-green-500": [
+    ":where(html)",
+  ],
+  "--colors-green-600": [
+    ":where(html)",
+  ],
+  "--colors-green-700": [
+    ":where(html)",
+  ],
+  "--colors-green-800": [
+    ":where(html)",
+  ],
+  "--colors-green-900": [
+    ":where(html)",
+  ],
+  "--colors-green-950": [
+    ":where(html)",
+  ],
+  "--colors-indigo-100": [
+    ":where(html)",
+  ],
+  "--colors-indigo-200": [
+    ":where(html)",
+  ],
+  "--colors-indigo-300": [
+    ":where(html)",
+  ],
+  "--colors-indigo-400": [
+    ":where(html)",
+  ],
+  "--colors-indigo-50": [
+    ":where(html)",
+  ],
+  "--colors-indigo-500": [
+    ":where(html)",
+  ],
+  "--colors-indigo-600": [
+    ":where(html)",
+  ],
+  "--colors-indigo-700": [
+    ":where(html)",
+  ],
+  "--colors-indigo-800": [
+    ":where(html)",
+  ],
+  "--colors-indigo-900": [
+    ":where(html)",
+  ],
+  "--colors-indigo-950": [
+    ":where(html)",
+  ],
+  "--colors-lime-100": [
+    ":where(html)",
+  ],
+  "--colors-lime-200": [
+    ":where(html)",
+  ],
+  "--colors-lime-300": [
+    ":where(html)",
+  ],
+  "--colors-lime-400": [
+    ":where(html)",
+  ],
+  "--colors-lime-50": [
+    ":where(html)",
+  ],
+  "--colors-lime-500": [
+    ":where(html)",
+  ],
+  "--colors-lime-600": [
+    ":where(html)",
+  ],
+  "--colors-lime-700": [
+    ":where(html)",
+  ],
+  "--colors-lime-800": [
+    ":where(html)",
+  ],
+  "--colors-lime-900": [
+    ":where(html)",
+  ],
+  "--colors-lime-950": [
+    ":where(html)",
+  ],
+  "--colors-neutral-100": [
+    ":where(html)",
+  ],
+  "--colors-neutral-200": [
+    ":where(html)",
+  ],
+  "--colors-neutral-300": [
+    ":where(html)",
+  ],
+  "--colors-neutral-400": [
+    ":where(html)",
+  ],
+  "--colors-neutral-50": [
+    ":where(html)",
+  ],
+  "--colors-neutral-500": [
+    ":where(html)",
+  ],
+  "--colors-neutral-600": [
+    ":where(html)",
+  ],
+  "--colors-neutral-700": [
+    ":where(html)",
+  ],
+  "--colors-neutral-800": [
+    ":where(html)",
+  ],
+  "--colors-neutral-900": [
+    ":where(html)",
+  ],
+  "--colors-neutral-950": [
+    ":where(html)",
+  ],
+  "--colors-orange-100": [
+    ":where(html)",
+  ],
+  "--colors-orange-200": [
+    ":where(html)",
+  ],
+  "--colors-orange-300": [
+    ":where(html)",
+  ],
+  "--colors-orange-400": [
+    ":where(html)",
+  ],
+  "--colors-orange-50": [
+    ":where(html)",
+  ],
+  "--colors-orange-500": [
+    ":where(html)",
+  ],
+  "--colors-orange-600": [
+    ":where(html)",
+  ],
+  "--colors-orange-700": [
+    ":where(html)",
+  ],
+  "--colors-orange-800": [
+    ":where(html)",
+  ],
+  "--colors-orange-900": [
+    ":where(html)",
+  ],
+  "--colors-orange-950": [
+    ":where(html)",
+  ],
+  "--colors-pink-100": [
+    ":where(html)",
+  ],
+  "--colors-pink-200": [
+    ":where(html)",
+  ],
+  "--colors-pink-300": [
+    ":where(html)",
+  ],
+  "--colors-pink-400": [
+    ":where(html)",
+  ],
+  "--colors-pink-50": [
+    ":where(html)",
+  ],
+  "--colors-pink-500": [
+    ":where(html)",
+  ],
+  "--colors-pink-600": [
+    ":where(html)",
+  ],
+  "--colors-pink-700": [
+    ":where(html)",
+  ],
+  "--colors-pink-800": [
+    ":where(html)",
+  ],
+  "--colors-pink-900": [
+    ":where(html)",
+  ],
+  "--colors-pink-950": [
+    ":where(html)",
+  ],
+  "--colors-primary": [
+    ":where(html)",
+    ":where([data-theme=dark], .dark)",
+  ],
+  "--colors-purple-100": [
+    ":where(html)",
+  ],
+  "--colors-purple-200": [
+    ":where(html)",
+  ],
+  "--colors-purple-300": [
+    ":where(html)",
+  ],
+  "--colors-purple-400": [
+    ":where(html)",
+  ],
+  "--colors-purple-50": [
+    ":where(html)",
+  ],
+  "--colors-purple-500": [
+    ":where(html)",
+  ],
+  "--colors-purple-600": [
+    ":where(html)",
+  ],
+  "--colors-purple-700": [
+    ":where(html)",
+  ],
+  "--colors-purple-800": [
+    ":where(html)",
+  ],
+  "--colors-purple-900": [
+    ":where(html)",
+  ],
+  "--colors-purple-950": [
+    ":where(html)",
+  ],
+  "--colors-red-100": [
+    ":where(html)",
+  ],
+  "--colors-red-200": [
+    ":where(html)",
+  ],
+  "--colors-red-300": [
+    ":where(html)",
+  ],
+  "--colors-red-400": [
+    ":where(html)",
+  ],
+  "--colors-red-50": [
+    ":where(html)",
+  ],
+  "--colors-red-500": [
+    ":where(html)",
+  ],
+  "--colors-red-600": [
+    ":where(html)",
+  ],
+  "--colors-red-700": [
+    ":where(html)",
+  ],
+  "--colors-red-800": [
+    ":where(html)",
+  ],
+  "--colors-red-900": [
+    ":where(html)",
+  ],
+  "--colors-red-950": [
+    ":where(html)",
+  ],
+  "--colors-rose-100": [
+    ":where(html)",
+  ],
+  "--colors-rose-200": [
+    ":where(html)",
+  ],
+  "--colors-rose-300": [
+    ":where(html)",
+  ],
+  "--colors-rose-400": [
+    ":where(html)",
+  ],
+  "--colors-rose-50": [
+    ":where(html)",
+  ],
+  "--colors-rose-500": [
+    ":where(html)",
+  ],
+  "--colors-rose-600": [
+    ":where(html)",
+  ],
+  "--colors-rose-700": [
+    ":where(html)",
+  ],
+  "--colors-rose-800": [
+    ":where(html)",
+  ],
+  "--colors-rose-900": [
+    ":where(html)",
+  ],
+  "--colors-rose-950": [
+    ":where(html)",
+  ],
+  "--colors-secondary": [
+    ":where(html)",
+    ":where([data-theme=dark], .dark)",
+  ],
+  "--colors-sky-100": [
+    ":where(html)",
+  ],
+  "--colors-sky-200": [
+    ":where(html)",
+  ],
+  "--colors-sky-300": [
+    ":where(html)",
+  ],
+  "--colors-sky-400": [
+    ":where(html)",
+  ],
+  "--colors-sky-50": [
+    ":where(html)",
+  ],
+  "--colors-sky-500": [
+    ":where(html)",
+  ],
+  "--colors-sky-600": [
+    ":where(html)",
+  ],
+  "--colors-sky-700": [
+    ":where(html)",
+  ],
+  "--colors-sky-800": [
+    ":where(html)",
+  ],
+  "--colors-sky-900": [
+    ":where(html)",
+  ],
+  "--colors-sky-950": [
+    ":where(html)",
+  ],
+  "--colors-slate-100": [
+    ":where(html)",
+  ],
+  "--colors-slate-200": [
+    ":where(html)",
+  ],
+  "--colors-slate-300": [
+    ":where(html)",
+  ],
+  "--colors-slate-400": [
+    ":where(html)",
+  ],
+  "--colors-slate-50": [
+    ":where(html)",
+  ],
+  "--colors-slate-500": [
+    ":where(html)",
+  ],
+  "--colors-slate-600": [
+    ":where(html)",
+  ],
+  "--colors-slate-700": [
+    ":where(html)",
+  ],
+  "--colors-slate-800": [
+    ":where(html)",
+  ],
+  "--colors-slate-900": [
+    ":where(html)",
+  ],
+  "--colors-slate-950": [
+    ":where(html)",
+  ],
+  "--colors-stone-100": [
+    ":where(html)",
+  ],
+  "--colors-stone-200": [
+    ":where(html)",
+  ],
+  "--colors-stone-300": [
+    ":where(html)",
+  ],
+  "--colors-stone-400": [
+    ":where(html)",
+  ],
+  "--colors-stone-50": [
+    ":where(html)",
+  ],
+  "--colors-stone-500": [
+    ":where(html)",
+  ],
+  "--colors-stone-600": [
+    ":where(html)",
+  ],
+  "--colors-stone-700": [
+    ":where(html)",
+  ],
+  "--colors-stone-800": [
+    ":where(html)",
+  ],
+  "--colors-stone-900": [
+    ":where(html)",
+  ],
+  "--colors-stone-950": [
+    ":where(html)",
+  ],
+  "--colors-surface": [
+    "[data-color=material]",
+    "[data-color=material]:where([data-theme=dark], .dark)",
+    "[data-color=pastel]",
+    "@media (width >= 48rem) [data-color=pastel]:where([data-theme=dark], .dark)",
+  ],
+  "--colors-teal-100": [
+    ":where(html)",
+  ],
+  "--colors-teal-200": [
+    ":where(html)",
+  ],
+  "--colors-teal-300": [
+    ":where(html)",
+  ],
+  "--colors-teal-400": [
+    ":where(html)",
+  ],
+  "--colors-teal-50": [
+    ":where(html)",
+  ],
+  "--colors-teal-500": [
+    ":where(html)",
+  ],
+  "--colors-teal-600": [
+    ":where(html)",
+  ],
+  "--colors-teal-700": [
+    ":where(html)",
+  ],
+  "--colors-teal-800": [
+    ":where(html)",
+  ],
+  "--colors-teal-900": [
+    ":where(html)",
+  ],
+  "--colors-teal-950": [
+    ":where(html)",
+  ],
+  "--colors-transparent": [
+    ":where(html)",
+  ],
+  "--colors-violet-100": [
+    ":where(html)",
+  ],
+  "--colors-violet-200": [
+    ":where(html)",
+  ],
+  "--colors-violet-300": [
+    ":where(html)",
+  ],
+  "--colors-violet-400": [
+    ":where(html)",
+  ],
+  "--colors-violet-50": [
+    ":where(html)",
+  ],
+  "--colors-violet-500": [
+    ":where(html)",
+  ],
+  "--colors-violet-600": [
+    ":where(html)",
+  ],
+  "--colors-violet-700": [
+    ":where(html)",
+  ],
+  "--colors-violet-800": [
+    ":where(html)",
+  ],
+  "--colors-violet-900": [
+    ":where(html)",
+  ],
+  "--colors-violet-950": [
+    ":where(html)",
+  ],
+  "--colors-white": [
+    ":where(html)",
+  ],
+  "--colors-yellow-100": [
+    ":where(html)",
+  ],
+  "--colors-yellow-200": [
+    ":where(html)",
+  ],
+  "--colors-yellow-300": [
+    ":where(html)",
+  ],
+  "--colors-yellow-400": [
+    ":where(html)",
+  ],
+  "--colors-yellow-50": [
+    ":where(html)",
+  ],
+  "--colors-yellow-500": [
+    ":where(html)",
+  ],
+  "--colors-yellow-600": [
+    ":where(html)",
+  ],
+  "--colors-yellow-700": [
+    ":where(html)",
+  ],
+  "--colors-yellow-800": [
+    ":where(html)",
+  ],
+  "--colors-yellow-900": [
+    ":where(html)",
+  ],
+  "--colors-yellow-950": [
+    ":where(html)",
+  ],
+  "--colors-zinc-100": [
+    ":where(html)",
+  ],
+  "--colors-zinc-200": [
+    ":where(html)",
+  ],
+  "--colors-zinc-300": [
+    ":where(html)",
+  ],
+  "--colors-zinc-400": [
+    ":where(html)",
+  ],
+  "--colors-zinc-50": [
+    ":where(html)",
+  ],
+  "--colors-zinc-500": [
+    ":where(html)",
+  ],
+  "--colors-zinc-600": [
+    ":where(html)",
+  ],
+  "--colors-zinc-700": [
+    ":where(html)",
+  ],
+  "--colors-zinc-800": [
+    ":where(html)",
+  ],
+  "--colors-zinc-900": [
+    ":where(html)",
+  ],
+  "--colors-zinc-950": [
+    ":where(html)",
+  ],
+  "--durations-fast": [
+    ":where(html)",
+  ],
+  "--durations-faster": [
+    ":where(html)",
+  ],
+  "--durations-fastest": [
+    ":where(html)",
+  ],
+  "--durations-normal": [
+    ":where(html)",
+  ],
+  "--durations-slow": [
+    ":where(html)",
+  ],
+  "--durations-slower": [
+    ":where(html)",
+  ],
+  "--durations-slowest": [
+    ":where(html)",
+  ],
+  "--easings-default": [
+    ":where(html)",
+  ],
+  "--easings-in": [
+    ":where(html)",
+  ],
+  "--easings-in-out": [
+    ":where(html)",
+  ],
+  "--easings-linear": [
+    ":where(html)",
+  ],
+  "--easings-out": [
+    ":where(html)",
+  ],
+  "--font-sizes-2xl": [
+    ":where(html)",
+  ],
+  "--font-sizes-2xs": [
+    ":where(html)",
+  ],
+  "--font-sizes-3xl": [
+    ":where(html)",
+  ],
+  "--font-sizes-4xl": [
+    ":where(html)",
+  ],
+  "--font-sizes-5xl": [
+    ":where(html)",
+  ],
+  "--font-sizes-6xl": [
+    ":where(html)",
+  ],
+  "--font-sizes-7xl": [
+    ":where(html)",
+  ],
+  "--font-sizes-8xl": [
+    ":where(html)",
+  ],
+  "--font-sizes-9xl": [
+    ":where(html)",
+  ],
+  "--font-sizes-lg": [
+    ":where(html)",
+  ],
+  "--font-sizes-md": [
+    ":where(html)",
+  ],
+  "--font-sizes-sm": [
+    ":where(html)",
+  ],
+  "--font-sizes-xl": [
+    ":where(html)",
+  ],
+  "--font-sizes-xs": [
+    ":where(html)",
+  ],
+  "--font-weights-black": [
+    ":where(html)",
+  ],
+  "--font-weights-bold": [
+    ":where(html)",
+  ],
+  "--font-weights-extrabold": [
+    ":where(html)",
+  ],
+  "--font-weights-extralight": [
+    ":where(html)",
+  ],
+  "--font-weights-light": [
+    ":where(html)",
+  ],
+  "--font-weights-medium": [
+    ":where(html)",
+  ],
+  "--font-weights-normal": [
+    ":where(html)",
+  ],
+  "--font-weights-semibold": [
+    ":where(html)",
+  ],
+  "--font-weights-thin": [
+    ":where(html)",
+  ],
+  "--fonts-mono": [
+    ":where(html)",
+  ],
+  "--fonts-sans": [
+    ":where(html)",
+  ],
+  "--fonts-serif": [
+    ":where(html)",
+  ],
+  "--letter-spacings-normal": [
+    ":where(html)",
+  ],
+  "--letter-spacings-tight": [
+    ":where(html)",
+  ],
+  "--letter-spacings-tighter": [
+    ":where(html)",
+  ],
+  "--letter-spacings-wide": [
+    ":where(html)",
+  ],
+  "--letter-spacings-wider": [
+    ":where(html)",
+  ],
+  "--letter-spacings-widest": [
+    ":where(html)",
+  ],
+  "--line-heights-loose": [
+    ":where(html)",
+  ],
+  "--line-heights-none": [
+    ":where(html)",
+  ],
+  "--line-heights-normal": [
+    ":where(html)",
+  ],
+  "--line-heights-relaxed": [
+    ":where(html)",
+  ],
+  "--line-heights-snug": [
+    ":where(html)",
+  ],
+  "--line-heights-tight": [
+    ":where(html)",
+  ],
+  "--made-with-bamboo": [
+    ":root",
+  ],
+  "--radii-2xl": [
+    ":where(html)",
+  ],
+  "--radii-3xl": [
+    ":where(html)",
+  ],
+  "--radii-4xl": [
+    ":where(html)",
+  ],
+  "--radii-full": [
+    ":where(html)",
+  ],
+  "--radii-lg": [
+    ":where(html)",
+  ],
+  "--radii-md": [
+    ":where(html)",
+  ],
+  "--radii-sm": [
+    ":where(html)",
+  ],
+  "--radii-xl": [
+    ":where(html)",
+  ],
+  "--radii-xs": [
+    ":where(html)",
+  ],
+  "--shadows-2xl": [
+    ":where(html)",
+  ],
+  "--shadows-2xs": [
+    ":where(html)",
+  ],
+  "--shadows-inset-2xs": [
+    ":where(html)",
+  ],
+  "--shadows-inset-sm": [
+    ":where(html)",
+  ],
+  "--shadows-inset-xs": [
+    ":where(html)",
+  ],
+  "--shadows-lg": [
+    ":where(html)",
+  ],
+  "--shadows-md": [
+    ":where(html)",
+  ],
+  "--shadows-sm": [
+    ":where(html)",
+  ],
+  "--shadows-xl": [
+    ":where(html)",
+  ],
+  "--shadows-xs": [
+    ":where(html)",
+  ],
+  "--sizes-0": [
+    ":where(html)",
+  ],
+  "--sizes-0\\.5": [
+    ":where(html)",
+  ],
+  "--sizes-1": [
+    ":where(html)",
+  ],
+  "--sizes-10": [
+    ":where(html)",
+  ],
+  "--sizes-11": [
+    ":where(html)",
+  ],
+  "--sizes-12": [
+    ":where(html)",
+  ],
+  "--sizes-14": [
+    ":where(html)",
+  ],
+  "--sizes-16": [
+    ":where(html)",
+  ],
+  "--sizes-1\\.5": [
+    ":where(html)",
+  ],
+  "--sizes-2": [
+    ":where(html)",
+  ],
+  "--sizes-20": [
+    ":where(html)",
+  ],
+  "--sizes-24": [
+    ":where(html)",
+  ],
+  "--sizes-28": [
+    ":where(html)",
+  ],
+  "--sizes-2\\.5": [
+    ":where(html)",
+  ],
+  "--sizes-2xl": [
+    ":where(html)",
+  ],
+  "--sizes-3": [
+    ":where(html)",
+  ],
+  "--sizes-32": [
+    ":where(html)",
+  ],
+  "--sizes-36": [
+    ":where(html)",
+  ],
+  "--sizes-3\\.5": [
+    ":where(html)",
+  ],
+  "--sizes-3xl": [
+    ":where(html)",
+  ],
+  "--sizes-4": [
+    ":where(html)",
+  ],
+  "--sizes-40": [
+    ":where(html)",
+  ],
+  "--sizes-44": [
+    ":where(html)",
+  ],
+  "--sizes-48": [
+    ":where(html)",
+  ],
+  "--sizes-4\\.5": [
+    ":where(html)",
+  ],
+  "--sizes-4xl": [
+    ":where(html)",
+  ],
+  "--sizes-5": [
+    ":where(html)",
+  ],
+  "--sizes-52": [
+    ":where(html)",
+  ],
+  "--sizes-56": [
+    ":where(html)",
+  ],
+  "--sizes-5\\.5": [
+    ":where(html)",
+  ],
+  "--sizes-5xl": [
+    ":where(html)",
+  ],
+  "--sizes-6": [
+    ":where(html)",
+  ],
+  "--sizes-60": [
+    ":where(html)",
+  ],
+  "--sizes-64": [
+    ":where(html)",
+  ],
+  "--sizes-6xl": [
+    ":where(html)",
+  ],
+  "--sizes-7": [
+    ":where(html)",
+  ],
+  "--sizes-72": [
+    ":where(html)",
+  ],
+  "--sizes-7xl": [
+    ":where(html)",
+  ],
+  "--sizes-8": [
+    ":where(html)",
+  ],
+  "--sizes-80": [
+    ":where(html)",
+  ],
+  "--sizes-8xl": [
+    ":where(html)",
+  ],
+  "--sizes-9": [
+    ":where(html)",
+  ],
+  "--sizes-96": [
+    ":where(html)",
+  ],
+  "--sizes-breakpoint-2xl": [
+    ":where(html)",
+  ],
+  "--sizes-breakpoint-lg": [
+    ":where(html)",
+  ],
+  "--sizes-breakpoint-md": [
+    ":where(html)",
+  ],
+  "--sizes-breakpoint-sm": [
+    ":where(html)",
+  ],
+  "--sizes-breakpoint-xl": [
+    ":where(html)",
+  ],
+  "--sizes-fit": [
+    ":where(html)",
+  ],
+  "--sizes-full": [
+    ":where(html)",
+  ],
+  "--sizes-lg": [
+    ":where(html)",
+  ],
+  "--sizes-max": [
+    ":where(html)",
+  ],
+  "--sizes-md": [
+    ":where(html)",
+  ],
+  "--sizes-min": [
+    ":where(html)",
+  ],
+  "--sizes-prose": [
+    ":where(html)",
+  ],
+  "--sizes-sm": [
+    ":where(html)",
+  ],
+  "--sizes-xl": [
+    ":where(html)",
+  ],
+  "--sizes-xs": [
+    ":where(html)",
+  ],
+  "--spacing-0": [
+    ":where(html)",
+  ],
+  "--spacing-0\\.5": [
+    ":where(html)",
+  ],
+  "--spacing-1": [
+    ":where(html)",
+  ],
+  "--spacing-10": [
+    ":where(html)",
+  ],
+  "--spacing-11": [
+    ":where(html)",
+  ],
+  "--spacing-12": [
+    ":where(html)",
+  ],
+  "--spacing-14": [
+    ":where(html)",
+  ],
+  "--spacing-16": [
+    ":where(html)",
+  ],
+  "--spacing-1\\.5": [
+    ":where(html)",
+  ],
+  "--spacing-2": [
+    ":where(html)",
+  ],
+  "--spacing-20": [
+    ":where(html)",
+  ],
+  "--spacing-24": [
+    ":where(html)",
+  ],
+  "--spacing-28": [
+    ":where(html)",
+  ],
+  "--spacing-2\\.5": [
+    ":where(html)",
+  ],
+  "--spacing-3": [
+    ":where(html)",
+  ],
+  "--spacing-32": [
+    ":where(html)",
+  ],
+  "--spacing-36": [
+    ":where(html)",
+  ],
+  "--spacing-3\\.5": [
+    ":where(html)",
+  ],
+  "--spacing-4": [
+    ":where(html)",
+  ],
+  "--spacing-40": [
+    ":where(html)",
+  ],
+  "--spacing-44": [
+    ":where(html)",
+  ],
+  "--spacing-48": [
+    ":where(html)",
+  ],
+  "--spacing-4\\.5": [
+    ":where(html)",
+  ],
+  "--spacing-5": [
+    ":where(html)",
+  ],
+  "--spacing-52": [
+    ":where(html)",
+  ],
+  "--spacing-56": [
+    ":where(html)",
+  ],
+  "--spacing-5\\.5": [
+    ":where(html)",
+  ],
+  "--spacing-6": [
+    ":where(html)",
+  ],
+  "--spacing-60": [
+    ":where(html)",
+  ],
+  "--spacing-64": [
+    ":where(html)",
+  ],
+  "--spacing-7": [
+    ":where(html)",
+  ],
+  "--spacing-72": [
+    ":where(html)",
+  ],
+  "--spacing-8": [
+    ":where(html)",
+  ],
+  "--spacing-80": [
+    ":where(html)",
+  ],
+  "--spacing-9": [
+    ":where(html)",
+  ],
+  "--spacing-96": [
+    ":where(html)",
+  ],
+  "--spacing-gutter": [
+    ":where(html)",
+    "@media (width >= 64rem) :where(html)",
+  ],
+  "--z-index-banner": [
+    ":where(html)",
+  ],
+  "--z-index-base": [
+    ":where(html)",
+  ],
+  "--z-index-docked": [
+    ":where(html)",
+  ],
+  "--z-index-dropdown": [
+    ":where(html)",
+  ],
+  "--z-index-hide": [
+    ":where(html)",
+  ],
+  "--z-index-modal": [
+    ":where(html)",
+  ],
+  "--z-index-overlay": [
+    ":where(html)",
+  ],
+  "--z-index-popover": [
+    ":where(html)",
+  ],
+  "--z-index-skip-nav": [
+    ":where(html)",
+  ],
+  "--z-index-sticky": [
+    ":where(html)",
+  ],
+  "--z-index-toast": [
+    ":where(html)",
+  ],
+  "--z-index-tooltip": [
+    ":where(html)",
+  ],
+  "align-items": [
+    ".checkbox__root",
+    ".buttonStyle",
+    ".ai_center",
+  ],
+  "background": [
+    ".cva_ixGXOH--tone_quiet",
+    ".cva_ixGXOH--tone_loud",
+    ".bg_white",
+    "@media (prefers-color-scheme: dark) .osDark\\:bg_gray\\.900",
+    "@media (prefers-color-scheme: light) .osLight\\:bg_gray\\.50",
+    "[data-theme=dark] .dark\\:bg_black",
+    ".dark .dark\\:bg_black",
+    ".dark\\:bg_black.dark",
+    ".dark\\:bg_black[data-theme=dark]",
+  ],
+  "background-color": [
+    ".buttonStyle--variant_solid",
+    ".buttonStyle:is(:hover, [data-hover])",
+    ".buttonStyle--variant_solid[data-disabled]",
+    ".buttonStyle--variant_solid:is(:hover, [data-hover])",
+  ],
+  "border-end-start-radius": [
+    ".bdr-s_md",
+  ],
+  "border-inline-end-width": [
+    ".textStyle > :not([hidden]) ~ :not([hidden])",
+  ],
+  "border-inline-start": [
+    ".bd-s_1px_solid",
+  ],
+  "border-inline-start-width": [
+    ".textStyle > :not([hidden]) ~ :not([hidden])",
+  ],
+  "border-left": [
+    ".bd-l_2px_solid",
+  ],
+  "border-radius": [
+    ".checkbox__control",
+    ".bdr_lg",
+  ],
+  "border-start-start-radius": [
+    ".bdr-s_md",
+  ],
+  "border-width": [
+    ".checkbox__control",
+  ],
+  "color": [
+    ".cva_ixGXOH",
+    ".cva_ixGXOH--tone_quiet",
+    ".cva_ixGXOH--tone_loud",
+    ".buttonStyle--variant_solid",
+    ".buttonStyle:is(:hover, [data-hover])",
+    ".buttonStyle--variant_solid[data-disabled]",
+    ".c_red\\.500",
+    ".c_blue\\.500",
+    ".\\[\\&_\\>_p\\]\\:c_gray\\.700 > p",
+    ".disabled\\:c_gray\\.500:is(:disabled, [disabled], [data-disabled], [aria-disabled=true])",
+    ".theme-x .\\[\\.theme-x_\\&\\]\\:c_gray\\.100",
+    ".focus\\:c_green\\.500:is(:focus, [data-focus])",
+    ".focusVisible\\:c_purple\\.500:is(:focus-visible, [data-focus-visible])",
+    ".hover\\:c_blue\\.500:is(:hover, [data-hover])",
+    ".hover\\:c_green\\.500:is(:hover, [data-hover])",
+    ".active\\:c_pink\\.500:is(:active, [data-active])",
+    ".c_orange\\.500\\! !important",
+    ".hover\\:c_teal\\.500\\!:is(:hover, [data-hover]) !important",
+  ],
+  "container-type": [
+    ".cq-t_inline-size",
+  ],
+  "content": [
+    ".before\\:content_\\"\\"::before",
+    ".after\\:content_\\"x\\"::after",
+  ],
+  "display": [
+    ".sva_eTYGMB__root",
+    ".checkbox__root",
+    ".cva_ixGXOH",
+    ".buttonStyle",
+    ".d_block",
+    ".d_flex",
+    ".d_inline-flex",
+    "@media (width >= 48rem) .md\\:d_flex",
+    "@media (width >= 48rem) and (width < 64rem) .mdOnly\\:d_inline",
+    "@media (width >= 48rem) and (width < 64rem) .mdToLg\\:d_inline-block",
+    "@media (width >= 64rem) .lg\\:d_grid",
+    "@media (width < 48rem) .mdDown\\:d_none",
+    "@media print .print\\:d_none",
+    ".before\\:d_block::before",
+    ".after\\:d_inline::after",
+    ".\\[\\&\\[data-open\\]\\]\\:d_flex[data-open]",
+  ],
+  "flex-direction": [
+    ".flex-d_column",
+  ],
+  "font-family": [
+    ".textStyle",
+  ],
+  "font-size": [
+    ".sva_eTYGMB__label",
+    "@scope (.sva_eTYGMB__root--size_lg) to (.sva_eTYGMB__root) .sva_eTYGMB__label",
+    "@scope (.checkbox__root--size_md) to (.checkbox__root) .checkbox__label",
+    ".cva_ixGXOH--size_sm",
+    ".cva_ixGXOH--size_lg",
+    ".textStyle--size_h1",
+    ".buttonStyle:is(:hover, [data-hover])",
+    ".buttonStyle--variant_solid[data-disabled]",
+    ".fs_sm",
+    "@container (inline-size >= 24rem) .\\@\\/sm\\:fs_md",
+    "@container (inline-size >= 32rem) .\\@\\/lg\\:fs_lg",
+    "[data-theme=dark] .dark\\:fs_md",
+    ".dark .dark\\:fs_md",
+    ".dark\\:fs_md.dark",
+    ".dark\\:fs_md[data-theme=dark]",
+    "@media (width >= 48rem) .hover\\:md\\:fs_lg:is(:hover, [data-hover])",
+    "@media (width >= 48rem) .md\\:hover\\:fs_xl:is(:hover, [data-hover])",
+    "[data-theme=dark] .dark\\:hover\\:fs_2xl:is(:hover, [data-hover])",
+    ".dark .dark\\:hover\\:fs_2xl:is(:hover, [data-hover])",
+    ".dark\\:hover\\:fs_2xl.dark:is(:hover, [data-hover])",
+    ".dark\\:hover\\:fs_2xl[data-theme=dark]:is(:hover, [data-hover])",
+  ],
+  "font-weight": [
+    ".textStyle--size_h1",
+    ".cva_ixGXOH--tone_loud.cva_ixGXOH--size_lg",
+  ],
+  "gap": [
+    ".sva_eTYGMB__root",
+    ".checkbox__root",
+    ".sva_eTYGMB__root--size_lg",
+    ".gap_4",
+  ],
+  "height": [
+    "@scope (.checkbox__root--size_md) to (.checkbox__root) .checkbox__control",
+    ".buttonStyle--size_sm",
+  ],
+  "inset": [
+    ".inset_0",
+  ],
+  "justify-content": [
+    ".buttonStyle",
+    ".jc_center",
+  ],
+  "line-height": [
+    ".textStyle--size_h1",
+  ],
+  "margin": [
+    ".m_2",
+  ],
+  "margin-bottom": [
+    ".\\[\\&_\\>_p\\]\\:mb_2 > p",
+  ],
+  "margin-inline": [
+    ".mx_1",
+  ],
+  "margin-inline-start": [
+    ".checkbox__label",
+  ],
+  "min-width": [
+    ".buttonStyle--size_sm",
+  ],
+  "opacity": [
+    ".op_0\\.5",
+    "@starting-style .starting\\:op_0",
+    ".peer:is(:checked, [data-checked], [aria-checked=true], [data-state="checked"]) ~ .peerChecked\\:op_0\\.8",
+    ".group:is(:focus-visible, [data-focus-visible]) .groupFocusVisible\\:op_0\\.9",
+    ".group:is(:hover, [data-hover]) .groupHover\\:op_1",
+  ],
+  "padding": [
+    ".buttonStyle--size_sm",
+    ".p_4",
+    ".\\[\\&\\:has\\(img\\)\\]\\:p_0:has(img)",
+    ".p_2\\! !important",
+    "@media (width >= 48rem) .md\\:p_6\\! !important",
+  ],
+  "padding-inline": [
+    ".cva_ixGXOH",
+    ".cva_ixGXOH--size_sm",
+    ".cva_ixGXOH--size_lg",
+    ".cva_ixGXOH--tone_loud.cva_ixGXOH--size_lg",
+  ],
+  "padding-top": [
+    ".pt_3",
+  ],
+  "text-decoration-line": [
+    ".\\[\\&_\\:is\\(p\\,_li\\)_a\\]\\:text-decoration-line_underline :is(p, li) a",
+  ],
+  "top": [
+    ".top_2",
+  ],
+  "transition": [
+    ".trs_all_0\\.2s",
+    "@media (prefers-reduced-motion: reduce) .motionReduce\\:trs_none",
+  ],
+  "width": [
+    "@scope (.checkbox__root--size_md) to (.checkbox__root) .checkbox__control",
+    ".before\\:w_4::before",
+    ".after\\:w_2::after",
+  ],
+}
+`;

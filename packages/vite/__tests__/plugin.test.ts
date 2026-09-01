@@ -44,8 +44,14 @@ describe('plugin contract', () => {
   test('returns the css emitter and the fold, in that order', () => {
     const { list } = plugins()
 
-    // The css plugin owns the extraction the fold's context reads from, so it goes first.
-    expect(list.map((p) => p.name)).toEqual(['bamboocss:css', 'bamboocss:compiler', 'bamboocss:compiler-sfc'])
+    // The css plugin owns the extraction the fold's context reads from, so it goes first. Its
+    // early half carries only a `pre`-ordered output hook, so its position is immaterial.
+    expect(list.map((p) => p.name)).toEqual([
+      'bamboocss:css',
+      'bamboocss:css-early',
+      'bamboocss:compiler',
+      'bamboocss:compiler-sfc',
+    ])
   })
 
   test('the fold runs before other plugins', () => {

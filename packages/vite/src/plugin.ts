@@ -1,19 +1,24 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
 
 import { logger } from '@bamboocss/logger'
 import { truncateList } from '@bamboocss/shared'
 import { markStaticCompilerActive } from '@bamboocss/node/static-compiler'
 import type { Plugin } from 'vite'
-import { asError, bamboocssCss, VIRTUAL_CSS_ID } from './css'
+import { asError, bamboocssCss, bamboocssCssEarly, VIRTUAL_CSS_ID } from './css'
 import { bare } from './class-name'
 import { createCompilationHost, type CompilationGeneration } from './compilation-host'
 import type { ExportReadRecord, FoldResult, ForeignRecipes, SkipReason, SkippedCall, verifyExportReads } from './fold'
-import { loadFoldModule } from './lazy-modules'
+import { loadCssOutputModule, loadFoldModule } from './lazy-modules'
 import type { RuntimeCss } from './runtime-css'
 import type { StaticStyleSetCompiler } from './style-set'
-import { createStaticCompilationSession, remainingEnvironments, selectorClassName } from './static-session'
+import {
+  createStaticCompilationSession,
+  remainingEnvironments,
+  selectorClassName,
+  type StaticCompilationSession,
+} from './static-session'
 
 export interface BambooVitePluginOptions {
   /** Path to `bamboo.config.ts`. Resolved the same way the CLI resolves it. */
@@ -941,6 +946,66 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     }
   }
 
+  /**
+   * Prune the sheets the run wrote whole, now that every environment has contributed.
+   *
+   * Reached from the write hook of whichever environment completes the run, which is the first
+   * point at which the union of every environment's reachability exists and every reference to
+   * the sheet is on disk. A run that never completes — an environment declared and never built
+   * — leaves the sheets whole, and says so as the process exits.
+   */
+  const finalizeDeferredSheetsIfComplete = async (
+    /** An environment proving it completes the run from inside its own output hook. */
+    candidate?: string,
+    /** Its bundle, whose references are still in memory. */
+    bundle?: object,
+    sourcemap?: StaticCompilationSession['sourcemap'],
+  ) => {
+    if (!staticSession.deferredSheets.length) return
+    if (remainingEnvironments(staticSession, candidate).length) return
+
+    const sheets = staticSession.deferredSheets.splice(0)
+    const { finalizeDeferredSheets } = await loadCssOutputModule()
+
+    // The final prune records what it removed from source, which replaces the provisional
+    // loss history outright: a class the provisional prune removed and the final one kept is
+    // no longer lost.
+    const committed = staticSession.prunedClasses
+    staticSession.prunedClasses = new Set()
+    let finalized: ReturnType<typeof finalizeDeferredSheets>
+    let lost: Set<string>
+    try {
+      finalized = finalizeDeferredSheets(sheets, staticSession, {
+        prune: pruneCss,
+        requiredClasses: currentRequiredClasses(),
+        outputs: staticSession.writtenOutputs,
+        bundle,
+        sourcemap,
+      })
+    } finally {
+      lost = staticSession.prunedClasses
+      staticSession.prunedClasses = committed
+    }
+
+    // The loss history belongs to the sheet's environment, so a later rebuild of another
+    // environment alone can notice that a class it compiles is already gone from the file.
+    for (const sheet of finalized) {
+      for (const slot of liveOutputSlotsByEnvironment.get(sheet.environment)?.values() ?? []) {
+        slot.prunedClasses = new Set(lost)
+      }
+    }
+    rebuildLivePrunedClasses()
+
+    for (const sheet of finalized) {
+      if (!sheet.renamed) continue
+      logger.info(
+        'vite',
+        `Pruned ${sheet.originalFileName} against every environment once the last had written, which restored ` +
+          `a rule the earlier prune removed: ${sheet.before} → ${sheet.after} bytes, now ${sheet.renamed}.`,
+      )
+    }
+  }
+
   const observeEnvironmentBuildStart = (environment: string) => {
     const serial = (nextBuildSerialByEnvironment.get(environment) ?? 0) + 1
     nextBuildSerialByEnvironment.set(environment, serial)
@@ -1130,6 +1195,9 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     rebuildLivePrunedClasses()
   }
 
+  staticSession.finalizeDeferred = ({ environment, bundle, sourcemap }) =>
+    finalizeDeferredSheetsIfComplete(environment, bundle, sourcemap)
+
   staticSession.beginOutputProjection = (environment, outputOptions, bundle, replacesGeneratedStylesheet) => {
     const generation = preparedGenerations.get(environment)
     if (!generation || transformStateByEnvironment.get(environment) !== generation.state) {
@@ -1157,9 +1225,22 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       restore() {
         if (restored) return
         restored = true
-        const stage = replacesGeneratedStylesheet
-          ? { cssDigest: bambooCssDigest(bundle), prunedClasses: new Set(staticSession.prunedClasses) }
-          : {}
+        // Merged with what an earlier projection over this same output recorded. The early
+        // prune and the late pass each open one, and the loss history has to describe the
+        // bundle as both left it. The digest is always taken now: the late pass is the last
+        // Bamboo sees of the bundle, and a plugin between the two that reshaped the sheet — the
+        // RSC plugin empties assets in its scan builds — is not the after-the-fact rewrite the
+        // finalizer's comparison exists to catch. A sheet that is gone by then digests to
+        // nothing, and the late pass's own check answers for whether it had to be there.
+        const previous = outputStageByBundle.get(bundle) ?? outputStageByOptions.get(outputOptions)
+        const stage: OutputStage = replacesGeneratedStylesheet
+          ? {
+              cssDigest: bambooCssDigest(bundle),
+              prunedClasses: new Set([...(previous?.prunedClasses ?? []), ...staticSession.prunedClasses]),
+            }
+          : previous
+            ? { cssDigest: bambooCssDigest(bundle), prunedClasses: new Set(previous.prunedClasses ?? []) }
+            : {}
         outputStageByBundle.set(bundle, stage)
         outputStageByOptions.set(outputOptions, stage)
         staticSession.prunedClasses = committedPrunedClasses
@@ -1631,6 +1712,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
   let styleCompiler: StaticStyleSetCompiler | undefined
   let command: 'build' | 'serve' = 'build'
   let defaultEmitAssets = true
+  let exitWarningInstalled = false
 
   /**
    * Expand semantic leaf reads through the Project's exact resolution paths.
@@ -1945,6 +2027,23 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       // built, and the class names in the bundle already named from it.
       host.setCommand(config.command)
       defaultEmitAssets = config.build?.emitAssets ?? (!config.build?.ssr || config.build?.ssrEmitAssets === true)
+
+      // A sheet written whole for a run that never completes would otherwise ship unpruned in
+      // silence — the shape pruning used to go missing in. There is no whole-run hook to say it
+      // from: `buildApp` runs before the default environment loop, not after it.
+      if (config.command === 'build' && !exitWarningInstalled) {
+        exitWarningInstalled = true
+        process.once('beforeExit', () => {
+          if (!staticSession.deferredSheets.length) return
+          logger.warn(
+            'vite',
+            `The stylesheet was pruned against an incomplete run: ` +
+              `${truncateList(remainingEnvironments(staticSession), { unit: 'environment', separator: ', ' })} never ` +
+              `completed, so a rule only those reach was never restored. Build every declared environment, or set ` +
+              `\`bamboocss({ pruneCss: false })\` to ship the full extracted stylesheet.`,
+          )
+        })
+      }
       // `closeBundle` has only pre/normal/post ordering. Another post-enforced user plugin may be
       // declared after Bamboo, so placing the committer last in Bamboo's own returned array would
       // not make it last globally. At this point Vite has assembled its complete input-plugin
@@ -2249,9 +2348,16 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
         //
         // `prunedClasses` is only ever filled by a prune that already ran, and a prune keeps
         // everything marked used, so an intersection can only mean a marker that arrived after.
-        const lost = currentWillEmitCss
-          ? []
-          : [...staticSession.usedClasses].filter((className) => staticSession.prunedClasses.has(bare(className)))
+        //
+        // Not while a written sheet is waiting to be finalized: that sheet was pruned against
+        // an incomplete run on purpose, and the finalization at the last environment's write
+        // is what restores a rule this environment reached. The guard is for the runs that
+        // have no finalization coming — an in-memory build, or one that never announced its
+        // environments.
+        const lost =
+          currentWillEmitCss || staticSession.deferredSheets.length
+            ? []
+            : [...staticSession.usedClasses].filter((className) => staticSession.prunedClasses.has(bare(className)))
         if (lost.length) {
           throw new Error(
             `bamboocss: ${lost.length} class(es) compiled in the ${JSON.stringify(environment)} environment were ` +
@@ -2261,11 +2367,13 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
                 lost.map((className) => `  ${className}`),
                 { unit: 'class', separator: '\n' },
               )}\n\n` +
-              `The stylesheet is finalized by the environment that imports it — the client, which builds first — so it ` +
-              `is pruned against what that environment compiled. These classes are reached only from here, so no rule ` +
-              `for them survived.\n\n` +
-              `That usually means a styled component which renders only on the server. Either give the client a path ` +
-              `to it, or set \`bamboocss({ pruneCss: false })\` to ship the whole extracted stylesheet.`,
+              `The stylesheet was pruned before this environment compiled. A run that announces its environments ` +
+              `— \`builder\` in the Vite config, which every framework building more than one sets — holds pruning ` +
+              `back until the last one has written, so this is a run that built environments one at a time without ` +
+              `saying so, or a rebuild of this environment alone after the sheet was finalized. These classes are ` +
+              `reached only from here, so no rule for them survived.\n\n` +
+              `Configure \`builder\` so the run announces its environments, rebuild every environment together, or ` +
+              `set \`bamboocss({ pruneCss: false })\` to ship the whole extracted stylesheet.`,
           )
         }
 
@@ -2604,15 +2712,31 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     writeBundle: {
       order: 'pre',
       sequential: true,
-      handler(outputOptions, bundle) {
+      async handler(outputOptions, bundle) {
+        const environment = environmentName(this)
+
+        // Recorded before publishing, so a finalization this very output completes can rewrite
+        // the references it wrote. By `fileName` rather than by key: the CSS plugin renames an
+        // asset in place, and Rolldown refuses a re-keyed bundle.
+        const outputDir = outputOptions.dir ?? (outputOptions.file ? dirname(outputOptions.file) : undefined)
+        if (outputDir) {
+          staticSession.writtenOutputs.push({
+            environment,
+            dir: resolve(outputDir),
+            files: Object.values(bundle).map((output) => output.fileName),
+          })
+        }
+
         // Reaching any write hook proves the bundler has already replaced every file for this
         // output. Publish immediately: a later writeBundle rejection cannot put the old bytes
         // back, so retaining the old contribution would make Bamboo disagree with the disk in
         // the opposite direction. Generate/render failures never enter this phase.
         const identity = outputIdentityByBundle.get(bundle) ?? outputIdentityByOptions.get(outputOptions)
-        if (identity?.environment === environmentName(this)) {
+        if (identity?.environment === environment) {
           publishPreparedOutput(identity.environment, identity.outputToken, identity.outputSlot, true)
         }
+
+        await finalizeDeferredSheetsIfComplete()
       },
     },
   }
@@ -2640,5 +2764,10 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
 
   // The css plugin first: it owns the extraction the compiler's context reads from, and Vite
   // preserves array order within one `enforce` bucket.
-  return [bamboocssCss({ configPath, cwd, host, session: staticSession, pruneCss }), compiler, compilerSfc]
+  return [
+    bamboocssCss({ configPath, cwd, host, session: staticSession, pruneCss }),
+    bamboocssCssEarly({ session: staticSession, pruneCss }),
+    compiler,
+    compilerSfc,
+  ]
 }

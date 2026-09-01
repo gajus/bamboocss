@@ -35,6 +35,8 @@ with workspace support.
  /vite-ts/, /astro/, /nuxt/, /svelte/, /solid-ts/,
  /preact-ts/, /qwik-ts/,
   /storybook/, /component-lib/    # per-framework integration apps
+  /rsc/            # React Server Components through @vitejs/plugin-rsc; its test asserts that a
+                   # sheet emitted by the server build is pruned against every environment
 
 /website/          # Documentation site
 ```

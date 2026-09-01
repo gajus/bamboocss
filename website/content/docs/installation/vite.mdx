@@ -209,16 +209,27 @@ that and keep the pruning. The build prints one line whenever pruning is off, so
 
 ### Builds with more than one environment
 
-An SSR framework builds a client bundle and a server bundle, and the stylesheet is emitted and finalized by the one that
-imports it — usually the client, which finishes before the server environment has compiled anything. The sheet is pruned
-against what that environment compiled, without waiting for the rest.
+An SSR framework builds a client bundle and a server bundle, and the stylesheet is emitted by the one that imports it,
+usually the client, which finishes before the server environment has compiled anything. Reachability is only whole once
+every environment has contributed. So a run that announces its environments — `builder` in the Vite config, which every
+framework building more than one sets — prunes the sheet against what it knows so far, writes it under a name hashed
+from those bytes, and prunes it again from its unpruned source once the last environment has written its output. Usually
+that produces the bytes already on disk, and nothing moves. When a later environment restored a rule, the final bytes go
+under a new name and every reference to it is rewritten in place: the HTML, the manifest, a server bundle that embeds
+the client's asset names, and any copy of the sheet a framework wrote into another output.
 
-Waiting was the old behaviour, and it meant never pruning at all: react-router, Remix, Nuxt, SvelteKit and Qwik all
-build the client first, so the feature was inert in most production apps — silently, since a build with nothing to prune
-looks exactly like one that skipped it.
+```
+🎋 info [vite] Pruned assets/index-C3xT9k.css against every environment once the last had written, which restored a rule the earlier prune removed: 3959 → 4102 bytes, now assets/index-C3xT9k.b-cUVtMv.css.
+```
 
-The case that costs is a class only the server graph reaches. Its rule is pruned, and rather than ship markup naming a
-class with no rule behind it, the build fails and names them:
+A class only the server graph reaches keeps its rule. That is what a styled component rendering only on the server
+needs, and what React Server Components need for most components, since most never reach the client graph. The sheet is
+pruned in a `pre`-ordered `generateBundle` hook, so a plugin that records asset names in its own hook — the RSC plugin's
+manifest does — records the final name.
+
+An in-memory build (`write: false`) has no file to finalize, and a run that builds environments one at a time without
+announcing them has no last environment to wait for. Both prune the sheet as it is emitted, and a class a later
+environment compiles that the sheet no longer carries fails that build, naming the classes:
 
 ```
 bamboocss: 2 class(es) compiled in the "ssr" environment were already pruned out of a
@@ -228,12 +239,8 @@ stylesheet emitted by an earlier one. Elements carrying them would render unstyl
   h_\[31\.3px\]
 ```
 
-A styled component that renders only on the server is what trips this; anything the client also renders is compiled in
-both environments and never reaches it. Either give the client a path to that component, or set `pruneCss: false` to
-ship the whole extracted stylesheet.
-
-Nothing to configure, and nothing about how the run is driven changes the outcome — `vite build`, `builder.buildApp()`
-and a script calling `builder.build(environment)` itself all behave the same way.
+Configure `builder` so the run announces itself, or set `pruneCss: false` to ship the whole extracted stylesheet. A run
+that declares an environment and never builds it is reported as the process exits.
 
 ### Seeing every diagnostic
 

@@ -3398,25 +3398,79 @@ export default defineConfig({
   }, 180_000)
 
   /**
-   * The stylesheet is emitted and pruned by the environment that imports it, and in an SSR app
-   * that is the client — which builds *first*, before the server environment has transformed a
-   * single module. A class only the server graph reaches is therefore not in the reachability
-   * set the prune consults, and its rule goes.
+   * The stylesheet is emitted by the environment that imports it, and in an SSR app that is the
+   * client — which builds *first*, before the server environment has transformed a single
+   * module. A class only the server graph reaches is therefore not in reachability when the
+   * sheet is emitted.
    *
-   * Holding pruning back until the whole run had contributed was the old answer, and it meant
+   * Holding the sheet back until the whole run had contributed was the old answer, and it meant
    * never pruning at all under react-router, Remix, Nuxt, SvelteKit or Qwik — every one builds
-   * the client first. The feature was inert in most production apps, silently, because a build
-   * with nothing to prune looks exactly the same.
-   *
-   * So it prunes, and this is the case where that is wrong. It has to fail: one project lost
-   * 39% of its atoms to a silent version of this, presenting as rarely-used classes not
-   * applying, `md:{display:inline-block}` among them — a conditional atom is exactly the kind
-   * only one of the two graphs tends to reach.
+   * the client first. So the sheet is pruned against what the run knows, and a written one is
+   * pruned again from source once the last environment has written. An in-memory build has no
+   * file to finalize, so for it the guard stays: one project lost 39% of its atoms to a silent
+   * version of this, `md:{display:inline-block}` among them, and that must fail rather than ship.
    */
-  test('a class only the later environment reaches fails the build', async () => {
+  test('a class only the later environment reaches fails an in-memory build, which cannot be finalized', async () => {
     const builder = await twoEnvironmentBuilder(true)
 
     await expect(buildBothEnvironments(builder)).rejects.toThrow(/already pruned out of a stylesheet/)
+  }, 180_000)
+
+  /**
+   * The written case. The client writes the sheet pruned against itself; when the server
+   * environment finishes, the sheet is pruned again from source against both, which restores the
+   * server-only rules, so the final bytes go under a new name and every reference to it — the
+   * HTML, the manifest — is rewritten in place.
+   */
+  test('a written sheet is pruned against every environment once the last has written', async () => {
+    const html = join(cwd, '__env-index.html')
+    const clientOutDir = join(cwd, '__env-finalized-client-out')
+    const ssrOutDir = join(cwd, '__env-finalized-ssr-out')
+    writeFileSync(html, `<script type="module" src="/src/__env-client.tsx"></script>`)
+
+    try {
+      const builder = await createBuilder({
+        root: cwd,
+        logLevel: 'silent',
+        css: { postcss: { plugins: [] } },
+        plugins: [bamboocss({ cwd, reportSummary: false })],
+        build: { minify: false, emptyOutDir: true, rollupOptions: { external: [/^react/] } },
+        builder: {},
+        environments: {
+          client: {
+            build: {
+              outDir: clientOutDir,
+              manifest: true,
+              cssCodeSplit: false,
+              rollupOptions: { input: html, output: { assetFileNames: 'assets/[name]-[hash][extname]' } },
+            },
+          },
+          ssr: {
+            build: { ssr: true, outDir: ssrOutDir, lib: { entry: envSsrEntry, formats: ['es'], fileName: 'env-ssr' } },
+          },
+        },
+      })
+      await builder.build(builder.environments.client!)
+      await builder.build(builder.environments.ssr!)
+
+      const cssFiles = readdirSync(join(clientOutDir, 'assets')).filter((file) => file.endsWith('.css'))
+      expect(cssFiles, 'one sheet, and only the finalized one').toHaveLength(1)
+      const [cssFile] = cssFiles
+      expect(cssFile).toMatch(/\.b-[A-Za-z0-9]+\.css$/)
+
+      const css = readFileSync(join(clientOutDir, 'assets', cssFile!), 'utf8')
+      expect(css, 'the client class').toContain('31.1px')
+      expect(css, 'the class only the ssr environment reaches').toContain('31.3px')
+      expect(css, 'the condition only the ssr environment reaches').toContain('inline-block')
+      expect(css, 'the variant nothing selects').not.toContain('31.7px')
+
+      expect(readFileSync(join(clientOutDir, '__env-index.html'), 'utf8')).toContain(`assets/${cssFile}`)
+      expect(readFileSync(join(clientOutDir, '.vite/manifest.json'), 'utf8')).toContain(`assets/${cssFile}`)
+    } finally {
+      rmSync(html, { force: true })
+      rmSync(clientOutDir, { force: true, recursive: true })
+      rmSync(ssrOutDir, { force: true, recursive: true })
+    }
   }, 180_000)
 
   /**

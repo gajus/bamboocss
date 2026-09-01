@@ -12,6 +12,48 @@ export interface StaticOutputProjection {
   restore(): void
 }
 
+/**
+ * A generated stylesheet written while other environments still had to compile.
+ *
+ * Reachability is complete only once every environment has contributed, and the sheet is
+ * emitted by whichever environment imports it — usually the client, which builds first. So the
+ * sheet goes to disk pruned against what the run knows so far, under a name hashed from those
+ * bytes, and is pruned again from its unpruned source once the last environment has written.
+ * When that restores a rule, the final bytes go under a new name and every written reference
+ * moves with them; when it does not, nothing on disk changes.
+ */
+export interface DeferredSheet {
+  /** The environment whose bundle carried the sheet. */
+  environment: string
+  /** The output directory it was written under, absolute. */
+  dir: string
+  /** The name Vite gave the sheet, before any rename. */
+  originalFileName: string
+  /** The name it was written under, relative to `dir`. */
+  fileName: string
+  /** The sheet as extracted, before any pruning. */
+  source: string
+  /** The bytes on disk under `fileName`. */
+  provisional: string
+  sourcemap: StaticCompilationSession['sourcemap']
+  /**
+   * The asset as the bundler holds it, and the bundle it sits in, so a finalization can move
+   * them too. A framework that keeps a finished build's bundle and copies its stylesheet into a
+   * later one — `@vitejs/plugin-rsc` does — then copies the final bytes under the final name.
+   */
+  asset?: { fileName: string; source: string | Uint8Array }
+  bundle?: Record<string, unknown>
+}
+
+/** One output an environment wrote, for rewriting the references a finalized sheet's rename moves. */
+export interface WrittenOutput {
+  environment: string
+  /** The output directory, absolute. */
+  dir: string
+  /** File names relative to `dir`, as the bundler reported them. */
+  files: string[]
+}
+
 /** Shared state between the build-time fold and the virtual CSS module. */
 export interface StaticCompilationSession {
   /** Resolved CSS layer name that carries generated atomic utilities. */
@@ -64,6 +106,24 @@ export interface StaticCompilationSession {
    * decides on; see `bare` there.
    */
   prunedClasses: Set<string>
+  /** Stylesheets written whole while environments remained, for the last one to finalize. */
+  deferredSheets: DeferredSheet[]
+  /** Every output this run has written, in the order the bundler wrote them. */
+  writtenOutputs: WrittenOutput[]
+  /** Sheet assets already pruned in this generation, so the late pass leaves them alone. */
+  prunedAssets: WeakSet<object>
+  /**
+   * Finalize the deferred sheets if `environment` completes the run, rewriting `bundle` too.
+   *
+   * Installed by the compiler, which owns the reachability projection. Reached from the early
+   * output hook of the environment that completes the run, before any other plugin reads a
+   * name — a name a framework records in its own hook has to already be the final one.
+   */
+  finalizeDeferred?: (options: {
+    environment: string
+    bundle: object
+    sourcemap?: StaticCompilationSession['sourcemap']
+  }) => Promise<void>
   markClassUsed(className: string): void
 }
 
@@ -81,6 +141,9 @@ export const createStaticCompilationSession = (): StaticCompilationSession => {
     participatingEnvironments: new Set(),
     completedEnvironments: new Set(),
     prunedClasses: new Set(),
+    deferredSheets: [],
+    writtenOutputs: [],
+    prunedAssets: new WeakSet(),
     beginOutputProjection(_environment, _outputOptions, _bundle, replacesGeneratedStylesheet) {
       if (replacesGeneratedStylesheet) session.prunedClasses.clear()
       const prunable = new Set([...session.prunableClasses].map((className) => className.replaceAll('\\', '')))

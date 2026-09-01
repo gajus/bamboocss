@@ -485,9 +485,15 @@ describe('late CSS asset renaming', () => {
     entry,
   })
 
-  /** The rename moves `fileName` in place; re-keying `bundle` is what Rolldown refuses. */
+  /**
+   * By value rather than by key: the rename moves `fileName` in place and re-keys the bundle
+   * where the bundler allows it, which Rollup does and Rolldown refuses.
+   */
   const renamedName = (bundle: Record<string, unknown>) =>
-    (bundle[CSS_NAME] as { fileName: string } | undefined)?.fileName
+    Object.values(bundle).find(
+      (output): output is { fileName: string } =>
+        typeof output === 'object' && output !== null && (output as { type?: string }).type === 'asset',
+    )?.fileName
 
   test('renames the asset and rewrites chunk code when referencedFiles is absent', () => {
     const { bundle, entry } = bundleWith(chunk())
@@ -563,7 +569,7 @@ describe('saying why the stylesheet was not pruned', () => {
     `@layer utilities{.h_\\[345\\.6789px\\]{height:345.6789px}}` +
     `:root{--made-with-bamboo:🌱}`
 
-  const generate = async (options: { pruneCss?: boolean; pending?: string[] }) => {
+  const generate = async (options: { pruneCss?: boolean; pending?: string[]; write?: boolean }) => {
     const session = createStaticCompilationSession()
     session.prunableClasses.add(esc('h_[345.6789px]'))
     if (options.pending) {
@@ -579,11 +585,17 @@ describe('saying why the stylesheet was not pruned', () => {
     const lines: string[] = []
     const spy = vi.spyOn(console, 'log').mockImplementation((...args) => void lines.push(args.join(' ')))
     try {
-      await handler.call({ environment: { name: 'client' } } as never, {} as never, bundle as never, {} as never)
+      await handler.call(
+        { environment: { name: 'client' } } as never,
+        { dir: join(cwd, 'dist') } as never,
+        bundle as never,
+        (options.write === true) as never,
+      )
     } finally {
       spy.mockRestore()
     }
-    return { lines: lines.join('\n'), source: String(bundle['a.css']!.source) }
+    const asset = Object.values(bundle).find((output) => output.type === 'asset')!
+    return { lines: lines.join('\n'), source: String(asset.source), session }
   }
 
   test('says so when the user turned it off', async () => {
@@ -594,14 +606,37 @@ describe('saying why the stylesheet was not pruned', () => {
   })
 
   /**
-   * `buildEnd` in `plugin.ts` is what catches a class only a later environment reaches, so
-   * this no longer waits for one. Waiting was the whole reason the feature never ran under
-   * react-router, Remix, Nuxt, SvelteKit or Qwik.
+   * Reachability is only whole once every environment has compiled, and the sheet is carried by
+   * the one that imports it — usually the first to build. So a written sheet is pruned against
+   * what the run knows so far and handed on with its unpruned source, for the last environment
+   * to prune again and rename only if that restores a rule.
    */
-  test('prunes even with an environment still to compile', async () => {
-    const { source } = await generate({ pending: ['ssr'] })
+  test('prunes against what the run knows while an environment is still to compile, and hands the written sheet on', async () => {
+    const { source, session } = await generate({ pending: ['ssr'], write: true })
 
     expect(source, 'the unreachable atom went').not.toContain('345.6789px')
+    expect(session.deferredSheets).toHaveLength(1)
+    const [handedOn] = session.deferredSheets
+    expect(handedOn).toMatchObject({
+      environment: 'client',
+      dir: join(cwd, 'dist'),
+      originalFileName: 'a.css',
+      fileName: expect.stringMatching(/^a\.b-[A-Za-z0-9]+\.css$/),
+      source: sheet,
+      provisional: source,
+      sourcemap: false,
+    })
+    // The asset itself and the bundle around it travel along, so a finalization can move them.
+    expect(handedOn?.asset?.fileName).toBe(handedOn?.fileName)
+    expect(handedOn?.bundle?.[handedOn.fileName]).toBe(handedOn?.asset)
+  })
+
+  /** An in-memory build has no file to finalize, so the guard in `buildEnd` stays its answer. */
+  test('prunes an in-memory build the same way, with nothing to hand on', async () => {
+    const { source, session } = await generate({ pending: ['ssr'] })
+
+    expect(source, 'the unreachable atom went').not.toContain('345.6789px')
+    expect(session.deferredSheets).toEqual([])
   })
 
   /** The user's own setting still wins, and still stops the pruning outright. */

@@ -1,3 +1,4 @@
+import { dirname, resolve } from 'node:path'
 import { logger } from '@bamboocss/logger'
 import { esc, truncateList } from '@bamboocss/shared'
 import type { Plugin, ViteDevServer } from 'vite'
@@ -75,6 +76,166 @@ interface BambooCssPluginOptions {
   /** See `BambooVitePluginOptions.pruneCss`. @default true */
   pruneCss?: boolean
 }
+
+/** The plugin-context shape the output hooks read. */
+type OutputContext = {
+  environment?: {
+    name?: string
+    config?: {
+      build?: {
+        sourcemap?: StaticCompilationSession['sourcemap']
+        ssr?: boolean | string
+        ssrEmitAssets?: boolean
+      }
+    }
+  }
+}
+
+/**
+ * Prune every generated sheet in `bundle` this generation has not pruned yet.
+ *
+ * Reached twice per output. The early hook, ordered `pre`, reaches a sheet Vite emitted while
+ * rendering chunks — every `cssCodeSplit: true` build — before any other plugin's
+ * `generateBundle` reads its name, so a framework recording asset names records the final one.
+ * That was not a courtesy: `@vitejs/plugin-rsc` snapshots the server build's stylesheet name in
+ * a normal-order hook and writes it into a manifest at the end of the run, so a rename in a
+ * `post` hook left every server-rendered page linking a stylesheet that no longer existed. The
+ * late hook, ordered `post`, reaches what Vite emits from its own `generateBundle` — the single
+ * `style.css` of a `cssCodeSplit: false` build. Exactly one of the two opens a projection for a
+ * given sheet.
+ *
+ * Pruning waits for no one; finalizing does. The stylesheet is emitted by the environment that
+ * *imports* it, which in an SSR app is the client — and the client builds first, before the
+ * server environment has transformed a single module. Two answers were tried before this one.
+ * Holding the sheet back until every environment had contributed meant never pruning in any SSR
+ * framework, since the client's output is on disk before the server starts. Pruning against the
+ * client alone, with a guard that failed the build when a later environment reached a rule it had
+ * removed, made a styled component that renders only on the server a build failure — and under
+ * React Server Components most components never reach the client graph at all.
+ *
+ * So while environments remain, the sheet is pruned against what the run knows so far and
+ * written under a name hashed from those bytes, and it is recorded as deferred with its unpruned
+ * source. When the last environment writes its output, `bamboocss:output-write-observer` prunes
+ * that source again against the union of every environment's reachability. Usually the result is
+ * the bytes already on disk, and nothing moves. When a later environment restored a rule, the
+ * final bytes go under a new name, every written reference moves with them, and so does any copy
+ * of the provisional sheet another output carries. A single-environment build, a run whose
+ * sheet-carrying environment builds last, and an in-memory build take the direct path, where the
+ * guard in `buildEnd` still fails a later environment that reaches a rule the sheet lost.
+ */
+const pruneEmittedSheets = async (
+  context: OutputContext,
+  session: StaticCompilationSession,
+  outputOptions: { dir?: string; file?: string },
+  bundle: object,
+  isWrite: boolean,
+  pruneCss: boolean,
+) => {
+  // Load the complete parser/remapping closure before opening the output projection. A
+  // rejected chunk load therefore publishes no partial reachability or prune state, and the
+  // process-wide retryable loader lets a later rebuild recover.
+  const { containsGeneratedCssAsset, optimizeStaticCssAssets } = await loadCssOutputModule()
+  const carriesSheet = containsGeneratedCssAsset(bundle as never, session.prunedAssets)
+
+  const environmentName = context.environment?.name ?? 'default'
+  // This environment is the candidate completing the run, not one still to compile: it has
+  // finished transforming, and what it emits here is what it contributes.
+  const pending = remainingEnvironments(session, environmentName)
+  const completesRun = !pending.length && session.deferredSheets.length > 0
+  if (!carriesSheet && !completesRun) return
+
+  // This bundle now replaces the previously emitted stylesheet, so its prune result also
+  // replaces that sheet's loss history. `optimizeStaticCssAssets` repopulates the set from
+  // this generation. Opened even for a bundle carrying no sheet when the run completes here:
+  // the projection is what makes the reachability below the whole run's.
+  const outputProjection = session.beginOutputProjection(environmentName, outputOptions, bundle, carriesSheet)
+  try {
+    const outputDir = outputOptions.dir ?? (outputOptions.file ? dirname(outputOptions.file) : undefined)
+    const deferred = pruneCss && isWrite === true && outputDir !== undefined && pending.length > 0
+    const remaining = truncateList(pending, { unit: 'environment', separator: ', ' })
+    const sourcemap = context.environment?.config?.build?.sourcemap ?? session.sourcemap
+
+    // This environment completes the run, so the sheets earlier ones deferred can be finalized
+    // now — inside this projection, where reachability is the whole run's, and before any
+    // other plugin's hook reads a name out of this bundle or copies a sheet into it.
+    if (completesRun) await session.finalizeDeferred?.({ environment: environmentName, bundle, sourcemap })
+    if (!carriesSheet) return
+
+    const { sheets, results } = optimizeStaticCssAssets(bundle as never, session, {
+      environment: environmentName,
+      prune: pruneCss,
+      requiredClasses: outputProjection.requiredClasses,
+      // Per environment rather than from the session, which one `configResolved` per
+      // environment leaves holding whichever resolved last.
+      sourcemap: context.environment?.config?.build?.sourcemap,
+      handled: session.prunedAssets,
+    })
+
+    // Said out loud, both ways. Pruning is the difference between the sheet a project
+    // measures and the one it extracted, and it used to go missing in silence — a build
+    // that quietly stopped pruning looked exactly like one that had nothing to prune.
+    if (sheets && !pruneCss) {
+      logger.info('vite', 'Reachability pruning is off (`pruneCss: false`). The full extracted stylesheet ships.')
+    }
+
+    if (!sheets || !pruneCss || !pending.length) return
+
+    if (deferred) {
+      for (const result of results) {
+        session.deferredSheets.push({
+          environment: environmentName,
+          dir: resolve(outputDir!),
+          originalFileName: result.original,
+          fileName: result.fileName,
+          source: result.source,
+          provisional: result.optimized,
+          sourcemap,
+          asset: result.asset,
+          bundle: bundle as Record<string, unknown>,
+        })
+      }
+      logger.debug(
+        'vite',
+        `Pruned the stylesheet against what the run knows, with ${remaining} still to compile. It is pruned ` +
+          `again from source once the last environment has written its output, and renamed only if that ` +
+          `restores a rule.`,
+      )
+    } else {
+      logger.debug(
+        'vite',
+        `Pruning against the ${JSON.stringify(environmentName)} environment with ${remaining} still to ` +
+          `compile. An in-memory build has no file to finalize, so a class only those reach fails the build ` +
+          `rather than shipping without its rule.`,
+      )
+    }
+  } finally {
+    outputProjection.restore()
+  }
+}
+
+/**
+ * The early half of the stylesheet's output lifecycle. @see `pruneEmittedSheets`
+ *
+ * A plugin of its own because one plugin carries one `generateBundle`, and this one has to be
+ * ordered `pre` while the checks in `bamboocssCss` have to see the finished bundle.
+ */
+export const bamboocssCssEarly = (options: { session: StaticCompilationSession; pruneCss?: boolean }): Plugin => ({
+  name: 'bamboocss:css-early',
+  sharedDuringBuild: true,
+  generateBundle: {
+    order: 'pre',
+    async handler(outputOptions, bundle, isWrite) {
+      await pruneEmittedSheets(
+        this as OutputContext,
+        options.session,
+        outputOptions,
+        bundle,
+        isWrite,
+        options.pruneCss ?? true,
+      )
+    },
+  },
+})
 
 /**
  * Serve bamboo's stylesheet as a virtual module, in dev and in build.
@@ -539,90 +700,19 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
 
     generateBundle: {
       order: 'post',
-      async handler(outputOptions, bundle) {
-        // Load the complete parser/remapping closure before opening the output projection. A
-        // rejected chunk load therefore publishes no partial reachability or prune state, and
-        // the process-wide retryable loader lets a later rebuild recover.
-        const { containsGeneratedCssAsset, optimizeStaticCssAssets } = await loadCssOutputModule()
-        const environment = (
-          this as {
-            environment?: {
-              name?: string
-              config?: {
-                build?: {
-                  sourcemap?: StaticCompilationSession['sourcemap']
-                  ssr?: boolean | string
-                  ssrEmitAssets?: boolean
-                }
-              }
-            }
-          }
-        ).environment
+      async handler(outputOptions, bundle, isWrite) {
+        const context = this as OutputContext
+        await pruneEmittedSheets(context, session, outputOptions, bundle, isWrite, pruneCss)
 
+        const { containsGeneratedCssAsset } = await loadCssOutputModule()
+        const environment = context.environment
         const environmentName = environment?.name ?? 'default'
         const replacesGeneratedStylesheet = containsGeneratedCssAsset(bundle)
-        const outputProjection = session.beginOutputProjection(
-          environmentName,
-          outputOptions,
-          bundle,
-          replacesGeneratedStylesheet,
-        )
+
+        // Opened only to read this environment's own view; nothing here prunes, so the stage
+        // an earlier projection recorded is left standing.
+        const outputProjection = session.beginOutputProjection(environmentName, outputOptions, bundle, false)
         try {
-          /**
-           * Pruned against what this environment compiled, without waiting for the rest.
-           *
-           * The stylesheet is emitted and finalized by the environment that *imports* it, which
-           * in an SSR app is the client — and the client builds first, before the server
-           * environment has transformed a single module. Waiting for a complete answer therefore
-           * meant never pruning at all in any SSR framework: react-router, Remix, Nuxt, SvelteKit
-           * and Qwik all build the client first, and the client's output is on disk before the
-           * server environment starts. That is most production apps, and the feature was inert in
-           * every one of them — silently, since a build with nothing to prune looks identical.
-           *
-           * The reason for waiting was real: a class only the server graph reaches is not in this
-           * environment's reachability set, so pruning here removes rules the server-rendered
-           * markup still names. What makes it safe to prune anyway is that the mistake is
-           * *detectable* rather than silent — `buildEnd` in `plugin.ts` intersects every later
-           * environment's compiled classes against `prunedClasses` and fails the build naming
-           * them. A styled component that only ever renders on the server is the shape that
-           * trips it, and `pruneCss: false` is the answer when it does.
-           *
-           * So the trade is deliberate: a loud build failure in the rare case, in exchange for
-           * the feature working at all in the common one. It is the same reasoning as the
-           * unimported-`virtual:bamboo.css` check — a class with no rule behind it must never
-           * leave the build quietly.
-           */
-          const pending = remainingEnvironments(session)
-          if (pending.length) {
-            logger.debug(
-              'vite',
-              `Pruning against the ${JSON.stringify(environment?.name ?? 'default')} environment with ` +
-                `${truncateList(pending, { unit: 'environment', separator: ', ' })} still to compile. A class ` +
-                `only those reach fails the build rather than shipping without its rule.`,
-            )
-          }
-
-          // This bundle now replaces the previously emitted stylesheet, so its prune result also
-          // replaces that sheet's loss history. Clear only once an actual Bamboo asset exists:
-          // doing it earlier would forget the still-live client sheet when an SSR environment
-          // loads the virtual module but Vite suppresses its assets, or when a rebuild fails before
-          // generateBundle. `optimizeStaticCssAssets` repopulates the set from this generation.
-          const { sheets } = optimizeStaticCssAssets(bundle, session, {
-            environment: environmentName,
-            prune: pruneCss,
-            requiredClasses: outputProjection.requiredClasses,
-            // Per environment rather than from the session, which one `configResolved` per
-            // environment leaves holding whichever resolved last.
-            sourcemap: environment?.config?.build?.sourcemap,
-          })
-
-          // Said out loud, both ways. Pruning is the difference between the sheet a project
-          // measures and the one it extracted, and it used to go missing in silence — a build
-          // that quietly stopped pruning looked exactly like one that had nothing to prune.
-          if (sheets && !pruneCss) {
-            logger.info('vite', 'Reachability pruning is off (`pruneCss: false`). The full extracted stylesheet ships.')
-          }
-
           // A stylesheet that vanishes between here and disk is the worst shape a failure takes:
           // the build is green, every class in the markup is real, and nothing is styled. The
           // compiler knows it produced classes, so it can also insist something carries them —

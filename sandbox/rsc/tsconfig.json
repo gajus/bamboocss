@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "types": ["node", "vite/client", "@bamboocss/vite/client", "@vitejs/plugin-rsc/types"]
+  },
+  "include": ["src", "styled-system", "vite.config.ts", "bamboo.config.ts", "__tests__"]
+}

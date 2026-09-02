@@ -171,11 +171,36 @@ export const getName = (node: Node): string | undefined => {
  */
 export const getLiteralText = (node: Node): string => (node as Node & { text?: string }).text ?? node.getText()
 
-/** 1-based line and column for an offset, for a diagnostic that names a place in a file. */
+/** Where each line of a source text starts, held as long as the file object it was read off. */
+const lineStartsBySourceFile = new WeakMap<SourceFile, { text: string; starts: number[] }>()
+
+const lineStartsOf = (sourceFile: SourceFile) => {
+  const text = sourceFile.text
+  const cached = lineStartsBySourceFile.get(sourceFile)
+  if (cached && cached.text === text) return cached.starts
+  const starts = [0]
+  for (let index = text.indexOf('\n'); index !== -1; index = text.indexOf('\n', index + 1)) starts.push(index + 1)
+  lineStartsBySourceFile.set(sourceFile, { text, starts })
+  return starts
+}
+
+/**
+ * 1-based line and column for an offset, for a diagnostic that names a place in a file.
+ *
+ * Line starts are computed once per source text and searched. Slicing and splitting the text
+ * up to each offset was fine for a diagnostic or two; a source map asks this once per call
+ * site of a project, which made it quadratic in a file's length.
+ */
 export const getLineAndColumnAtPos = (sourceFile: SourceFile, pos: number): { line: number; column: number } => {
-  const upto = sourceFile.text.slice(0, pos)
-  const lastBreak = upto.lastIndexOf('\n')
-  return { line: upto.split('\n').length, column: pos - lastBreak }
+  const starts = lineStartsOf(sourceFile)
+  let low = 0
+  let high = starts.length - 1
+  while (low < high) {
+    const middle = (low + high + 1) >> 1
+    if (starts[middle]! <= pos) low = middle
+    else high = middle - 1
+  }
+  return { line: low + 1, column: pos - starts[low]! + 1 }
 }
 
 /** The named bindings of an import — `import { a, b } from 'x'`. */

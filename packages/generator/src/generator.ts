@@ -1,6 +1,7 @@
 import {
   Context,
   pruneKeyframes,
+  type AtomOrigin,
   prunePreflight,
   prunesPreflight,
   pruneTokenVars,
@@ -365,6 +366,23 @@ export class Generator extends Context {
 
   getParserCss = (decoder: StyleDecoder) => {
     return generateParserCss(this, decoder)
+  }
+
+  /**
+   * Each atom's first call site, by the class name the sheet writes it under.
+   *
+   * Only what the encoder recorded — see `StyleEncoder.recordOrigins` — so empty unless an
+   * integration asked for origins. Several hashes can decode to one class; the first wins.
+   */
+  getAtomOrigins = (): Map<string, AtomOrigin> => {
+    const byHash = this.encoder.atomOrigins()
+    const origins = new Map<string, AtomOrigin>()
+    if (!byHash.size) return origins
+    for (const atom of this.decoder.collect(this.encoder).atomic) {
+      const origin = byHash.get(atom.hash)
+      if (origin && !origins.has(atom.className)) origins.set(atom.className, origin)
+    }
+    return origins
   }
 
   getCss = (stylesheet?: Stylesheet) => {

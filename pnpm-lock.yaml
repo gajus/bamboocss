@@ -789,6 +789,9 @@ importers:
       '@bamboocss/types':
         specifier: workspace:*
         version: link:../types
+      '@jridgewell/gen-mapping':
+        specifier: 0.3.13
+        version: 0.3.13
       magic-string:
         specifier: 0.30.21
         version: 0.30.21
@@ -1074,6 +1077,9 @@ importers:
       '@bamboocss/vite':
         specifier: workspace:*
         version: link:../../packages/vite
+      '@jridgewell/trace-mapping':
+        specifier: ^0.3.31
+        version: 0.3.31
       '@types/react':
         specifier: 19.2.7
         version: 19.2.7

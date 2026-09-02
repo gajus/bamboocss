@@ -62,6 +62,8 @@ export function createParser(context: ParserOptions) {
      * recipe declared in another module stays invisible exactly as before.
      */
     resolveModule?: ResolveModule,
+    /** Whether result items may be attributed to their call site. @see `ParserResult.origins` */
+    origins = true,
   ) {
     if (!sourceFile) return
 
@@ -77,6 +79,7 @@ export function createParser(context: ParserOptions) {
     )
 
     const parserResult = new ParserResult(context, encoder)
+    parserResult.origins = origins
 
     // Recipes reached through an import, resolved before the early return below rather than
     // beside the in-file pre-pass. A file whose only bamboo-adjacent import is the recipe

@@ -45,6 +45,13 @@ const urlRegex = /^https?:\/\//
  * Membership is recorded even when the underlying hash was already present, since
  * the class name still belongs to this call's result.
  */
+/** Where the call site that encoded an atom sits, 1-based, for a source map to point at. */
+export interface AtomOrigin {
+  filePath: string
+  line: number
+  column: number
+}
+
 export interface EncoderScope {
   atomic: Set<string>
   /** recipe name -> variant hashes contributed by this call */
@@ -73,6 +80,21 @@ export interface EncoderScope {
   observed_recipes?: Set<string>
   /** Inline recipe configs registered while this owner was active. */
   inline_recipes?: Map<string, InlineRecipeContribution>
+  /**
+   * hash -> the call site this owner first encoded it at, while origins are being recorded.
+   *
+   * First within the owner, since a file's earliest call site is the one worth pointing a
+   * developer at; `mergeScope` keeps the target's entry for the same reason.
+   */
+  origins?: Map<string, AtomOrigin>
+  /**
+   * Inline recipe name -> the call site that declared it, while origins are being recorded.
+   *
+   * A recipe's atoms are written once per recipe, after extraction, under an owner of the
+   * recipe's own; this is what lets `atomOrigins` attribute them to the `cva` or `sva` call
+   * whose styles they are.
+   */
+  recipe_origins?: Map<string, AtomOrigin>
 }
 
 interface InlineRecipeContribution {
@@ -122,6 +144,14 @@ const mergeScope = (target: EncoderScope, source: EncoderScope) => {
   source.inline_recipes?.forEach((recipe, name) => {
     const recipes = (target.inline_recipes ??= new Map())
     if (!recipes.has(name)) recipes.set(name, recipe)
+  })
+  source.origins?.forEach((origin, hash) => {
+    const origins = (target.origins ??= new Map())
+    if (!origins.has(hash)) origins.set(hash, origin)
+  })
+  source.recipe_origins?.forEach((origin, name) => {
+    const origins = (target.recipe_origins ??= new Map())
+    if (!origins.has(name)) origins.set(name, origin)
   })
 }
 
@@ -971,6 +1001,16 @@ export class StyleEncoder {
   /** The owner `withOwner` is recording for, if any. Nested calls defer to the outermost. */
   private activeOwner: string | null = null
 
+  /**
+   * Whether `processAtomic` notes the call site it is encoding for.
+   *
+   * Off unless an integration that will emit a source map asks — a dev server under Vite's
+   * `css.devSourcemap` — so nothing else computes positions it would never read.
+   */
+  recordOrigins = false
+  /** The call site `withOrigin` is encoding for, if any. */
+  private activeOrigin: AtomOrigin | null = null
+
   /** Stable owner rank shared by every ordered registry, including registries first touched later. */
   private ownerOrderRanks = new Map<string, OrderOwnerRank>()
   private nextFileOwnerOrderRank = 0
@@ -1182,6 +1222,61 @@ export class StyleEncoder {
    */
   withOwner = <T>(kind: FileOwnerKind, path: string, fn: () => T): T => {
     return this.withOwnerKey(ownerKey(kind, path), fn)
+  }
+
+  /**
+   * Run `fn` with `origin` as the call site every atom it encodes is attributed to.
+   *
+   * Nothing happens unless `recordOrigins` is on, so a parser can wrap every result item in
+   * this — it asks `recordOrigins` before computing a position at all.
+   */
+  withOrigin = <T>(origin: AtomOrigin | undefined, fn: () => T): T => {
+    if (!origin || !this.recordOrigins) return fn()
+    const previous = this.activeOrigin
+    this.activeOrigin = origin
+    try {
+      return fn()
+    } finally {
+      this.activeOrigin = previous
+    }
+  }
+
+  /**
+   * Every atom's first call site, by hash, over the extraction pass's reading of each file.
+   *
+   * Files are visited in path order, so the answer is the same whatever order they were read
+   * in, and a file's re-parse replaces its own entries through its owner scope. Only `extract`
+   * owners count: a bundler transform reads a module as its pipeline handed it over, whose
+   * lines need not be the file's. An inline recipe's atoms, written under the recipe's own
+   * owner by `atomizeObservedRecipes`, take the call site that declared the recipe — read at
+   * this point rather than when they were written, so a recipe that moved within its file
+   * answers with where it is now.
+   */
+  atomOrigins = (): Map<string, AtomOrigin> => {
+    const origins = new Map<string, AtomOrigin>()
+    const recipeOrigins = new Map<string, AtomOrigin>()
+    const owners = [...this.owners.keys()].sort()
+    for (const owner of owners) {
+      if (!owner.startsWith('extract:')) continue
+      const scope = this.owners.get(owner)
+      scope?.origins?.forEach((origin, hash) => {
+        if (!origins.has(hash)) origins.set(hash, origin)
+      })
+      scope?.recipe_origins?.forEach((origin, name) => {
+        if (!recipeOrigins.has(name)) recipeOrigins.set(name, origin)
+      })
+    }
+    if (recipeOrigins.size) {
+      for (const owner of owners) {
+        if (!owner.startsWith('recipe:')) continue
+        const origin = recipeOrigins.get(owner.slice('recipe:'.length))
+        if (!origin) continue
+        for (const hash of this.owners.get(owner)?.atomic ?? []) {
+          if (!origins.has(hash)) origins.set(hash, origin)
+        }
+      }
+    }
+    return origins
   }
 
   private withOwnerKey = <T>(owner: string, fn: () => T): T => {
@@ -1828,6 +1923,13 @@ export class StyleEncoder {
     }
     const scope = this.activeScope
     if (scope) (scope.observed_recipes ??= new Set()).add(name)
+    // Only an inline recipe is declared where it is observed. A config recipe's call sites are
+    // wrapped in no origin, so a config recipe's atoms stay unattributed rather than pointing
+    // at the first file that happened to use it.
+    if (scope && this.activeOrigin) {
+      const origins = (scope.recipe_origins ??= new Map())
+      if (!origins.has(name)) origins.set(name, this.activeOrigin)
+    }
   }
 
   constructor(private context: Pick<Context, 'isValidProperty' | 'recipes' | 'patterns' | 'conditions' | 'utility'>) {}
@@ -1936,10 +2038,13 @@ export class StyleEncoder {
 
     const scope = this.activeScope
     const unowned = this.activeOwner === null
+    const origin = this.activeOrigin
+    const origins = origin && scope ? (scope.origins ??= new Map()) : undefined
 
     set.forEach((hash) => {
       this.atomic.add(hash)
       if (scope) scope.atomic.add(hash)
+      if (origins && !origins.has(hash)) origins.set(hash, origin!)
       if (unowned) {
         this.atomicRefs.pin(hash)
         this.pinOrderKey(this.atomic, hash)

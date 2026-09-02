@@ -82,6 +82,8 @@ export interface BuilderSetupOptions {
   configPath?: string
   cwd?: string
   dev?: boolean
+  /** Record each atom's first call site during extraction, for `getAtomOrigins`. */
+  atomOrigins?: boolean
   /** A watcher-owned change journal. Without one, Builder performs its standalone filesystem scan. */
   sourceChanges?: BuilderSourceChanges
 }
@@ -249,7 +251,7 @@ export class Builder {
     const configPath = options.configPath ?? findConfig({ cwd: options.cwd })
 
     if (!this.context) {
-      return this.setupContext({ configPath, cwd: options.cwd, dev: options.dev })
+      return this.setupContext({ configPath, cwd: options.cwd, dev: options.dev, atomOrigins: options.atomOrigins })
     }
 
     const ctx = this.getContextOrThrow()
@@ -286,6 +288,7 @@ export class Builder {
       this.context = new BambooContext(conf)
     })
     const nextContext = this.getContextOrThrow()
+    nextContext.encoder.recordOrigins = Boolean(options.atomOrigins)
     if (options.sourceChanges?.needsConfigReload) {
       const { cwd: configCwd, dependencies } = nextContext.config
       nextContext.explicitDeps = dependencies
@@ -586,6 +589,7 @@ export class Builder {
     const { configPath, cwd, dev } = options
 
     const ctx = await loadConfigAndCreateContext({ configPath, cwd, dev })
+    ctx.encoder.recordOrigins = Boolean(options.atomOrigins)
 
     this.recordConfigDependencies(ctx, cwd)
 
@@ -908,6 +912,13 @@ export class Builder {
     })
     return ctx.getCss(sheet)
   }
+
+  /**
+   * Each atom's first call site, by class name, as recorded by the last `extract`.
+   *
+   * Empty unless `setup` was asked for `atomOrigins`.
+   */
+  getAtomOrigins = () => this.getContextOrThrow().getAtomOrigins()
 }
 
 interface FileMeta {
@@ -918,6 +929,8 @@ interface FileMeta {
 interface SetupContextOptions {
   configPath: string
   cwd?: string
+  /** @see `BuilderSetupOptions.atomOrigins` */
+  atomOrigins?: boolean
   /** Set by the integration; only a dev server knows it is one. @see `hash: 'auto'` */
   dev?: boolean
 }

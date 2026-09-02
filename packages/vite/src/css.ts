@@ -1,9 +1,11 @@
 import { dirname, resolve } from 'node:path'
+import type { AtomOrigin } from '@bamboocss/core'
 import { logger } from '@bamboocss/logger'
 import { esc, truncateList } from '@bamboocss/shared'
 import { bare } from './class-name'
 import type { Plugin, ViteDevServer } from 'vite'
 import { createCompilationHost, type CompilationBuilder, type CompilationHost } from './compilation-host'
+import type { CssSourceMap } from './css-output-module'
 import { createRetryableLazy, loadConfigModule, loadCssOutputModule } from './lazy-modules'
 import { remainingEnvironments, type StaticCompilationSession } from './static-session'
 
@@ -57,6 +59,7 @@ export const asError = (error: unknown, context: string): Error =>
 
 interface CssOutputValidator {
   pruneStaticCss(css: string, session: StaticCompilationSession, options?: { prune?: boolean }): string
+  cssSourceMap?(css: string, origins: ReadonlyMap<string, AtomOrigin>): CssSourceMap | undefined
 }
 
 interface BambooCssPluginOptions {
@@ -421,7 +424,14 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
    */
   let changeGeneration = 0
   let pendingGeneration = -1
-  let servedCss: { generation: number; css: string } | undefined
+  let servedCss: { generation: number; css: string; map?: CssSourceMap } | undefined
+  /**
+   * Whether the served stylesheet carries a source map: a dev server with Vite's
+   * `css.devSourcemap` on. Off, and the extraction pass records no call sites at all.
+   */
+  let devSourcemap = false
+  /** Each atom's first call site, by class name, from the last pass. @see `Builder.getAtomOrigins` */
+  let atomOrigins: ReadonlyMap<string, AtomOrigin> | undefined
 
   /**
    * Held by the host for its whole length, rather than only around each mutation.
@@ -468,6 +478,7 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
 
       // The whole stylesheet, so it carries the `@layer` order statement itself.
       const css = activeBuilder.toCss({ layerParams: true })
+      atomOrigins = devSourcemap ? activeBuilder.getAtomOrigins?.() : undefined
 
       session.prunableClasses.clear()
       session.viewTransitionClasses.clear()
@@ -587,6 +598,8 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
     async configResolved(config) {
       command = config.command
       host.setCommand(config.command)
+      devSourcemap = config.command === 'serve' && Boolean(config.css?.devSourcemap)
+      host.setDevSourcemap(devSourcemap)
       session.sourcemap = config.build.sourcemap
       session.cssCodeSplit = config.build.cssCodeSplit
       ssrBuildOptions = { ssr: config.build.ssr, ssrEmitAssets: config.build.ssrEmitAssets }
@@ -699,10 +712,11 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
         if (this.addWatchFile) {
           for (const file of session.extractedFiles) this.addWatchFile(file)
         }
-        return servedCss.css
+        return servedCss.map ? { code: servedCss.css, map: servedCss.map } : servedCss.css
       }
 
       let css: string
+      let map: CssSourceMap | undefined
       try {
         // Resolve the dev validator before taking a generation. Once the generation promise
         // settles, validation must remain in the same continuation with no intervening await:
@@ -710,7 +724,8 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
         // replaced on every pass. Waiting for the chunk between those two steps would let a
         // concurrent environment validate old bytes against a newer rule inventory. A rejected
         // chunk attempt leaves `prebuilt` untouched for the next request to retry.
-        const validateDevCss = command === 'serve' ? (await loadCssOutput()).pruneStaticCss : undefined
+        const cssOutput = command === 'serve' ? await loadCssOutput() : undefined
+        const validateDevCss = cssOutput?.pruneStaticCss
 
         // The `buildStart` pass, the first time. Cleared as it is taken, so a reload in dev —
         // which is what an invalidation ends in — regenerates rather than replaying it.
@@ -724,6 +739,11 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
         // parser here means an unimported prebuild never pays for the CSS-output closure; the
         // final production reachability removal remains in `generateBundle`.
         if (validateDevCss) css = validateDevCss(css, session, { prune: false })
+
+        // Off the served text, after every rewrite of it above: a map is positions into
+        // exactly the bytes the browser parses. Vite inlines it into the module it serves
+        // for the stylesheet, and DevTools then names the call site behind each rule.
+        if (devSourcemap && atomOrigins?.size) map = cssOutput?.cssSourceMap?.(css, atomOrigins)
       } catch (error) {
         throw asError(error, `failed to generate ${VIRTUAL_CSS_ID}`)
       }
@@ -732,7 +752,7 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
       // landed is still the answer to this request — exactly as before — but must not be
       // remembered as current.
       if (command === 'serve' && generationAtStart === changeGeneration) {
-        servedCss = { generation: generationAtStart, css }
+        servedCss = { generation: generationAtStart, css, map }
       }
 
       // Every file the extractor reads is a source for this module, so editing one has to
@@ -744,7 +764,7 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
         for (const file of session.extractedFiles) this.addWatchFile(file)
       }
 
-      return css
+      return map ? { code: css, map } : css
     },
 
     configureServer(devServer) {

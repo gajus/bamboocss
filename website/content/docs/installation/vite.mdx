@@ -224,6 +224,26 @@ Builds only, and only where Vite's `build.cssCodeSplit` is on, which it is unles
 library. A framework that copies a server build's stylesheets into the client build by the names its chunks recorded, as
 the RSC plugin does, copies the chunk sheets along with the entry sheet. Set `splitCss: false` to keep one sheet.
 
+### Source maps in development
+
+With Vite's own `css.devSourcemap` on, the dev server serves the stylesheet with a source map from each rule to the call
+that first wrote its atom, so DevTools names the file and line beside the rule instead of the virtual stylesheet:
+
+```ts filename="vite.config.ts"
+export default defineConfig({
+  css: { devSourcemap: true },
+  plugins: [bamboocss()],
+})
+```
+
+A rule that several calls share points at the first of them, in path order across files and in source order within one,
+so the answer is the same however files were read. An inline `cva()` or `sva()` attributes its rules to the call that
+declared it. Rules from a config recipe, from `staticCss` or from `globalCss` have no call site and are left
+unattributed, as is a file a `parser:before` hook rewrote, whose positions are the hook's rather than the file's.
+
+Off, which is Vite's default, nothing is recorded during extraction and the served sheet is what it was. Builds are
+unaffected either way.
+
 ### Builds with more than one environment
 
 An SSR framework builds a client bundle and a server bundle, and the stylesheet is emitted by the one that imports it,

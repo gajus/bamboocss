@@ -1787,7 +1787,17 @@ export class Project {
     // claims the whole parse for `extract` instead.
     const target = encoder ?? this.options.parserOptions.encoder
     const result = target
-      .withOwner('parse', pathOf(sourceFile), () => this.parser(sourceFile, encoder, parserOptions, this.resolveModule))
+      .withOwner('parse', pathOf(sourceFile), () =>
+        // Attributed to call sites only when the text parsed is the file's own: a hook's
+        // rewrite has positions of its own, which a source map must not present as the file's.
+        this.parser(
+          sourceFile,
+          encoder,
+          parserOptions,
+          this.resolveModule,
+          prepared.effectiveText === prepared.inputText,
+        ),
+      )
       // Keep dependency accounting on the AST's real identity. Only user hooks receive the
       // logical path; making ParserResult physical would classify the synthetic AST as its
       // own dependency and register it as a Vite watch file.

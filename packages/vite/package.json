@@ -51,6 +51,7 @@
     "@bamboocss/shared": "workspace:*",
     "@bamboocss/ts-ast": "workspace:*",
     "@bamboocss/types": "workspace:*",
+    "@jridgewell/gen-mapping": "0.3.13",
     "magic-string": "0.30.21",
     "postcss": "8.5.26",
     "postcss-selector-parser": "7.1.5"

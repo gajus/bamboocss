@@ -158,6 +158,12 @@ pnpm bamboo --cpu-prof
 # → bamboo-cli-20260809T101530123Z.cpuprofile
 ```
 
+## Which call wrote a rule
+
+Turn on Vite's `css.devSourcemap` and the dev server serves the stylesheet with a source map to the call that first
+wrote each rule's atom, which DevTools shows beside the rule. See
+[source maps in development](/docs/installation/vite#source-maps-in-development).
+
 ## Some CSS is missing when using absolute imports
 
 This can happen when `tsconfig` (with `paths` or `baseUrl`) or with package.json

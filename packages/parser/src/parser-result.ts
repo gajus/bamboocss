@@ -1,5 +1,5 @@
-import { pathOf } from '@bamboocss/ts-ast'
-import type { DeadImport, ParserOptions } from '@bamboocss/core'
+import { getLineAndColumnAtPos, pathOf } from '@bamboocss/ts-ast'
+import type { AtomOrigin, DeadImport, ParserOptions } from '@bamboocss/core'
 import { type BoxNode, box } from '@bamboocss/extractor'
 import { BambooError, getOrCreateSet } from '@bamboocss/shared'
 import type { ParserResultInterface, ResultItem } from '@bamboocss/types'
@@ -51,6 +51,14 @@ export class ParserResult implements ParserResultInterface {
    * `assertNoDeadCalls` rather than warned about, for that reason.
    */
   deadCalls: DeadImport[] = []
+
+  /**
+   * Whether each result item is attributed to its call site, for a source map.
+   *
+   * Off for a source a `parser:before` hook rewrote: its positions are the hook's output's,
+   * not the file's, and a wrong line is worse than none.
+   */
+  origins = true
 
   constructor(
     private context: ParserOptions,
@@ -114,7 +122,17 @@ export class ParserResult implements ParserResultInterface {
     const unresolved = findUnresolvedStyles(result, 'atomic').filter((entry) => entry.reason === 'unenumerable-keys')
     if (unresolved.length) this.unresolved.push(...unresolved)
 
-    data.forEach((obj) => encoder.processAtomic(obj))
+    encoder.withOrigin(this.originOf(result), () => data.forEach((obj) => encoder.processAtomic(obj)))
+  }
+
+  /** The call site of `result`, when the encoder is recording them. */
+  private originOf = (result: ResultItem): AtomOrigin | undefined => {
+    if (!this.origins || !this.encoder.recordOrigins) return undefined
+    const node = result.box?.getNode()
+    const sourceFile = node?.getSourceFile()
+    if (!node || !sourceFile) return undefined
+    const { line, column } = getLineAndColumnAtPos(sourceFile, node.getStart())
+    return { filePath: pathOf(sourceFile), line, column }
   }
 
   setCva(result: ResultItem) {
@@ -123,7 +141,7 @@ export class ParserResult implements ParserResultInterface {
     this.reportUnresolvedRecipe(result)
 
     const encoder = this.encoder
-    result.data.forEach((data) => encoder.processAtomicRecipe(data))
+    encoder.withOrigin(this.originOf(result), () => result.data.forEach((data) => encoder.processAtomicRecipe(data)))
   }
 
   /**
@@ -144,7 +162,9 @@ export class ParserResult implements ParserResultInterface {
     this.reportUnresolvedRecipe(result)
 
     const encoder = this.encoder
-    result.data.forEach((data) => encoder.processAtomicSlotRecipe(data))
+    encoder.withOrigin(this.originOf(result), () =>
+      result.data.forEach((data) => encoder.processAtomicSlotRecipe(data)),
+    )
   }
 
   /**
@@ -200,7 +220,9 @@ export class ParserResult implements ParserResultInterface {
     const set = getOrCreateSet(this.pattern, name)
     set.add(this.append(Object.assign({ type: 'pattern', name }, result)))
 
-    result.data.forEach((obj) => this.encoder.processPattern(name, obj))
+    this.encoder.withOrigin(this.originOf(result), () =>
+      result.data.forEach((obj) => this.encoder.processPattern(name, obj)),
+    )
   }
 
   /**

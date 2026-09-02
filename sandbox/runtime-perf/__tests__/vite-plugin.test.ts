@@ -5,7 +5,8 @@ import { logger } from '@bamboocss/logger'
 import { esc } from '@bamboocss/shared'
 import bamboocss from '@bamboocss/vite'
 import { build, createBuilder as createVite7Builder, createServer, type Plugin as VitePlugin, type Rollup } from 'vite'
-import { build as buildVite8, createBuilder, type Plugin } from 'vite8'
+import { TraceMap, originalPositionFor } from '@jridgewell/trace-mapping'
+import { build as buildVite8, createBuilder, createServer as createVite8Server, type Plugin } from 'vite8'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 /**
@@ -3726,6 +3727,108 @@ describe('vite plugin, real dev server', () => {
         expect(code, `${environment}: the recipe edit never reached the module that calls it`).toContain('c_blue600')
         expect(code, environment).not.toContain('c_red600')
       }
+    } finally {
+      await server.close()
+    }
+  }, 120_000)
+})
+
+/**
+ * With Vite's `css.devSourcemap` on, the served stylesheet carries a source map from each rule
+ * to the call site that first wrote its atom, which is what DevTools shows beside a rule.
+ *
+ * Through the whole of Vite's pipeline rather than the plugin's hook alone: the map is
+ * returned from `load`, and it is Vite that carries it through its CSS plugins, reads the
+ * sources off disk into it and inlines it into the module the browser fetches. Each of those
+ * is a place a virtual module's map can be dropped.
+ */
+describe.sequential("the served stylesheet's source map", () => {
+  const consumer = join(cwd, 'src/__map-consumer.tsx')
+  const source = `import 'virtual:bamboo.css'
+import { css } from '../styled-system/css'
+export const first = css({ width: '[913.1px]' })
+export const second = css({ width: '[913.1px]', height: '[913.2px]' })
+`
+  /** 0-based column of the call on `line`, where the parser places a call's box. */
+  const columnOf = (line: number) => source.split('\n')[line - 1]!.indexOf('css(')
+
+  afterEach(() => {
+    rmSync(consumer, { force: true })
+  })
+
+  const serve = async (createDevServer: typeof createServer, port: number) => {
+    writeFileSync(consumer, source)
+    return createDevServer({
+      root: cwd,
+      configFile: false,
+      logLevel: 'silent',
+      css: { postcss: { plugins: [] }, devSourcemap: true },
+      plugins: [bamboocss({ cwd, reportSummary: false }) as never],
+      server: { middlewareMode: true, hmr: { port } },
+    })
+  }
+
+  /** 1-based line and 0-based column of the first `needle` in `text`. */
+  const positionOf = (text: string, needle: string) => {
+    const index = text.indexOf(needle)
+    expect(index, `${needle} in the served sheet`).toBeGreaterThanOrEqual(0)
+    const before = text.slice(0, index)
+    return { line: before.split('\n').length, column: index - before.lastIndexOf('\n') - 1 }
+  }
+
+  const cases: Array<[string, typeof createServer, number]> = [
+    ['Vite 7', createServer, 24790],
+    ['Vite 8', createVite8Server as unknown as typeof createServer, 24791],
+  ]
+
+  for (const [label, createDevServer, port] of cases) {
+    test(`${label} serves the sheet with a map to each atom's first call site`, async () => {
+      const server = await serve(createDevServer, port)
+      try {
+        // The module the consumer imports, so the request runs through the module graph the
+        // browser's does. Transforming the consumer first is what a page load does as well.
+        await server.environments.client.transformRequest('/src/__map-consumer.tsx')
+        const direct = await server.environments.client.transformRequest('virtual:bamboo.css?direct')
+        expect(direct?.map, 'a map on the direct request').toBeTruthy()
+
+        const map = direct!.map as { sources: string[]; sourcesContent?: (string | null)[]; mappings: string }
+        const tracer = new TraceMap(map as never)
+        const sheet = direct!.code
+
+        const width = originalPositionFor(tracer, positionOf(sheet, '.w_\\[913\\.1px\\]'))
+        expect(width.source, 'the file').toBe(consumer)
+        expect({ line: width.line, column: width.column }).toEqual({ line: 3, column: columnOf(3) })
+
+        const height = originalPositionFor(tracer, positionOf(sheet, '.h_\\[913\\.2px\\]'))
+        expect({ line: height.line, column: height.column }).toEqual({ line: 4, column: columnOf(4) })
+
+        // Vite read the source in for DevTools, since a dev server serves no raw `.tsx`.
+        expect(map.sourcesContent?.[map.sources.indexOf(consumer)]).toBe(source)
+
+        // And the module the browser actually fetches inlines it.
+        const module = await server.environments.client.transformRequest('virtual:bamboo.css')
+        expect(module?.code).toContain('sourceMappingURL=data:application/json;base64,')
+      } finally {
+        await server.close()
+      }
+    }, 120_000)
+  }
+
+  test('serves no map unless asked to', async () => {
+    writeFileSync(consumer, source)
+    const server = await createServer({
+      root: cwd,
+      configFile: false,
+      logLevel: 'silent',
+      css: { postcss: { plugins: [] } },
+      plugins: [bamboocss({ cwd, reportSummary: false })],
+      server: { middlewareMode: true, hmr: { port: 24792 } },
+    })
+    try {
+      await server.environments.client.transformRequest('/src/__map-consumer.tsx')
+      const module = await server.environments.client.transformRequest('virtual:bamboo.css')
+      expect(module?.code).toContain('w_\\\\[913\\\\.1px\\\\]')
+      expect(module?.code).not.toContain('sourceMappingURL')
     } finally {
       await server.close()
     }

@@ -78,6 +78,12 @@ whose flag is malformed — `--keep-index=false` is not a valid form, and the st
 a "before" measurement that is really the "after" tree. Commit or copy to a scratch directory first, then confirm the
 state actually changed (`grep` for something the change added) before trusting anything measured against it.
 
+**Killing a test run can leave half-built packages behind.** `packages/vite/__tests__/built-package-consumer.test.ts`
+runs `pnpm build` for any package whose `dist` lacks declarations, and a run stopped in the middle of that leaves a
+`dist` holding `index.cjs` and nothing else. Every later test that imports the package's ESM entry then fails with
+`ERR_MODULE_NOT_FOUND`, and some of them hang instead of failing, which read as a stuck suite for over an hour. After
+stopping a run, `ls packages/*/dist/index.mjs` and run `pnpm build` before trusting anything.
+
 **Generated artifacts under `packages/generator/src/artifacts/generated` are built from `dist`, not from the working
 tree.** Committing source that has not been rebuilt leaves those artifacts generated from a different revision, and CI
 fails on the "Check generated output is committed" step. Run `pnpm build` before committing anything that changes what
@@ -356,7 +362,10 @@ Brief description of the change and its impact.
 2. CSS generation → `packages/core/src/stylesheet.ts`. Utilities are written into cascade sublayers keyed by
    specificity, condition and property priority (`packages/core/src/layers.ts`), so precedence never depends on source
    order. `packages/core/__tests__/cascade-oracle.test.ts` models the browser's cascade and pins the winner of every
-   competing pair in a corpus; a change to where rules are written has to leave that snapshot untouched.
+   competing pair in a corpus; a change to where rules are written has to leave that snapshot untouched. Rules enter the
+   postcss tree as strings, which strips their positions, so the dev server's source map for the stylesheet is read off
+   the served text (`cssSourceMap` in `packages/vite/src/css-output-module.ts`) against call sites the encoder recorded
+   under `recordOrigins` — on only when Vite's `css.devSourcemap` is.
 3. Optimization → `packages/core/src/optimize.ts` dispatches; the PostCSS plugin order lives in
    `packages/core/src/plugins/optimize-postcss.ts`
    - LightningCSS path: `packages/plugin-lightningcss/src/optimize-lightningcss.ts`, reached through the `css:optimize`

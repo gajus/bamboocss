@@ -1,7 +1,9 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import remapping from '@ampproject/remapping'
+import type { AtomOrigin } from '@bamboocss/core'
 import { toHash } from '@bamboocss/shared'
+import { GenMapping, addMapping, toEncodedMap } from '@jridgewell/gen-mapping'
 import MagicString from 'magic-string'
 import postcss from 'postcss'
 import selectorParser from 'postcss-selector-parser'
@@ -595,4 +597,104 @@ export const splitStaticCss = (
   }
 
   return { css: root.toString(), chunks, moved }
+}
+
+/** The served stylesheet's source map, as Vite's `load` hook takes one. @see `cssSourceMap` */
+export type CssSourceMap = Rollup.ExistingRawSourceMap
+
+/** A class token of a selector, escapes and all: `.hover\\:c_red600` up to its unescaped `:`. */
+const CLASS_TOKEN = /\.((?:\\.|[^\\\s.:>+~[\](),])+)/g
+
+/**
+ * The top-level comma-separated parts of a selector list as written, each with its offset.
+ *
+ * `rule.selectors` splits the same way but loses where each part sits, and a merged rule's
+ * selectors sit on separate lines in the unminified sheet a dev server serves.
+ */
+const selectorParts = (raw: string) => {
+  const parts: Array<{ text: string; offset: number }> = []
+  let depth = 0
+  let start = 0
+  for (let index = 0; index < raw.length; index++) {
+    const char = raw[index]
+    if (char === '\\') index++
+    else if (char === '(' || char === '[') depth++
+    else if (char === ')' || char === ']') depth--
+    else if (char === ',' && depth === 0) {
+      parts.push({ text: raw.slice(start, index), offset: start })
+      start = index + 1
+    }
+  }
+  parts.push({ text: raw.slice(start), offset: start })
+  return parts.map((part) => {
+    const leading = part.text.length - part.text.trimStart().length
+    return { text: part.text.trim(), offset: part.offset + leading }
+  })
+}
+
+/** `start` advanced over `text` up to `offset`, in 1-based lines and columns. */
+const positionAt = (text: string, offset: number, start: { line: number; column: number }) => {
+  let { line, column } = start
+  for (let index = 0; index < offset; index++) {
+    if (text[index] === '\n') {
+      line++
+      column = 1
+    } else column++
+  }
+  return { line, column }
+}
+
+/**
+ * A source map from each rule of the served stylesheet to the call site its atom was first
+ * encoded at, for DevTools to name the file and line a rule came from.
+ *
+ * Read off the finished sheet rather than threaded through its generation: rules enter the
+ * postcss tree as strings, which strips their positions, and the optimizer re-parses the text
+ * twice more. One parse here costs the same as one of those and needs no cooperation from
+ * either. A rule maps at its selector, and a merged rule maps each of its selectors, since
+ * the optimizer folds rules from different call sites into one. `sourcesContent` is left for
+ * Vite to fill from disk, which it does for a dev stylesheet's map before inlining it.
+ */
+export const cssSourceMap = (css: string, origins: ReadonlyMap<string, AtomOrigin>): CssSourceMap | undefined => {
+  const byBareClass = new Map<string, AtomOrigin>()
+  for (const [className, origin] of origins) {
+    const name = bare(className)
+    if (!byBareClass.has(name)) byBareClass.set(name, origin)
+  }
+  if (!byBareClass.size) return undefined
+
+  const originOf = (selector: string) => {
+    for (const match of selector.matchAll(CLASS_TOKEN)) {
+      const origin = byBareClass.get(bare(match[1]!))
+      if (origin) return origin
+    }
+    return undefined
+  }
+
+  const map = new GenMapping()
+  let mapped = 0
+  postcss.parse(css).walkRules((rule) => {
+    const start = rule.source?.start
+    if (!start) return
+    const raw = rule.raws.selector?.raw ?? rule.selector
+    for (const part of selectorParts(raw)) {
+      const origin = originOf(part.text)
+      if (!origin) continue
+      const generated = positionAt(raw, part.offset, start)
+      addMapping(map, {
+        generated: { line: generated.line, column: generated.column - 1 },
+        source: origin.filePath,
+        original: { line: origin.line, column: origin.column - 1 },
+      })
+      mapped++
+    }
+  })
+  if (!mapped) return undefined
+  const encoded = toEncodedMap(map)
+  return {
+    version: 3,
+    mappings: encoded.mappings,
+    names: [...encoded.names],
+    sources: encoded.sources.map((source) => source ?? ''),
+  }
 }

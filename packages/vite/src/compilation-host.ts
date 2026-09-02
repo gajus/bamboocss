@@ -65,6 +65,8 @@ export interface CompilationSourceChangeOptions {
 export interface CompilationHost {
   /** Set once per run from `configResolved`; only a dev server knows it is one. */
   setCommand(command: 'build' | 'serve'): void
+  /** Whether a dev server will emit a source map for the stylesheet, which needs atom origins. */
+  setDevSourcemap(enabled: boolean): void
   /** The current generation, without loading anything. `undefined` before the first setup. */
   current(): CompilationGeneration | undefined
   /**
@@ -106,6 +108,7 @@ export const createCompilationHost = (options: CompilationHostOptions = {}): Com
   const loadBuilder = options.loadBuilder ?? createLazyBuilder()
 
   let command: 'build' | 'serve' = 'build'
+  let devSourcemap = false
   let builder: Builder | undefined
   let generation: CompilationGeneration | undefined
   let nextGenerationId = 0
@@ -185,6 +188,7 @@ export const createCompilationHost = (options: CompilationHostOptions = {}): Com
         configPath,
         cwd,
         dev: command === 'serve',
+        atomOrigins: command === 'serve' && devSourcemap,
         ...(command === 'serve' ? { sourceChanges } : {}),
       })
       return publish()
@@ -218,6 +222,10 @@ export const createCompilationHost = (options: CompilationHostOptions = {}): Com
   return {
     setCommand(next) {
       command = next
+    },
+
+    setDevSourcemap(enabled) {
+      devSourcemap = enabled
     },
 
     current: () => generation,

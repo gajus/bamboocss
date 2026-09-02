@@ -3,7 +3,10 @@ import { basename, join } from 'node:path'
 import remapping from '@ampproject/remapping'
 import { toHash } from '@bamboocss/shared'
 import MagicString from 'magic-string'
+import postcss from 'postcss'
+import selectorParser from 'postcss-selector-parser'
 import type { Rollup } from 'vite'
+import { bare } from './class-name'
 import { pruneStaticCss } from './prune-static-css'
 import type { DeferredSheet, StaticCompilationSession, WrittenOutput } from './static-session'
 
@@ -110,8 +113,15 @@ const generatedCssSource = (output: Rollup.OutputBundle[string]) => {
  * Whether this bundle replaces a previously generated Bamboo stylesheet — or, given the set of
  * assets a pass already handled, whether any generated sheet is still waiting for one.
  */
-export const containsGeneratedCssAsset = (bundle: Rollup.OutputBundle, handled?: WeakSet<object>) =>
-  Object.values(bundle).some((output) => generatedCssSource(output) !== undefined && !handled?.has(output))
+export const containsGeneratedCssAsset = (
+  bundle: Rollup.OutputBundle,
+  handled?: WeakSet<object>,
+  handledNames?: ReadonlySet<string>,
+) =>
+  Object.values(bundle).some(
+    (output) =>
+      generatedCssSource(output) !== undefined && !handled?.has(output) && !handledNames?.has(output.fileName),
+  )
 
 /**
  * Prune compiler-owned CSS, then give any sheet whose bytes changed a hash of those bytes.
@@ -136,6 +146,15 @@ export interface OptimizedSheet {
   optimized: string
   /** The asset itself, as the bundler holds it. */
   asset: Rollup.OutputAsset
+  /** Escape-free classes moved into chunk sheets of their own. */
+  moved: ReadonlySet<string>
+}
+
+export interface SplitOptions {
+  /** Which lazily loaded chunk each exclusive atom belongs to. @see `ChunkOwnership` */
+  ownership: ChunkOwnership
+  /** Emit one chunk's sheet, and attach it to that chunk. */
+  emit: (chunk: string, css: string) => void
 }
 
 export const optimizeStaticCssAssets = (
@@ -148,9 +167,21 @@ export const optimizeStaticCssAssets = (
     sourcemap?: StaticCompilationSession['sourcemap']
     /** Assets to leave alone, and to record the ones handled here in. */
     handled?: WeakSet<object>
+    /** The same by file name, for a bundler whose asset objects do not keep their identity. */
+    handledNames?: Set<string>
+    /** Move each lazily loaded chunk's exclusive atoms into a sheet of its own. */
+    split?: SplitOptions
   } = {},
 ) => {
-  const { environment, prune = true, requiredClasses, sourcemap = session.sourcemap, handled } = options
+  const {
+    environment,
+    prune = true,
+    requiredClasses,
+    sourcemap = session.sourcemap,
+    handled,
+    handledNames,
+    split,
+  } = options
   /** Assets in this bundle that carry the generated stylesheet, pruned or not. */
   let sheets = 0
   /** Their file names, after any rename below. */
@@ -160,8 +191,9 @@ export const optimizeStaticCssAssets = (
   for (const output of Object.values(bundle)) {
     const source = generatedCssSource(output)
     if (source === undefined) continue
-    if (handled?.has(output)) continue
+    if (handled?.has(output) || handledNames?.has(output.fileName)) continue
     handled?.add(output)
+    handledNames?.add(output.fileName)
     sheets++
     names.push(output.fileName)
     const original = output.fileName
@@ -169,14 +201,33 @@ export const optimizeStaticCssAssets = (
     // Validation always runs: disabling reachability pruning cannot make a live class with no
     // extracted rule safe. The unpruned asset remains byte-identical because the parsed result
     // is used only when pruning is enabled.
-    const optimized = pruneStaticCss(source, session, { environment, prune, requiredClasses })
+    const pruned = pruneStaticCss(source, session, { environment, prune, requiredClasses })
     if (!prune) {
-      results.push({ original, fileName: original, source, optimized: source, asset: output as Rollup.OutputAsset })
+      results.push({
+        original,
+        fileName: original,
+        source,
+        optimized: source,
+        asset: output as Rollup.OutputAsset,
+        moved: new Set(),
+      })
       continue
     }
+
+    // After pruning, so an atom nothing reaches never gets a sheet; before the rename, so the
+    // entry sheet's name describes its bytes with the moved rules gone.
+    let optimized = pruned
+    let moved: ReadonlySet<string> = new Set()
+    if (split?.ownership.size) {
+      const divided = splitStaticCss(pruned, session, split.ownership)
+      optimized = divided.css
+      moved = divided.moved
+      for (const [chunk, css] of divided.chunks) split.emit(chunk, css)
+    }
+
     ;(output as Rollup.OutputAsset).source = optimized
     if (optimized === source) {
-      results.push({ original, fileName: original, source, optimized, asset: output as Rollup.OutputAsset })
+      results.push({ original, fileName: original, source, optimized, asset: output as Rollup.OutputAsset, moved })
       continue
     }
     names.pop()
@@ -205,7 +256,8 @@ export const optimizeStaticCssAssets = (
     const previous = output.fileName
     output.fileName = nextName
     names.push(nextName)
-    results.push({ original, fileName: nextName, source, optimized, asset: output as Rollup.OutputAsset })
+    handledNames?.add(nextName)
+    results.push({ original, fileName: nextName, source, optimized, asset: output as Rollup.OutputAsset, moved })
     replaceAssetReferences(bundle, previous, nextName, sourcemap)
 
     // Re-keyed as well, where the bundler allows it, so a plugin that looks the asset up by the
@@ -320,7 +372,12 @@ export const finalizeDeferredSheets = (
     // rewrite: whatever replaced it was derived from bytes this pass never changed.
     if (!existsSync(path)) continue
 
-    const final = pruneStaticCss(sheet.source, session, { prune, requiredClasses })
+    let final = pruneStaticCss(sheet.source, session, { prune, requiredClasses })
+    // The rules that went to chunk sheets of their own are still in the source; they belong
+    // where they went, and only the entry sheet is being decided here.
+    if (sheet.moved?.size) {
+      final = splitStaticCss(final, session, new Map([...sheet.moved].map((className) => [className, '']))).css
+    }
     if (!prune || final === sheet.provisional) {
       finalized.push({ ...sheet, before: sheet.provisional.length, after: sheet.provisional.length })
       continue
@@ -377,3 +434,165 @@ export const finalizeDeferredSheets = (
 }
 
 export { pruneStaticCss } from './prune-static-css'
+
+/**
+ * What decides which chunk a utility rule belongs to, by the escape-free class it selects on.
+ *
+ * Only atoms exclusive to a chunk that is not loaded with an entry appear here. Everything
+ * else — an atom two chunks use, one an entry or its static imports reach, `staticCss` — has no
+ * owner and stays in the entry sheet, which is what every route loads.
+ */
+export type ChunkOwnership = ReadonlyMap<string, string>
+
+export interface SplitStaticCssResult {
+  /** The entry sheet with the owned rules taken out. */
+  css: string
+  /** One sheet per owning chunk, keyed as `ownership` keys them. */
+  chunks: Map<string, string>
+  /** The escape-free classes moved out, for a finalization that has to move them again. */
+  moved: Set<string>
+}
+
+/** The at-rules a rule sits under, outermost first, as name and params. */
+const ancestryOf = (rule: postcss.Rule) => {
+  const chain: Array<{ name: string; params: string }> = []
+  let parent = rule.parent as postcss.Node | undefined
+  while (parent && parent.type !== 'root') {
+    if (parent.type === 'atrule') {
+      const atRule = parent as postcss.AtRule
+      chain.unshift({ name: atRule.name, params: atRule.params })
+    }
+    parent = parent.parent as postcss.Node | undefined
+  }
+  return chain
+}
+
+/** The container in `root` under the same at-rule chain, created where absent. */
+const containerFor = (root: postcss.Root, chain: ReadonlyArray<{ name: string; params: string }>) => {
+  let container: postcss.Container = root
+  for (const { name, params } of chain) {
+    let next = container.nodes?.find(
+      (node): node is postcss.AtRule =>
+        node.type === 'atrule' && (node as postcss.AtRule).name === name && (node as postcss.AtRule).params === params,
+    )
+    if (!next) {
+      next = postcss.atRule({ name, params, nodes: [] })
+      container.append(next)
+    }
+    container = next
+  }
+  return container
+}
+
+/**
+ * Move every utility rule a lazily loaded chunk owns into a sheet of that chunk's own.
+ *
+ * Reads the finished entry sheet — pruned, sublayered, minified or not — and walks its
+ * utility rules. A selector naming exactly one class that `ownership` assigns to a chunk is
+ * moved to that chunk's sheet under the same at-rule chain: the utilities layer, its sublayer,
+ * any media or container query. A rule with several selectors is split per selector, since a
+ * merged rule's members can belong to different chunks. Whatever nothing owns stays.
+ *
+ * Each chunk sheet opens with the entry's sublayer order statement, so whichever sheet the
+ * document happens to parse first establishes the same order. That is what makes the split
+ * safe at all: precedence lives in the sublayers, not in where a rule sits.
+ */
+export const splitStaticCss = (
+  css: string,
+  session: StaticCompilationSession,
+  ownership: ChunkOwnership,
+): SplitStaticCssResult => {
+  const chunks = new Map<string, string>()
+  const moved = new Set<string>()
+  if (!ownership.size || !css.includes('--made-with-bamboo')) return { css, chunks, moved }
+
+  const root = postcss.parse(css)
+  const roots = new Map<string, postcss.Root>()
+  const rootFor = (chunk: string) => {
+    let chunkRoot = roots.get(chunk)
+    if (!chunkRoot) {
+      chunkRoot = postcss.root()
+      roots.set(chunk, chunkRoot)
+    }
+    return chunkRoot
+  }
+
+  const isUtilityRule = (rule: postcss.Rule) => {
+    let parent = rule.parent as postcss.Node | undefined
+    while (parent) {
+      if (parent.type === 'atrule') {
+        const atRule = parent as postcss.AtRule
+        if (atRule.name === 'layer' && atRule.params === session.utilityLayer) return true
+      }
+      parent = parent.parent as postcss.Node | undefined
+    }
+    return false
+  }
+
+  let order: postcss.AtRule | undefined
+  root.walkAtRules('layer', (atRule) => {
+    if (order || atRule.nodes) return
+    const parent = atRule.parent
+    if (parent?.type === 'atrule' && (parent as postcss.AtRule).params === session.utilityLayer) order = atRule
+  })
+
+  root.walkRules((rule) => {
+    if (!isUtilityRule(rule)) return
+
+    const kept: string[] = []
+    const taken = new Map<string, string[]>()
+    for (const selector of rule.selectors) {
+      let owner: string | undefined
+      try {
+        selectorParser((selectors) => {
+          const classes = new Set<string>()
+          selectors.walkClasses((classNode) => {
+            classes.add(bare(classNode.toString().slice(1)))
+          })
+          if (classes.size !== 1) return
+          const [className] = classes
+          owner = ownership.get(className!)
+          if (owner !== undefined) moved.add(className!)
+        }).processSync(selector)
+      } catch {
+        // An authored selector the parser cannot read is not a compiler-owned atom.
+      }
+      if (owner === undefined) kept.push(selector)
+      else (taken.get(owner) ?? taken.set(owner, []).get(owner)!).push(selector)
+    }
+    if (!taken.size) return
+
+    const chain = ancestryOf(rule)
+    for (const [chunk, selectors] of taken) {
+      containerFor(rootFor(chunk), chain).append(rule.clone({ selectors }))
+    }
+    if (kept.length) rule.selectors = kept
+    else rule.remove()
+  })
+
+  // Removing the last rule from a condition or layer should remove its wrappers as well.
+  let removed = true
+  while (removed) {
+    removed = false
+    root.walkAtRules((atRule) => {
+      if (atRule.nodes?.length !== 0) return
+      atRule.remove()
+      removed = true
+    })
+  }
+
+  for (const [chunk, chunkRoot] of roots) {
+    if (order) {
+      const utilities = chunkRoot.nodes.find(
+        (node): node is postcss.AtRule =>
+          node.type === 'atrule' &&
+          (node as postcss.AtRule).name === 'layer' &&
+          (node as postcss.AtRule).params === session.utilityLayer,
+      )
+      utilities?.prepend(order.clone())
+    }
+    chunks.set(chunk, chunkRoot.toString())
+  }
+
+  return { css: root.toString(), chunks, moved }
+}

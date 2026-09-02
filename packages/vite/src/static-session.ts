@@ -43,6 +43,11 @@ export interface DeferredSheet {
    */
   asset?: { fileName: string; source: string | Uint8Array }
   bundle?: Record<string, unknown>
+  /**
+   * Escape-free classes the sheet's emission moved into chunk sheets of their own. A
+   * finalization prunes from the unpruned source, so it has to move them out again.
+   */
+  moved?: ReadonlySet<string>
 }
 
 /** One output an environment wrote, for rewriting the references a finalized sheet's rename moves. */
@@ -113,6 +118,30 @@ export interface StaticCompilationSession {
   /** Sheet assets already pruned in this generation, so the late pass leaves them alone. */
   prunedAssets: WeakSet<object>
   /**
+   * The same, by file name, per output. Rolldown hands each hook fresh wrappers around the
+   * bundle's entries, so identity alone would let the late pass prune a sheet the early one
+   * already split — and report the moved rules missing. Keyed on the output options, which
+   * do keep their identity from one hook to the next, and reset per build at `renderStart`.
+   */
+  prunedSheetNames: WeakMap<object, Set<string>>
+  /**
+   * Whether utilities exclusive to a lazily loaded chunk go into a sheet of that chunk's own.
+   *
+   * The plugin option; Vite's own `build.cssCodeSplit` has to agree, per environment, since
+   * a sheet Vite emits whole in its own `generateBundle` is not there to split when the early
+   * hook runs.
+   */
+  splitCss: boolean
+  /** `build.cssCodeSplit` of the run's own config, for a bundler with no per-environment one. */
+  cssCodeSplit?: boolean
+  /**
+   * The class strings a module's compiled calls emit, as the compiler recorded them.
+   *
+   * Installed by the compiler, which owns the transform artifacts. The output hook uses it to
+   * work out which chunk each atom belongs to from the chunks' module lists.
+   */
+  classNamesOf?: (environment: string, moduleId: string) => readonly string[] | undefined
+  /**
    * Finalize the deferred sheets if `environment` completes the run, rewriting `bundle` too.
    *
    * Installed by the compiler, which owns the reachability projection. Reached from the early
@@ -144,6 +173,8 @@ export const createStaticCompilationSession = (): StaticCompilationSession => {
     deferredSheets: [],
     writtenOutputs: [],
     prunedAssets: new WeakSet(),
+    prunedSheetNames: new WeakMap(),
+    splitCss: true,
     beginOutputProjection(_environment, _outputOptions, _bundle, replacesGeneratedStylesheet) {
       if (replacesGeneratedStylesheet) session.prunedClasses.clear()
       const prunable = new Set([...session.prunableClasses].map((className) => className.replaceAll('\\', '')))

@@ -1,6 +1,7 @@
 import { dirname, resolve } from 'node:path'
 import { logger } from '@bamboocss/logger'
 import { esc, truncateList } from '@bamboocss/shared'
+import { bare } from './class-name'
 import type { Plugin, ViteDevServer } from 'vite'
 import { createCompilationHost, type CompilationBuilder, type CompilationHost } from './compilation-host'
 import { createRetryableLazy, loadConfigModule, loadCssOutputModule } from './lazy-modules'
@@ -86,9 +87,75 @@ type OutputContext = {
         sourcemap?: StaticCompilationSession['sourcemap']
         ssr?: boolean | string
         ssrEmitAssets?: boolean
+        cssCodeSplit?: boolean
       }
     }
   }
+  emitFile?: (file: { type: 'asset'; name?: string; source: string }) => string
+  getFileName?: (referenceId: string) => string
+}
+
+/** The chunk shape the split reads: which modules it holds, and what it imports. */
+interface OutputChunkShape {
+  type: 'chunk'
+  fileName: string
+  name: string
+  isEntry: boolean
+  imports: string[]
+  modules: Record<string, unknown>
+  viteMetadata?: { importedCss?: Set<string> }
+}
+
+/**
+ * Which lazily loaded chunk each atom exclusive to one belongs to.
+ *
+ * An atom belongs to a chunk when every module that emits it is in that chunk, and the chunk
+ * is not loaded with an entry anyway — an entry, or anything an entry statically imports,
+ * would put the atom in the entry sheet's own company either way. An atom two chunks share,
+ * or one no compiled module emits — `staticCss` — has no owner and stays where every route
+ * finds it. Loading with an entry is the static import closure of every entry, which is what
+ * the browser fetches before the first render.
+ */
+const chunkOwnership = (bundle: object, environment: string, session: StaticCompilationSession) => {
+  const classNamesOf = session.classNamesOf
+  const ownership = new Map<string, string>()
+  if (!classNamesOf) return ownership
+
+  const chunks = Object.values(bundle as Record<string, { type: string }>).filter(
+    (output): output is OutputChunkShape => output.type === 'chunk',
+  )
+  const byFileName = new Map(chunks.map((chunk) => [chunk.fileName, chunk]))
+  const eager = new Set<string>()
+  const visit = (fileName: string) => {
+    if (eager.has(fileName)) return
+    eager.add(fileName)
+    for (const imported of byFileName.get(fileName)?.imports ?? []) visit(imported)
+  }
+  for (const chunk of chunks) if (chunk.isEntry) visit(chunk.fileName)
+
+  // `null` marks an atom seen from more than one chunk, or from an eager one.
+  const owners = new Map<string, string | null>()
+  for (const chunk of chunks) {
+    const owner = eager.has(chunk.fileName) ? null : chunk.fileName
+    for (const moduleId of Object.keys(chunk.modules)) {
+      for (const classNames of classNamesOf(environment, moduleId) ?? []) {
+        for (const token of classNames.split(' ')) {
+          if (!token) continue
+          const className = bare(token)
+          const previous = owners.get(className)
+          if (previous === undefined) owners.set(className, owner)
+          else if (previous !== owner) owners.set(className, null)
+        }
+      }
+    }
+  }
+  for (const [className, owner] of owners) if (owner !== null) ownership.set(className, owner)
+  logger.debug(
+    'vite',
+    `Split: ${chunks.length} chunk(s), ${eager.size} loaded with an entry, ${owners.size} atom(s) seen, ` +
+      `${ownership.size} owned by a lazy chunk.`,
+  )
+  return ownership
 }
 
 /**
@@ -130,12 +197,23 @@ const pruneEmittedSheets = async (
   bundle: object,
   isWrite: boolean,
   pruneCss: boolean,
+  /**
+   * Whether this pass may split the sheet per chunk. Only the early one: a chunk sheet has to
+   * be attached to its chunk before Vite's own hooks read which stylesheets a chunk imports,
+   * for the HTML, the manifest and the preload list to carry it.
+   */
+  splitCss: boolean,
 ) => {
   // Load the complete parser/remapping closure before opening the output projection. A
   // rejected chunk load therefore publishes no partial reachability or prune state, and the
   // process-wide retryable loader lets a later rebuild recover.
   const { containsGeneratedCssAsset, optimizeStaticCssAssets } = await loadCssOutputModule()
-  const carriesSheet = containsGeneratedCssAsset(bundle as never, session.prunedAssets)
+  let handledNames = session.prunedSheetNames.get(outputOptions)
+  if (!handledNames) {
+    handledNames = new Set()
+    session.prunedSheetNames.set(outputOptions, handledNames)
+  }
+  const carriesSheet = containsGeneratedCssAsset(bundle as never, session.prunedAssets, handledNames)
 
   const environmentName = context.environment?.name ?? 'default'
   // This environment is the candidate completing the run, not one still to compile: it has
@@ -161,6 +239,31 @@ const pruneEmittedSheets = async (
     if (completesRun) await session.finalizeDeferred?.({ environment: environmentName, bundle, sourcemap })
     if (!carriesSheet) return
 
+    // Splitting needs the chunks to still be open to a new stylesheet each, which is only so
+    // when Vite emitted the sheet while rendering chunks — `cssCodeSplit` on, the default.
+    const cssCodeSplit = context.environment?.config?.build?.cssCodeSplit ?? session.cssCodeSplit ?? true
+    const split =
+      splitCss && session.splitCss && pruneCss && cssCodeSplit && context.emitFile && context.getFileName
+        ? {
+            ownership: chunkOwnership(bundle, environmentName, session),
+            emit: (chunkFileName: string, css: string) => {
+              const chunk = (bundle as Record<string, OutputChunkShape | undefined>)[chunkFileName]
+              const referenceId = context.emitFile!({
+                type: 'asset',
+                name: `${chunk?.name ?? 'chunk'}.css`,
+                source: css,
+              })
+              const fileName = context.getFileName!(referenceId)
+              // Attached where Vite's own plumbing reads it: the HTML plugin links an entry's
+              // sheets, the manifest lists a chunk's, and the preload helper fetches a lazy
+              // chunk's before running it.
+              chunk?.viteMetadata?.importedCss?.add(fileName)
+              const emitted = (bundle as Record<string, object | undefined>)[fileName]
+              if (emitted) session.prunedAssets.add(emitted)
+            },
+          }
+        : undefined
+
     const { sheets, results } = optimizeStaticCssAssets(bundle as never, session, {
       environment: environmentName,
       prune: pruneCss,
@@ -169,6 +272,8 @@ const pruneEmittedSheets = async (
       // environment leaves holding whichever resolved last.
       sourcemap: context.environment?.config?.build?.sourcemap,
       handled: session.prunedAssets,
+      handledNames,
+      split,
     })
 
     // Said out loud, both ways. Pruning is the difference between the sheet a project
@@ -192,6 +297,7 @@ const pruneEmittedSheets = async (
           sourcemap,
           asset: result.asset,
           bundle: bundle as Record<string, unknown>,
+          moved: result.moved,
         })
       }
       logger.debug(
@@ -222,6 +328,14 @@ const pruneEmittedSheets = async (
 export const bamboocssCssEarly = (options: { session: StaticCompilationSession; pruneCss?: boolean }): Plugin => ({
   name: 'bamboocss:css-early',
   sharedDuringBuild: true,
+  /**
+   * A watch rebuild renders into the same output options object, so the names pruned by the
+   * previous build would otherwise still read as handled, and the sheet a rebuild re-emits
+   * under an unchanged name would ship unpruned.
+   */
+  renderStart(outputOptions) {
+    options.session.prunedSheetNames.delete(outputOptions)
+  },
   generateBundle: {
     order: 'pre',
     async handler(outputOptions, bundle, isWrite) {
@@ -232,6 +346,7 @@ export const bamboocssCssEarly = (options: { session: StaticCompilationSession; 
         bundle,
         isWrite,
         options.pruneCss ?? true,
+        true,
       )
     },
   },
@@ -473,6 +588,7 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
       command = config.command
       host.setCommand(config.command)
       session.sourcemap = config.build.sourcemap
+      session.cssCodeSplit = config.build.cssCodeSplit
       ssrBuildOptions = { ssr: config.build.ssr, ssrEmitAssets: config.build.ssrEmitAssets }
 
       /**
@@ -702,7 +818,7 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
       order: 'post',
       async handler(outputOptions, bundle, isWrite) {
         const context = this as OutputContext
-        await pruneEmittedSheets(context, session, outputOptions, bundle, isWrite, pruneCss)
+        await pruneEmittedSheets(context, session, outputOptions, bundle, isWrite, pruneCss, false)
 
         const { containsGeneratedCssAsset } = await loadCssOutputModule()
         const environment = context.environment

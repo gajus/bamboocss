@@ -5,7 +5,7 @@ import { Builder } from '@bamboocss/node'
 import * as bambooConfig from '@bamboocss/config'
 import { esc } from '@bamboocss/shared'
 import { describe, expect, test, vi } from 'vitest'
-import { asError, bamboocssCss, VIRTUAL_CSS_ID } from '../src/css'
+import { asError, bamboocssCss, bamboocssCssEarly, VIRTUAL_CSS_ID } from '../src/css'
 import { optimizeStaticCssAssets } from '../src/css-output-module'
 import { createLazyCssOutputModule } from '../src/lazy-modules'
 import { createStaticCompilationSession } from '../src/static-session'
@@ -652,6 +652,40 @@ describe('saying why the stylesheet was not pruned', () => {
 
     expect(lines).not.toContain('pruning')
     expect(source, 'the unreachable atom went').not.toContain('345.6789px')
+  })
+})
+
+/**
+ * A watch rebuild renders into the same output options object as the build before it. The
+ * names the early pass prunes are remembered per output so the late pass leaves them alone,
+ * and that memory has to end with the build: a rebuild re-emitting a sheet under an unchanged
+ * name shipped it unpruned, with every stale epoch's rules still in it.
+ */
+describe('a watch rebuild prunes again', () => {
+  const sheet =
+    `@layer reset, base, tokens, utilities;` +
+    `@layer utilities{.h_\\[345\\.6789px\\]{height:345.6789px}}` +
+    `:root{--made-with-bamboo:🌱}`
+
+  test('after renderStart, a sheet under a name the previous build pruned is pruned once more', async () => {
+    const session = createStaticCompilationSession()
+    session.prunableClasses.add(esc('h_[345.6789px]'))
+    const plugin = bamboocssCssEarly({ session, pruneCss: true })
+    const generate = hookOf(plugin.generateBundle)!
+    const renderStart = hookOf(plugin.renderStart)!
+    const outputOptions = { dir: join(cwd, 'dist') }
+    const context = { environment: { name: 'client' } } as never
+
+    const build = async () => {
+      const bundle = { 'a.css': { type: 'asset', fileName: 'a.css', names: [], source: sheet } }
+      await generate.call(context, outputOptions as never, bundle as never, false as never)
+      return String(Object.values(bundle).find((output) => output.type === 'asset')!.source)
+    }
+
+    expect(await build(), 'the first build prunes').not.toContain('345.6789px')
+    // The same output options, as a watcher hands them to the next build.
+    await renderStart.call(context, outputOptions as never, {} as never)
+    expect(await build(), 'the rebuild prunes again').not.toContain('345.6789px')
   })
 })
 

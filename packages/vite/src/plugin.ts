@@ -72,6 +72,17 @@ export interface BambooVitePluginOptions {
    * @default true
    */
   pruneCss?: boolean
+  /**
+   * Give each lazily loaded chunk a stylesheet of the utilities only it uses, and keep the
+   * rest in the entry sheet. Builds only, and only where Vite's own `build.cssCodeSplit` is on.
+   *
+   * An atom two chunks use stays in the entry sheet, so nothing is ever downloaded twice; a
+   * route that is the only user of a style downloads that style with the route. Precedence
+   * does not depend on which sheet a rule is in, since it lives in the cascade sublayers.
+   *
+   * @default true
+   */
+  splitCss?: boolean
 }
 
 const DEFAULT_EXTENSIONS = /\.(?:[cm]?[jt]sx?)$/
@@ -249,7 +260,15 @@ const formatSkipped = (id: string, skipped: SkippedCall[]) => {
  * therefore fold in the post plugin, after the framework has extracted them.
  */
 export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
-  const { configPath, cwd, reportSkipped = false, reportSummary = true, maxRecipeStates, pruneCss = true } = options
+  const {
+    configPath,
+    cwd,
+    reportSkipped = false,
+    reportSummary = true,
+    maxRecipeStates,
+    pruneCss = true,
+    splitCss = true,
+  } = options
 
   // Announced as the Vite config is evaluated so generated runtime guards and internal
   // integrations can identify the compiler before any application module runs.
@@ -275,6 +294,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
   }
 
   const staticSession = createStaticCompilationSession()
+  staticSession.splitCss = splitCss
 
   /**
    * One Builder, one resolved config, one context and one ts-morph project for the run.
@@ -1197,6 +1217,11 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
 
   staticSession.finalizeDeferred = ({ environment, bundle, sourcemap }) =>
     finalizeDeferredSheetsIfComplete(environment, bundle, sourcemap)
+
+  // What each module's compiled calls emit, for the split: chunk membership is the bundler's,
+  // the class strings are the compiler's, and the output hook has to join the two.
+  staticSession.classNamesOf = (environment, moduleId) =>
+    transformStateByEnvironment.get(environment)?.transformArtifactsByModule.get(moduleId)?.classNames
 
   staticSession.beginOutputProjection = (environment, outputOptions, bundle, replacesGeneratedStylesheet) => {
     const generation = preparedGenerations.get(environment)

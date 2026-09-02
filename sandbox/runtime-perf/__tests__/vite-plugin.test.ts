@@ -3868,3 +3868,143 @@ describe('a project with no generated output yet', () => {
     expect(css).toContain('display: flex')
   }, 120_000)
 })
+
+/**
+ * Per-route stylesheets.
+ *
+ * An atom only one lazily loaded chunk uses goes into a sheet of that chunk's own, attached
+ * where Vite's plumbing reads it: the manifest lists it under the chunk, and the preload helper
+ * fetches it before the chunk runs. An atom two routes share, or one the entry reaches, stays
+ * in the entry sheet, so nothing is downloaded twice. Precedence is unaffected because it lives
+ * in the cascade sublayers, and every chunk sheet repeats the sublayer order statement.
+ */
+describe.sequential('per-route stylesheets', () => {
+  const html = join(cwd, '__split-index.html')
+  const entry = join(cwd, 'src/__split-entry.tsx')
+  const routeA = join(cwd, 'src/__split-route-a.tsx')
+  const routeB = join(cwd, 'src/__split-route-b.tsx')
+
+  beforeEach(() => {
+    writeFileSync(html, `<script type="module" src="/src/__split-entry.tsx"></script>`)
+    writeFileSync(
+      entry,
+      `import 'virtual:bamboo.css'\n` +
+        `import { css } from '../styled-system/css'\n` +
+        `document.body.className = css({ color: 'red600' })\n` +
+        // Reached from a side effect, or tree-shaking would drop both routes with the exports.
+        `window.addEventListener('hashchange', () => {\n` +
+        `  const route = location.hash === '#a' ? import('./__split-route-a') : import('./__split-route-b')\n` +
+        `  void route.then((m) => { document.body.className = Object.values(m).join(' ') })\n` +
+        `})\n`,
+    )
+    writeFileSync(
+      routeA,
+      `import { css } from '../styled-system/css'\n` +
+        `export const onlyA = css({ width: '[811.1px]', _hover: { width: '[811.2px]' } })\n` +
+        `export const shared = css({ gap: '[812.2px]' })\n`,
+    )
+    writeFileSync(
+      routeB,
+      `import { css } from '../styled-system/css'\n` +
+        `export const onlyB = css({ md: { height: '[813.3px]' } })\n` +
+        `export const shared = css({ gap: '[812.2px]' })\n`,
+    )
+  })
+
+  afterEach(() => {
+    for (const file of [html, entry, routeA, routeB]) rmSync(file, { force: true })
+  })
+
+  const buildSplit = async (run: typeof build) => {
+    const result = (await run({
+      root: cwd,
+      logLevel: 'silent',
+      css: { postcss: { plugins: [] } },
+      plugins: [bamboocss({ cwd, reportSummary: false })],
+      build: {
+        write: false,
+        manifest: true,
+        minify: false,
+        rollupOptions: { input: html, output: { assetFileNames: 'assets/[name]-[hash][extname]' } },
+      },
+    })) as Rollup.RollupOutput
+    const { output } = result
+    const sheets = output.filter(
+      (item): item is Rollup.OutputAsset => item.type === 'asset' && item.fileName.endsWith('.css'),
+    )
+    const source = (asset: Rollup.OutputAsset) => String(asset.source)
+    const entrySheet = sheets.find((asset) => source(asset).includes('--made-with-bamboo'))
+    const routeSheet = (marker: string) => sheets.find((asset) => source(asset).includes(marker))
+    const chunkOf = (name: string) =>
+      output.find((item): item is Rollup.OutputChunk => item.type === 'chunk' && item.name === name)
+    const manifest = output.find((item) => item.type === 'asset' && item.fileName.endsWith('manifest.json'))
+    const builtHtml = output.find((item) => item.type === 'asset' && item.fileName.endsWith('.html'))
+    return { output, sheets, source, entrySheet, routeSheet, chunkOf, manifest, builtHtml }
+  }
+
+  const assertSplit = (built: Awaited<ReturnType<typeof buildSplit>>) => {
+    const { sheets, source, entrySheet, routeSheet, chunkOf, manifest, builtHtml } = built
+    expect(entrySheet, 'the entry sheet').toBeDefined()
+    const entryCss = source(entrySheet!)
+    expect(entryCss, 'an atom the entry uses').toContain('red600')
+    expect(entryCss, 'an atom both routes use').toContain('812.2px')
+    expect(entryCss, 'an atom only route a uses').not.toContain('811.1px')
+    expect(entryCss, 'a conditional atom only route a uses').not.toContain('811.2px')
+    expect(entryCss, 'an atom only route b uses').not.toContain('813.3px')
+
+    const sheetA = routeSheet('811.1px')
+    const sheetB = routeSheet('813.3px')
+    expect(sheetA, 'route a has a sheet').toBeDefined()
+    expect(sheetB, 'route b has a sheet').toBeDefined()
+    expect(sheets, 'the entry sheet and one per route').toHaveLength(3)
+
+    const cssA = source(sheetA!)
+    expect(cssA, 'its conditional atom too, under its sublayer and selector').toContain('811.2px')
+    expect(cssA, 'nothing shared').not.toContain('812.2px')
+    expect(cssA, 'no sentinel: it is not a sheet the late pass should prune again').not.toContain('--made-with-bamboo')
+    expect(cssA, 'the sublayer order statement comes first').toMatch(
+      /^\s*@layer utilities\s*\{\s*@layer s\d+-c\d+-p\d+/,
+    )
+    const cssB = source(sheetB!)
+    expect(cssB, 'a breakpoint atom keeps its query').toMatch(/@media[^{]*\{[^}]*813\.3px/)
+    expect(cssB).not.toContain('812.2px')
+
+    const chunkA = chunkOf('__split-route-a')
+    const chunkB = chunkOf('__split-route-b')
+    expect(chunkA?.viteMetadata?.importedCss, 'attached to its chunk').toContain(sheetA!.fileName)
+    expect(chunkB?.viteMetadata?.importedCss).toContain(sheetB!.fileName)
+
+    const manifestText = String((manifest as Rollup.OutputAsset).source)
+    expect(manifestText, 'the manifest lists the route sheet').toContain(sheetA!.fileName)
+    expect(manifestText).toContain(sheetB!.fileName)
+
+    const entryChunk = built.output.find((item): item is Rollup.OutputChunk => item.type === 'chunk' && item.isEntry)
+    expect(entryChunk?.code, 'the preload helper fetches the route sheet with the route').toContain(sheetA!.fileName)
+    expect(entryChunk?.code).toContain(sheetB!.fileName)
+
+    const htmlText = String((builtHtml as Rollup.OutputAsset).source)
+    expect(htmlText, 'the document links the entry sheet').toContain(entrySheet!.fileName)
+    expect(htmlText, 'and not a route sheet').not.toContain(sheetA!.fileName)
+  }
+
+  test('Vite 7 gives each lazy route the atoms only it uses', async () => {
+    assertSplit(await buildSplit(build))
+  }, 60_000)
+
+  test('Vite 8 gives each lazy route the atoms only it uses', async () => {
+    assertSplit(await buildSplit(buildVite8 as unknown as typeof build))
+  }, 60_000)
+
+  test('splitCss: false keeps one sheet', async () => {
+    const result = (await build({
+      root: cwd,
+      logLevel: 'silent',
+      css: { postcss: { plugins: [] } },
+      plugins: [bamboocss({ cwd, reportSummary: false, splitCss: false })],
+      build: { write: false, minify: false, rollupOptions: { input: html } },
+    })) as Rollup.RollupOutput
+    const sheets = result.output.filter((item) => item.type === 'asset' && item.fileName.endsWith('.css'))
+    expect(sheets).toHaveLength(1)
+    expect(String((sheets[0] as Rollup.OutputAsset).source)).toContain('811.1px')
+  }, 60_000)
+})

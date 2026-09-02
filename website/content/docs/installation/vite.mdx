@@ -185,6 +185,7 @@ export const title = 'fs_lg fw_bold'
 | `configPath`      | –       | Path to `bamboo.config.ts`, resolved the same way as the CLI.    |
 | `cwd`             | –       | Directory the config is resolved from.                           |
 | `pruneCss`        | `true`  | Remove rules for atoms no compiled module can emit. See below.   |
+| `splitCss`        | `true`  | Give each lazily loaded chunk a sheet of the atoms only it uses. |
 
 `pruneCss` drops every rule the source graph produced that nothing in the bundle can reach. It applies to builds only —
 the dev server never prunes. Turning it off ships the whole extracted stylesheet: larger, and never wrong _by pruning_.
@@ -206,6 +207,22 @@ moved.
 
 Where the consumer can run after Bamboo instead — `order: 'post'` listed later, or `writeBundle`/`closeBundle` — prefer
 that and keep the pruning. The build prints one line whenever pruning is off, so it is never off silently.
+
+### Per-route stylesheets
+
+A utility only one lazily loaded chunk uses is written into a stylesheet of that chunk's own, attached where Vite's own
+plumbing reads it: the manifest lists it under the chunk, and the preload helper fetches it before the chunk runs. A
+utility two chunks use, one the entry or its static imports reach, or one `staticCss` asked for, stays in the entry
+sheet, so nothing is ever downloaded twice and a route that is the only user of a style downloads that style with the
+route.
+
+The split is safe because precedence does not depend on where a rule sits: it lives in the
+[cascade sublayers](/docs/concepts/cascade-layers#sublayers-of-utilities), and every chunk sheet opens with the same
+sublayer order statement as the entry sheet, so whichever the document parses first establishes the same order.
+
+Builds only, and only where Vite's `build.cssCodeSplit` is on, which it is unless you turned it off or are building a
+library. A framework that copies a server build's stylesheets into the client build by the names its chunks recorded, as
+the RSC plugin does, copies the chunk sheets along with the entry sheet. Set `splitCss: false` to keep one sheet.
 
 ### Builds with more than one environment
 

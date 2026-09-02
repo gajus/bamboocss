@@ -116,7 +116,9 @@ resolve by specificity and then source order.
 This exists so that a rule's precedence never depends on where it sits in the file. One flat layer carried precedence in
 its source order — shorthands before longhands, bare rules before conditional ones, each breakpoint in its place — and
 source order is the one thing a stylesheet split per chunk cannot promise, since chunks load in whichever order a route
-needs them. Layer order is decided by the statement, whatever order the rules arrive in.
+needs them. Layer order is decided by the statement, whatever order the rules arrive in. That is what lets the Vite
+plugin give each lazily loaded chunk a [sheet of its own](/docs/installation/vite#per-route-stylesheets): every chunk
+sheet repeats the statement, so whichever the document parses first establishes the same order.
 
 Nothing resolves differently. Specificity comes first in the key because layer order outranks it: two rules of different
 specificity used to resolve by specificity alone, and now the more specific one sits in the later sublayer. Two rules of

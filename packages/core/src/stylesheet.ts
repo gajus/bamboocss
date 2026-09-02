@@ -1,16 +1,74 @@
 import merge from 'lodash.merge'
 import { logger } from '@bamboocss/logger'
-import type { CascadeLayer, Dict, SystemStyleObject, ViewTransitionResult } from '@bamboocss/types'
+import { getPropertyPriority, isImportant } from '@bamboocss/shared'
+import type { CascadeLayer, ConditionDetails, Dict, SystemStyleObject, ViewTransitionResult } from '@bamboocss/types'
 import postcss, { CssSyntaxError } from 'postcss'
 import { stringifyCustomProperties } from './global-vars'
+import type { UtilitySublayerKey } from './layers'
 import { optimizeCss, optimizeCssRoot } from './optimize'
 import sortMediaQueries from './plugins/sort-mq'
 import { serializeStyles } from './serialize'
 import { sortStyleRules } from './sort-style-rules'
+import {
+  NO_SPECIFICITY,
+  nestedSpecificity,
+  selectorMembers,
+  selectorSpecificity,
+  type Specificity,
+} from './specificity'
 import { stringify } from './stringify'
 import type { StyleDecoder } from './style-decoder'
 import type { CssOptions, LayerName, ProcessOptions, StylesheetContext } from './types'
 import { findInvalidDeclarations, type InvalidDeclaration } from './validate-declarations'
+
+/**
+ * The one sublayer key a style object resolves to when it does not branch, or `undefined`.
+ *
+ * Follows the object down while each level holds exactly one key, adding each selector's
+ * specificity as nesting would, and stops at the container holding declarations: one path, so
+ * one specificity, and one key if every declaration there agrees on importance — the shape of
+ * nearly every atom. Anything else is handed to the full walk.
+ */
+const singleUtilityKey = (
+  styles: Dict,
+  conditions: ConditionDetails[] | undefined,
+  priorityOf: (property: string) => number,
+): UtilitySublayerKey | undefined => {
+  let node: Dict = styles
+  let specificity: Specificity = NO_SPECIFICITY
+  let underSelector = false
+  for (;;) {
+    let name: string | undefined
+    let count = 0
+    for (const key in node) {
+      name = key
+      if (++count > 1) return undefined
+    }
+    if (name === undefined) return undefined
+    const value = node[name]
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) break
+    if (name[0] !== '@') {
+      if (name.includes(',')) return undefined
+      specificity = underSelector ? nestedSpecificity(specificity, name) : selectorSpecificity(name)
+      underSelector = true
+    }
+    node = value as Dict
+  }
+
+  let important: boolean | undefined
+  let property: string | undefined
+  for (const name in node) {
+    const value = node[name]
+    if (typeof value === 'object' && value !== null && !Array.isArray(value)) return undefined
+    const flag = typeof value === 'string' && isImportant(value)
+    if (important === undefined) important = flag
+    else if (important !== flag) return undefined
+    property ??= name
+    if (priorityOf(name) !== priorityOf(property)) return undefined
+  }
+  if (property === undefined || important === undefined) return undefined
+  return { important, specificity, conditions, priority: priorityOf(property) }
+}
 
 export class Stylesheet {
   constructor(private context: StylesheetContext) {}
@@ -94,9 +152,106 @@ export class Stylesheet {
     this.process({ styles, layer })
   }
 
+  /**
+   * Write a style object into the sublayers of `utilities` its rules belong in.
+   *
+   * One object can hold rules of more than one specificity — a condition adds to the base
+   * selector's, a selector list's members differ — and declarations of more than one
+   * importance, and a sublayer is one of each. So the object is walked to its declarations,
+   * each is keyed by the specificity of the selector it ends up under, its importance, the
+   * rule's conditions and its property priority, and the declarations sharing a key are
+   * written together under the path that led to them. For the ordinary atom, one property
+   * under one path, that is the whole object.
+   *
+   * `priorityOf` is the sorter's last key. An atom sorts by the property it was written as,
+   * so an atom passes a constant; a view transition's rules carry many properties and take
+   * each one's own.
+   */
+  private processUtility = (
+    styles: Dict,
+    conditions: ConditionDetails[] | undefined,
+    priorityOf: (property: string) => number,
+  ) => {
+    // The ordinary atom — one selector, perhaps a condition or two, then its declarations —
+    // is one group, and can be written as it stands. Only an object that branches, or that
+    // mixes importances or selector-list members of differing specificity, needs taking
+    // apart. This is where a sheet spends its time, so the walk below is the exception.
+    const single = singleUtilityKey(styles, conditions, priorityOf)
+    if (single) {
+      this.appendUtility(single, styles)
+      return
+    }
+
+    const groups = new Map<string, { key: UtilitySublayerKey; styles: Dict }>()
+
+    const place = (path: string[], pathKey: string, property: string, value: unknown, specificity: Specificity) => {
+      const important = typeof value === 'string' && isImportant(value)
+      const priority = priorityOf(property)
+      const id = `${important ? 'i' : 'n'}${specificity[0]}.${specificity[1]}.${specificity[2]}\0${priority}\0${pathKey}`
+      let group = groups.get(id)
+      if (!group) {
+        group = { key: { important, specificity, conditions, priority }, styles: {} }
+        groups.set(id, group)
+      }
+      let cursor: Dict = group.styles
+      for (const segment of path) cursor = (cursor[segment] ??= {}) as Dict
+      cursor[property] = value
+    }
+
+    const walk = (node: Dict, path: string[], pathKey: string, specificity: Specificity, underSelector: boolean) => {
+      for (const name in node) {
+        const value = node[name]
+        const nested = typeof value === 'object' && value !== null && !Array.isArray(value)
+        if (!nested) {
+          // An at-rule key holding a list of blocks, the one shape `stringify` reads an array as.
+          if (name[0] === '@' && Array.isArray(value)) {
+            for (const block of value as Dict[]) {
+              walk(block, [...path, name], `${pathKey}\0${name}`, specificity, underSelector)
+            }
+            continue
+          }
+          place(path, pathKey, name, value, specificity)
+          continue
+        }
+        if (name[0] === '@') {
+          walk(value as Dict, [...path, name], `${pathKey}\0${name}`, specificity, underSelector)
+          continue
+        }
+        for (const member of selectorMembers(name)) {
+          const next = underSelector ? nestedSpecificity(specificity, member) : selectorSpecificity(member)
+          walk(value as Dict, [...path, member], `${pathKey}\0${member}`, next, true)
+        }
+      }
+    }
+
+    walk(styles, [], '', NO_SPECIFICITY, false)
+
+    for (const { key, styles: grouped } of groups.values()) this.appendUtility(key, grouped)
+  }
+
+  private appendUtility = (key: UtilitySublayerKey, styles: Dict) => {
+    try {
+      this.layers.utilitySublayer(key).append(stringify(styles))
+    } catch (error) {
+      if (error instanceof CssSyntaxError) {
+        logger.error('sheet:process', error.showSourceCode(true))
+      } else {
+        logger.caughtError('sheet:process', 'Failed to process styles', error)
+      }
+    }
+  }
+
   processDecoder = (decoder: StyleDecoder, { includeRecipes = true }: { includeRecipes?: boolean } = {}) => {
     sortStyleRules([...decoder.atomic]).forEach((css) => {
-      this.processCss(css.result, (css.layer as LayerName) ?? 'utilities')
+      const layer = (css.layer as LayerName) ?? 'utilities'
+      if (layer !== 'utilities') {
+        this.processCss(css.result, layer)
+        return
+      }
+      // The sorter's last key is the property the atom was written as, resolved shorthand
+      // and all; every declaration the atom emits inherits it, as it did in the flat layer.
+      const priority = getPropertyPriority(css.entry.prop)
+      this.processUtility(css.result, css.conditions, () => priority)
     })
 
     if (includeRecipes)
@@ -160,7 +315,7 @@ export class Stylesheet {
   processViewTransition = (viewTransition: ViewTransitionResult) => {
     // Serialized rather than appended raw: the slot bodies are authored style objects, so
     // tokens, shorthands and conditions inside them resolve the same as anywhere else.
-    this.process({ styles: this.serialize(viewTransition.styles), layer: 'utilities' })
+    this.processUtility(this.serialize(viewTransition.styles), undefined, getPropertyPriority)
   }
 
   getLayerCss = (...layers: CascadeLayer[]) => {
@@ -197,7 +352,7 @@ export class Stylesheet {
        * protection to `sortMediaQueries`, which ran against the shared tree even under the old
        * spelling.
        */
-      const root = this.context.layers.insert().clone()
+      const root = this.context.layers.insert({ compact: Boolean(minify) }).clone()
 
       breakpoints.expandScreenAtRule(root)
 

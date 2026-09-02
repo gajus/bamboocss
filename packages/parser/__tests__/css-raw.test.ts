@@ -155,45 +155,55 @@ describe('{fn}.raw', () => {
       }
 
       @layer utilities {
-        .bg_red\\.400 {
-          background: var(--colors-red-400);
+        @layer s010-c0-p1000, s010-c0-p2000, s010-c0-p3000, s010-c0-p4000;
+
+        @layer s010-c0-p1000 {
+          .bg_red\\.400 {
+            background: var(--colors-red-400);
+      }
+        }
+
+        @layer s010-c0-p2000 {
+          .mx_3 {
+            margin-inline: var(--spacing-3);
       }
 
-        .mx_3 {
-          margin-inline: var(--spacing-3);
+          .mx_10 {
+            margin-inline: var(--spacing-10);
+      }
+        }
+
+        @layer s010-c0-p3000 {
+          .c_amber\\.100 {
+            color: var(--colors-amber-100);
       }
 
-        .mx_10 {
-          margin-inline: var(--spacing-10);
+          .c_blue\\.950 {
+            color: var(--colors-blue-950);
       }
 
-        .c_amber\\.100 {
-          color: var(--colors-amber-100);
+          .d_flex {
+            display: flex;
       }
 
-        .c_blue\\.950 {
-          color: var(--colors-blue-950);
+          .flex-d_column {
+            flex-direction: column;
       }
 
-        .d_flex {
-          display: flex;
+          .flex-d_row {
+            flex-direction: row;
+      }
+        }
+
+        @layer s010-c0-p4000 {
+          .pt_4 {
+            padding-top: var(--spacing-4);
       }
 
-        .flex-d_column {
-          flex-direction: column;
+          .pt_6 {
+            padding-top: var(--spacing-6);
       }
-
-        .flex-d_row {
-          flex-direction: row;
-      }
-
-        .pt_4 {
-          padding-top: var(--spacing-4);
-      }
-
-        .pt_6 {
-          padding-top: var(--spacing-6);
-      }
+        }
       }"
     `)
   })

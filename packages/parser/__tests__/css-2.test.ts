@@ -619,13 +619,19 @@ export function Card({ className }) {
 
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        .c_red\\.400 {
-          color: var(--colors-red-400);
-      }
+        @layer s010-c0-p3000, s010-c0-p4000;
 
-        .max-w_1000px {
-          max-width: 1000px;
+        @layer s010-c0-p3000 {
+          .c_red\\.400 {
+            color: var(--colors-red-400);
       }
+        }
+
+        @layer s010-c0-p4000 {
+          .max-w_1000px {
+            max-width: 1000px;
+      }
+        }
       }"
     `)
   })

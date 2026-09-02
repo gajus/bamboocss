@@ -45,10 +45,14 @@ describe('color-mix', () => {
           "bg_red\\/30",
         ],
         "css": "@layer utilities {
-        .bg_red\\/30 {
-          --mix-background: color-mix(in srgb, red 30%, transparent);
-          background: var(--mix-background, red);
+        @layer s010-c0-p1000;
+
+        @layer s010-c0-p1000 {
+          .bg_red\\/30 {
+            --mix-background: color-mix(in srgb, red 30%, transparent);
+            background: var(--mix-background, red);
       }
+        }
       }",
       }
     `)
@@ -61,10 +65,14 @@ describe('color-mix', () => {
           "bg_red\\/30",
         ],
         "css": "@layer utilities {
-        .bg_red\\/30 {
-          --mix-background: color-mix(in srgb, red 30%, transparent);
-          background: var(--mix-background, red);
+        @layer s010-c0-p1000;
+
+        @layer s010-c0-p1000 {
+          .bg_red\\/30 {
+            --mix-background: color-mix(in srgb, red 30%, transparent);
+            background: var(--mix-background, red);
       }
+        }
       }",
       }
     `)
@@ -77,10 +85,14 @@ describe('color-mix', () => {
           "bg_red\\.300\\/30",
         ],
         "css": "@layer utilities {
-        .bg_red\\.300\\/30 {
-          --mix-background: color-mix(in srgb, var(--colors-red-300) 30%, transparent);
-          background: var(--mix-background, var(--colors-red-300));
+        @layer s010-c0-p1000;
+
+        @layer s010-c0-p1000 {
+          .bg_red\\.300\\/30 {
+            --mix-background: color-mix(in srgb, var(--colors-red-300) 30%, transparent);
+            background: var(--mix-background, var(--colors-red-300));
       }
+        }
       }",
       }
     `)
@@ -93,10 +105,14 @@ describe('color-mix', () => {
           "bg_red\\/0\\.33",
         ],
         "css": "@layer utilities {
-        .bg_red\\/0\\.33 {
-          --mix-background: color-mix(in srgb, red 0.33%, transparent);
-          background: var(--mix-background, red);
+        @layer s010-c0-p1000;
+
+        @layer s010-c0-p1000 {
+          .bg_red\\/0\\.33 {
+            --mix-background: color-mix(in srgb, red 0.33%, transparent);
+            background: var(--mix-background, red);
       }
+        }
       }",
       }
     `)
@@ -109,10 +125,14 @@ describe('color-mix', () => {
           "bg_red\\/33",
         ],
         "css": "@layer utilities {
-        .bg_red\\/33 {
-          --mix-background: color-mix(in srgb, red 33%, transparent);
-          background: var(--mix-background, red);
+        @layer s010-c0-p1000;
+
+        @layer s010-c0-p1000 {
+          .bg_red\\/33 {
+            --mix-background: color-mix(in srgb, red 33%, transparent);
+            background: var(--mix-background, red);
       }
+        }
       }",
       }
     `)
@@ -125,10 +145,14 @@ describe('color-mix', () => {
           "from_red\\/33",
         ],
         "css": "@layer utilities {
-        .from_red\\/33 {
-          --mix---gradient-from: color-mix(in srgb, red 33%, transparent);
-          --gradient-from: var(--mix---gradient-from, red);
+        @layer s010-c0-p3000;
+
+        @layer s010-c0-p3000 {
+          .from_red\\/33 {
+            --mix---gradient-from: color-mix(in srgb, red 33%, transparent);
+            --gradient-from: var(--mix---gradient-from, red);
       }
+        }
       }",
       }
     `)
@@ -141,9 +165,13 @@ describe('color-mix', () => {
           "bg_token\\(colors\\.pink\\.400\\/30\\)",
         ],
         "css": "@layer utilities {
-        .bg_token\\(colors\\.pink\\.400\\/30\\) {
-          background: color-mix(in srgb, var(--colors-pink-400) 30%, transparent);
+        @layer s010-c0-p1000;
+
+        @layer s010-c0-p1000 {
+          .bg_token\\(colors\\.pink\\.400\\/30\\) {
+            background: color-mix(in srgb, var(--colors-pink-400) 30%, transparent);
       }
+        }
       }",
       }
     `)
@@ -190,9 +218,13 @@ describe('color-mix', () => {
           "bg_xx1x\\/\\/30",
         ],
         "css": "@layer utilities {
-        .bg_xx1x\\/\\/30 {
-          background: xx1x//30;
+        @layer s010-c0-p1000;
+
+        @layer s010-c0-p1000 {
+          .bg_xx1x\\/\\/30 {
+            background: xx1x//30;
       }
+        }
       }",
       }
     `)
@@ -205,9 +237,13 @@ describe('color-mix', () => {
           "bg_red\\/abc",
         ],
         "css": "@layer utilities {
-        .bg_red\\/abc {
-          background: red/abc;
+        @layer s010-c0-p1000;
+
+        @layer s010-c0-p1000 {
+          .bg_red\\/abc {
+            background: red/abc;
       }
+        }
       }",
       }
     `)
@@ -220,9 +256,13 @@ describe('color-mix', () => {
           "bg_red\\/0\\,4",
         ],
         "css": "@layer utilities {
-        .bg_red\\/0\\,4 {
-          background: red/0,4;
+        @layer s010-c0-p1000;
+
+        @layer s010-c0-p1000 {
+          .bg_red\\/0\\,4 {
+            background: red/0,4;
       }
+        }
       }",
       }
     `)
@@ -235,9 +275,13 @@ describe('color-mix', () => {
           "bg_red\\/0\\.\\.\\,4",
         ],
         "css": "@layer utilities {
-        .bg_red\\/0\\.\\.\\,4 {
-          background: red/0..,4;
+        @layer s010-c0-p1000;
+
+        @layer s010-c0-p1000 {
+          .bg_red\\/0\\.\\.\\,4 {
+            background: red/0..,4;
       }
+        }
       }",
       }
     `)
@@ -250,10 +294,14 @@ describe('color-mix', () => {
           "bg_red\\/half",
         ],
         "css": "@layer utilities {
-        .bg_red\\/half {
-          --mix-background: color-mix(in srgb, red 50%, transparent);
-          background: var(--mix-background, red);
+        @layer s010-c0-p1000;
+
+        @layer s010-c0-p1000 {
+          .bg_red\\/half {
+            --mix-background: color-mix(in srgb, red 50%, transparent);
+            background: var(--mix-background, red);
       }
+        }
       }",
       }
     `)
@@ -266,9 +314,13 @@ describe('color-mix', () => {
           "wktf-c_red\\.300",
         ],
         "css": "@layer utilities {
-        .wktf-c_red\\.300 {
-          -webkit-text-fill-color: var(--colors-red-300);
+        @layer s010-c0-p3000;
+
+        @layer s010-c0-p3000 {
+          .wktf-c_red\\.300 {
+            -webkit-text-fill-color: var(--colors-red-300);
       }
+        }
       }",
       }
     `)

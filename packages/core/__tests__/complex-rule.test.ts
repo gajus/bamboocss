@@ -15,17 +15,24 @@ describe('complex-rule', () => {
       }),
     ).toMatchInlineSnapshot(`
       "@layer utilities {
-        [data-theme=dark] .dark\\:c_green500,.dark .dark\\:c_green500,.dark\\:c_green500.dark,.dark\\:c_green500[data-theme=dark] {
-          color: green500;
-      }
+        @layer s020-c0-p3000, s020-c1-p3000;
 
-        @media (width >= 40rem) {
-          @media (width >= 48rem) {
-            [data-theme=dark] .dark\\:sm\\:md\\:c_red200,.dark .dark\\:sm\\:md\\:c_red200,.dark\\:sm\\:md\\:c_red200.dark,.dark\\:sm\\:md\\:c_red200[data-theme=dark] {
-              color: red200;
+        @layer s020-c0-p3000 {
+
+          [data-theme=dark] .dark\\:c_green500,.dark .dark\\:c_green500,.dark\\:c_green500.dark,.dark\\:c_green500[data-theme=dark] {
+            color: green500;
+      }
+        }
+
+        @layer s020-c1-p3000 {
+          @media (width >= 40rem) {
+            @media (width >= 48rem) {
+              [data-theme=dark] .dark\\:sm\\:md\\:c_red200,.dark .dark\\:sm\\:md\\:c_red200,.dark\\:sm\\:md\\:c_red200.dark,.dark\\:sm\\:md\\:c_red200[data-theme=dark] {
+                color: red200;
       }
       }
       }
+        }
       }"
     `)
   })

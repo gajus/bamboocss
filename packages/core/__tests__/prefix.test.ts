@@ -14,20 +14,28 @@ describe('atomic-rule / prefix', () => {
   test('should product consistent hash', () => {
     expect(backend({ color: 'red' })).toMatchInlineSnapshot(`
       "@layer utilities {
-        .tw-wxtrg {
-          color: red;
+        @layer s010-c0-p3000;
+
+        @layer s010-c0-p3000 {
+          .tw-wxtrg {
+            color: red;
       }
+        }
       }"
     `)
     expect(frontend({ color: 'red' })).toMatchInlineSnapshot(`"tw-wxtrg"`)
 
     expect(backend({ color: { sm: 'red' } })).toMatchInlineSnapshot(`
       "@layer utilities {
-        @media (width >= 40rem) {
-          .tw-eIFrkw {
-            color: red;
+        @layer s010-c0-p3000;
+
+        @layer s010-c0-p3000 {
+          @media (width >= 40rem) {
+            .tw-eIFrkw {
+              color: red;
       }
       }
+        }
       }"
     `)
     expect(frontend({ color: { sm: 'red' } })).toMatchInlineSnapshot(`"tw-eIFrkw"`)

@@ -63,10 +63,14 @@ describe('fallback values', () => {
   test('emits one declaration per candidate, least-preferred first', () => {
     expect(css({ height: 'fallback(calc(100dvh - 100px), calc(100vh - 100px))' })).toMatchInlineSnapshot(`
       "@layer utilities {
-        .h_fallback\\(calc\\(100dvh_-_100px\\)\\,_calc\\(100vh_-_100px\\)\\) {
-          height: calc(100vh - 100px);
-          height: calc(100dvh - 100px);
+        @layer s010-c0-p4000;
+
+        @layer s010-c0-p4000 {
+          .h_fallback\\(calc\\(100dvh_-_100px\\)\\,_calc\\(100vh_-_100px\\)\\) {
+            height: calc(100vh - 100px);
+            height: calc(100dvh - 100px);
       }
+        }
       }"
     `)
   })
@@ -74,11 +78,15 @@ describe('fallback values', () => {
   test('supports more than two candidates', () => {
     expect(css({ cursor: 'fallback(-webkit-grab, grab, move)' })).toMatchInlineSnapshot(`
       "@layer utilities {
-        .cursor_fallback\\(-webkit-grab\\,_grab\\,_move\\) {
-          cursor: move;
-          cursor: grab;
-          cursor: -webkit-grab;
+        @layer s010-c0-p3000;
+
+        @layer s010-c0-p3000 {
+          .cursor_fallback\\(-webkit-grab\\,_grab\\,_move\\) {
+            cursor: move;
+            cursor: grab;
+            cursor: -webkit-grab;
       }
+        }
       }"
     `)
   })
@@ -86,10 +94,14 @@ describe('fallback values', () => {
   test('resolves tokens inside each candidate', () => {
     expect(css({ color: 'fallback(red.300, red)' })).toMatchInlineSnapshot(`
       "@layer utilities {
-        .c_fallback\\(red\\.300\\,_red\\) {
-          color: red;
-          color: var(--colors-red-300);
+        @layer s010-c0-p3000;
+
+        @layer s010-c0-p3000 {
+          .c_fallback\\(red\\.300\\,_red\\) {
+            color: red;
+            color: var(--colors-red-300);
       }
+        }
       }"
     `)
   })
@@ -97,10 +109,14 @@ describe('fallback values', () => {
   test('resolves the arbitrary-value escape hatch inside each candidate', () => {
     expect(css({ width: 'fallback([stretch], [100%])' })).toMatchInlineSnapshot(`
       "@layer utilities {
-        .w_fallback\\(\\[stretch\\]\\,_\\[100\\%\\]\\) {
-          width: 100%;
-          width: stretch;
+        @layer s010-c0-p4000;
+
+        @layer s010-c0-p4000 {
+          .w_fallback\\(\\[stretch\\]\\,_\\[100\\%\\]\\) {
+            width: 100%;
+            width: stretch;
       }
+        }
       }"
     `)
   })
@@ -108,10 +124,14 @@ describe('fallback values', () => {
   test('expands shorthands and multi-declaration utilities per candidate', () => {
     expect(css({ paddingX: 'fallback(4, 2)' })).toMatchInlineSnapshot(`
       "@layer utilities {
-        .px_fallback\\(4\\,_2\\) {
-          padding-inline: var(--spacing-2);
-          padding-inline: var(--spacing-4);
+        @layer s010-c0-p2000;
+
+        @layer s010-c0-p2000 {
+          .px_fallback\\(4\\,_2\\) {
+            padding-inline: var(--spacing-2);
+            padding-inline: var(--spacing-4);
       }
+        }
       }"
     `)
   })
@@ -119,9 +139,13 @@ describe('fallback values', () => {
   test('collapses candidates that resolve to the same declaration', () => {
     expect(css({ height: 'fallback(100px, 100px)' })).toMatchInlineSnapshot(`
       "@layer utilities {
-        .h_fallback\\(100px\\,_100px\\) {
-          height: 100px;
+        @layer s010-c0-p4000;
+
+        @layer s010-c0-p4000 {
+          .h_fallback\\(100px\\,_100px\\) {
+            height: 100px;
       }
+        }
       }"
     `)
   })
@@ -129,10 +153,14 @@ describe('fallback values', () => {
   test('works under conditions', () => {
     expect(css({ _hover: { height: 'fallback(100dvh, 100vh)' } })).toMatchInlineSnapshot(`
       "@layer utilities {
-        .hover\\:h_fallback\\(100dvh\\,_100vh\\):is(:hover, [data-hover]) {
-          height: 100vh;
-          height: 100dvh;
+        @layer s020-c0-p4000;
+
+        @layer s020-c0-p4000 {
+          .hover\\:h_fallback\\(100dvh\\,_100vh\\):is(:hover, [data-hover]) {
+            height: 100vh;
+            height: 100dvh;
       }
+        }
       }"
     `)
   })
@@ -140,12 +168,16 @@ describe('fallback values', () => {
   test('works inside at-rules', () => {
     expect(css({ md: { height: 'fallback(100dvh, 100vh)' } })).toMatchInlineSnapshot(`
       "@layer utilities {
-        @media (width >= 48rem) {
-          .md\\:h_fallback\\(100dvh\\,_100vh\\) {
-            height: 100vh;
-            height: 100dvh;
+        @layer s010-c0-p4000;
+
+        @layer s010-c0-p4000 {
+          @media (width >= 48rem) {
+            .md\\:h_fallback\\(100dvh\\,_100vh\\) {
+              height: 100vh;
+              height: 100dvh;
       }
       }
+        }
       }"
     `)
   })
@@ -153,9 +185,13 @@ describe('fallback values', () => {
   test('a single candidate emits a single declaration', () => {
     expect(css({ height: 'fallback(100dvh)' })).toMatchInlineSnapshot(`
       "@layer utilities {
-        .h_fallback\\(100dvh\\) {
-          height: 100dvh;
+        @layer s010-c0-p4000;
+
+        @layer s010-c0-p4000 {
+          .h_fallback\\(100dvh\\) {
+            height: 100dvh;
       }
+        }
       }"
     `)
   })
@@ -166,10 +202,14 @@ describe('fallback values', () => {
     // the browser that fell back — the variable and the property would disagree.
     expect(css({ transitionProperty: 'fallback([color, background-color], all)' })).toMatchInlineSnapshot(`
       "@layer utilities {
-        .trs-prop_fallback\\(\\[color\\,_background-color\\]\\,_all\\) {
-          --transition-prop: color, background-color;
-          transition-property: color, background-color;
+        @layer s010-c0-p3000;
+
+        @layer s010-c0-p3000 {
+          .trs-prop_fallback\\(\\[color\\,_background-color\\]\\,_all\\) {
+            --transition-prop: color, background-color;
+            transition-property: color, background-color;
       }
+        }
       }"
     `)
   })
@@ -181,10 +221,14 @@ describe('fallback values', () => {
 
     expect(css({ myNum: 'fallback(4, 8)' } as SystemStyleObject, config)).toMatchInlineSnapshot(`
       "@layer utilities {
-        .myNum_fallback\\(4\\,_8\\) {
-          margin-top: 8px;
-          margin-top: 4px;
+        @layer s010-c0-p3000;
+
+        @layer s010-c0-p3000 {
+          .myNum_fallback\\(4\\,_8\\) {
+            margin-top: 8px;
+            margin-top: 4px;
       }
+        }
       }"
     `)
   })
@@ -196,9 +240,13 @@ describe('fallback values', () => {
   test('strips a NUL arriving in an author value', () => {
     expect(css({ height: '100px\u0000200px' })).toMatchInlineSnapshot(`
       "@layer utilities {
-        .h_100px200px {
-          height: 100px200px;
+        @layer s010-c0-p4000;
+
+        @layer s010-c0-p4000 {
+          .h_100px200px {
+            height: 100px200px;
       }
+        }
       }"
     `)
   })
@@ -216,17 +264,25 @@ describe('fallback values', () => {
 
     expect(css({ myFont: 'Inter' } as SystemStyleObject, config)).toMatchInlineSnapshot(`
       "@layer utilities {
-        .myFont_Inter {
-          font-family: Inter,sans-serif;
+        @layer s010-c0-p3000;
+
+        @layer s010-c0-p3000 {
+          .myFont_Inter {
+            font-family: Inter,sans-serif;
       }
+        }
       }"
     `)
     expect(css({ myFont: 'fallback(Inter, Arial)' } as SystemStyleObject, config)).toMatchInlineSnapshot(`
       "@layer utilities {
-        .myFont_fallback\\(Inter\\,_Arial\\) {
-          font-family: Arial,sans-serif;
-          font-family: Inter,sans-serif;
+        @layer s010-c0-p3000;
+
+        @layer s010-c0-p3000 {
+          .myFont_fallback\\(Inter\\,_Arial\\) {
+            font-family: Arial,sans-serif;
+            font-family: Inter,sans-serif;
       }
+        }
       }"
     `)
   })
@@ -246,14 +302,18 @@ describe('fallback values', () => {
     // the fallback path mutated would leak the extra candidate into it.
     expect(processor.css({ myFont: 'multi' } as SystemStyleObject).toCss()).toMatchInlineSnapshot(`
       "@layer utilities {
-        .myFont_fallback\\(Inter\\,_multi\\) {
-          font-family: multi,sans-serif;
-          font-family: Inter,sans-serif;
+        @layer s010-c0-p3000;
+
+        @layer s010-c0-p3000 {
+          .myFont_fallback\\(Inter\\,_multi\\) {
+            font-family: multi,sans-serif;
+            font-family: Inter,sans-serif;
       }
 
-        .myFont_multi {
-          font-family: multi,sans-serif;
+          .myFont_multi {
+            font-family: multi,sans-serif;
       }
+        }
       }"
     `)
   })
@@ -263,9 +323,13 @@ describe('fallback values', () => {
     // per-property cascade to build. The preferred candidate is used on its own.
     expect(css({ lineClamp: 'fallback(none, 3)' })).toMatchInlineSnapshot(`
       "@layer utilities {
-        .lc_fallback\\(none\\,_3\\) {
-          -webkit-line-clamp: unset;
+        @layer s010-c0-p4000;
+
+        @layer s010-c0-p4000 {
+          .lc_fallback\\(none\\,_3\\) {
+            -webkit-line-clamp: unset;
       }
+        }
       }"
     `)
   })
@@ -273,10 +337,14 @@ describe('fallback values', () => {
   test('declines to stack candidates that expand to a nested rule', () => {
     expect(css({ divideX: 'fallback(2px, 1px)' })).toMatchInlineSnapshot(`
       "@layer utilities {
-        .dvd-x_fallback\\(2px\\,_1px\\) > :not([hidden]) ~ :not([hidden]) {
-          border-inline-start-width: 2px;
-          border-inline-end-width: 0px;
+        @layer s030-c0-p3000;
+
+        @layer s030-c0-p3000 {
+          .dvd-x_fallback\\(2px\\,_1px\\) > :not([hidden]) ~ :not([hidden]) {
+            border-inline-start-width: 2px;
+            border-inline-end-width: 0px;
       }
+        }
       }"
     `)
   })
@@ -284,13 +352,17 @@ describe('fallback values', () => {
   test('drops a malformed call instead of emitting invalid CSS', () => {
     expect(css({ color: 'red', height: 'fallback(100dvh, 100vh', display: 'flex' })).toMatchInlineSnapshot(`
       "@layer utilities {
-        .c_red {
-          color: red;
+        @layer s010-c0-p3000;
+
+        @layer s010-c0-p3000 {
+          .c_red {
+            color: red;
       }
 
-        .d_flex {
-          display: flex;
+          .d_flex {
+            display: flex;
       }
+        }
       }"
     `)
   })
@@ -298,10 +370,14 @@ describe('fallback values', () => {
   test('carries !important onto every candidate', () => {
     expect(css({ height: 'fallback(100dvh, 100vh)!' })).toMatchInlineSnapshot(`
       "@layer utilities {
-        .h_fallback\\(100dvh\\,_100vh\\)\\! {
-          height: 100vh !important;
-          height: 100dvh !important;
+        @layer important;
+
+        @layer important {
+          .h_fallback\\(100dvh\\,_100vh\\)\\! {
+            height: 100vh !important;
+            height: 100dvh !important;
       }
+        }
       }"
     `)
   })
@@ -597,10 +673,14 @@ describe('fallback values', () => {
   test('works with hashed class names', () => {
     expect(css({ height: 'fallback(100dvh, 100vh)' }, { hash: true } as Config)).toMatchInlineSnapshot(`
       "@layer utilities {
-        .oFJfu {
-          height: 100vh;
-          height: 100dvh;
+        @layer s010-c0-p4000;
+
+        @layer s010-c0-p4000 {
+          .oFJfu {
+            height: 100vh;
+            height: 100dvh;
       }
+        }
       }"
     `)
   })
@@ -608,9 +688,13 @@ describe('fallback values', () => {
   test('leaves a value that merely contains the call alone', () => {
     expect(css({ border: '1px solid fallback(red, blue)' })).toMatchInlineSnapshot(`
       "@layer utilities {
-        .bd_1px_solid_fallback\\(red\\,_blue\\) {
-          border: 1px solid fallback(red, blue);
+        @layer s010-c0-p1000;
+
+        @layer s010-c0-p1000 {
+          .bd_1px_solid_fallback\\(red\\,_blue\\) {
+            border: 1px solid fallback(red, blue);
       }
+        }
       }"
     `)
   })

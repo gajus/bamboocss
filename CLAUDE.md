@@ -353,7 +353,10 @@ Brief description of the change and its impact.
 ### CSS Processing Flow
 
 1. Style objects → `packages/core/src/rule-processor.ts`
-2. CSS generation → `packages/core/src/stylesheet.ts`
+2. CSS generation → `packages/core/src/stylesheet.ts`. Utilities are written into cascade sublayers keyed by
+   specificity, condition and property priority (`packages/core/src/layers.ts`), so precedence never depends on source
+   order. `packages/core/__tests__/cascade-oracle.test.ts` models the browser's cascade and pins the winner of every
+   competing pair in a corpus; a change to where rules are written has to leave that snapshot untouched.
 3. Optimization → `packages/core/src/optimize.ts` dispatches; the PostCSS plugin order lives in
    `packages/core/src/plugins/optimize-postcss.ts`
    - LightningCSS path: `packages/plugin-lightningcss/src/optimize-lightningcss.ts`, reached through the `css:optimize`

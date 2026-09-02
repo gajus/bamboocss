@@ -74,33 +74,50 @@ describe('sort style rules', () => {
 
     expect(sheet.toCss()).toMatchInlineSnapshot(`
       "@layer utilities {
-        .fs_1 {
-          font-size: 1px;
-      }
+        @layer s010-c0-p3000, s010-c4-p3000, s020-c1-p3000, s020-c2-p3000, s020-c5-p3000, s030-c3-p3000;
 
-        .\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:fs_2[data-attr='test'] {
-          font-size: 2px;
+        @layer s010-c0-p3000 {
+          .fs_1 {
+            font-size: 1px;
       }
+        }
 
-        .focus\\:fs_3:is(:focus, [data-focus]) {
-          font-size: 3px;
+        @layer s010-c4-p3000 {
+          @media (width >= 40rem) {
+            .sm\\:fs_5 {
+              font-size: 5px;
       }
+            .sm\\:bg-c_red {
+              background-color: red;
+      }
+      }
+        }
 
-        .\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:fs_4[data-attr='test']:is([aria-expanded=true], [data-expanded], [data-state="expanded"]) {
-          font-size: 4px;
+        @layer s020-c1-p3000 {
+          .\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:fs_2[data-attr='test'] {
+            font-size: 2px;
       }
+        }
 
-        @media (width >= 40rem) {
-          .sm\\:fs_5 {
-            font-size: 5px;
+        @layer s020-c2-p3000 {
+          .focus\\:fs_3:is(:focus, [data-focus]) {
+            font-size: 3px;
       }
-          .sm\\:bg-c_red {
-            background-color: red;
+        }
+
+        @layer s020-c5-p3000 {
+          @media (width >= 40rem) {
+            .sm\\:hover\\:bg-c_green:is(:hover, [data-hover]) {
+              background-color: green;
       }
-          .sm\\:hover\\:bg-c_green:is(:hover, [data-hover]) {
-            background-color: green;
       }
+        }
+
+        @layer s030-c3-p3000 {
+          .\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:fs_4[data-attr='test']:is([aria-expanded=true], [data-expanded], [data-state="expanded"]) {
+            font-size: 4px;
       }
+        }
       }"
     `)
 
@@ -124,50 +141,69 @@ describe('sort style rules', () => {
 
     expect(sheet2.toCss()).toMatchInlineSnapshot(`
       "@layer utilities {
-        .fs_1 {
-          font-size: 1px;
+        @layer s010-c0-p3000, s010-c5-p3000, s020-c1-p3000, s020-c2-p3000, s020-c3-p3000, s020-c6-p3000, s030-c4-p3000;
+
+        @layer s010-c0-p3000 {
+          .fs_1 {
+            font-size: 1px;
       }
 
-        .fs_1\\.1 {
-          font-size: 1.1px;
+          .fs_1\\.1 {
+            font-size: 1.1px;
       }
+        }
 
-        .\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:fs_2[data-attr='test'] {
-          font-size: 2px;
+        @layer s010-c5-p3000 {
+          @media (width >= 40rem) {
+            .sm\\:fs_5 {
+              font-size: 5px;
       }
+            .sm\\:bg-c_red {
+              background-color: red;
+      }
+            .sm\\:fs_5\\.3 {
+              font-size: 5.3px;
+      }
+            .sm\\:bg-c_blue {
+              background-color: blue;
+      }
+      }
+        }
 
-        .focus\\:fs_3:is(:focus, [data-focus]) {
-          font-size: 3px;
+        @layer s020-c1-p3000 {
+          .\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:fs_2[data-attr='test'] {
+            font-size: 2px;
       }
+        }
 
-        .hover\\:fs_3\\.2:is(:hover, [data-hover]) {
-          font-size: 3.2px;
+        @layer s020-c2-p3000 {
+          .focus\\:fs_3:is(:focus, [data-focus]) {
+            font-size: 3px;
       }
+        }
 
-        .\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:fs_4[data-attr='test']:is([aria-expanded=true], [data-expanded], [data-state="expanded"]) {
-          font-size: 4px;
+        @layer s020-c3-p3000 {
+          .hover\\:fs_3\\.2:is(:hover, [data-hover]) {
+            font-size: 3.2px;
       }
+        }
 
-        @media (width >= 40rem) {
-          .sm\\:fs_5 {
-            font-size: 5px;
+        @layer s020-c6-p3000 {
+          @media (width >= 40rem) {
+            .sm\\:hover\\:bg-c_green:is(:hover, [data-hover]) {
+              background-color: green;
       }
-          .sm\\:bg-c_red {
-            background-color: red;
-      }
-          .sm\\:fs_5\\.3 {
-            font-size: 5.3px;
-      }
-          .sm\\:bg-c_blue {
-            background-color: blue;
-      }
-          .sm\\:hover\\:bg-c_green:is(:hover, [data-hover]) {
-            background-color: green;
-      }
-          .sm\\:hover\\:bg-c_purple:is(:hover, [data-hover]) {
-            background-color: purple;
+            .sm\\:hover\\:bg-c_purple:is(:hover, [data-hover]) {
+              background-color: purple;
       }
       }
+        }
+
+        @layer s030-c4-p3000 {
+          .\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:fs_4[data-attr='test']:is([aria-expanded=true], [data-expanded], [data-state="expanded"]) {
+            font-size: 4px;
+      }
+        }
       }"
     `)
   })

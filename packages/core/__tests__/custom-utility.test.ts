@@ -24,17 +24,25 @@ describe('custom utility', () => {
 
     expect(css({ coloredBorder: 'red' })).toMatchInlineSnapshot(`
       "@layer utilities {
-        .cb_red {
-          border: 1px solid red;
+        @layer s010-c0-p3000;
+
+        @layer s010-c0-p3000 {
+          .cb_red {
+            border: 1px solid red;
       }
+        }
       }"
     `)
 
     expect(css({ cb: 'red' })).toMatchInlineSnapshot(`
       "@layer utilities {
-        .cb_red {
-          border: 1px solid red;
+        @layer s010-c0-p3000;
+
+        @layer s010-c0-p3000 {
+          .cb_red {
+            border: 1px solid red;
       }
+        }
       }"
     `)
   })
@@ -61,25 +69,37 @@ describe('custom utility', () => {
 
     expect(css({ coloredBorder: 'red' })).toMatchInlineSnapshot(`
       "@layer utilities {
-        .cbd_red {
-          border: 1px solid red;
+        @layer s010-c0-p3000;
+
+        @layer s010-c0-p3000 {
+          .cbd_red {
+            border: 1px solid red;
       }
+        }
       }"
     `)
 
     expect(css({ cbd: 'red' })).toMatchInlineSnapshot(`
       "@layer utilities {
-        .cbd_red {
-          border: 1px solid red;
+        @layer s010-c0-p3000;
+
+        @layer s010-c0-p3000 {
+          .cbd_red {
+            border: 1px solid red;
       }
+        }
       }"
     `)
 
     expect(css({ cbxxp: 'red' })).toMatchInlineSnapshot(`
       "@layer utilities {
-        .cbd_red {
-          border: 1px solid red;
+        @layer s010-c0-p3000;
+
+        @layer s010-c0-p3000 {
+          .cbd_red {
+            border: 1px solid red;
       }
+        }
       }"
     `)
   })

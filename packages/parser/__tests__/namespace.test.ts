@@ -27,13 +27,19 @@ describe('extract namespace', () => {
 
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        .d_flex {
-          display: flex;
-      }
+        @layer s010-c0-p3000, s010-c0-p4000;
 
-        .mt_40px {
-          margin-top: 40px;
+        @layer s010-c0-p3000 {
+          .d_flex {
+            display: flex;
       }
+        }
+
+        @layer s010-c0-p4000 {
+          .mt_40px {
+            margin-top: 40px;
+      }
+        }
       }"
     `)
   })
@@ -129,9 +135,13 @@ describe('extract namespace', () => {
       }
 
       @layer utilities {
-        .c_red {
-          color: red;
+        @layer s010-c0-p3000;
+
+        @layer s010-c0-p3000 {
+          .c_red {
+            color: red;
       }
+        }
       }"
     `)
   })

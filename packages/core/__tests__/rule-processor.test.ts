@@ -63,21 +63,29 @@ describe('rule processor', () => {
     `)
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        .m_2 {
-          margin: var(--spacing-2);
+        @layer s010-c0-p1000, s010-c0-p2000, s010-c0-p3000;
+
+        @layer s010-c0-p1000 {
+          .m_2 {
+            margin: var(--spacing-2);
+      }
+        }
+
+        @layer s010-c0-p2000 {
+          .mx_token\\(spacing\\.2\\) {
+            margin-inline: var(--spacing-2);
       }
 
-        .mx_token\\(spacing\\.2\\) {
-          margin-inline: var(--spacing-2);
+          .my_-2 {
+            margin-block: calc(var(--spacing-2) * -1);
       }
+        }
 
-        .my_-2 {
-          margin-block: calc(var(--spacing-2) * -1);
+        @layer s010-c0-p3000 {
+          .c_blue\\.300 {
+            color: var(--colors-blue-300);
       }
-
-        .c_blue\\.300 {
-          color: var(--colors-blue-300);
-      }
+        }
       }"
     `)
   })
@@ -115,21 +123,29 @@ describe('rule processor', () => {
     `)
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        .m_\\$2 {
-          margin: var(--spacing-2);
+        @layer s010-c0-p1000, s010-c0-p2000, s010-c0-p3000;
+
+        @layer s010-c0-p1000 {
+          .m_\\$2 {
+            margin: var(--spacing-2);
+      }
+        }
+
+        @layer s010-c0-p2000 {
+          .mx_token\\(\\$spacing-2\\) {
+            margin-inline: var(--spacing-2);
       }
 
-        .mx_token\\(\\$spacing-2\\) {
-          margin-inline: var(--spacing-2);
+          .my_-\\$2 {
+            margin-block: calc(var(--spacing-2) * -1);
       }
+        }
 
-        .my_-\\$2 {
-          margin-block: calc(var(--spacing-2) * -1);
+        @layer s010-c0-p3000 {
+          .c_\\$blue-300 {
+            color: var(--colors-blue-300);
       }
-
-        .c_\\$blue-300 {
-          color: var(--colors-blue-300);
-      }
+        }
       }"
     `)
   })
@@ -161,9 +177,13 @@ describe('rule processor', () => {
     `)
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        .mx_token\\(\\$spacing-2\\) {
-          margin-inline: var(--spacing-2);
+        @layer s010-c0-p2000;
+
+        @layer s010-c0-p2000 {
+          .mx_token\\(\\$spacing-2\\) {
+            margin-inline: var(--spacing-2);
       }
+        }
       }"
     `)
   })
@@ -188,21 +208,29 @@ describe('rule processor', () => {
     `)
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        .AxiDH {
-          margin: var(--ebuyxV);
+        @layer s010-c0-p1000, s010-c0-p2000, s010-c0-p3000;
+
+        @layer s010-c0-p1000 {
+          .AxiDH {
+            margin: var(--ebuyxV);
+      }
+        }
+
+        @layer s010-c0-p2000 {
+          .hHAKfe {
+            margin-inline: var(--ebuyxV);
       }
 
-        .hHAKfe {
-          margin-inline: var(--ebuyxV);
+          .pWVwj {
+            margin-block: calc(var(--ebuyxV) * -1);
       }
+        }
 
-        .pWVwj {
-          margin-block: calc(var(--ebuyxV) * -1);
+        @layer s010-c0-p3000 {
+          .hDAFEs {
+            color: var(--bMEoOM);
       }
-
-        .hDAFEs {
-          color: var(--bMEoOM);
-      }
+        }
       }"
     `)
   })
@@ -246,21 +274,29 @@ describe('rule processor', () => {
     `)
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        .bnJC_bnIF {
-          margin: var(--ebuyxV);
+        @layer s010-c0-p1000, s010-c0-p2000, s010-c0-p3000;
+
+        @layer s010-c0-p1000 {
+          .bnJC_bnIF {
+            margin: var(--ebuyxV);
+      }
+        }
+
+        @layer s010-c0-p2000 {
+          .PJOa_hhWZwA {
+            margin-inline: var(--ebuyxV);
       }
 
-        .PJOa_hhWZwA {
-          margin-inline: var(--ebuyxV);
+          .PJOH_PIXg {
+            margin-block: calc(var(--ebuyxV) * -1);
       }
+        }
 
-        .PJOH_PIXg {
-          margin-block: calc(var(--ebuyxV) * -1);
+        @layer s010-c0-p3000 {
+          .bnJA_bNBgpA {
+            color: var(--bMEoOM);
       }
-
-        .bnJA_bNBgpA {
-          color: var(--bMEoOM);
-      }
+        }
       }"
     `)
   })
@@ -334,90 +370,136 @@ describe('rule processor', () => {
 
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        .bd_1px_solid_token\\(colors\\.red\\.100\\) {
-          border: 1px solid var(--colors-red-100);
+        @layer s010-c0-p1000, s010-c0-p3000, s010-c0-p4000, s010-c8-p3000, s010-c8-p4000, s010-c11-p4000, s020-c1-p3000, s020-c2-p3000, s020-c3-p3000, s020-c9-p3000, s020-c10-p3000, s030-c4-p3000, s030-c5-p3000, s040-c6-p3000, s040-c12-p3000, s050-c7-p3000, important;
+
+        @layer s010-c0-p1000 {
+          .bd_1px_solid_token\\(colors\\.red\\.100\\) {
+            border: 1px solid var(--colors-red-100);
       }
 
-        .bg_blue\\.300 {
-          background: var(--colors-blue-300);
+          .bg_blue\\.300 {
+            background: var(--colors-blue-300);
+      }
+        }
+
+        @layer s010-c0-p3000 {
+          .text-style_headline\\.h1 {
+            text-style: headline.h1;
       }
 
-        .c_red\\! {
-          color: red !important;
+          .fs_xs {
+            font-size: var(--font-sizes-xs);
       }
+        }
 
-        .text-style_headline\\.h1 {
-          text-style: headline.h1;
+        @layer s010-c0-p4000 {
+          .w_1 {
+            width: var(--sizes-1);
       }
+        }
 
-        .fs_xs {
-          font-size: var(--font-sizes-xs);
+        @layer s010-c8-p3000 {
+          @media (width >= 40rem) {
+            .sm\\:fs_sm {
+              font-size: var(--font-sizes-sm);
       }
+            .sm\\:c_yellow {
+              color: yellow;
+      }
+            .sm\\:bg-c_red {
+              background-color: red;
+      }
+      }
+        }
 
-        .w_1 {
-          width: var(--sizes-1);
+        @layer s010-c8-p4000 {
+          @media (width >= 40rem) {
+            .sm\\:w_2 {
+              width: var(--sizes-2);
       }
+      }
+        }
 
-        [data-theme=dark] .dark\\:fs_2xl,.dark .dark\\:fs_2xl,.dark\\:fs_2xl.dark,.dark\\:fs_2xl[data-theme=dark] {
-          font-size: var(--font-sizes-2xl);
+        @layer s010-c11-p4000 {
+          @media (width >= 80rem) {
+            .xl\\:w_3 {
+              width: var(--sizes-3);
       }
+      }
+        }
 
-        .\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:c_green[data-attr='test'] {
-          color: green;
-      }
+        @layer s020-c1-p3000 {
 
-        .hover\\:fs_md:is(:hover, [data-hover]) {
-          font-size: var(--font-sizes-md);
+          [data-theme=dark] .dark\\:fs_2xl,.dark .dark\\:fs_2xl,.dark\\:fs_2xl.dark,.dark\\:fs_2xl[data-theme=dark] {
+            font-size: var(--font-sizes-2xl);
       }
+        }
 
-        .\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:c_purple[data-attr='test']:is([aria-expanded=true], [data-expanded], [data-state="expanded"]) {
-          color: purple;
+        @layer s020-c2-p3000 {
+          .\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:c_green[data-attr='test'] {
+            color: green;
       }
+        }
 
-        .hover\\:focus\\:fs_xl:is(:hover, [data-hover]):is(:focus, [data-focus]) {
-          font-size: var(--font-sizes-xl);
+        @layer s020-c3-p3000 {
+          .hover\\:fs_md:is(:hover, [data-hover]) {
+            font-size: var(--font-sizes-md);
       }
+        }
 
-        .target .\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:\\[\\.target_\\&\\]\\:c_cyan[data-attr='test']:is([aria-expanded=true], [data-expanded], [data-state="expanded"]) {
-          color: cyan;
+        @layer s020-c9-p3000 {
+          @media (width >= 40rem) {
+            .sm\\:hover\\:bg-c_green:is(:hover, [data-hover]) {
+              background-color: green;
       }
+      }
+        }
 
-        .target .\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:\\[\\.target_\\&\\]\\:open\\:c_orange[data-attr='test']:is([aria-expanded=true], [data-expanded], [data-state="expanded"]):is([open], [data-open], [data-state="open"], :popover-open) {
-          color: orange;
+        @layer s020-c10-p3000 {
+          @media (width >= 48rem) {
+            .hover\\:md\\:fs_lg:is(:hover, [data-hover]) {
+              font-size: var(--font-sizes-lg);
       }
+      }
+        }
 
-        @media (width >= 40rem) {
-          .sm\\:fs_sm {
-            font-size: var(--font-sizes-sm);
+        @layer s030-c4-p3000 {
+          .\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:c_purple[data-attr='test']:is([aria-expanded=true], [data-expanded], [data-state="expanded"]) {
+            color: purple;
       }
-          .sm\\:c_yellow {
-            color: yellow;
-      }
-          .sm\\:bg-c_red {
-            background-color: red;
-      }
-          .sm\\:w_2 {
-            width: var(--sizes-2);
-      }
-          .sm\\:hover\\:bg-c_green:is(:hover, [data-hover]) {
-            background-color: green;
-      }
-      }
+        }
 
-        @media (width >= 48rem) {
-          .hover\\:md\\:fs_lg:is(:hover, [data-hover]) {
-            font-size: var(--font-sizes-lg);
+        @layer s030-c5-p3000 {
+          .hover\\:focus\\:fs_xl:is(:hover, [data-hover]):is(:focus, [data-focus]) {
+            font-size: var(--font-sizes-xl);
       }
-      }
+        }
 
-        @media (width >= 80rem) {
-          .xl\\:w_3 {
-            width: var(--sizes-3);
+        @layer s040-c6-p3000 {
+          .target .\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:\\[\\.target_\\&\\]\\:c_cyan[data-attr='test']:is([aria-expanded=true], [data-expanded], [data-state="expanded"]) {
+            color: cyan;
       }
-          .target .\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:\\[\\.target_\\&\\]\\:xl\\:c_pink[data-attr='test']:is([aria-expanded=true], [data-expanded], [data-state="expanded"]) {
-            color: pink;
+        }
+
+        @layer s040-c12-p3000 {
+          @media (width >= 80rem) {
+            .target .\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:\\[\\.target_\\&\\]\\:xl\\:c_pink[data-attr='test']:is([aria-expanded=true], [data-expanded], [data-state="expanded"]) {
+              color: pink;
       }
       }
+        }
+
+        @layer s050-c7-p3000 {
+          .target .\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:\\[\\.target_\\&\\]\\:open\\:c_orange[data-attr='test']:is([aria-expanded=true], [data-expanded], [data-state="expanded"]):is([open], [data-open], [data-state="open"], :popover-open) {
+            color: orange;
+      }
+        }
+
+        @layer important {
+          .c_red\\! {
+            color: red !important;
+      }
+        }
       }"
     `)
   })
@@ -886,13 +968,19 @@ describe('rule processor', () => {
       }
 
       @layer utilities {
-        .c_blue\\.300 {
-          color: var(--colors-blue-300);
-      }
+        @layer s010-c0-p3000, s020-c1-p3000;
 
-        .hover\\:c_red\\.400:is(:hover, [data-hover]) {
-          color: var(--colors-red-400);
+        @layer s010-c0-p3000 {
+          .c_blue\\.300 {
+            color: var(--colors-blue-300);
       }
+        }
+
+        @layer s020-c1-p3000 {
+          .hover\\:c_red\\.400:is(:hover, [data-hover]) {
+            color: var(--colors-red-400);
+      }
+        }
       }"
     `)
   })
@@ -912,13 +1000,17 @@ describe('rule processor', () => {
 
     expect(processor.toCss()).toMatchInlineSnapshot(`
       "@layer utilities {
-        .c_red {
-          color: red;
+        @layer s010-c0-p3000;
+
+        @layer s010-c0-p3000 {
+          .c_red {
+            color: red;
       }
 
-        .c_blue {
-          color: blue;
+          .c_blue {
+            color: blue;
       }
+        }
       }"
     `)
 
@@ -1007,39 +1099,49 @@ describe('rule processor', () => {
       }
 
       @layer utilities {
-        .trs_all_0\\.3s_ease-in-out {
-          transition: all 0.3s ease-in-out;
+        @layer s010-c0-p2000, s010-c0-p3000, s010-c0-p4000, important;
+
+        @layer s010-c0-p2000 {
+          .trs_all_0\\.3s_ease-in-out {
+            transition: all 0.3s ease-in-out;
+      }
+        }
+
+        @layer s010-c0-p3000 {
+          .d_none {
+            display: none;
       }
 
-        .d_none {
-          display: none;
+          .op_1 {
+            opacity: 1;
       }
 
-        .op_0\\! {
-          opacity: 0 !important;
+          .bg-grad_to-b {
+            --gradient-stops: var(--gradient-via-stops, var(--gradient-position), var(--gradient-from) var(--gradient-from-position, ), var(--gradient-to) var(--gradient-to-position, ));
+            --gradient-position: to bottom;
+            background-image: linear-gradient(var(--gradient-stops));
       }
 
-        .op_1 {
-          opacity: 1;
+          .grad-from_rgb\\(200_200_200_\\/_0\\.4\\) {
+            --gradient-from: rgb(200 200 200 / 0.4);
+      }
+        }
+
+        @layer s010-c0-p4000 {
+          .h_100\\% {
+            height: 100%;
       }
 
-        .bg-grad_to-b {
-          --gradient-stops: var(--gradient-via-stops, var(--gradient-position), var(--gradient-from) var(--gradient-from-position, ), var(--gradient-to) var(--gradient-to-position, ));
-          --gradient-position: to bottom;
-          background-image: linear-gradient(var(--gradient-stops));
+          .h_10px {
+            height: 10px;
       }
+        }
 
-        .grad-from_rgb\\(200_200_200_\\/_0\\.4\\) {
-          --gradient-from: rgb(200 200 200 / 0.4);
+        @layer important {
+          .op_0\\! {
+            opacity: 0 !important;
       }
-
-        .h_100\\% {
-          height: 100%;
-      }
-
-        .h_10px {
-          height: 10px;
-      }
+        }
       }"
     `)
   })
@@ -1062,11 +1164,15 @@ describe('rule processor', () => {
           "trunc_true",
         ],
         "css": "@layer utilities {
-        .trunc_true {
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
+        @layer s010-c0-p3000;
+
+        @layer s010-c0-p3000 {
+          .trunc_true {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
       }
+        }
       }",
       }
     `)
@@ -1122,7 +1228,13 @@ describe('js to css', () => {
       background: false,
     })
 
-    expect(result.css).toMatchInlineSnapshot('""')
+    expect(result.css).toMatchInlineSnapshot(`
+      "@layer utilities {
+        @layer s010-c0-p1000;
+
+        @layer s010-c0-p1000 {}
+      }"
+    `)
   })
 
   test('unitless', () => {
@@ -1135,21 +1247,29 @@ describe('js to css', () => {
 
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        .\\--foo_42 {
-          --foo: 42;
+        @layer s010-c0-p1, s010-c0-p3000, s010-c0-p4000;
+
+        @layer s010-c0-p1 {
+          .\\--foo_42 {
+            --foo: 42;
+      }
+        }
+
+        @layer s010-c0-p3000 {
+          .op_1 {
+            opacity: 1;
       }
 
-        .op_1 {
-          opacity: 1;
+          .z_0 {
+            z-index: 0;
       }
+        }
 
-        .z_0 {
-          z-index: 0;
+        @layer s010-c0-p4000 {
+          .w_42 {
+            width: 42px;
       }
-
-        .w_42 {
-          width: 42px;
-      }
+        }
       }"
     `)
   })
@@ -1163,17 +1283,21 @@ describe('js to css', () => {
 
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        .\\--testVariable0_0 {
-          --testVariable0: 0;
+        @layer s010-c0-p1;
+
+        @layer s010-c0-p1 {
+          .\\--testVariable0_0 {
+            --testVariable0: 0;
       }
 
-        .\\--test-Variable-1_1 {
-          --test-Variable-1: 1;
+          .\\--test-Variable-1_1 {
+            --test-Variable-1: 1;
       }
 
-        .\\--test-variable-2_2 {
-          --test-variable-2: 2;
+          .\\--test-variable-2_2 {
+            --test-variable-2: 2;
       }
+        }
       }"
     `)
   })
@@ -1188,21 +1312,27 @@ describe('js to css', () => {
 
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        .bg_white\\! {
-          background: var(--colors-white) !important;
+        @layer s010-c0-p3000, important;
+
+        @layer s010-c0-p3000 {
+          .ff_A {
+            font-family: A;
+      }
+        }
+
+        @layer important {
+          .bg_white\\! {
+            background: var(--colors-white) !important;
       }
 
-        .bd-c_red\\! {
-          border-color: red !important;
+          .bd-c_red\\! {
+            border-color: red !important;
       }
 
-        .c_pink\\! {
-          color: pink !important;
+          .c_pink\\! {
+            color: pink !important;
       }
-
-        .ff_A {
-          font-family: A;
-      }
+        }
       }"
     `)
   })
@@ -1215,14 +1345,20 @@ describe('js to css', () => {
           "c_white",
         ],
         "css": "@layer utilities {
-        .bg_red\\.300\\/40 {
-          --mix-background: color-mix(in srgb, var(--colors-red-300) 40%, transparent);
-          background: var(--mix-background, var(--colors-red-300));
-      }
+        @layer s010-c0-p1000, s010-c0-p3000;
 
-        .c_white {
-          color: var(--colors-white);
+        @layer s010-c0-p1000 {
+          .bg_red\\.300\\/40 {
+            --mix-background: color-mix(in srgb, var(--colors-red-300) 40%, transparent);
+            background: var(--mix-background, var(--colors-red-300));
       }
+        }
+
+        @layer s010-c0-p3000 {
+          .c_white {
+            color: var(--colors-white);
+      }
+        }
       }",
       }
     `)
@@ -1249,26 +1385,34 @@ describe('js to css', () => {
     `)
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        .bd-w_1px {
-          border-width: 1px;
+        @layer s010-c0-p2000, s010-c0-p3000, s010-c0-p4000;
+
+        @layer s010-c0-p2000 {
+          .bd-w_1px {
+            border-width: 1px;
       }
 
-        .ov_hidden {
-          overflow: hidden;
+          .ov_hidden {
+            overflow: hidden;
       }
 
-        .bd-w_2px {
-          border-width: 2px;
+          .bd-w_2px {
+            border-width: 2px;
       }
+        }
 
-        .bdr-t_0px {
-          border-top-left-radius: 0px;
-          border-top-right-radius: 0px;
+        @layer s010-c0-p3000 {
+          .bdr-t_0px {
+            border-top-left-radius: 0px;
+            border-top-right-radius: 0px;
       }
+        }
 
-        .bd-b-w_3px {
-          border-bottom-width: 3px;
+        @layer s010-c0-p4000 {
+          .bd-b-w_3px {
+            border-bottom-width: 3px;
       }
+        }
       }"
     `)
   })
@@ -1292,21 +1436,27 @@ describe('js to css', () => {
     `)
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        .p_1px {
-          padding: 1px;
+        @layer s010-c0-p1000, s010-c0-p4000;
+
+        @layer s010-c0-p1000 {
+          .p_1px {
+            padding: 1px;
       }
 
-        .p_2px {
-          padding: 2px;
+          .p_2px {
+            padding: 2px;
+      }
+        }
+
+        @layer s010-c0-p4000 {
+          .pt_3px {
+            padding-top: 3px;
       }
 
-        .pt_3px {
-          padding-top: 3px;
+          .pb_4px {
+            padding-bottom: 4px;
       }
-
-        .pb_4px {
-          padding-bottom: 4px;
-      }
+        }
       }"
     `)
   })
@@ -1372,70 +1522,137 @@ describe('js to css', () => {
     `)
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        .bg_red {
-          background: red;
-      }
+        @layer s010-c0-p1000, s010-c0-p3000, s010-c4-p1000, s010-c4-p3000, s020-c1-p1000, s020-c1-p3000, s020-c2-p1000, s020-c2-p3000, s020-c3-p1000, s020-c3-p3000, s020-c5-p1000, s020-c5-p3000, s030-c6-p1000, s030-c6-p3000, s030-c7-p1000, s030-c7-p3000, s030-c8-p1000, s030-c8-p3000;
 
-        .bg-c_blue {
-          background-color: blue;
-      }
-
-        [data-theme=dark] .dark\\:bg_red,.dark .dark\\:bg_red,.dark\\:bg_red.dark,.dark\\:bg_red[data-theme=dark] {
-          background: red;
-      }
-
-        [data-theme=dark] .dark\\:bg-c_blue,.dark .dark\\:bg-c_blue,.dark\\:bg-c_blue.dark,.dark\\:bg-c_blue[data-theme=dark] {
-          background-color: blue;
-      }
-
-        .focus\\:bg_red:is(:focus, [data-focus]) {
-          background: red;
-      }
-
-        .focus\\:bg-c_blue:is(:focus, [data-focus]) {
-          background-color: blue;
-      }
-
-        .hover\\:bg_red:is(:hover, [data-hover]) {
-          background: red;
-      }
-
-        .hover\\:bg-c_blue:is(:hover, [data-hover]) {
-          background-color: blue;
-      }
-
-        @media (width >= 48rem) {
-          .md\\:bg_red {
+        @layer s010-c0-p1000 {
+          .bg_red {
             background: red;
       }
-          .md\\:bg-c_blue {
+        }
+
+        @layer s010-c0-p3000 {
+          .bg-c_blue {
             background-color: blue;
       }
-          [data-theme=light] .md\\:light\\:bg_red,.light .md\\:light\\:bg_red,.md\\:light\\:bg_red.light,.md\\:light\\:bg_red[data-theme=light] {
+        }
+
+        @layer s010-c4-p1000 {
+          @media (width >= 48rem) {
+            .md\\:bg_red {
+              background: red;
+      }
+      }
+        }
+
+        @layer s010-c4-p3000 {
+          @media (width >= 48rem) {
+            .md\\:bg-c_blue {
+              background-color: blue;
+      }
+      }
+        }
+
+        @layer s020-c1-p1000 {
+
+          [data-theme=dark] .dark\\:bg_red,.dark .dark\\:bg_red,.dark\\:bg_red.dark,.dark\\:bg_red[data-theme=dark] {
             background: red;
       }
-          [data-theme=light] .md\\:light\\:bg-c_blue,.light .md\\:light\\:bg-c_blue,.md\\:light\\:bg-c_blue.light,.md\\:light\\:bg-c_blue[data-theme=light] {
+        }
+
+        @layer s020-c1-p3000 {
+
+          [data-theme=dark] .dark\\:bg-c_blue,.dark .dark\\:bg-c_blue,.dark\\:bg-c_blue.dark,.dark\\:bg-c_blue[data-theme=dark] {
             background-color: blue;
       }
-          [data-theme=light] .md\\:light\\:focus\\:bg_red:is(:focus, [data-focus]),.light .md\\:light\\:focus\\:bg_red:is(:focus, [data-focus]),.md\\:light\\:focus\\:bg_red.light:is(:focus, [data-focus]),.md\\:light\\:focus\\:bg_red[data-theme=light]:is(:focus, [data-focus]) {
+        }
+
+        @layer s020-c2-p1000 {
+          .focus\\:bg_red:is(:focus, [data-focus]) {
             background: red;
       }
-          [data-theme=light] .md\\:light\\:focus\\:bg-c_blue:is(:focus, [data-focus]),.light .md\\:light\\:focus\\:bg-c_blue:is(:focus, [data-focus]),.md\\:light\\:focus\\:bg-c_blue.light:is(:focus, [data-focus]),.md\\:light\\:focus\\:bg-c_blue[data-theme=light]:is(:focus, [data-focus]) {
+        }
+
+        @layer s020-c2-p3000 {
+          .focus\\:bg-c_blue:is(:focus, [data-focus]) {
             background-color: blue;
       }
-          [data-theme=light] .md\\:light\\:hover\\:bg_red:is(:hover, [data-hover]),.light .md\\:light\\:hover\\:bg_red:is(:hover, [data-hover]),.md\\:light\\:hover\\:bg_red.light:is(:hover, [data-hover]),.md\\:light\\:hover\\:bg_red[data-theme=light]:is(:hover, [data-hover]) {
+        }
+
+        @layer s020-c3-p1000 {
+          .hover\\:bg_red:is(:hover, [data-hover]) {
             background: red;
       }
-          [data-theme=light] .md\\:light\\:hover\\:bg-c_blue:is(:hover, [data-hover]),.light .md\\:light\\:hover\\:bg-c_blue:is(:hover, [data-hover]),.md\\:light\\:hover\\:bg-c_blue.light:is(:hover, [data-hover]),.md\\:light\\:hover\\:bg-c_blue[data-theme=light]:is(:hover, [data-hover]) {
+        }
+
+        @layer s020-c3-p3000 {
+          .hover\\:bg-c_blue:is(:hover, [data-hover]) {
             background-color: blue;
       }
-          [data-theme=light] .md\\:light\\:active\\:bg_red:is(:active, [data-active]),.light .md\\:light\\:active\\:bg_red:is(:active, [data-active]),.md\\:light\\:active\\:bg_red.light:is(:active, [data-active]),.md\\:light\\:active\\:bg_red[data-theme=light]:is(:active, [data-active]) {
-            background: red;
+        }
+
+        @layer s020-c5-p1000 {
+          @media (width >= 48rem) {
+            [data-theme=light] .md\\:light\\:bg_red,.light .md\\:light\\:bg_red,.md\\:light\\:bg_red.light,.md\\:light\\:bg_red[data-theme=light] {
+              background: red;
       }
-          [data-theme=light] .md\\:light\\:active\\:bg-c_blue:is(:active, [data-active]),.light .md\\:light\\:active\\:bg-c_blue:is(:active, [data-active]),.md\\:light\\:active\\:bg-c_blue.light:is(:active, [data-active]),.md\\:light\\:active\\:bg-c_blue[data-theme=light]:is(:active, [data-active]) {
-            background-color: blue;
+      }
+        }
+
+        @layer s020-c5-p3000 {
+          @media (width >= 48rem) {
+            [data-theme=light] .md\\:light\\:bg-c_blue,.light .md\\:light\\:bg-c_blue,.md\\:light\\:bg-c_blue.light,.md\\:light\\:bg-c_blue[data-theme=light] {
+              background-color: blue;
       }
       }
+        }
+
+        @layer s030-c6-p1000 {
+          @media (width >= 48rem) {
+            [data-theme=light] .md\\:light\\:focus\\:bg_red:is(:focus, [data-focus]),.light .md\\:light\\:focus\\:bg_red:is(:focus, [data-focus]),.md\\:light\\:focus\\:bg_red.light:is(:focus, [data-focus]),.md\\:light\\:focus\\:bg_red[data-theme=light]:is(:focus, [data-focus]) {
+              background: red;
+      }
+      }
+        }
+
+        @layer s030-c6-p3000 {
+          @media (width >= 48rem) {
+            [data-theme=light] .md\\:light\\:focus\\:bg-c_blue:is(:focus, [data-focus]),.light .md\\:light\\:focus\\:bg-c_blue:is(:focus, [data-focus]),.md\\:light\\:focus\\:bg-c_blue.light:is(:focus, [data-focus]),.md\\:light\\:focus\\:bg-c_blue[data-theme=light]:is(:focus, [data-focus]) {
+              background-color: blue;
+      }
+      }
+        }
+
+        @layer s030-c7-p1000 {
+          @media (width >= 48rem) {
+            [data-theme=light] .md\\:light\\:hover\\:bg_red:is(:hover, [data-hover]),.light .md\\:light\\:hover\\:bg_red:is(:hover, [data-hover]),.md\\:light\\:hover\\:bg_red.light:is(:hover, [data-hover]),.md\\:light\\:hover\\:bg_red[data-theme=light]:is(:hover, [data-hover]) {
+              background: red;
+      }
+      }
+        }
+
+        @layer s030-c7-p3000 {
+          @media (width >= 48rem) {
+            [data-theme=light] .md\\:light\\:hover\\:bg-c_blue:is(:hover, [data-hover]),.light .md\\:light\\:hover\\:bg-c_blue:is(:hover, [data-hover]),.md\\:light\\:hover\\:bg-c_blue.light:is(:hover, [data-hover]),.md\\:light\\:hover\\:bg-c_blue[data-theme=light]:is(:hover, [data-hover]) {
+              background-color: blue;
+      }
+      }
+        }
+
+        @layer s030-c8-p1000 {
+          @media (width >= 48rem) {
+            [data-theme=light] .md\\:light\\:active\\:bg_red:is(:active, [data-active]),.light .md\\:light\\:active\\:bg_red:is(:active, [data-active]),.md\\:light\\:active\\:bg_red.light:is(:active, [data-active]),.md\\:light\\:active\\:bg_red[data-theme=light]:is(:active, [data-active]) {
+              background: red;
+      }
+      }
+        }
+
+        @layer s030-c8-p3000 {
+          @media (width >= 48rem) {
+            [data-theme=light] .md\\:light\\:active\\:bg-c_blue:is(:active, [data-active]),.light .md\\:light\\:active\\:bg-c_blue:is(:active, [data-active]),.md\\:light\\:active\\:bg-c_blue.light:is(:active, [data-active]),.md\\:light\\:active\\:bg-c_blue[data-theme=light]:is(:active, [data-active]) {
+              background-color: blue;
+      }
+      }
+        }
       }"
     `)
   })
@@ -1476,21 +1693,31 @@ describe('js to css', () => {
 
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        .custom\\:w_3px[data-attr="custom"] {
-          width: 3px;
-      }
+        @layer s020-c0-p4000, s020-c1-p4000, s020-c2-p4000, s020-c3-p4000;
 
-        .focus\\:w_2px:is(:focus, [data-focus]) {
-          width: 2px;
+        @layer s020-c0-p4000 {
+          .custom\\:w_3px[data-attr="custom"] {
+            width: 3px;
       }
+        }
 
-        .hover\\:w_1px:is(:hover, [data-hover]) {
-          width: 1px;
+        @layer s020-c1-p4000 {
+          .focus\\:w_2px:is(:focus, [data-focus]) {
+            width: 2px;
       }
+        }
 
-        .active\\:w_3px:is(:active, [data-active]) {
-          width: 3px;
+        @layer s020-c2-p4000 {
+          .hover\\:w_1px:is(:hover, [data-hover]) {
+            width: 1px;
       }
+        }
+
+        @layer s020-c3-p4000 {
+          .active\\:w_3px:is(:active, [data-active]) {
+            width: 3px;
+      }
+        }
       }"
     `)
   })
@@ -1533,20 +1760,39 @@ describe('js to css', () => {
 
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        @media (width >= 40rem) {
-          .sm\\:custom\\:w_33px[data-attr="custom"] {
-            width: 33px;
-      }
-          .sm\\:focus\\:w_22px:is(:focus, [data-focus]) {
-            width: 22px;
-      }
-          .sm\\:hover\\:w_11px:is(:hover, [data-hover]) {
-            width: 11px;
-      }
-          .sm\\:active\\:w_44px:is(:active, [data-active]) {
-            width: 44px;
+        @layer s020-c0-p4000, s020-c1-p4000, s020-c2-p4000, s020-c3-p4000;
+
+        @layer s020-c0-p4000 {
+          @media (width >= 40rem) {
+            .sm\\:custom\\:w_33px[data-attr="custom"] {
+              width: 33px;
       }
       }
+        }
+
+        @layer s020-c1-p4000 {
+          @media (width >= 40rem) {
+            .sm\\:focus\\:w_22px:is(:focus, [data-focus]) {
+              width: 22px;
+      }
+      }
+        }
+
+        @layer s020-c2-p4000 {
+          @media (width >= 40rem) {
+            .sm\\:hover\\:w_11px:is(:hover, [data-hover]) {
+              width: 11px;
+      }
+      }
+        }
+
+        @layer s020-c3-p4000 {
+          @media (width >= 40rem) {
+            .sm\\:active\\:w_44px:is(:active, [data-active]) {
+              width: 44px;
+      }
+      }
+        }
       }"
     `)
   })
@@ -1589,22 +1835,35 @@ describe('js to css', () => {
 
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        .hover\\:custom\\:c_blue:is(:hover, [data-hover])[data-attr="custom"] {
-          color: blue;
-      }
+        @layer s010-c2-p4000, s020-c3-p4000, s030-c0-p3000, s030-c1-p4000;
 
-        .hover\\:focus\\:w_2px:is(:hover, [data-hover]):is(:focus, [data-focus]) {
-          width: 2px;
+        @layer s010-c2-p4000 {
+          @media (width >= 48rem) {
+            .md\\:w_3px {
+              width: 3px;
       }
+      }
+        }
 
-        @media (width >= 48rem) {
-          .md\\:w_3px {
-            width: 3px;
-      }
-          .hover\\:md\\:w_5px:is(:hover, [data-hover]) {
-            width: 5px;
+        @layer s020-c3-p4000 {
+          @media (width >= 48rem) {
+            .hover\\:md\\:w_5px:is(:hover, [data-hover]) {
+              width: 5px;
       }
       }
+        }
+
+        @layer s030-c0-p3000 {
+          .hover\\:custom\\:c_blue:is(:hover, [data-hover])[data-attr="custom"] {
+            color: blue;
+      }
+        }
+
+        @layer s030-c1-p4000 {
+          .hover\\:focus\\:w_2px:is(:hover, [data-hover]):is(:focus, [data-focus]) {
+            width: 2px;
+      }
+        }
       }"
     `)
   })
@@ -1649,25 +1908,33 @@ describe('js to css', () => {
 
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        .hover\\:mixed\\:c_green:is(:hover, [data-hover])[data-attr="custom"] {
-          color: green;
+        @layer s020-c1-p4000, s030-c0-p3000, s030-c2-p3000;
+
+        @layer s020-c1-p4000 {
+          @media (width >= 48rem) {
+            .hover\\:md\\:w_5px:is(:hover, [data-hover]) {
+              width: 5px;
+      }
+      }
+        }
+
+        @layer s030-c0-p3000 {
+          .hover\\:mixed\\:c_green:is(:hover, [data-hover])[data-attr="custom"] {
+            color: green;
       }
 
-        .hover\\:custom\\:c_blue:is(:hover, [data-hover])[data-attr="custom"] {
-          color: blue;
+          .hover\\:custom\\:c_blue:is(:hover, [data-hover])[data-attr="custom"] {
+            color: blue;
       }
+        }
 
-        @media (width >= 48rem) {
-          .hover\\:md\\:w_5px:is(:hover, [data-hover]) {
-            width: 5px;
+        @layer s030-c2-p3000 {
+          @media screen and (min-width: 48em) {
+            .hover\\:mixedMd\\:c_6px:is(:hover, [data-hover])[data-attr="custom"] {
+              color: 6px;
       }
       }
-
-        @media screen and (min-width: 48em) {
-          .hover\\:mixedMd\\:c_6px:is(:hover, [data-hover])[data-attr="custom"] {
-            color: 6px;
-      }
-      }
+        }
       }"
     `)
   })
@@ -1701,29 +1968,39 @@ describe('js to css', () => {
 
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        @media (width >= 40rem) {
-          .sm\\:w_1px {
-            width: 1px;
-      }
-      }
+        @layer s010-c0-p4000, s010-c1-p3000, s010-c2-p3000, s010-c3-p4000;
 
-        @media (width >= 48rem) {
-          .md\\:c_3px {
-            color: 3px;
+        @layer s010-c0-p4000 {
+          @media (width >= 40rem) {
+            .sm\\:w_1px {
+              width: 1px;
       }
       }
+        }
 
-        @media (width >= 64rem) {
-          .lg\\:c_2px {
-            color: 2px;
+        @layer s010-c1-p3000 {
+          @media (width >= 48rem) {
+            .md\\:c_3px {
+              color: 3px;
       }
       }
+        }
 
-        @media (width >= 80rem) {
-          .xl\\:w_4px {
-            width: 4px;
+        @layer s010-c2-p3000 {
+          @media (width >= 64rem) {
+            .lg\\:c_2px {
+              color: 2px;
       }
       }
+        }
+
+        @layer s010-c3-p4000 {
+          @media (width >= 80rem) {
+            .xl\\:w_4px {
+              width: 4px;
+      }
+      }
+        }
       }"
     `)
   })
@@ -1783,57 +2060,75 @@ describe('js to css', () => {
 
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        @media (width >= 40rem) {
-          .sm\\:w_1px {
-            width: 1px;
-      }
-      }
+        @layer s010-c0-p4000, s010-c3-p3000, s010-c6-p3000, s010-c7-p4000, s020-c1-p3000, s020-c2-p3000, s020-c4-p3000, s020-c5-p3000;
 
-        @media screen and (min-width: 40em) {
-          .mixedSm\\:c_red[data-attr="custom"] {
-            color: red;
+        @layer s010-c0-p4000 {
+          @media (width >= 40rem) {
+            .sm\\:w_1px {
+              width: 1px;
       }
       }
+        }
 
-        @media screen and (min-width: 40em) {
-          @support (display: flex) {
-            .mixedSupportSm\\:c_green[data-attr="custom"] {
-              color: green;
+        @layer s010-c3-p3000 {
+          @media (width >= 48rem) {
+            .md\\:c_3px {
+              color: 3px;
       }
       }
-      }
+        }
 
-        @media (width >= 48rem) {
-          .md\\:c_3px {
-            color: 3px;
+        @layer s010-c6-p3000 {
+          @media (width >= 64rem) {
+            .lg\\:c_2px {
+              color: 2px;
       }
       }
+        }
 
-        @media screen and (min-width: 48em) {
-          .mixedMd\\:c_blue[data-attr="custom"] {
-            color: blue;
+        @layer s010-c7-p4000 {
+          @media (width >= 80rem) {
+            .xl\\:w_4px {
+              width: 4px;
       }
       }
+        }
 
-        @media screen and (min-width: 48em) {
-          @support (display: flex) {
-            .mixedSupportMd\\:c_yellow[data-attr="custom"] {
-              color: yellow;
+        @layer s020-c1-p3000 {
+          @media screen and (min-width: 40em) {
+            .mixedSm\\:c_red[data-attr="custom"] {
+              color: red;
       }
       }
-      }
+        }
 
-        @media (width >= 64rem) {
-          .lg\\:c_2px {
-            color: 2px;
+        @layer s020-c2-p3000 {
+          @media screen and (min-width: 40em) {
+            @support (display: flex) {
+              .mixedSupportSm\\:c_green[data-attr="custom"] {
+                color: green;
       }
       }
+      }
+        }
 
-        @media (width >= 80rem) {
-          .xl\\:w_4px {
-            width: 4px;
+        @layer s020-c4-p3000 {
+          @media screen and (min-width: 48em) {
+            .mixedMd\\:c_blue[data-attr="custom"] {
+              color: blue;
       }
       }
+        }
+
+        @layer s020-c5-p3000 {
+          @media screen and (min-width: 48em) {
+            @support (display: flex) {
+              .mixedSupportMd\\:c_yellow[data-attr="custom"] {
+                color: yellow;
+      }
+      }
+      }
+        }
       }"
     `)
   })
@@ -1868,22 +2163,33 @@ describe('js to css', () => {
 
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        @media (width >= 48rem) {
-          .md\\:w_4\\.5px {
-            width: 4.5px;
-      }
-          .hover\\:md\\:w_5px:is(:hover, [data-hover]) {
-            width: 5px;
-      }
-      }
+        @layer s010-c0-p4000, s020-c1-p4000, s020-c2-p4000;
 
-        @media screen and (min-width: 48em) {
-          @supports (display: flex) {
-            .mdHover\\:w_6px:hover {
-              width: 6px;
+        @layer s010-c0-p4000 {
+          @media (width >= 48rem) {
+            .md\\:w_4\\.5px {
+              width: 4.5px;
+      }
+      }
+        }
+
+        @layer s020-c1-p4000 {
+          @media (width >= 48rem) {
+            .hover\\:md\\:w_5px:is(:hover, [data-hover]) {
+              width: 5px;
+      }
+      }
+        }
+
+        @layer s020-c2-p4000 {
+          @media screen and (min-width: 48em) {
+            @supports (display: flex) {
+              .mdHover\\:w_6px:hover {
+                width: 6px;
       }
       }
       }
+        }
       }"
     `)
   })
@@ -1947,68 +2253,98 @@ describe('js to css', () => {
 
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        .w_0px {
-          width: 0px;
-      }
+        @layer s010-c0-p4000, s010-c6-p4000, s010-c8-p4000, s020-c1-p3000, s020-c2-p4000, s020-c3-p4000, s020-c7-p4000, s020-c9-p4000, s020-c10-p4000, s020-c11-p4000, s030-c4-p3000, s030-c5-p4000;
 
-        .custom\\:c_red[data-attr="custom"] {
-          color: red;
+        @layer s010-c0-p4000 {
+          .w_0px {
+            width: 0px;
       }
+        }
 
-        [data-theme=dark] .dark\\:w_1px,.dark .dark\\:w_1px,.dark\\:w_1px.dark,.dark\\:w_1px[data-theme=dark] {
-          width: 1px;
+        @layer s010-c6-p4000 {
+          @media (width >= 40rem) {
+            .sm\\:w_4px {
+              width: 4px;
       }
+      }
+        }
 
-        .hover\\:w_2px:is(:hover, [data-hover]) {
-          width: 2px;
+        @layer s010-c8-p4000 {
+          @media (width >= 48rem) {
+            .md\\:w_4\\.5px {
+              width: 4.5px;
       }
+      }
+        }
 
-        .hover\\:custom\\:c_blue:is(:hover, [data-hover])[data-attr="custom"] {
-          color: blue;
+        @layer s020-c1-p3000 {
+          .custom\\:c_red[data-attr="custom"] {
+            color: red;
       }
+        }
 
-        .hover\\:focus\\:w_3px:is(:hover, [data-hover]):is(:focus, [data-focus]) {
-          width: 3px;
-      }
+        @layer s020-c2-p4000 {
 
-        @media (width >= 40rem) {
-          .sm\\:w_4px {
-            width: 4px;
+          [data-theme=dark] .dark\\:w_1px,.dark .dark\\:w_1px,.dark\\:w_1px.dark,.dark\\:w_1px[data-theme=dark] {
+            width: 1px;
       }
-      }
+        }
 
-        @media screen and (min-width: 40em) {
-          @supports (display: grid) {
-            .smHover\\:w_7px:hover {
-              width: 7px;
+        @layer s020-c3-p4000 {
+          .hover\\:w_2px:is(:hover, [data-hover]) {
+            width: 2px;
       }
-      }
-      }
+        }
 
-        @media (width >= 48rem) {
-          .md\\:w_4\\.5px {
-            width: 4.5px;
+        @layer s020-c7-p4000 {
+          @media screen and (min-width: 40em) {
+            @supports (display: grid) {
+              .smHover\\:w_7px:hover {
+                width: 7px;
       }
-          .hover\\:md\\:w_5px:is(:hover, [data-hover]) {
-            width: 5px;
       }
       }
+        }
 
-        @media screen and (min-width: 48em) {
-          @supports (display: flex) {
-            .mdHover\\:w_8px:hover {
-              width: 8px;
+        @layer s020-c9-p4000 {
+          @media (width >= 48rem) {
+            .hover\\:md\\:w_5px:is(:hover, [data-hover]) {
+              width: 5px;
       }
       }
-      }
+        }
 
-        @media (hover: hover) and (pointer: fine) {
-          @supports (display: table-cell) {
-            .supportHover\\:w_6px:hover {
-              width: 6px;
+        @layer s020-c10-p4000 {
+          @media screen and (min-width: 48em) {
+            @supports (display: flex) {
+              .mdHover\\:w_8px:hover {
+                width: 8px;
       }
       }
       }
+        }
+
+        @layer s020-c11-p4000 {
+          @media (hover: hover) and (pointer: fine) {
+            @supports (display: table-cell) {
+              .supportHover\\:w_6px:hover {
+                width: 6px;
+      }
+      }
+      }
+        }
+
+        @layer s030-c4-p3000 {
+          .hover\\:custom\\:c_blue:is(:hover, [data-hover])[data-attr="custom"] {
+            color: blue;
+      }
+        }
+
+        @layer s030-c5-p4000 {
+          .hover\\:focus\\:w_3px:is(:hover, [data-hover]):is(:focus, [data-focus]) {
+            width: 3px;
+      }
+        }
       }"
     `)
   })
@@ -2029,9 +2365,13 @@ describe('js to css', () => {
 
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        .hover\\:\\[\\&_\\>_\\:where\\(svg\\)\\]\\:c_green:hover > :where(svg) {
-          color: green;
+        @layer s020-c0-p3000;
+
+        @layer s020-c0-p3000 {
+          .hover\\:\\[\\&_\\>_\\:where\\(svg\\)\\]\\:c_green:hover > :where(svg) {
+            color: green;
       }
+        }
       }"
     `)
   })
@@ -2054,11 +2394,15 @@ describe('js to css', () => {
 
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        @media (hover: hover) {
-          .hoverMedia\\:\\[\\&_\\>_\\:where\\(svg\\)\\]\\:c_blue:hover > :where(svg) {
-            color: blue;
+        @layer s020-c0-p3000;
+
+        @layer s020-c0-p3000 {
+          @media (hover: hover) {
+            .hoverMedia\\:\\[\\&_\\>_\\:where\\(svg\\)\\]\\:c_blue:hover > :where(svg) {
+              color: blue;
       }
       }
+        }
       }"
     `)
   })
@@ -2088,17 +2432,21 @@ describe('multi-block conditions (object syntax with @slot)', () => {
 
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        @media (hover: hover) {
-          .hoverActive\\:bg_red:is(:hover, [data-hover]) {
-            background: red;
+        @layer s020-c0-p1000;
+
+        @layer s020-c0-p1000 {
+          @media (hover: hover) {
+            .hoverActive\\:bg_red:is(:hover, [data-hover]) {
+              background: red;
       }
       }
 
-        @media (hover: none) {
-          .hoverActive\\:bg_red:is(:active, [data-active]) {
-            background: red;
+          @media (hover: none) {
+            .hoverActive\\:bg_red:is(:active, [data-active]) {
+              background: red;
       }
       }
+        }
       }"
     `)
   })
@@ -2123,11 +2471,15 @@ describe('multi-block conditions (object syntax with @slot)', () => {
 
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        @media (hover: hover) {
-          .anyHover\\:c_blue:hover {
-            color: blue;
+        @layer s020-c0-p3000;
+
+        @layer s020-c0-p3000 {
+          @media (hover: hover) {
+            .anyHover\\:c_blue:hover {
+              color: blue;
       }
       }
+        }
       }"
     `)
   })
@@ -2156,23 +2508,35 @@ describe('multi-block conditions (object syntax with @slot)', () => {
 
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        @media (hover: hover) {
-          .hoverActive\\:bg_red:is(:hover, [data-hover]) {
-            background: red;
-      }
-          .hoverActive\\:c_white:is(:hover, [data-hover]) {
-            color: var(--colors-white);
+        @layer s020-c0-p1000, s020-c0-p3000;
+
+        @layer s020-c0-p1000 {
+          @media (hover: hover) {
+            .hoverActive\\:bg_red:is(:hover, [data-hover]) {
+              background: red;
       }
       }
 
-        @media (hover: none) {
-          .hoverActive\\:bg_red:is(:active, [data-active]) {
-            background: red;
-      }
-          .hoverActive\\:c_white:is(:active, [data-active]) {
-            color: var(--colors-white);
+          @media (hover: none) {
+            .hoverActive\\:bg_red:is(:active, [data-active]) {
+              background: red;
       }
       }
+        }
+
+        @layer s020-c0-p3000 {
+          @media (hover: hover) {
+            .hoverActive\\:c_white:is(:hover, [data-hover]) {
+              color: var(--colors-white);
+      }
+      }
+
+          @media (hover: none) {
+            .hoverActive\\:c_white:is(:active, [data-active]) {
+              color: var(--colors-white);
+      }
+      }
+        }
       }"
     `)
   })
@@ -2219,17 +2583,21 @@ describe('multi-block conditions (object syntax with @slot)', () => {
 
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        @media (hover: hover) {
-          .dark .dark\\:hoverActive\\:bg_red:is(:hover, [data-hover]) {
-            background: red;
+        @layer s030-c0-p1000;
+
+        @layer s030-c0-p1000 {
+          @media (hover: hover) {
+            .dark .dark\\:hoverActive\\:bg_red:is(:hover, [data-hover]) {
+              background: red;
       }
       }
 
-        @media (hover: none) {
-          .dark .dark\\:hoverActive\\:bg_red:is(:active, [data-active]) {
-            background: red;
+          @media (hover: none) {
+            .dark .dark\\:hoverActive\\:bg_red:is(:active, [data-active]) {
+              background: red;
       }
       }
+        }
       }"
     `)
   })
@@ -2253,17 +2621,21 @@ describe('multi-block conditions (object syntax with @slot)', () => {
     // change that flipped `(hover: hover)` and `(hover: none)` would diff loudly.
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        @media (hover: hover) {
-          .hoverActive\\:bg_red:is(:hover, [data-hover]) {
-            background: red;
+        @layer s020-c0-p1000;
+
+        @layer s020-c0-p1000 {
+          @media (hover: hover) {
+            .hoverActive\\:bg_red:is(:hover, [data-hover]) {
+              background: red;
       }
       }
 
-        @media (hover: none) {
-          .hoverActive\\:bg_red:is(:active, [data-active]) {
-            background: red;
+          @media (hover: none) {
+            .hoverActive\\:bg_red:is(:active, [data-active]) {
+              background: red;
       }
       }
+        }
       }"
     `)
   })
@@ -2294,33 +2666,41 @@ describe('multi-block conditions (object syntax with @slot)', () => {
     // 2 (hoverActive) × 2 (lightDark) = 4 selector combinations expected.
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        @media (hover: hover) {
-          @media (prefers-color-scheme: dark) {
-            .hoverActive\\:lightDark\\:bg_red:is(:hover, [data-hover])[data-mode="dark"] {
-              background: red;
-      }
-      }
+        @layer s030-c0-p1000;
 
-          @media (prefers-color-scheme: light) {
-            .hoverActive\\:lightDark\\:bg_red:is(:hover, [data-hover])[data-mode="light"] {
-              background: red;
+        @layer s030-c0-p1000 {
+          @media (hover: hover) {
+            @media (prefers-color-scheme: light) {
+              .hoverActive\\:lightDark\\:bg_red:is(:hover, [data-hover])[data-mode="light"] {
+                background: red;
       }
       }
       }
 
-        @media (hover: none) {
-          @media (prefers-color-scheme: dark) {
-            .hoverActive\\:lightDark\\:bg_red:is(:active, [data-active])[data-mode="dark"] {
-              background: red;
+          @media (hover: hover) {
+            @media (prefers-color-scheme: dark) {
+              .hoverActive\\:lightDark\\:bg_red:is(:hover, [data-hover])[data-mode="dark"] {
+                background: red;
+      }
       }
       }
 
-          @media (prefers-color-scheme: light) {
-            .hoverActive\\:lightDark\\:bg_red:is(:active, [data-active])[data-mode="light"] {
-              background: red;
+          @media (hover: none) {
+            @media (prefers-color-scheme: light) {
+              .hoverActive\\:lightDark\\:bg_red:is(:active, [data-active])[data-mode="light"] {
+                background: red;
       }
       }
       }
+
+          @media (hover: none) {
+            @media (prefers-color-scheme: dark) {
+              .hoverActive\\:lightDark\\:bg_red:is(:active, [data-active])[data-mode="dark"] {
+                background: red;
+      }
+      }
+      }
+        }
       }"
     `)
   })

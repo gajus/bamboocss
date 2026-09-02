@@ -68,6 +68,62 @@ The generated CSS for the tokens layer looks like this:
 - `@layer utilities` - Styles that are scoped to a specific utility class. These styles are only applied to elements
   that have the utility class applied.
 
+### Sublayers of `utilities`
+
+Utility rules are not written into `utilities` directly. Each goes into a sublayer keyed by the rule's specificity, its
+condition and its property's priority, and the layer opens with a statement fixing their order:
+
+```css
+@layer utilities {
+  @layer s010-c0-p1000, s010-c0-p4000, s010-c2-p3000, s020-c1-p3000, important;
+
+  @layer s010-c0-p1000 {
+    .p_4 {
+      padding: var(--spacing-4);
+    }
+  }
+  @layer s010-c0-p4000 {
+    .pt_2 {
+      padding-top: var(--spacing-2);
+    }
+  }
+  @layer s010-c2-p3000 {
+    @media (width >= 48rem) {
+      .md\:c_green\.500 {
+        color: var(--colors-green-500);
+      }
+    }
+  }
+  @layer s020-c1-p3000 {
+    .hover\:c_blue\.500:is(:hover, [data-hover]) {
+      color: var(--colors-blue-500);
+    }
+  }
+  @layer important {
+    .c_red\.500\! {
+      color: var(--colors-red-500) !important;
+    }
+  }
+}
+```
+
+A name reads as its key. `s010` is the specificity of the rule's selector, `(0,1,0)`; `c2` is the rule's condition,
+numbered in the order Bamboo sorts conditions, the same number wherever that condition appears; `p3000` is the
+property's priority, shorthands before longhands. Every `!important` declaration goes into the one sublayer named
+`important`, because importance inverts layer order and one layer is the only place two important declarations still
+resolve by specificity and then source order.
+
+This exists so that a rule's precedence never depends on where it sits in the file. One flat layer carried precedence in
+its source order — shorthands before longhands, bare rules before conditional ones, each breakpoint in its place — and
+source order is the one thing a stylesheet split per chunk cannot promise, since chunks load in whichever order a route
+needs them. Layer order is decided by the statement, whatever order the rules arrive in.
+
+Nothing resolves differently. Specificity comes first in the key because layer order outranks it: two rules of different
+specificity used to resolve by specificity alone, and now the more specific one sits in the later sublayer. Two rules of
+equal specificity used to resolve by source order, and between them the sublayers follow the sorter's order exactly. A
+test in `packages/core` models the browser's cascade over a corpus that exercises every way two declarations can compete
+and pins the winner of every pair; the sublayers reproduce that ranking without exception.
+
 ## Layer Order
 
 The cascade layers are applied in the following order:
@@ -139,7 +195,8 @@ The first line of the generated CSS declares the layer order:
 @layer reset, base, tokens, utilities;
 ```
 
-The named `recipes` layer is not emitted. Recipe selections compile into shared atoms in `utilities`.
+The named `recipes` layer is not emitted. Recipe selections compile into shared atoms in `utilities`, and the
+[sublayers](#sublayers-of-utilities) of `utilities` are declared by a statement inside it.
 
 ## Customize layers
 

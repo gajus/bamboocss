@@ -27,26 +27,32 @@ describe('viewTransition', () => {
     // reproduced by each test's own arithmetic.
     expect(parseAndExtract(code).css).toMatchInlineSnapshot(`
       "@layer utilities {
-        .vt_golYYs {
-          view-transition-class: vt_golYYs;
+        @layer s001-c0-p3000, s010-c0-p3000;
+
+        @layer s001-c0-p3000 {
+          ::view-transition-group(.vt_golYYs) {
+            animation-duration: 0.4s;
+            animation-timing-function: ease-in-out;
       }
 
-        ::view-transition-group(.vt_golYYs) {
-          animation-duration: 0.4s;
-          animation-timing-function: ease-in-out;
+          ::view-transition-image-pair(.vt_golYYs) {
+            isolation: isolate;
       }
 
-        ::view-transition-image-pair(.vt_golYYs) {
-          isolation: isolate;
+          ::view-transition-old(.vt_golYYs) {
+            animation-name: fade-out;
       }
 
-        ::view-transition-old(.vt_golYYs) {
-          animation-name: fade-out;
+          ::view-transition-new(.vt_golYYs) {
+            animation-name: fade-in;
       }
+        }
 
-        ::view-transition-new(.vt_golYYs) {
-          animation-name: fade-in;
+        @layer s010-c0-p3000 {
+          .vt_golYYs {
+            view-transition-class: vt_golYYs;
       }
+        }
       }"
     `)
   })
@@ -68,25 +74,33 @@ describe('viewTransition', () => {
 
     expect(parseAndExtract(code).css).toMatchInlineSnapshot(`
       "@layer utilities {
-        .vt_cAQlRA {
-          view-transition-class: vt_cAQlRA;
-      }
+        @layer s001-c0-p1000, s001-c0-p3000, s010-c0-p3000;
 
-        ::view-transition-group(.vt_cAQlRA) {
-          background: var(--colors-red-300);
-      }
-
-        @media (width >= 48rem) {
+        @layer s001-c0-p1000 {
           ::view-transition-group(.vt_cAQlRA) {
-            color: var(--colors-green-300);
+            background: var(--colors-red-300);
+      }
+        }
+
+        @layer s001-c0-p3000 {
+          @media (width >= 48rem) {
+            ::view-transition-group(.vt_cAQlRA) {
+              color: var(--colors-green-300);
       }
       }
 
-        @media (prefers-reduced-motion: reduce) {
-          ::view-transition-group(.vt_cAQlRA) {
-            animation-duration: 0.01s;
+          @media (prefers-reduced-motion: reduce) {
+            ::view-transition-group(.vt_cAQlRA) {
+              animation-duration: 0.01s;
       }
       }
+        }
+
+        @layer s010-c0-p3000 {
+          .vt_cAQlRA {
+            view-transition-class: vt_cAQlRA;
+      }
+        }
       }"
     `)
   })

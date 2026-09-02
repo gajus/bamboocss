@@ -89,79 +89,102 @@ describe('config.importMap', () => {
 
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        .m_auto {
-          margin: auto;
+        @layer s010-c0-p1000, s010-c0-p2000, s010-c0-p3000, s010-c0-p4000, s010-c1-p3000, s010-c2-p2000, s010-c3-p2000, s010-c4-p3000, s010-c4-p4000;
+
+        @layer s010-c0-p1000 {
+          .m_auto {
+            margin: auto;
+      }
+        }
+
+        @layer s010-c0-p2000 {
+          .mx_auto {
+            margin-inline: auto;
       }
 
-        .mx_auto {
-          margin-inline: auto;
+          .px_4 {
+            padding-inline: var(--spacing-4);
       }
 
-        .px_4 {
-          padding-inline: var(--spacing-4);
+          .flex_2 {
+            flex: 2;
       }
 
-        .flex_2 {
-          flex: 2;
+          .flex_1 {
+            flex: 1 1 0%;
+      }
+        }
+
+        @layer s010-c0-p3000 {
+          .pos_relative {
+            position: relative;
       }
 
-        .flex_1 {
-          flex: 1 1 0%;
+          .page_A4 {
+            page: A4;
       }
 
-        .pos_relative {
-          position: relative;
+          .d_flex {
+            display: flex;
       }
 
-        .page_A4 {
-          page: A4;
+          .flex-d_column {
+            flex-direction: column;
+      }
+        }
+
+        @layer s010-c0-p4000 {
+          .max-w_8xl {
+            max-width: var(--sizes-8xl);
       }
 
-        .d_flex {
-          display: flex;
+          .h_600px {
+            height: 600px;
       }
+        }
 
-        .flex-d_column {
-          flex-direction: column;
+        @layer s010-c1-p3000 {
+          @media (width >= 40rem) {
+            .sm\\:flex-d_row {
+              flex-direction: row;
       }
+      }
+        }
 
-        .max-w_8xl {
-          max-width: var(--sizes-8xl);
+        @layer s010-c2-p2000 {
+          @media (width >= 48rem) {
+            .md\\:px_6 {
+              padding-inline: var(--spacing-6);
       }
+      }
+        }
 
-        .h_600px {
-          height: 600px;
+        @layer s010-c3-p2000 {
+          @media (width >= 64rem) {
+            .lg\\:px_8 {
+              padding-inline: var(--spacing-8);
       }
+      }
+        }
 
-        @media (width >= 40rem) {
-          .sm\\:flex-d_row {
-            flex-direction: row;
+        @layer s010-c4-p3000 {
+          @media print {
+            .print\\:flex-d_row {
+              flex-direction: row;
       }
       }
+        }
 
-        @media (width >= 48rem) {
-          .md\\:px_6 {
-            padding-inline: var(--spacing-6);
+        @layer s010-c4-p4000 {
+          @media print {
+            .print\\:w_210mm {
+              width: 210mm;
+      }
+            .print\\:h_297mm {
+              height: 297mm;
       }
       }
-
-        @media (width >= 64rem) {
-          .lg\\:px_8 {
-            padding-inline: var(--spacing-8);
-      }
-      }
-
-        @media print {
-          .print\\:flex-d_row {
-            flex-direction: row;
-      }
-          .print\\:w_210mm {
-            width: 210mm;
-      }
-          .print\\:h_297mm {
-            height: 297mm;
-      }
-      }
+        }
       }"
     `)
   })
@@ -252,9 +275,13 @@ describe('config.importMap', () => {
       }
 
       @layer utilities {
-        .c_red {
-          color: red;
+        @layer s010-c0-p3000;
+
+        @layer s010-c0-p3000 {
+          .c_red {
+            color: red;
       }
+        }
       }"
     `)
   })

@@ -121,29 +121,33 @@ describe('extract Vue templates', () => {
 
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        .c_green\\.400 {
-          color: var(--colors-green-400);
+        @layer s010-c0-p3000;
+
+        @layer s010-c0-p3000 {
+          .c_green\\.400 {
+            color: var(--colors-green-400);
       }
 
-        .c_purple\\.400 {
-          color: var(--colors-purple-400);
+          .c_purple\\.400 {
+            color: var(--colors-purple-400);
       }
 
-        .c_red\\.500 {
-          color: var(--colors-red-500);
+          .c_red\\.500 {
+            color: var(--colors-red-500);
       }
 
-        .c_red {
-          color: red;
+          .c_red {
+            color: red;
       }
 
-        .fw_bold {
-          font-weight: var(--font-weights-bold);
+          .fw_bold {
+            font-weight: var(--font-weights-bold);
       }
 
-        .c_green {
-          color: green;
+          .c_green {
+            color: green;
       }
+        }
       }"
     `)
   })
@@ -248,21 +252,25 @@ describe('extract Vue templates', () => {
 
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        .text-style_overline {
-          text-style: overline;
+        @layer s010-c0-p3000;
+
+        @layer s010-c0-p3000 {
+          .text-style_overline {
+            text-style: overline;
       }
 
-        .text-style_h7 {
-          text-style: h7;
+          .text-style_h7 {
+            text-style: h7;
       }
 
-        .text-style_text {
-          text-style: text;
+          .text-style_text {
+            text-style: text;
       }
 
-        .c_grey\\.70 {
-          color: grey.70;
+          .c_grey\\.70 {
+            color: grey.70;
       }
+        }
       }"
     `)
   })
@@ -371,29 +379,33 @@ describe('extract Vue templates', () => {
 
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        .c_green\\.400 {
-          color: var(--colors-green-400);
+        @layer s010-c0-p3000;
+
+        @layer s010-c0-p3000 {
+          .c_green\\.400 {
+            color: var(--colors-green-400);
       }
 
-        .c_purple\\.400 {
-          color: var(--colors-purple-400);
+          .c_purple\\.400 {
+            color: var(--colors-purple-400);
       }
 
-        .c_red\\.500 {
-          color: var(--colors-red-500);
+          .c_red\\.500 {
+            color: var(--colors-red-500);
       }
 
-        .c_red {
-          color: red;
+          .c_red {
+            color: red;
       }
 
-        .fw_bold {
-          font-weight: var(--font-weights-bold);
+          .fw_bold {
+            font-weight: var(--font-weights-bold);
       }
 
-        .c_green {
-          color: green;
+          .c_green {
+            color: green;
       }
+        }
       }"
     `)
   })
@@ -512,29 +524,33 @@ describe('extract Vue templates', () => {
 
     expect(result.css).toMatchInlineSnapshot(`
       "@layer utilities {
-        .c_green\\.400 {
-          color: var(--colors-green-400);
+        @layer s010-c0-p3000;
+
+        @layer s010-c0-p3000 {
+          .c_green\\.400 {
+            color: var(--colors-green-400);
       }
 
-        .c_purple\\.400 {
-          color: var(--colors-purple-400);
+          .c_purple\\.400 {
+            color: var(--colors-purple-400);
       }
 
-        .c_red\\.500 {
-          color: var(--colors-red-500);
+          .c_red\\.500 {
+            color: var(--colors-red-500);
       }
 
-        .c_red {
-          color: red;
+          .c_red {
+            color: red;
       }
 
-        .fw_bold {
-          font-weight: var(--font-weights-bold);
+          .fw_bold {
+            font-weight: var(--font-weights-bold);
       }
 
-        .c_green {
-          color: green;
+          .c_green {
+            color: green;
       }
+        }
       }"
     `)
   })

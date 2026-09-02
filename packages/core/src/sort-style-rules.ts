@@ -143,6 +143,30 @@ export const compareAtRuleOrMixed = (a: WithConditions, b: WithConditions) =>
 
 export interface WithConditions extends Pick<AtomicStyleResult, 'conditions' | 'entry'> {}
 
+/** Which of the three blocks below a rule's conditions put it in: none, selectors only, at-rules. */
+const conditionGroup = (conditions: ConditionDetails[] | undefined) =>
+  !conditions?.length ? 0 : hasAtRule(conditions) ? 2 : 1
+
+/**
+ * The order `sortStyleRules` puts two rules in by their conditions alone — the three blocks,
+ * then the comparison each block sorts by — with property priority left out.
+ *
+ * Exported for the cascade sublayers, which have to reproduce this order between sublayers so
+ * that two rules of equal specificity keep the winner the flat layer's source order gave them.
+ */
+export const compareConditionOrder = (a: ConditionDetails[] | undefined, b: ConditionDetails[] | undefined): number => {
+  const group = conditionGroup(a) - conditionGroup(b)
+  if (group !== 0) return group
+  switch (conditionGroup(a)) {
+    case 0:
+      return 0
+    case 1:
+      return compareSelectors({ conditions: a } as WithConditions, { conditions: b } as WithConditions)
+    default:
+      return compareFlattened(flatten(a!) as Array<ConditionDetails>, flatten(b!) as Array<ConditionDetails>)
+  }
+}
+
 const sortByPropertyPriority = (a: WithConditions, b: WithConditions) => {
   if (a.entry.prop === b.entry.prop) return 0
   return getPropertyPriority(a.entry.prop) - getPropertyPriority(b.entry.prop)

@@ -1132,10 +1132,14 @@ export class Project {
       const resolved = this.#completeResolution(plan)
       if (!resolved.local) continue
 
+      const target = resolved.sourceFile ? this.normalizePath(pathOf(resolved.sourceFile)) : null
+      if (target && !specifier.startsWith('.') && !specifier.startsWith('/')) {
+        this.#bareSpecifierTargets.set(specifier, target)
+      }
       facts.push(
         Object.freeze({
           importer,
-          target: resolved.sourceFile ? this.normalizePath(pathOf(resolved.sourceFile)) : null,
+          target,
           specifier,
           kind,
           ordinal,
@@ -1593,6 +1597,33 @@ export class Project {
     this.invalidate(true)
   }
 
+  /**
+   * Whether the project holds this exact path, without reading anything from the compiler.
+   *
+   * Membership is answered from what was installed, so it costs no round trip — which is what
+   * lets the Vite compiler ask it once per module it is handed.
+   */
+  hasSourceFile = (filePath: string): boolean => {
+    this.#ensureSourceFiles()
+    return this.project.has(filePath)
+  }
+
+  /**
+   * Where a bare specifier — a package name — resolved to, the last time any importer asked.
+   *
+   * One answer per specifier rather than per importer, which is an approximation a nested
+   * `node_modules` could defeat; it exists for the Vite compiler to ask, of a module it has
+   * not parsed, whether a package it imports is one the project holds a source of.
+   */
+  bareSpecifierTarget = (specifier: string): string | undefined => this.#bareSpecifierTargets.get(specifier)
+
+  /** @internal The revision every importer's cached resolution facts are checked against. */
+  get fileTreeRevision(): number {
+    return this.#fileTreeRevision
+  }
+
+  #bareSpecifierTargets = new Map<string, string>()
+
   addSourceFile = (filePath: string, content: string, options: AddSourceFileOptions = {}): SourceFile => {
     this.#assertNotLoading()
     this.#ensureSourceFiles()
@@ -1631,9 +1662,18 @@ export class Project {
 
     // Resolutions memoized against other files' nodes can now be out of date. The canonical
     // `getFilePath()` spelling is what dependency records carry — see `invalidate`.
+    //
+    // An auxiliary path — `X.__bamboo__.tsx` — is one nothing imports, so its appearance cannot
+    // change what any specifier resolves to. It is a content event, not a tree change: every
+    // importer keeps its resolution facts and the resolver survives. Treating it as a tree
+    // change made each bundler transform parked here re-resolve, with filesystem probes, the
+    // imports of every module parsed after it.
     this.invalidateSourcePreparation(filePath, existing)
     this.removedSourcePaths.delete(this.normalizePath(filePath))
-    this.invalidate(!existing, pathOf(existing))
+    this.invalidate(
+      !existing && !options.auxiliary,
+      existing ? pathOf(existing) : options.auxiliary ? filePath : undefined,
+    )
     const sourceFile = this.project.createSourceFile(filePath, content, { scriptKind: scriptKindFor(filePath) })
     if (!sourceFile) throw new Error(`bamboo: could not add ${filePath} to the project`)
     // Keyed on the source file's own spelling, which is the one the ledger records.

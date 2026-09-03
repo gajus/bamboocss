@@ -208,6 +208,16 @@ moved.
 Where the consumer can run after Bamboo instead — `order: 'post'` listed later, or `writeBundle`/`closeBundle` — prefer
 that and keep the pruning. The build prints one line whenever pruning is off, so it is never off silently.
 
+### What the compiler transforms
+
+The compiler folds the modules `include` covers and `exclude` does not, which is also what the stylesheet is extracted
+from, so a compiled class always has a rule behind it. A module outside that inventory is left alone, with three
+exceptions: one an included file imports a recipe from, one whose text names a bamboo entrypoint, since the build's
+check for classes without rules exists to report exactly that misconfiguration, and one importing a module the project
+holds by relative path, which may be calling a recipe declared there. Excluding generated code, as in
+`exclude: ['**/__generated__/**']`, therefore also keeps it out of the compiler, which matters at scale: with the
+TypeScript 7 backend, every module the compiler parses outside the inventory costs a reload of the whole project.
+
 ### Per-route stylesheets
 
 A utility only one lazily loaded chunk uses is written into a stylesheet of that chunk's own, attached where Vite's own

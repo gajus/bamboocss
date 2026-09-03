@@ -67,6 +67,8 @@ export interface CompilationHost {
   setCommand(command: 'build' | 'serve'): void
   /** Whether a dev server will emit a source map for the stylesheet, which needs atom origins. */
   setDevSourcemap(enabled: boolean): void
+  /** Whether `include` covers this path and `exclude` does not. `true` before a Builder exists. */
+  isSourceFile(filePath: string): boolean
   /** The current generation, without loading anything. `undefined` before the first setup. */
   current(): CompilationGeneration | undefined
   /**
@@ -226,6 +228,10 @@ export const createCompilationHost = (options: CompilationHostOptions = {}): Com
 
     setDevSourcemap(enabled) {
       devSourcemap = enabled
+    },
+
+    isSourceFile(filePath) {
+      return builder?.context ? builder.isPotentialSourceFile(filePath) : true
     },
 
     current: () => generation,

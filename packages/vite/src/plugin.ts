@@ -162,6 +162,79 @@ export const shouldTransform = (id: string) => {
  * Returns `null` when the module is still a raw SFC and must be left to the framework plugin.
  * Astro frontmatter is `---`, not `<script>`, so a tag check alone would parse the template.
  */
+/** The module specifiers that reach bamboo — the `styled-system` paths and any `importMap` — per context. */
+const entrypointNeedles = new WeakMap<object, string[]>()
+
+/**
+ * Whether a module's text names a bamboo entrypoint at all.
+ *
+ * A textual test on purpose: it runs before the module is parsed, on modules outside the
+ * extraction inventory, to decide whether parsing is worth it. The outdir's own name is among
+ * the needles, so a relative import of the generated `styled-system` counts too.
+ */
+export const namesEntrypoint = (
+  ctx: { imports: { outdir: string; value: Record<string, string[]> } },
+  code: string,
+) => {
+  let needles = entrypointNeedles.get(ctx)
+  if (!needles) {
+    const outdirName = ctx.imports.outdir.split('/').filter(Boolean).at(-1)
+    needles = [
+      ...new Set([outdirName ?? '', ...Object.values(ctx.imports.value).flat()].filter((needle) => needle.length > 0)),
+    ]
+    entrypointNeedles.set(ctx, needles)
+  }
+  return needles.some((needle) => code.includes(needle))
+}
+
+/** A module specifier in an import, export-from, dynamic import or require. */
+const MODULE_SPECIFIER = /\b(?:from|import|require)\s*\(?\s*['"]([^'"]+)['"]/g
+/** How a relative specifier may name a file, in the order the bundler tries them. */
+const SPECIFIER_SUFFIXES = [
+  '',
+  '.ts',
+  '.tsx',
+  '.mts',
+  '.cts',
+  '.js',
+  '.jsx',
+  '.mjs',
+  '.cjs',
+  '/index.ts',
+  '/index.tsx',
+  '/index.js',
+]
+
+/**
+ * Whether a module imports a module the shared project holds.
+ *
+ * Answered from project membership alone — no parse, no disk, no round trip to the compiler —
+ * which is what makes it affordable to ask of every module outside the extraction inventory.
+ * A relative specifier is tried against the file names a bundler would; a bare one against
+ * where the parser last resolved that package to, since a package the project holds a source
+ * of is one an included file imports a recipe from.
+ */
+export const importsProjectModule = (
+  ctx: {
+    project: { hasSourceFile(path: string): boolean; bareSpecifierTarget(specifier: string): string | undefined }
+  },
+  filePath: string,
+  code: string,
+) => {
+  const directory = dirname(filePath)
+  for (const match of code.matchAll(MODULE_SPECIFIER)) {
+    const specifier = match[1]!
+    if (specifier.startsWith('.') || specifier.startsWith('/')) {
+      const base = specifier.startsWith('/') ? specifier : resolve(directory, specifier)
+      for (const suffix of SPECIFIER_SUFFIXES) if (ctx.project.hasSourceFile(base + suffix)) return true
+      continue
+    }
+    const target = ctx.project.bareSpecifierTarget(specifier)
+    if (target && ctx.project.hasSourceFile(target)) return true
+  }
+  return false
+}
+
 export const compilerParsePath = (id: string, code: string): string | null => {
   const [filePath, query = ''] = id.split('?')
   if (!filePath) return null
@@ -2507,6 +2580,34 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     // the project's `include`, so parsing it fails, and folding it would be meaningless
     // even if it did not.
     if (isGeneratedOutput(filePath, ctx)) return null
+
+    // Only a module the extraction inventory covers can have a rule behind what this compiles,
+    // so a module `include` does not reach — or `exclude` drops, as a project's generated
+    // GraphQL artifacts are — is left alone. Three exceptions keep what such a module can
+    // still legitimately do: one the project already holds was installed because an included
+    // file imports a recipe from it; one naming a bamboo entrypoint has calls the build-end
+    // check for classes without rules exists to report; and one importing, by relative path, a
+    // module the project holds may be calling a recipe that module declares, whose rules exist
+    // whatever calls them.
+    //
+    // Not a courtesy. Each such module used to be parked in the shared project under an
+    // auxiliary path, and with the TypeScript 7 backend every file joining the project rewrites
+    // its config and reloads the whole program in the Go compiler. A 7,000-file app with 3,000
+    // excluded generated modules paid that reload 3,000 times per environment — about a second
+    // each — and its production build stopped finishing inside its CI timeout.
+    //
+    // The same test decides for a module the project holds under different text — a framework
+    // plugin's rewrite of an included file, such as the export-name stubs a router derives from
+    // its page modules. That text would be parked under an auxiliary path too, at the same
+    // cost, and a stub that names nothing bamboo compiles to nothing.
+    const heldAsIs = ctx.project.hasSourceFile(filePath) && ctx.project.getSourceFile(filePath)?.getFullText() === code
+    if (!heldAsIs && !namesEntrypoint(ctx, code) && !importsProjectModule(ctx, filePath, code)) {
+      logger.debug(
+        'vite:transform',
+        `Skipped ${filePath}: ${host.isSourceFile(filePath) ? 'rewritten before bamboo' : 'outside `include`'}, and it reaches nothing bamboo`,
+      )
+      return null
+    }
 
     const requestedParsePath = compilerParsePath(id, code)
     if (requestedParsePath === null) return null

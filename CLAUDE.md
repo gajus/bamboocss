@@ -78,6 +78,16 @@ whose flag is malformed — `--keep-index=false` is not a valid form, and the st
 a "before" measurement that is really the "after" tree. Commit or copy to a scratch directory first, then confirm the
 state actually changed (`grep` for something the change added) before trusting anything measured against it.
 
+**With the TypeScript 7 backend, a file joining the shared project is a full program reload.** Membership is the
+synthesized tsconfig's `files` list, so every `addSourceFile` of a path the project does not hold rewrites that list and
+has the Go compiler re-derive a program the size of the whole inventory — about a second on 7,000 files — and it bumps
+the tree revision every importer's cached import resolutions are checked against. The Vite compiler therefore must not
+add a source per module it is handed: it skips modules outside `include`/`exclude` and framework rewrites that reach
+nothing bamboo (`packages/vite/src/plugin.ts`, `compileModule`), and an auxiliary `X.__bamboo__.tsx` is a content event,
+not a tree change (`packages/parser/src/project.ts`, `addSourceFile`). Contra's production build went from timing out at
+30 minutes to finishing because of exactly this; profile with `--inspect` and a 20-second CPU profile of the transform
+phase before assuming the fold itself is slow.
+
 **Killing a test run can leave half-built packages behind.** `packages/vite/__tests__/built-package-consumer.test.ts`
 runs `pnpm build` for any package whose `dist` lacks declarations, and a run stopped in the middle of that leaves a
 `dist` holding `index.cjs` and nothing else. Every later test that imports the package's ESM entry then fails with

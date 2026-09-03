@@ -183,15 +183,28 @@ export class Builder {
   /** @internal The inventory reconciled by the most recent extraction pass. */
   getSourceFiles = (): readonly string[] => Object.freeze([...(this.sourceInventory ?? [])])
 
-  /** @internal Whether creating this path can change source or explicit-dependency membership. */
+  /** The compiled `include`/`exclude` matcher of each context, since the compiler asks per module. */
+  private sourceMatchers = new WeakMap<BambooContext, ((path: string) => boolean) | undefined>()
+
+  /**
+   * @internal Whether this path is one `include` covers and `exclude` does not.
+   *
+   * What decides source membership when a file appears, and what the Vite compiler asks of
+   * every module it is handed: a module outside the extraction inventory yields no rule, so
+   * compiling it is wasted — and with the TypeScript 7 backend, far from free.
+   */
   isPotentialSourceFile = (filePath: string): boolean => {
     const ctx = this.getContextOrThrow()
     const absolutePath = this.absOwner(ctx, filePath)
     const relativePath = this.sourcePath(ctx.runtime.path.relative(ctx.config.cwd, absolutePath))
-    const sourcePatterns = ctx.config.include ?? []
-    const sourceMatcher = sourcePatterns.length
-      ? picomatch(sourcePatterns, { ignore: globIgnore(ctx.config.exclude) })
-      : undefined
+    if (!this.sourceMatchers.has(ctx)) {
+      const sourcePatterns = ctx.config.include ?? []
+      this.sourceMatchers.set(
+        ctx,
+        sourcePatterns.length ? picomatch(sourcePatterns, { ignore: globIgnore(ctx.config.exclude) }) : undefined,
+      )
+    }
+    const sourceMatcher = this.sourceMatchers.get(ctx)
     return sourceMatcher?.(relativePath) || sourceMatcher?.(absolutePath) || false
   }
 

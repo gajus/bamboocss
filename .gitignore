@@ -1,36 +1,17 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-
-# Dependency directory
-**/node_modules/**
+.*
+!.github
+!.changeset
+!.gitignore
+!.ncurc.json
+!.oxfmtrc.json
+!.oxlintrc.json
 node_modules
-
 dist
-dist-ssr
-out
 build
-.astro
-**/buil
-tsconfig.tsbuildinfo
-.DS_Store
-__generated__
-*.env
-.idea
-*.vsix
-.vercel
-.envrc
-.npmrc
-
-## Bamboo
+out
 styled-system
-styled-system-static
-bamboo
-outdir
-ts-import-map-outdir
-
-storybook-static
+sandbox
+*.tsbuildinfo
 
 ## Benchmark results (machine-specific, see `pnpm bench`)
 bench/*

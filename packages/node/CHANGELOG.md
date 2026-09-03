@@ -1,5 +1,31 @@
 # @bamboocss/node
 
+## 1.55.0
+
+### Minor Changes
+
+- cdfe42c: Migrate stylesheet extraction to a native Rust/Oxc evaluator.
+
+  Extraction now handles local and cross-file values, helpers, re-exports, path and package aliases, recipes, patterns,
+  tokens, JSX recipe props, parser hooks, diagnostics, source origins, and incremental dependency invalidation without a
+  TypeScript extraction fallback. Prebuilt binaries ship inside `@bamboocss/node` for macOS arm64/x64, glibc Linux
+  arm64/x64, and Windows x64.
+
+### Patch Changes
+
+- @bamboocss/config@1.55.0
+- @bamboocss/core@1.55.0
+- @bamboocss/generator@1.55.0
+- @bamboocss/logger@1.55.0
+- @bamboocss/parser@1.55.0
+- @bamboocss/plugin-svelte@1.55.0
+- @bamboocss/plugin-vue@1.55.0
+- @bamboocss/reporter@1.55.0
+- @bamboocss/shared@1.55.0
+- @bamboocss/token-dictionary@1.55.0
+- @bamboocss/ts-ast@1.55.0
+- @bamboocss/types@1.55.0
+
 ## 1.54.2
 
 ### Patch Changes

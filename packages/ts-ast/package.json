@@ -1,6 +1,6 @@
 {
   "name": "@bamboocss/ts-ast",
-  "version": "1.54.2",
+  "version": "1.55.0",
   "description": "The AST backend bamboo extracts through, on TypeScript 7's Go compiler",
   "homepage": "https://bamboocss.com",
   "license": "MIT",

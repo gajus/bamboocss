@@ -857,7 +857,9 @@ export class Builder {
       }
     }
     ctx.encoder?.reconcileFileOwnerOrder('extract', files)
-    const filesToExtract = hasConfigChanged ? files : (this.extractionOrder ?? files)
+    // A cold Builder pass is Vite's path into extraction. Use the same cheap source scan as
+    // `parseFiles`; otherwise Vite parses every included file while the CLI skips non-authors.
+    const filesToExtract = hasConfigChanged ? ctx.extractableFiles(files) : (this.extractionOrder ?? files)
 
     // The set this pass genuinely re-reads, and a fresh digest memo for it. Dependents whose
     // bytes did not move consult both: `extractionOrder` puts every changed file before its

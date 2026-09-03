@@ -1,5 +1,28 @@
 # @bamboocss/node
 
+## 1.54.2
+
+### Patch Changes
+
+- 1f4ec2e: Skip files that cannot reach a Bamboo entrypoint during a cold `Builder` extraction.
+
+  The CLI already used this source scan, but the Builder path used by Vite bypassed it. On a 7,016-file application,
+  Vite therefore parsed every file through the TypeScript 7 backend while the CLI parsed the 4,377 files that could
+  author styles. Applying the same selection to both paths reduced a cold Vite extraction from 121,541 ms to 21,832 ms
+  on the same machine. CSS output is unchanged because the omitted files have no import path to a Bamboo authoring API.
+  - @bamboocss/config@1.54.2
+  - @bamboocss/core@1.54.2
+  - @bamboocss/generator@1.54.2
+  - @bamboocss/logger@1.54.2
+  - @bamboocss/parser@1.54.2
+  - @bamboocss/plugin-svelte@1.54.2
+  - @bamboocss/plugin-vue@1.54.2
+  - @bamboocss/reporter@1.54.2
+  - @bamboocss/shared@1.54.2
+  - @bamboocss/token-dictionary@1.54.2
+  - @bamboocss/ts-ast@1.54.2
+  - @bamboocss/types@1.54.2
+
 ## 1.54.1
 
 ### Patch Changes

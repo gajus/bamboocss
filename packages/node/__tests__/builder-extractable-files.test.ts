@@ -19,7 +19,7 @@ const createProject = () => {
   )
   writeFileSync(
     join(directory, 'src/styles.ts'),
-    `import { css } from '../styled-system/css'\nexport const className = css({ color: 'red' })\n`,
+    `import { css, cva } from '../styled-system/css'\nconst styles = { color: 'red' }\nstyles.color = 'green'\nexport const className = css(styles)\nexport const badge = cva({ base: { backgroundColor: 'blue' } })\n`,
   )
   writeFileSync(
     join(directory, 'src/consumer.ts'),
@@ -31,12 +31,31 @@ const createProject = () => {
 
 test('a cold Builder pass parses only files that can reach bamboo', async () => {
   const builder = new Builder()
-  await builder.setup({ cwd: createProject() })
+  await builder.setup({ cwd: createProject(), atomOrigins: true })
   const context = builder.getContextOrThrow()
   const parseFile = vi.spyOn(context, 'parseFile')
+  const parseTypeScript = vi.spyOn(context.project, 'parseSourceFile')
 
   builder.extract()
 
   expect(parseFile.mock.calls.map(([file]) => basename(file))).toEqual(['consumer.ts', 'styles.ts'])
-  expect(builder.toCss()).toContain('color: red')
+  expect(parseTypeScript).not.toHaveBeenCalled()
+  const nativeCss = builder.toCss()
+  expect(nativeCss).toContain('color: red')
+  expect(nativeCss).toContain('background-color: blue')
+  expect([...builder.getAtomOrigins().values()]).toContainEqual({
+    filePath: join(context.config.cwd, 'src/styles.ts'),
+    line: 4,
+    column: 26,
+  })
+
+  process.env.BAMBOO_DISABLE_NATIVE_EXTRACTION = '1'
+  try {
+    const typescriptBuilder = new Builder()
+    await typescriptBuilder.setup({ cwd: context.config.cwd })
+    typescriptBuilder.extract()
+    expect(typescriptBuilder.toCss()).toBe(nativeCss)
+  } finally {
+    delete process.env.BAMBOO_DISABLE_NATIVE_EXTRACTION
+  }
 })

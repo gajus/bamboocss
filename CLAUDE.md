@@ -22,6 +22,7 @@ with workspace support.
   /generator/      # Code generation for styled-system
   /config/         # Config loading and resolution
   /types/          # Type definitions (config options live here)
+  /native-extractor/ # Rust/Oxc kernel for cold extraction; per-file TypeScript fallback remains
   /vite/           # Vite plugin, including the build-time fold
   /plugin-*/       # vue and svelte are auto-injected; lightningcss is opt-in
   /preset-*/       # Design system presets (base, bamboo, atlaskit, open-props)
@@ -143,6 +144,11 @@ else and broke Solid's `createStyleContext`, because Solid compiles props to acc
 component's children before its provider exists. A change to `packages/shared/src` that touches how props are read
 belongs in that test, since nothing downstream will catch it.
 
+**Generated test projects must live outside the checkout.** The TypeScript compiler is process-global, so a test that
+writes a `styled-system` package under `packages/**` can be discovered by unrelated resolution tests running in
+parallel. This made `resolution-ledger.test.ts` resolve its virtual `/app` imports into the CLI test's temporary output.
+Use `mkdtempSync(tmpdir())`, and remove the whole directory in teardown.
+
 **Always run tests from the project root:**
 
 ```bash
@@ -178,6 +184,7 @@ Perf-sensitive code has Vitest benchmarks in `{packages,sandbox}/*/__tests__/**/
 | `parser/ts-eval`, `parser/extract-modes`        | extraction                                                    |
 | `generator/css-fn`, `cva`, `recipe`             | the generated runtime, cached path                            |
 | `generator/css-fn-miss`                         | the uncached path; kept in its own file so ordering can't lie |
+| `native-extractor/analyze`                      | batched Rust parsing, analysis and compact result transfer    |
 | `shared/split-props`, `shared/leaf-class`       | runtime helpers on the per-render path                        |
 | `vite/fold`                                     | the fold's per-module cost                                    |
 
@@ -435,7 +442,8 @@ Brief description of the change and its impact.
 @bamboocss/dev (CLI)
   ├─ @bamboocss/node (core runtime)
   │   ├─ @bamboocss/core (CSS processing)
-  │   ├─ @bamboocss/parser (static analysis)
+  │   ├─ @bamboocss/parser (TypeScript extraction and fallback)
+  │   ├─ @bamboocss/native-extractor (private Rust/Oxc cold-path build package)
   │   ├─ @bamboocss/generator (codegen)
   │   └─ @bamboocss/config (config resolution)
 

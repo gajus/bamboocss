@@ -80,6 +80,7 @@
     "ts-pattern": "5.9.0"
   },
   "devDependencies": {
+    "@bamboocss/native-extractor": "workspace:*",
     "@types/fs-extra": "11.0.4",
     "@types/picomatch": "4.0.2",
     "boxen": "8.0.1"

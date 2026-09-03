@@ -1,4 +1,5 @@
 import type { DeadImport, StyleEncoder, Stylesheet } from '@bamboocss/core'
+import type { NativeEntrypoint, NativeFileAnalysis, NativeSource } from '@bamboocss/native-extractor'
 import { checkNamingAgreement, formatNamingDisagreement } from '@bamboocss/core'
 import { Generator } from '@bamboocss/generator'
 import { logger } from '@bamboocss/logger'
@@ -8,6 +9,9 @@ import { selectExtractable } from './extractable-files'
 import { isCompilerGone } from '@bamboocss/ts-ast'
 import type { LoadConfigResult, Runtime, WatchOptions, WatcherEventType } from '@bamboocss/types'
 import { debounce } from 'perfect-debounce'
+import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { createBox } from './cli-box'
 import { DiffEngine } from './diff-engine'
 import { getTsConfigResolutionFiles } from './load-tsconfig'
@@ -16,6 +20,18 @@ import { OutputEngine } from './output-engine'
 
 /** A thrown value's message, for a `catch` binding that is typed `unknown`. */
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error))
+
+type NativeExtractor = {
+  analyzeMany(sources: NativeSource[], entrypoints: NativeEntrypoint[]): NativeFileAnalysis[]
+}
+
+const nativeBinaryName = () => {
+  if (process.platform === 'darwin' && process.arch === 'arm64') return 'darwin-arm64.node'
+  if (process.platform === 'darwin' && process.arch === 'x64') return 'darwin-x64.node'
+  if (process.platform === 'linux' && process.arch === 'arm64') return 'linux-arm64-gnu.node'
+  if (process.platform === 'linux' && process.arch === 'x64') return 'linux-x64-gnu.node'
+  if (process.platform === 'win32' && process.arch === 'x64') return 'win32-x64-msvc.node'
+}
 
 /**
  * What each loss is, and what the author can do about it.
@@ -82,6 +98,9 @@ export class BambooContext extends Generator {
    * never take.
    */
   deadCalls = new Map<string, DeadImport[]>()
+
+  /** Complete cold-pass results produced without materializing TypeScript ASTs. */
+  private nativeExtractions = new Map<string, NativeFileAnalysis>()
 
   constructor(conf: LoadConfigResult)
   constructor(conf: LoadConfigResult) {
@@ -367,6 +386,74 @@ export class BambooContext extends Generator {
     return file === outdir || file.startsWith(outdir + this.runtime.path.sep)
   }
 
+  /** Prepare complete direct calls in one coarse native invocation. Unsafe files are omitted. */
+  prepareNativeExtraction = (filePaths: readonly string[]) => {
+    this.nativeExtractions.clear()
+    if (process.env.BAMBOO_DISABLE_NATIVE_EXTRACTION) return
+    const customParserHook = this.config.plugins?.some(
+      (plugin) =>
+        plugin.name !== '@bamboocss/plugin-vue' &&
+        plugin.name !== '@bamboocss/plugin-svelte' &&
+        (plugin.hooks?.['parser:before'] || plugin.hooks?.['parser:after']),
+    )
+    if (customParserHook) return
+
+    try {
+      const nativeRequire = createRequire(import.meta.url)
+      let native: NativeExtractor
+      try {
+        // Workspace development: the host binary built beside the private Rust package.
+        native = nativeRequire('@bamboocss/native-extractor') as NativeExtractor
+      } catch {
+        // Published package: release CI places every prebuild beside @bamboocss/node's output.
+        const binary = nativeBinaryName()
+        if (!binary) return
+        native = nativeRequire(join(dirname(fileURLToPath(import.meta.url)), 'native', binary)) as NativeExtractor
+      }
+      const sources = filePaths
+        .filter((filePath) => /\.[cm]?[jt]sx?$/.test(filePath))
+        // Configured recipes make JSX tags extractable without a Bamboo import. Keep those
+        // extensions on TypeScript while still accelerating ordinary style modules.
+        .filter((filePath) => !this.jsx.isEnabled || /\.[cm]?ts$/.test(filePath))
+        .map((filePath) => {
+          const filename = this.runtime.path.abs(this.config.cwd, filePath)
+          return { filename, source: this.runtime.fs.readFileSync(filename) }
+        })
+      if (!sources.length) return
+      const entrypoints: NativeEntrypoint[] = [
+        { kind: 'css', modules: this.imports.value.css, names: ['css', 'cva', 'sva', 'cx'] },
+        { kind: 'token', modules: this.imports.value.tokens, names: ['token'] },
+        { kind: 'recipe', modules: this.imports.value.recipe, names: this.recipes.keys },
+        { kind: 'pattern', modules: this.imports.value.pattern, names: this.patterns.keys },
+      ]
+      for (const analysis of native.analyzeMany(sources, entrypoints)) {
+        if (analysis.safe) this.nativeExtractions.set(analysis.filename, analysis)
+      }
+    } catch (error) {
+      // The addon is optional so unsupported platforms retain the TypeScript implementation.
+      logger.debug('native:extract', messageOf(error))
+    }
+  }
+
+  private parseNativeFile = (filePath: string, native: NativeFileAnalysis, encoder: StyleEncoder) => {
+    const result = new ParserResult(this.parserOptions, encoder).setFilePath(filePath)
+    for (const call of native.calls) {
+      const item = {
+        name: call.importedName,
+        data: call.arguments as Record<string, unknown>[],
+        atomOrigin: encoder.recordOrigins ? { filePath, line: call.line, column: call.column } : undefined,
+      }
+      if (
+        call.kind === 'css' &&
+        (call.importedName === 'css' || call.importedName === 'cva' || call.importedName === 'sva')
+      ) {
+        result.set(call.importedName, item)
+      } else if (call.kind === 'pattern') result.setPattern(call.importedName, item)
+      else if (call.kind === 'recipe') result.setRecipe(call.importedName, item)
+    }
+    return result
+  }
+
   parseFile = (filePath: string, styleEncoder?: StyleEncoder) => {
     const file = this.runtime.path.abs(this.config.cwd, filePath)
     logger.debug('file:extract', file)
@@ -380,7 +467,11 @@ export class BambooContext extends Generator {
       // The extraction pass's reading of this file, which replaces whatever its last reading
       // encoded. A bundler that also parses the module during `transform` records that
       // separately -- see `StyleEncoder.withOwner` for why the two are not one owner.
-      result = encoder.withOwner('extract', file, () => this.project.parseSourceFile(file, encoder))
+      const native = this.nativeExtractions.get(file)
+      result = encoder.withOwner('extract', file, () =>
+        native ? this.parseNativeFile(file, native, encoder) : this.project.parseSourceFile(file, encoder),
+      )
+      this.nativeExtractions.delete(file)
       this.parseFailures.delete(file)
     } catch (error) {
       // A compiler that has died is not a parse failure, and must not be recorded as one.
@@ -489,6 +580,7 @@ export class BambooContext extends Generator {
     const encoder = styleEncoder || this.parserOptions.encoder
 
     const files = this.extractableFiles(this.getFiles())
+    this.prepareNativeExtraction(files)
     const filesWithCss = [] as string[]
     const results = [] as ParserResult[]
 

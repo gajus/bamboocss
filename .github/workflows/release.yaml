@@ -10,6 +10,16 @@ on:
   # The push filter above means a commit touching only .github or the website never
   # runs this, so there is otherwise no way to re-open the Version Packages PR --
   # or to retry a publish -- without manufacturing a commit under packages/.
+  pull_request:
+    paths:
+      - '.github/workflows/release.yaml'
+      - 'packages/native-extractor/**'
+      - 'packages/node/package.json'
+      - 'packages/node/src/builder.ts'
+      - 'packages/node/src/create-context.ts'
+      - 'packages/parser/src/parser-result.ts'
+      - 'packages/types/src/parser.ts'
+      - 'pnpm-lock.yaml'
   workflow_dispatch:
 
 # Publishing is not safe to run twice at once: two jobs can race to version, tag and
@@ -34,8 +44,57 @@ permissions:
   pull-requests: write
 
 jobs:
+  native-build:
+    name: Native extractor (${{ matrix.binary }})
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            binary: darwin-arm64.node
+          - runner: macos-15-intel
+            binary: darwin-x64.node
+          - runner: ubuntu-24.04-arm
+            binary: linux-arm64-gnu.node
+          - runner: ubuntu-latest
+            binary: linux-x64-gnu.node
+          - runner: windows-latest
+            binary: win32-x64-msvc.node
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Build native extractor
+        shell: bash
+        run: |
+          cd packages/native-extractor
+          sh scripts/build.sh --release
+          mkdir -p prebuilds
+          cp bamboo-native-extractor.node "prebuilds/${{ matrix.binary }}"
+          cd ../..
+          node - <<'NODE'
+          const { analyze } = require('./packages/native-extractor')
+          const result = analyze('smoke.ts', "import { css } from 'styled-system/css'; css({ color: 'red' })", [
+            { kind: 'css', modules: ['styled-system/css'], names: ['css'] },
+          ])
+          if (!result.safe || result.calls.length !== 1) throw new Error('Native extractor smoke test failed')
+          NODE
+
+      - name: Upload native binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.binary }}
+          path: packages/native-extractor/prebuilds/${{ matrix.binary }}
+          if-no-files-found: error
+
   release:
     name: Release
+    if: github.event_name != 'pull_request'
+    needs: native-build
     runs-on: ubuntu-latest
     # npm binds a trusted publisher to repository + workflow filename + environment.
     # All three are load-bearing: this is `.github/workflows/release.yaml` and the
@@ -54,6 +113,25 @@ jobs:
 
       - name: Build packages
         run: pnpm build
+
+      - name: Download native binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: native-*
+          path: packages/node/dist/native
+          merge-multiple: true
+
+      - name: Verify Node package native contents
+        run: |
+          for binary in \
+            darwin-arm64.node \
+            darwin-x64.node \
+            linux-arm64-gnu.node \
+            linux-x64-gnu.node \
+            win32-x64-msvc.node
+          do
+            test -f "packages/node/dist/native/$binary"
+          done
 
       # A package npm has never seen cannot be published by this job. Trusted publishing
       # binds a publisher to an *existing* package, so the first release of a new one is a

@@ -875,6 +875,8 @@ export class Builder {
 
     const done = logger.time.info('Extracted in')
 
+    if (hasConfigChanged) ctx.prepareNativeExtraction(filesToExtract)
+
     // `for…of` rather than `.map`, whose result is discarded. `.map` also builds an array
     // holding every `ParserResult` until the statement ends, keeping the whole set reachable
     // across the pass for nothing — what each result carries is in the encoder by then.

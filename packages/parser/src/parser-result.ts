@@ -128,6 +128,7 @@ export class ParserResult implements ParserResultInterface {
   /** The call site of `result`, when the encoder is recording them. */
   private originOf = (result: ResultItem): AtomOrigin | undefined => {
     if (!this.origins || !this.encoder.recordOrigins) return undefined
+    if (result.atomOrigin) return result.atomOrigin
     const node = result.box?.getNode()
     const sourceFile = node?.getSourceFile()
     if (!node || !sourceFile) return undefined

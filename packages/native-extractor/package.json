@@ -1,0 +1,20 @@
+{
+  "name": "@bamboocss/native-extractor",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Internal native Rust extraction kernel for Bamboo CSS",
+  "license": "MIT",
+  "files": [
+    "index.cjs",
+    "index.d.ts",
+    "bamboo-native-extractor.node"
+  ],
+  "type": "commonjs",
+  "main": "index.cjs",
+  "types": "index.d.ts",
+  "scripts": {
+    "build": "sh ./scripts/build.sh --release",
+    "build-fast": "sh ./scripts/build.sh",
+    "test": "vitest run"
+  }
+}

@@ -351,6 +351,16 @@ interface CssgenOptions {
    */
   minify?: boolean
   /**
+   * Whether the stylesheet carries the 🎋 in its `--made-with-bamboo` declaration on `:root`.
+   *
+   * `false` keeps the declaration and drops the emoji from its value. The declaration itself
+   * stays because the Vite plugin recognises its stylesheet by that property once a bundler
+   * has minified and merged it with other css.
+   *
+   * @default true
+   */
+  watermark?: boolean
+  /**
    * What to drop from the generated stylesheet. See `PruneOptions`.
    */
   prune?: PruneOptions

@@ -48,14 +48,4 @@ test('a cold Builder pass parses only files that can reach bamboo', async () => 
     line: 4,
     column: 26,
   })
-
-  process.env.BAMBOO_DISABLE_NATIVE_EXTRACTION = '1'
-  try {
-    const typescriptBuilder = new Builder()
-    await typescriptBuilder.setup({ cwd: context.config.cwd })
-    typescriptBuilder.extract()
-    expect(typescriptBuilder.toCss()).toBe(nativeCss)
-  } finally {
-    delete process.env.BAMBOO_DISABLE_NATIVE_EXTRACTION
-  }
 })

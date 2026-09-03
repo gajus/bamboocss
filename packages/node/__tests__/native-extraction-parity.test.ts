@@ -1,8 +1,10 @@
+import { fixtureDefaults } from '@bamboocss/fixture'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, expect, test, vi } from 'vitest'
 import { Builder } from '../src/builder'
+import { BambooContext } from '../src/create-context'
 
 const temporaryDirectories = new Set<string>()
 afterAll(() => {
@@ -88,58 +90,109 @@ const createDeadCallProject = () => {
   return cwd
 }
 
-const extract = async (cwd: string, typescriptOnly: boolean) => {
-  if (typescriptOnly) process.env.BAMBOO_DISABLE_NATIVE_EXTRACTION = '1'
+const extract = async (cwd: string) => {
+  const builder = new Builder()
+  await builder.setup({ cwd, atomOrigins: true })
+  const parseTypeScript = vi.spyOn(builder.getContextOrThrow().project, 'parseSourceFile')
+  builder.extract()
+  return {
+    css: builder.toCss(),
+    origins: builder.getAtomOrigins(),
+    typescriptFiles: parseTypeScript.mock.calls.map(([file]) => file),
+  }
+}
+
+const extractFailure = async (cwd: string) => {
+  const builder = new Builder()
+  await builder.setup({ cwd })
+  const parseTypeScript = vi.spyOn(builder.getContextOrThrow().project, 'parseSourceFile')
+  let message = ''
   try {
-    const builder = new Builder()
-    await builder.setup({ cwd, atomOrigins: true })
-    const parseTypeScript = vi.spyOn(builder.getContextOrThrow().project, 'parseSourceFile')
     builder.extract()
-    return {
-      css: builder.toCss(),
-      origins: builder.getAtomOrigins(),
-      typescriptFiles: parseTypeScript.mock.calls.map(([file]) => file),
-    }
-  } finally {
-    if (typescriptOnly) delete process.env.BAMBOO_DISABLE_NATIVE_EXTRACTION
+  } catch (error) {
+    message = (error as Error).message
   }
+  return { message, typescriptFiles: parseTypeScript.mock.calls.map(([file]) => file) }
 }
 
-const extractFailure = async (cwd: string, typescriptOnly: boolean) => {
-  if (typescriptOnly) process.env.BAMBOO_DISABLE_NATIVE_EXTRACTION = '1'
-  try {
-    const builder = new Builder()
-    await builder.setup({ cwd })
-    const parseTypeScript = vi.spyOn(builder.getContextOrThrow().project, 'parseSourceFile')
-    let message = ''
-    try {
-      builder.extract()
-    } catch (error) {
-      message = (error as Error).message
-    }
-    return { message, typescriptFiles: parseTypeScript.mock.calls.map(([file]) => file) }
-  } finally {
-    if (typescriptOnly) delete process.env.BAMBOO_DISABLE_NATIVE_EXTRACTION
-  }
-}
+test('the native-only corpus preserves styles and source origins without TypeScript extraction', async () => {
+  const result = await extract(createCorpus())
 
-test('native-safe and TypeScript-fallback files produce the same corpus stylesheet and origins', async () => {
-  const cwd = createCorpus()
-  const native = await extract(cwd, false)
-  const typescript = await extract(cwd, true)
-
-  expect(native.css).toBe(typescript.css)
-  expect(native.origins).toEqual(typescript.origins)
-  expect(native.typescriptFiles.length).toBeGreaterThan(0)
-  expect(native.typescriptFiles.length).toBeLessThan(typescript.typescriptFiles.length)
+  expect(result.css).toMatch(/background-color:\s*purple/)
+  expect(result.css).toMatch(/display:\s*inline-flex/)
+  expect(result.css).toMatch(/flex-direction:\s*column/)
+  expect(result.origins.size).toBeGreaterThan(0)
+  expect([...result.origins.values()].some((origin) => origin.filePath.endsWith('cross-file.ts'))).toBe(true)
+  expect(result.typescriptFiles).toEqual([])
 })
 
-test('an unknown generated entrypoint retains TypeScript diagnostics', async () => {
-  const cwd = createDeadCallProject()
-  const native = await extractFailure(cwd, false)
-  const typescript = await extractFailure(cwd, true)
+test('parser hooks can introduce Bamboo calls and receive native results', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'bamboo-native-parser-hook-'))
+  temporaryDirectories.add(cwd)
+  mkdirSync(join(cwd, 'src'))
+  const sourceFile = join(cwd, 'src/component.custom')
+  writeFileSync(sourceFile, 'custom component source')
+  const after = vi.fn()
+  const ctx = new BambooContext({
+    ...fixtureDefaults,
+    config: { ...fixtureDefaults.config, cwd, include: ['src/**/*.custom'] },
+    hooks: {
+      'parser:before': ({ content }) =>
+        content === 'custom component source'
+          ? `import { css } from 'styled-system/css'\ncss({ color: 'red' })`
+          : undefined,
+      'parser:after': after,
+    },
+  })
 
-  expect(native.message).not.toBe('')
-  expect(native.message).toBe(typescript.message)
-  expect(native.typescriptFiles).toHaveLength(1)
+  const parsed = ctx.parseFiles()
+  expect(parsed.files).toEqual([sourceFile])
+  expect([...parsed.results[0].css]).toMatchObject([{ data: [{ color: 'red' }] }])
+  expect(parsed.results[0].origins).toBe(false)
+  expect(after).toHaveBeenCalledWith({ filePath: sourceFile, result: parsed.results[0] })
+  expect(ctx.project.hasMaterializedCompiler()).toBe(false)
+})
+
+test('excluded dependencies use virtual runtime bytes without materializing TypeScript', async () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'bamboo-native-virtual-dependency-'))
+  temporaryDirectories.add(cwd)
+  mkdirSync(join(cwd, 'src'))
+  mkdirSync(join(cwd, 'generated'))
+  writeFileSync(
+    join(cwd, 'bamboo.config.ts'),
+    `export default { include: ['src/**/*.ts'], outdir: 'styled-system', preflight: false }\n`,
+  )
+  writeFileSync(
+    join(cwd, 'src/style.ts'),
+    `import { css } from '../styled-system/css'\nimport { shared } from '../generated/shared.js'\ncss(shared)\n`,
+  )
+  const dependency = join(cwd, 'generated/shared.ts')
+  writeFileSync(dependency, `export const shared = { background: '#00f' }\n`)
+
+  const builder = new Builder()
+  await builder.setup({ cwd })
+  const ctx = builder.getContextOrThrow()
+  expect(ctx.project.hasMaterializedCompiler()).toBe(false)
+  const readFileSync = ctx.runtime.fs.readFileSync
+  ctx.runtime = {
+    ...ctx.runtime,
+    fs: {
+      ...ctx.runtime.fs,
+      readFileSync: (filePath: string) =>
+        filePath === dependency ? `export const shared = { background: '#f00' }\n` : readFileSync(filePath),
+    },
+  }
+
+  builder.extract()
+  expect(ctx.project.hasMaterializedCompiler()).toBe(false)
+  expect(builder.toCss()).toMatch(/background:\s*#f00/)
+  expect(builder.toCss()).not.toMatch(/background:\s*#00f/)
+})
+
+test('an unknown generated entrypoint reports the native diagnostic without TypeScript extraction', async () => {
+  const result = await extractFailure(createDeadCallProject())
+
+  expect(result.message).toContain('`absent` is not a pattern')
+  expect(result.message).toContain('src/invalid.ts')
+  expect(result.typescriptFiles).toEqual([])
 })

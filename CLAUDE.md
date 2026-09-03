@@ -22,7 +22,7 @@ with workspace support.
   /generator/      # Code generation for styled-system
   /config/         # Config loading and resolution
   /types/          # Type definitions (config options live here)
-  /native-extractor/ # Rust/Oxc kernel for cold extraction; per-file TypeScript fallback remains
+  /native-extractor/ # Rust/Oxc stylesheet extraction and static evaluation engine
   /vite/           # Vite plugin, including the build-time fold
   /plugin-*/       # vue and svelte are auto-injected; lightningcss is opt-in
   /preset-*/       # Design system presets (base, bamboo, atlaskit, open-props)
@@ -442,8 +442,8 @@ Brief description of the change and its impact.
 @bamboocss/dev (CLI)
   ├─ @bamboocss/node (core runtime)
   │   ├─ @bamboocss/core (CSS processing)
-  │   ├─ @bamboocss/parser (TypeScript extraction and fallback)
-  │   ├─ @bamboocss/native-extractor (private Rust/Oxc cold-path build package)
+  │   ├─ @bamboocss/parser (parser result model and TypeScript APIs used by Vite compilation)
+  │   ├─ @bamboocss/native-extractor (private Rust/Oxc stylesheet extraction build package)
   │   ├─ @bamboocss/generator (codegen)
   │   └─ @bamboocss/config (config resolution)
 

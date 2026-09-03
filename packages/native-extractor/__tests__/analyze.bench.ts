@@ -20,7 +20,14 @@ const sources = Array.from({ length: 500 }, (_, file) => ({
   `,
 }))
 const compactTransferControl = JSON.stringify(
-  sources.map(({ filename }) => ({ filename, calls: [], errors: [], safe: true })),
+  sources.map(({ filename }) => ({
+    filename,
+    calls: [],
+    errors: [],
+    dependencies: [],
+    pendingCandidates: [],
+    configurationFiles: [],
+  })),
 )
 
 describe('native cold extraction', () => {

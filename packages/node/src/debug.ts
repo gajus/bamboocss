@@ -31,10 +31,11 @@ export async function debug(ctx: BambooContext, options: DebugOptions) {
 
   const filesWithCss = []
 
+  ctx.prepareNativeExtraction(files)
   files.map((file) => {
     const measure = logger.time.debug(`Parsed ${file}`)
     const encoder = ctx.encoder.clone()
-    const result = ctx.project.parseSourceFile(file, encoder)
+    const result = ctx.parseFile(file, encoder)
 
     measure()
     if (!result || result.isEmpty() || encoder.isEmpty()) return

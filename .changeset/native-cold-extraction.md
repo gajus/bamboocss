@@ -1,9 +1,10 @@
 ---
-'@bamboocss/node': patch
+'@bamboocss/node': minor
 ---
 
-Accelerate cold stylesheet extraction with a batched Rust/Oxc kernel while retaining the TypeScript extractor as a
-per-file and per-platform fallback.
+Migrate stylesheet extraction to a native Rust/Oxc evaluator.
 
-Vite module folding and incremental resolution continue to use the TypeScript backend. Prebuilt binaries ship inside
-`@bamboocss/node` for macOS arm64/x64, glibc Linux arm64/x64, and Windows x64.
+Extraction now handles local and cross-file values, helpers, re-exports, path and package aliases, recipes, patterns,
+tokens, JSX recipe props, parser hooks, diagnostics, source origins, and incremental dependency invalidation without a
+TypeScript extraction fallback. Prebuilt binaries ship inside `@bamboocss/node` for macOS arm64/x64, glibc Linux
+arm64/x64, and Windows x64.

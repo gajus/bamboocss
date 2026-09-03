@@ -1,17 +1,22 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
+use evaluator::{EvalResult, FileEvaluator, ProjectEvaluator};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use oxc_allocator::Allocator;
-use oxc_ast::ast::{
-    Argument, CallExpression, Expression, ImportDeclarationSpecifier, ObjectPropertyKind,
-    Statement, VariableDeclaration, VariableDeclarationKind,
+use oxc_ast::{
+    AstKind,
+    ast::{
+        Argument, Expression, ImportDeclarationSpecifier, JSXAttributeItem, JSXAttributeName,
+        JSXAttributeValue, JSXElementName, Statement,
+    },
 };
-use oxc_ast_visit::{Visit, walk};
 use oxc_parser::Parser;
 use oxc_semantic::{Scoping, SemanticBuilder};
 use oxc_span::{GetSpan, SourceType};
 use oxc_syntax::symbol::SymbolId;
+
+mod evaluator;
 
 #[napi(object)]
 pub struct NativeEntrypoint {
@@ -22,27 +27,40 @@ pub struct NativeEntrypoint {
 }
 
 #[napi(object)]
+pub struct NativeLoss {
+    pub prop: Option<String>,
+    pub reason: String,
+}
+
+#[napi(object)]
 pub struct NativeCall {
     /// The local binding at the call site.
     pub name: String,
     /// The name exported by the Bamboo entrypoint.
     pub imported_name: String,
     pub kind: String,
+    /// The module specifier which introduced the binding.
+    pub module: String,
     pub start: u32,
     pub end: u32,
+    pub callee_start: u32,
+    pub callee_end: u32,
     pub line: u32,
     pub column: u32,
+    /// Data fragments to feed to the existing encoder. Unknown dynamic values are omitted;
+    /// statically enumerable conditional branches are included as independent fragments.
     pub arguments: Vec<serde_json::Value>,
     pub complete: bool,
+    pub losses: Vec<NativeLoss>,
 }
 
 #[napi(object)]
 pub struct NativeAnalysis {
     pub calls: Vec<NativeCall>,
     pub errors: Vec<String>,
-    /// True only when this file can bypass the TypeScript extractor without losing semantics.
-    pub safe: bool,
-    pub fallback_reason: Option<String>,
+    pub dependencies: Vec<String>,
+    pub pending_candidates: Vec<String>,
+    pub configuration_files: Vec<String>,
 }
 
 #[napi(object)]
@@ -52,316 +70,58 @@ pub struct NativeSource {
 }
 
 #[napi(object)]
+pub struct NativePathMapping {
+    pub pattern: String,
+    pub paths: Vec<String>,
+}
+
+#[napi(object)]
+pub struct NativeToken {
+    pub path: String,
+    pub value: Option<serde_json::Value>,
+    pub variable: Option<String>,
+}
+
+#[napi(object)]
+pub struct NativeProjectOptions {
+    pub cwd: Option<String>,
+    pub base_url: Option<String>,
+    pub paths: Vec<NativePathMapping>,
+    pub tokens: Vec<NativeToken>,
+    pub jsx: bool,
+}
+
+#[napi(object)]
 pub struct NativeFileAnalysis {
     pub filename: String,
     pub calls: Vec<NativeCall>,
     pub errors: Vec<String>,
-    pub safe: bool,
-    pub fallback_reason: Option<String>,
+    pub dependencies: Vec<String>,
+    pub pending_candidates: Vec<String>,
+    pub configuration_files: Vec<String>,
 }
 
-fn is_javascript_whitespace(character: char) -> bool {
-    matches!(
-        character,
-        '\u{0009}'..='\u{000d}'
-            | '\u{0020}'
-            | '\u{00a0}'
-            | '\u{1680}'
-            | '\u{2000}'..='\u{200a}'
-            | '\u{2028}'
-            | '\u{2029}'
-            | '\u{202f}'
-            | '\u{205f}'
-            | '\u{3000}'
-            | '\u{feff}'
-    )
+#[derive(Clone)]
+struct CallBinding {
+    kind: String,
+    imported_name: String,
+    module: String,
+    supported: bool,
 }
 
-fn normalize_whitespace(value: &str) -> String {
-    let mut output = String::with_capacity(value.len());
-    let mut whitespace = false;
-    for character in value.chars() {
-        if is_javascript_whitespace(character) {
-            if !whitespace {
-                output.push(' ');
-                whitespace = true;
-            }
-        } else {
-            output.push(character);
-            whitespace = false;
-        }
-    }
-    output
+fn source_type(filename: &str) -> Result<SourceType> {
+    SourceType::from_path(filename)
+        // A parser hook can turn a framework single-file component into TSX while preserving
+        // its logical filename. The transformed content, not that extension, decides syntax.
+        .or_else(|_| Ok::<_, String>(SourceType::tsx()))
+        .map_err(|error| Error::new(Status::InvalidArg, error.to_string()))
 }
 
-fn literal_value(
-    expression: &Expression<'_>,
-    scoping: &Scoping,
-    constants: &HashMap<SymbolId, serde_json::Value>,
-) -> Option<serde_json::Value> {
-    match expression {
-        Expression::BooleanLiteral(value) => Some(value.value.into()),
-        Expression::NullLiteral(_) => Some(serde_json::Value::Null),
-        Expression::NumericLiteral(value) => {
-            serde_json::Number::from_f64(value.value).map(Into::into)
-        }
-        Expression::StringLiteral(value) => Some(normalize_whitespace(value.value.as_str()).into()),
-        Expression::TemplateLiteral(value) if value.expressions.is_empty() => value
-            .quasis
-            .first()
-            .and_then(|quasi| quasi.value.cooked.as_ref())
-            .map(|value| normalize_whitespace(value.as_str()).into()),
-        Expression::ArrayExpression(value) => {
-            let mut output = Vec::with_capacity(value.elements.len());
-            for element in &value.elements {
-                match element {
-                    oxc_ast::ast::ArrayExpressionElement::SpreadElement(spread) => {
-                        let serde_json::Value::Array(values) =
-                            literal_value(&spread.argument, scoping, constants)?
-                        else {
-                            return None;
-                        };
-                        output.extend(values);
-                    }
-                    oxc_ast::ast::ArrayExpressionElement::Elision(_) => return None,
-                    _ => output.push(literal_value(element.as_expression()?, scoping, constants)?),
-                }
-            }
-            Some(output.into())
-        }
-        Expression::ObjectExpression(value) => {
-            let mut output = serde_json::Map::with_capacity(value.properties.len());
-            for property in &value.properties {
-                match property {
-                    ObjectPropertyKind::ObjectProperty(property) => {
-                        if property.computed || property.method {
-                            return None;
-                        }
-                        output.insert(
-                            property.key.static_name()?.into_owned(),
-                            literal_value(&property.value, scoping, constants)?,
-                        );
-                    }
-                    ObjectPropertyKind::SpreadProperty(spread) => {
-                        let serde_json::Value::Object(values) =
-                            literal_value(&spread.argument, scoping, constants)?
-                        else {
-                            return None;
-                        };
-                        output.extend(values);
-                    }
-                }
-            }
-            Some(output.into())
-        }
-        Expression::Identifier(identifier) => {
-            let reference = identifier.reference_id.get()?;
-            let symbol = scoping.get_reference(reference).symbol_id()?;
-            constants.get(&symbol).cloned()
-        }
-        Expression::ParenthesizedExpression(value) => {
-            literal_value(&value.expression, scoping, constants)
-        }
-        Expression::TSAsExpression(value) => literal_value(&value.expression, scoping, constants),
-        Expression::TSSatisfiesExpression(value) => {
-            literal_value(&value.expression, scoping, constants)
-        }
-        Expression::TSTypeAssertion(value) => literal_value(&value.expression, scoping, constants),
-        Expression::TSNonNullExpression(value) => {
-            literal_value(&value.expression, scoping, constants)
-        }
-        _ => None,
-    }
+fn utf16_offset(source: &str, byte: u32) -> u32 {
+    source[..byte as usize].encode_utf16().count() as u32
 }
 
-struct DeclarationVisitor<'s> {
-    constants: HashMap<SymbolId, serde_json::Value>,
-    scoping: &'s Scoping,
-}
-
-impl<'a> Visit<'a> for DeclarationVisitor<'_> {
-    fn visit_variable_declaration(&mut self, declaration: &VariableDeclaration<'a>) {
-        if declaration.kind == VariableDeclarationKind::Const {
-            for declarator in &declaration.declarations {
-                if let (Some(binding), Some(expression)) =
-                    (declarator.id.get_binding_identifier(), &declarator.init)
-                    && let Some(symbol) = binding.symbol_id.get()
-                    && let Some(value) = literal_value(expression, self.scoping, &self.constants)
-                {
-                    self.constants.insert(symbol, value);
-                }
-            }
-        }
-        walk::walk_variable_declaration(self, declaration);
-    }
-}
-
-struct CallVisitor<'s> {
-    bindings: HashMap<SymbolId, (String, String)>,
-    imported_symbols: HashSet<SymbolId>,
-    constants: HashMap<SymbolId, serde_json::Value>,
-    scoping: &'s Scoping,
-    calls: Vec<NativeCall>,
-    calls_by_binding: HashMap<SymbolId, usize>,
-    unsafe_import_call: bool,
-}
-
-impl<'a> Visit<'a> for CallVisitor<'_> {
-    fn visit_call_expression(&mut self, expression: &CallExpression<'a>) {
-        let member_callee = matches!(
-            expression.callee,
-            Expression::StaticMemberExpression(_) | Expression::ComputedMemberExpression(_)
-        );
-        let imported_callee = match &expression.callee {
-            Expression::Identifier(identifier) => identifier
-                .reference_id
-                .get()
-                .and_then(|reference| self.scoping.get_reference(reference).symbol_id()),
-            Expression::StaticMemberExpression(member) => member
-                .object
-                .get_identifier_reference()
-                .and_then(|identifier| {
-                    identifier
-                        .reference_id
-                        .get()
-                        .and_then(|reference| self.scoping.get_reference(reference).symbol_id())
-                }),
-            Expression::ComputedMemberExpression(member) => member
-                .object
-                .get_identifier_reference()
-                .and_then(|identifier| {
-                    identifier
-                        .reference_id
-                        .get()
-                        .and_then(|reference| self.scoping.get_reference(reference).symbol_id())
-                }),
-            _ => None,
-        };
-        if imported_callee.is_some_and(|symbol| {
-            self.imported_symbols.contains(&symbol)
-                && (member_callee || !self.bindings.contains_key(&symbol))
-        }) {
-            self.unsafe_import_call = true;
-        }
-
-        if let Expression::Identifier(identifier) = &expression.callee
-            && let Some(reference_id) = identifier.reference_id.get()
-            && let Some(symbol_id) = self.scoping.get_reference(reference_id).symbol_id()
-            && let Some((kind, imported_name)) = self.bindings.get(&symbol_id)
-        {
-            // `cx` only joins class strings. It is relevant to the Vite fold but contributes
-            // no stylesheet data, so observing its binding use is enough for cold extraction.
-            if imported_name == "cx" {
-                *self.calls_by_binding.entry(symbol_id).or_default() += 1;
-                walk::walk_call_expression(self, expression);
-                return;
-            }
-            let span = expression.span();
-            let mut complete = true;
-            let arguments = expression
-                .arguments
-                .iter()
-                .filter_map(|argument| match argument {
-                    Argument::SpreadElement(_) => {
-                        complete = false;
-                        None
-                    }
-                    _ => {
-                        let value = argument.as_expression().and_then(|expression| {
-                            literal_value(expression, self.scoping, &self.constants)
-                        });
-                        if value.is_none() {
-                            complete = false;
-                        }
-                        value
-                    }
-                })
-                .collect();
-            *self.calls_by_binding.entry(symbol_id).or_default() += 1;
-            self.calls.push(NativeCall {
-                name: identifier.name.to_string(),
-                imported_name: imported_name.clone(),
-                kind: kind.clone(),
-                start: span.start,
-                end: span.end,
-                // Filled from the source once traversal has completed.
-                line: 0,
-                column: 0,
-                arguments,
-                complete,
-            });
-        }
-        walk::walk_call_expression(self, expression);
-    }
-}
-
-fn analyze_source(
-    filename: &str,
-    source: &str,
-    entrypoints: &[NativeEntrypoint],
-) -> Result<NativeAnalysis> {
-    let source_type = SourceType::from_path(filename)
-        .map_err(|error| Error::new(Status::InvalidArg, error.to_string()))?;
-    let allocator = Allocator::default();
-    let parsed = Parser::new(&allocator, source, source_type).parse();
-    let mut errors: Vec<_> = parsed.diagnostics.iter().map(ToString::to_string).collect();
-    let semantic = SemanticBuilder::new_compiler().build(&parsed.program);
-    errors.extend(semantic.diagnostics.iter().map(ToString::to_string));
-    let scoping = semantic.semantic.scoping();
-    let mut bindings = HashMap::new();
-    let mut imported_symbols = HashSet::new();
-    let mut has_entrypoint_import = false;
-    for statement in &parsed.program.body {
-        let Statement::ImportDeclaration(declaration) = statement else {
-            continue;
-        };
-        let Some(entrypoint) = entrypoints.iter().find(|entrypoint| {
-            entrypoint
-                .modules
-                .iter()
-                .any(|module| declaration.source.value.contains(module))
-        }) else {
-            continue;
-        };
-        has_entrypoint_import = true;
-        for specifier in declaration.specifiers.iter().flatten() {
-            if let Some(symbol) = specifier.local().symbol_id.get() {
-                imported_symbols.insert(symbol);
-            }
-            let ImportDeclarationSpecifier::ImportSpecifier(specifier) = specifier else {
-                // Namespace and default imports need property/default binding semantics. Falling
-                // back is safer than treating either as an ordinary named call.
-                continue;
-            };
-            let imported = specifier.imported.name();
-            if !entrypoint
-                .names
-                .iter()
-                .any(|name| name == imported.as_str())
-            {
-                continue;
-            }
-            let Some(symbol_id) = specifier.local.symbol_id.get() else {
-                continue;
-            };
-            bindings.insert(symbol_id, (entrypoint.kind.clone(), imported.to_string()));
-        }
-    }
-    let mut declarations = DeclarationVisitor {
-        constants: HashMap::new(),
-        scoping,
-    };
-    declarations.visit_program(&parsed.program);
-    let mut visitor = CallVisitor {
-        bindings,
-        imported_symbols,
-        constants: declarations.constants,
-        scoping,
-        calls: Vec::new(),
-        calls_by_binding: HashMap::new(),
-        unsafe_import_call: false,
-    };
-    visitor.visit_program(&parsed.program);
+fn line_and_column(source: &str, start: u32) -> (u32, u32) {
     let mut line_starts = vec![0];
     let mut characters = source.char_indices().peekable();
     while let Some((index, character)) = characters.next() {
@@ -379,57 +139,586 @@ fn analyze_source(
             _ => {}
         }
     }
-    for call in &mut visitor.calls {
-        let start = call.start as usize;
-        let line_index = line_starts.partition_point(|line_start| *line_start <= start) - 1;
-        call.line = line_index as u32 + 1;
-        call.column = source[line_starts[line_index]..start]
-            .encode_utf16()
-            .count() as u32
-            + 1;
-    }
-    let every_entrypoint_use_is_accounted = visitor.imported_symbols.iter().all(|symbol| {
-        let references = scoping.get_resolved_reference_ids(*symbol).len();
-        match visitor.bindings.get(symbol) {
-            Some(_) => {
-                references
-                    == visitor
-                        .calls_by_binding
-                        .get(symbol)
-                        .copied()
-                        .unwrap_or_default()
-            }
-            None => references == 0,
+    let start = start as usize;
+    let line_index = line_starts.partition_point(|line_start| *line_start <= start) - 1;
+    let column = source[line_starts[line_index]..start]
+        .encode_utf16()
+        .count() as u32
+        + 1;
+    (line_index as u32 + 1, column)
+}
+
+fn callee_symbol_and_members(
+    expression: &Expression<'_>,
+    scoping: &Scoping,
+) -> Option<(SymbolId, Vec<String>, String)> {
+    match expression {
+        Expression::Identifier(identifier) => {
+            let reference = identifier.reference_id.get()?;
+            Some((
+                scoping.get_reference(reference).symbol_id()?,
+                Vec::new(),
+                identifier.name.to_string(),
+            ))
         }
-    });
-    let supported_calls = visitor.calls.iter().all(|call| {
-        call.complete
-            && (call.kind == "pattern"
-                || call.kind == "recipe"
-                || (call.kind == "css"
-                    && matches!(call.imported_name.as_str(), "css" | "cva" | "sva")))
-    });
-    let fallback_reason = if !errors.is_empty() {
-        Some("diagnostic".to_string())
-    } else if !has_entrypoint_import {
-        // A module with no direct Bamboo entrypoint cannot contribute stylesheet data. It may
-        // call an imported inline recipe, but that call only selects classes whose rules are
-        // emitted by the recipe's declaration; Vite reparses the call module when folding.
-        None
-    } else if visitor.unsafe_import_call {
-        Some("unknown-entrypoint-call".to_string())
-    } else if !every_entrypoint_use_is_accounted {
-        Some("non-call-binding-use".to_string())
-    } else if !supported_calls {
-        Some("unsupported-call".to_string())
-    } else {
-        None
-    };
+        Expression::StaticMemberExpression(member) => {
+            let (symbol, mut members, mut display) =
+                callee_symbol_and_members(&member.object, scoping)?;
+            members.push(member.property.name.to_string());
+            display.push('.');
+            display.push_str(member.property.name.as_str());
+            Some((symbol, members, display))
+        }
+        Expression::ComputedMemberExpression(member) => {
+            let Expression::StringLiteral(property) = &member.expression else {
+                return None;
+            };
+            let (symbol, mut members, mut display) =
+                callee_symbol_and_members(&member.object, scoping)?;
+            members.push(property.value.to_string());
+            display.push('.');
+            display.push_str(property.value.as_str());
+            Some((symbol, members, display))
+        }
+        Expression::ParenthesizedExpression(value) => {
+            callee_symbol_and_members(&value.expression, scoping)
+        }
+        _ => None,
+    }
+}
+
+fn callee_root_span(expression: &Expression<'_>) -> oxc_span::Span {
+    match expression {
+        Expression::StaticMemberExpression(member) => callee_root_span(&member.object),
+        Expression::ComputedMemberExpression(member) => callee_root_span(&member.object),
+        Expression::ParenthesizedExpression(value) => callee_root_span(&value.expression),
+        _ => expression.span(),
+    }
+}
+
+type NamedBindings = HashMap<SymbolId, CallBinding>;
+type NamespaceBindings = HashMap<SymbolId, (String, String)>;
+type JsxAliases = HashMap<SymbolId, String>;
+
+fn collect_bindings(
+    program: &oxc_ast::ast::Program<'_>,
+    entrypoints: &[NativeEntrypoint],
+) -> (NamedBindings, NamespaceBindings, JsxAliases) {
+    let mut named = HashMap::new();
+    let mut namespaces = HashMap::new();
+    let mut jsx_aliases = HashMap::new();
+    for statement in &program.body {
+        let Statement::ImportDeclaration(declaration) = statement else {
+            continue;
+        };
+        let Some(entrypoint) = entrypoints.iter().find(|entrypoint| {
+            entrypoint
+                .modules
+                .iter()
+                .any(|module| declaration.source.value.contains(module))
+        }) else {
+            continue;
+        };
+        for specifier in declaration.specifiers.iter().flatten() {
+            match specifier {
+                ImportDeclarationSpecifier::ImportSpecifier(specifier) => {
+                    let Some(symbol) = specifier.local.symbol_id.get() else {
+                        continue;
+                    };
+                    let imported_name = specifier.imported.name().to_string();
+                    jsx_aliases.insert(symbol, imported_name.clone());
+                    named.insert(
+                        symbol,
+                        CallBinding {
+                            kind: entrypoint.kind.clone(),
+                            supported: entrypoint.names.iter().any(|name| name == &imported_name),
+                            imported_name,
+                            module: declaration.source.value.to_string(),
+                        },
+                    );
+                }
+                ImportDeclarationSpecifier::ImportNamespaceSpecifier(specifier) => {
+                    if let Some(symbol) = specifier.local.symbol_id.get() {
+                        namespaces.insert(
+                            symbol,
+                            (
+                                entrypoint.kind.clone(),
+                                declaration.source.value.to_string(),
+                            ),
+                        );
+                    }
+                }
+                ImportDeclarationSpecifier::ImportDefaultSpecifier(_) => {}
+            }
+        }
+    }
+    // JSX aliases can come from any module, not only a Bamboo entrypoint. A project-written
+    // recipe component is commonly imported from its own component module.
+    for statement in &program.body {
+        let Statement::ImportDeclaration(declaration) = statement else {
+            continue;
+        };
+        for specifier in declaration.specifiers.iter().flatten() {
+            match specifier {
+                ImportDeclarationSpecifier::ImportSpecifier(specifier) => {
+                    if let Some(symbol) = specifier.local.symbol_id.get() {
+                        jsx_aliases.insert(symbol, specifier.imported.name().to_string());
+                    }
+                }
+                ImportDeclarationSpecifier::ImportDefaultSpecifier(specifier) => {
+                    if let Some(symbol) = specifier.local.symbol_id.get() {
+                        jsx_aliases.insert(symbol, "default".to_string());
+                    }
+                }
+                ImportDeclarationSpecifier::ImportNamespaceSpecifier(_) => {}
+            }
+        }
+    }
+    (named, namespaces, jsx_aliases)
+}
+
+fn classify_call(
+    expression: &Expression<'_>,
+    scoping: &Scoping,
+    named: &HashMap<SymbolId, CallBinding>,
+    namespaces: &HashMap<SymbolId, (String, String)>,
+    entrypoints: &[NativeEntrypoint],
+) -> Option<(CallBinding, String)> {
+    let (symbol, members, display) = callee_symbol_and_members(expression, scoping)?;
+    if let Some(binding) = named.get(&symbol) {
+        let mut binding = binding.clone();
+        if let Some(member) = members.first() {
+            // `token.value()` and every `.raw()` surface retain the root's identity.
+            if member != "value" && member != "raw" {
+                return None;
+            }
+            if member == "value" && binding.kind == "token" {
+                binding.kind = "tokenValue".to_string();
+            }
+        }
+        return Some((binding, display));
+    }
+    let (kind, module) = namespaces.get(&symbol)?;
+    let imported_name = members.first()?.clone();
+    let entrypoint = entrypoints.iter().find(|entrypoint| {
+        entrypoint.kind == *kind && entrypoint.modules.iter().any(|item| module.contains(item))
+    })?;
+    let mut call_kind = kind.clone();
+    if kind == "token" && members.get(1).is_some_and(|member| member == "value") {
+        call_kind = "tokenValue".to_string();
+    }
+    Some((
+        CallBinding {
+            kind: call_kind,
+            imported_name: imported_name.clone(),
+            module: module.clone(),
+            supported: entrypoint.names.iter().any(|name| name == &imported_name),
+        },
+        display,
+    ))
+}
+
+fn argument_data<'a>(
+    arguments: &'a oxc_allocator::Vec<'a, Argument<'a>>,
+    evaluator: &mut FileEvaluator<'a, '_, '_>,
+) -> (Vec<serde_json::Value>, bool) {
+    let mut output = Vec::new();
+    let mut complete = true;
+    for argument in arguments {
+        match argument {
+            Argument::SpreadElement(spread) => {
+                let result = evaluator.evaluate(&spread.argument);
+                complete &= result.complete;
+                if let Some(serde_json::Value::Array(values)) = result.value {
+                    output.extend(values);
+                } else {
+                    complete = false;
+                }
+                output.extend(result.conditions);
+            }
+            _ => {
+                let result = argument
+                    .as_expression()
+                    .map_or_else(EvalResult::unknown, |expression| {
+                        evaluator.evaluate(expression)
+                    });
+                complete &= result.complete;
+                let mut data = result.data();
+                if data.is_empty() {
+                    // `unbox(undefined)` is `{}` for every Bamboo style surface.
+                    data.push(serde_json::Value::Object(serde_json::Map::new()));
+                }
+                output.extend(data);
+            }
+        }
+    }
+    if arguments.is_empty() {
+        output.push(serde_json::Value::Object(serde_json::Map::new()));
+    }
+    (output, complete)
+}
+
+fn jsx_tag(
+    name: &JSXElementName<'_>,
+    scoping: &Scoping,
+    aliases: &HashMap<SymbolId, String>,
+) -> Option<(String, String)> {
+    match name {
+        JSXElementName::Identifier(identifier) => {
+            let name = identifier.name.to_string();
+            Some((name.clone(), name))
+        }
+        JSXElementName::IdentifierReference(identifier) => {
+            let local = identifier.name.to_string();
+            let canonical = identifier
+                .reference_id
+                .get()
+                .and_then(|reference| scoping.get_reference(reference).symbol_id())
+                .and_then(|symbol| aliases.get(&symbol).cloned())
+                .unwrap_or_else(|| local.clone());
+            Some((local, canonical))
+        }
+        _ => None,
+    }
+}
+
+fn jsx_data<'a>(
+    attributes: &'a oxc_allocator::Vec<'a, JSXAttributeItem<'a>>,
+    evaluator: &mut FileEvaluator<'a, '_, '_>,
+) -> (Vec<serde_json::Value>, bool) {
+    let mut object = serde_json::Map::new();
+    let mut conditions = Vec::new();
+    let mut complete = true;
+    for attribute in attributes {
+        match attribute {
+            JSXAttributeItem::Attribute(attribute) => {
+                let JSXAttributeName::Identifier(name) = &attribute.name else {
+                    complete = false;
+                    continue;
+                };
+                let key = name.name.to_string();
+                let value = match &attribute.value {
+                    None => EvalResult {
+                        value: Some(true.into()),
+                        conditions: Vec::new(),
+                        complete: true,
+                    },
+                    Some(JSXAttributeValue::StringLiteral(value)) => EvalResult {
+                        value: Some(value.value.to_string().into()),
+                        conditions: Vec::new(),
+                        complete: true,
+                    },
+                    Some(JSXAttributeValue::ExpressionContainer(container)) => {
+                        evaluator.evaluate_jsx_expression(&container.expression)
+                    }
+                    _ => EvalResult::unknown(),
+                };
+                complete &= value.complete;
+                for condition in value.conditions {
+                    let mut fragment = serde_json::Map::new();
+                    fragment.insert(key.clone(), condition);
+                    conditions.push(fragment.into());
+                }
+                if let Some(value) = value.value {
+                    object.insert(key, value);
+                }
+            }
+            JSXAttributeItem::SpreadAttribute(spread) => {
+                let value = evaluator.evaluate(&spread.argument);
+                complete &= value.complete;
+                conditions.extend(value.conditions);
+                if let Some(serde_json::Value::Object(value)) = value.value {
+                    object.extend(value);
+                } else {
+                    complete = false;
+                }
+            }
+        }
+    }
+    conditions.push(object.into());
+    (conditions, complete)
+}
+
+fn unwrap_expression<'a>(expression: &'a Expression<'a>) -> &'a Expression<'a> {
+    match expression {
+        Expression::ParenthesizedExpression(value) => unwrap_expression(&value.expression),
+        Expression::TSAsExpression(value) => unwrap_expression(&value.expression),
+        Expression::TSSatisfiesExpression(value) => unwrap_expression(&value.expression),
+        Expression::TSTypeAssertion(value) => unwrap_expression(&value.expression),
+        Expression::TSNonNullExpression(value) => unwrap_expression(&value.expression),
+        _ => expression,
+    }
+}
+
+fn recipe_losses<'a>(
+    expression: &'a Expression<'a>,
+    evaluator: &mut FileEvaluator<'a, '_, '_>,
+    path: &str,
+    output: &mut Vec<NativeLoss>,
+) {
+    match unwrap_expression(expression) {
+        Expression::ObjectExpression(object) => {
+            for property in &object.properties {
+                match property {
+                    oxc_ast::ast::ObjectPropertyKind::SpreadProperty(spread) => {
+                        if !matches!(
+                            evaluator.evaluate(&spread.argument).value,
+                            Some(serde_json::Value::Object(_))
+                        ) {
+                            output.push(NativeLoss {
+                                prop: (!path.is_empty()).then(|| path.to_string()),
+                                reason: "unenumerable-keys".to_string(),
+                            });
+                        }
+                    }
+                    oxc_ast::ast::ObjectPropertyKind::ObjectProperty(property) => {
+                        let key = if property.computed {
+                            property
+                                .key
+                                .as_expression()
+                                .and_then(|key| evaluator.evaluate(key).value)
+                                .map(|value| match value {
+                                    serde_json::Value::String(value) => value,
+                                    value => value.to_string(),
+                                })
+                        } else {
+                            property.key.static_name().map(|name| name.into_owned())
+                        };
+                        let Some(key) = key else {
+                            output.push(NativeLoss {
+                                prop: (!path.is_empty()).then(|| path.to_string()),
+                                reason: "unenumerable-keys".to_string(),
+                            });
+                            continue;
+                        };
+                        let child_path = if path.is_empty() {
+                            key
+                        } else {
+                            format!("{path}.{key}")
+                        };
+                        let value = evaluator.evaluate(&property.value);
+                        if value.value.is_none() && value.conditions.is_empty() && !value.complete {
+                            output.push(NativeLoss {
+                                prop: Some(child_path.clone()),
+                                reason: "missing-property".to_string(),
+                            });
+                        }
+                        recipe_losses(&property.value, evaluator, &child_path, output);
+                    }
+                }
+            }
+        }
+        Expression::ArrayExpression(array) => {
+            for (index, element) in array.elements.iter().enumerate() {
+                let Some(expression) = element.as_expression() else {
+                    continue;
+                };
+                recipe_losses(expression, evaluator, &format!("{path}.{index}"), output);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn call_losses<'a>(
+    call: &'a oxc_ast::ast::CallExpression<'a>,
+    binding: &CallBinding,
+    evaluator: &mut FileEvaluator<'a, '_, '_>,
+    named: &NamedBindings,
+    namespaces: &NamespaceBindings,
+    entrypoints: &[NativeEntrypoint],
+) -> Vec<NativeLoss> {
+    let mut losses = Vec::new();
+    let recipe = binding.kind == "css" && matches!(binding.imported_name.as_str(), "cva" | "sva");
+    for argument in &call.arguments {
+        let Some(expression) = argument.as_expression() else {
+            losses.push(NativeLoss {
+                prop: None,
+                reason: "unenumerable-keys".to_string(),
+            });
+            continue;
+        };
+        if binding.kind == "css"
+            && binding.imported_name == "css"
+            && let Expression::CallExpression(inner) = unwrap_expression(expression)
+            && let Some((inner_binding, display)) = classify_call(
+                &inner.callee,
+                evaluator.scoping,
+                named,
+                namespaces,
+                entrypoints,
+            )
+            && matches!(inner_binding.kind.as_str(), "pattern" | "recipe")
+            && display.ends_with(".raw")
+        {
+            losses.push(NativeLoss {
+                prop: Some(display.trim_end_matches(".raw").to_string()),
+                reason: "unresolved-raw".to_string(),
+            });
+        }
+        if recipe {
+            if !matches!(
+                unwrap_expression(expression),
+                Expression::ObjectExpression(_)
+            ) && !evaluator.evaluate(expression).complete
+            {
+                losses.push(NativeLoss {
+                    prop: None,
+                    reason: "unresolvable-value".to_string(),
+                });
+            }
+            recipe_losses(expression, evaluator, "", &mut losses);
+        } else if binding.kind == "css"
+            && binding.imported_name == "css"
+            && let Expression::ObjectExpression(object) = unwrap_expression(expression)
+        {
+            for property in &object.properties {
+                match property {
+                    oxc_ast::ast::ObjectPropertyKind::SpreadProperty(spread)
+                        if !matches!(
+                            evaluator.evaluate(&spread.argument).value,
+                            Some(serde_json::Value::Object(_))
+                        ) =>
+                    {
+                        losses.push(NativeLoss {
+                            prop: None,
+                            reason: "unenumerable-keys".to_string(),
+                        });
+                    }
+                    oxc_ast::ast::ObjectPropertyKind::ObjectProperty(property)
+                        if property.computed
+                            && property
+                                .key
+                                .as_expression()
+                                .is_none_or(|key| evaluator.evaluate(key).value.is_none()) =>
+                    {
+                        losses.push(NativeLoss {
+                            prop: None,
+                            reason: "unenumerable-keys".to_string(),
+                        });
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    losses
+}
+
+fn analyze_source<'sources>(
+    project: &ProjectEvaluator<'sources>,
+    filename: &str,
+    source: &'sources str,
+    entrypoints: &[NativeEntrypoint],
+    capture_jsx: bool,
+) -> Result<NativeAnalysis> {
+    let allocator = Allocator::default();
+    let parsed = Parser::new(&allocator, source, source_type(filename)?).parse();
+    let mut errors: Vec<_> = parsed.diagnostics.iter().map(ToString::to_string).collect();
+    let semantic = SemanticBuilder::new_compiler()
+        .with_build_nodes(true)
+        .build(&parsed.program);
+    errors.extend(semantic.diagnostics.iter().map(ToString::to_string));
+    let semantic = semantic.semantic;
+    let scoping = semantic.scoping();
+    let (named, namespaces, jsx_aliases) = collect_bindings(&parsed.program, entrypoints);
+    project.begin_file(filename);
+    let mut evaluator = FileEvaluator::new(filename, project, &semantic, &parsed.program);
+    let mut calls = Vec::new();
+
+    for node in semantic.nodes().iter() {
+        let AstKind::CallExpression(expression) = node.kind() else {
+            continue;
+        };
+        let Some((binding, display)) = classify_call(
+            &expression.callee,
+            scoping,
+            &named,
+            &namespaces,
+            entrypoints,
+        ) else {
+            continue;
+        };
+        if !binding.supported && !matches!(binding.kind.as_str(), "pattern" | "recipe") {
+            continue;
+        }
+
+        // `cx` and `fallback` affect folded runtime values but never contribute rules. Nested
+        // token calls are still visited independently by the node iteration.
+        if binding.kind == "css" && matches!(binding.imported_name.as_str(), "cx" | "fallback") {
+            continue;
+        }
+
+        let (arguments, complete) = argument_data(&expression.arguments, &mut evaluator);
+        let losses = call_losses(
+            expression,
+            &binding,
+            &mut evaluator,
+            &named,
+            &namespaces,
+            entrypoints,
+        );
+        let span = expression.span();
+        let (line, column) = line_and_column(source, span.start);
+        let kind = if !binding.supported && matches!(binding.kind.as_str(), "pattern" | "recipe") {
+            "dead".to_string()
+        } else {
+            binding.kind
+        };
+        let callee_span = callee_root_span(&expression.callee);
+        calls.push(NativeCall {
+            name: display,
+            imported_name: binding.imported_name,
+            kind,
+            module: binding.module,
+            start: utf16_offset(source, span.start),
+            end: utf16_offset(source, span.end),
+            callee_start: utf16_offset(source, callee_span.start),
+            callee_end: utf16_offset(source, callee_span.end),
+            line,
+            column,
+            arguments,
+            complete,
+            losses,
+        });
+    }
+    if capture_jsx {
+        for node in semantic.nodes().iter() {
+            let AstKind::JSXOpeningElement(element) = node.kind() else {
+                continue;
+            };
+            let Some((local, canonical)) = jsx_tag(&element.name, scoping, &jsx_aliases) else {
+                continue;
+            };
+            let (arguments, complete) = jsx_data(&element.attributes, &mut evaluator);
+            let span = element.span();
+            let (line, column) = line_and_column(source, span.start);
+            calls.push(NativeCall {
+                name: local,
+                imported_name: canonical,
+                kind: "jsx".to_string(),
+                module: String::new(),
+                start: utf16_offset(source, span.start),
+                end: utf16_offset(source, span.end),
+                callee_start: utf16_offset(source, span.start),
+                callee_end: utf16_offset(source, span.start),
+                line,
+                column,
+                arguments,
+                complete,
+                losses: Vec::new(),
+            });
+        }
+    }
+    calls.sort_by_key(|call| call.start);
+
+    let reads = project.end_file(filename);
     Ok(NativeAnalysis {
-        calls: visitor.calls,
+        calls,
+        dependencies: reads.dependencies,
+        pending_candidates: reads.pending_candidates,
+        configuration_files: reads.configuration_files,
         errors,
-        safe: fallback_reason.is_none(),
-        fallback_reason,
     })
 }
 
@@ -439,26 +728,46 @@ pub fn analyze(
     source: String,
     entrypoints: Vec<NativeEntrypoint>,
 ) -> Result<NativeAnalysis> {
-    analyze_source(&filename, &source, &entrypoints)
+    let project = ProjectEvaluator::new(
+        std::iter::once((filename.as_str(), source.as_str())),
+        &entrypoints,
+        None,
+    );
+    analyze_source(&project, &filename, &source, &entrypoints, false)
 }
 
-/// Analyze a cold inventory in one N-API call. The AST never crosses into JavaScript; each
-/// source is dropped after its compact call records have been copied into the result.
+/// Analyze a cold or incremental inventory in one N-API call. ASTs and expression graphs stay
+/// in Rust; only compact extraction records cross into JavaScript.
 #[napi]
 pub fn analyze_many(
     sources: Vec<NativeSource>,
     entrypoints: Vec<NativeEntrypoint>,
+    options: Option<NativeProjectOptions>,
 ) -> Result<Vec<NativeFileAnalysis>> {
+    let project = ProjectEvaluator::new(
+        sources
+            .iter()
+            .map(|source| (source.filename.as_str(), source.source.as_str())),
+        &entrypoints,
+        options.as_ref(),
+    );
     sources
         .iter()
         .map(|source| {
-            let analysis = analyze_source(&source.filename, &source.source, &entrypoints)?;
+            let analysis = analyze_source(
+                &project,
+                &source.filename,
+                &source.source,
+                &entrypoints,
+                options.as_ref().is_some_and(|options| options.jsx),
+            )?;
             Ok(NativeFileAnalysis {
                 filename: source.filename.clone(),
                 calls: analysis.calls,
                 errors: analysis.errors,
-                safe: analysis.safe,
-                fallback_reason: analysis.fallback_reason,
+                dependencies: analysis.dependencies,
+                pending_candidates: analysis.pending_candidates,
+                configuration_files: analysis.configuration_files,
             })
         })
         .collect()

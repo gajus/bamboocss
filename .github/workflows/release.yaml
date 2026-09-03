@@ -17,7 +17,10 @@ on:
       - 'packages/node/package.json'
       - 'packages/node/src/builder.ts'
       - 'packages/node/src/create-context.ts'
+      - 'packages/node/src/debug.ts'
+      - 'packages/node/src/generate.ts'
       - 'packages/parser/src/parser-result.ts'
+      - 'packages/ts-ast/src/project.ts'
       - 'packages/types/src/parser.ts'
       - 'pnpm-lock.yaml'
   workflow_dispatch:
@@ -81,7 +84,7 @@ jobs:
           const result = analyze('smoke.ts', "import { css } from 'styled-system/css'; css({ color: 'red' })", [
             { kind: 'css', modules: ['styled-system/css'], names: ['css'] },
           ])
-          if (!result.safe || result.calls.length !== 1) throw new Error('Native extractor smoke test failed')
+          if (result.errors.length || result.calls.length !== 1) throw new Error('Native extractor smoke test failed')
           NODE
 
       - name: Upload native binary

@@ -456,6 +456,8 @@ importers:
         specifier: ^4.0.0
         version: 4.1.12
 
+  packages/native-extractor: {}
+
   packages/node:
     dependencies:
       '@bamboocss/config':
@@ -540,6 +542,9 @@ importers:
         specifier: 5.9.0
         version: 5.9.0
     devDependencies:
+      '@bamboocss/native-extractor':
+        specifier: workspace:*
+        version: link:../native-extractor
       '@types/fs-extra':
         specifier: 11.0.4
         version: 11.0.4

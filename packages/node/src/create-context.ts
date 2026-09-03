@@ -1,4 +1,10 @@
 import type { DeadImport, StyleEncoder, Stylesheet } from '@bamboocss/core'
+import type {
+  NativeEntrypoint,
+  NativeFileAnalysis,
+  NativeProjectOptions,
+  NativeSource,
+} from '@bamboocss/native-extractor'
 import { checkNamingAgreement, formatNamingDisagreement } from '@bamboocss/core'
 import { Generator } from '@bamboocss/generator'
 import { logger } from '@bamboocss/logger'
@@ -6,8 +12,17 @@ import { ParserResult, Project } from '@bamboocss/parser'
 import { BambooError, groupBy, truncateList, uniq } from '@bamboocss/shared'
 import { selectExtractable } from './extractable-files'
 import { isCompilerGone } from '@bamboocss/ts-ast'
-import type { LoadConfigResult, Runtime, WatchOptions, WatcherEventType } from '@bamboocss/types'
+import type {
+  LoadConfigResult,
+  ParserResultConfigureOptions,
+  Runtime,
+  WatchOptions,
+  WatcherEventType,
+} from '@bamboocss/types'
 import { debounce } from 'perfect-debounce'
+import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { createBox } from './cli-box'
 import { DiffEngine } from './diff-engine'
 import { getTsConfigResolutionFiles } from './load-tsconfig'
@@ -16,6 +31,22 @@ import { OutputEngine } from './output-engine'
 
 /** A thrown value's message, for a `catch` binding that is typed `unknown`. */
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error))
+
+type NativeExtractor = {
+  analyzeMany(
+    sources: NativeSource[],
+    entrypoints: NativeEntrypoint[],
+    options?: NativeProjectOptions,
+  ): NativeFileAnalysis[]
+}
+
+const nativeBinaryName = () => {
+  if (process.platform === 'darwin' && process.arch === 'arm64') return 'darwin-arm64.node'
+  if (process.platform === 'darwin' && process.arch === 'x64') return 'darwin-x64.node'
+  if (process.platform === 'linux' && process.arch === 'arm64') return 'linux-arm64-gnu.node'
+  if (process.platform === 'linux' && process.arch === 'x64') return 'linux-x64-gnu.node'
+  if (process.platform === 'win32' && process.arch === 'x64') return 'win32-x64-msvc.node'
+}
 
 /**
  * What each loss is, and what the author can do about it.
@@ -83,12 +114,29 @@ export class BambooContext extends Generator {
    */
   deadCalls = new Map<string, DeadImport[]>()
 
+  /** Extraction results produced without materializing TypeScript ASTs. */
+  private nativeExtractions = new Map<string, NativeFileAnalysis>()
+  /** Native semantic reads retained across incremental passes. */
+  private nativeDependencies = new Map<string, readonly string[]>()
+  private nativePendingCandidates = new Map<string, readonly string[]>()
+  private nativeConfigurationFiles = new Map<string, readonly string[]>()
+  private nativeAuxiliaryFiles: readonly string[] = []
+  /** Parser-hook output staged by the prefilter for the following native boundary. */
+  private nativePreparedSources = new Map<
+    string,
+    { original: string; source: string; metadata: { options: ParserResultConfigureOptions; origins: boolean } }
+  >()
+  /** Per-file parser-hook options and whether a transform invalidated source locations. */
+  private nativeSourceMetadata = new Map<string, { options: ParserResultConfigureOptions; origins: boolean }>()
+  private parserHooks: LoadConfigResult['hooks']
+
   constructor(conf: LoadConfigResult)
   constructor(conf: LoadConfigResult) {
     super(conf)
 
     const config = conf.config
     this.runtime = nodeRuntime
+    this.parserHooks = conf.hooks
 
     config.cwd ||= this.runtime.cwd()
 
@@ -111,6 +159,7 @@ export class BambooContext extends Generator {
       resolutionConfigFiles: getTsConfigResolutionFiles(conf),
       getFiles: () => this.getFiles(),
       readFile: (filePath) => this.runtime.fs.readFileSync(filePath),
+      fileExists: (filePath) => this.runtime.fs.existsSync(filePath),
       hooks: conf.hooks,
       parserOptions: {
         ...this.parserOptions,
@@ -367,8 +416,279 @@ export class BambooContext extends Generator {
     return file === outdir || file.startsWith(outdir + this.runtime.path.sep)
   }
 
+  /** Load the required Rust extractor from the workspace or the published prebuild directory. */
+  private loadNativeExtractor = (): NativeExtractor => {
+    const nativeRequire = createRequire(import.meta.url)
+    try {
+      return nativeRequire('@bamboocss/native-extractor') as NativeExtractor
+    } catch (workspaceError) {
+      const binary = nativeBinaryName()
+      if (!binary) {
+        throw new BambooError(
+          'NATIVE_EXTRACTION',
+          `Native extraction is not available for ${process.platform}-${process.arch}.`,
+          { cause: workspaceError },
+        )
+      }
+      try {
+        return nativeRequire(join(dirname(fileURLToPath(import.meta.url)), 'native', binary)) as NativeExtractor
+      } catch (publishedError) {
+        throw new BambooError('NATIVE_EXTRACTION', `Failed to load the native extractor binary ${binary}.`, {
+          cause: publishedError,
+        })
+      }
+    }
+  }
+
+  private prepareNativeSource = (filePath: string, original: string) => {
+    let parserOptions: ParserResultConfigureOptions = {}
+    const source =
+      this.parserHooks['parser:before']?.({
+        filePath,
+        content: original,
+        configure: (options) => {
+          parserOptions = { ...parserOptions, ...options }
+        },
+      }) ?? original
+    return { original, source, metadata: { options: parserOptions, origins: source === original } }
+  }
+
+  /** Prepare a whole extraction pass in one coarse native invocation. */
+  prepareNativeExtraction = (filePaths: readonly string[]) => {
+    this.nativeExtractions.clear()
+    this.nativeSourceMetadata.clear()
+    const owners = new Set(
+      filePaths.map((filePath) => this.runtime.path.abs(this.config.cwd, filePath).replaceAll('\\', '/')),
+    )
+    for (const owner of owners) {
+      this.nativeDependencies.delete(owner)
+      this.nativePendingCandidates.delete(owner)
+      this.nativeConfigurationFiles.delete(owner)
+    }
+    const sources: NativeSource[] = []
+    const auxiliary =
+      this.parserHooks['parser:before'] || this.runtime !== nodeRuntime
+        ? this.nativeAuxiliaryFiles
+        : this.nativeAuxiliaryFiles.filter(this.project.sourceIsOverridden)
+    const inventory = uniq([...filePaths, ...auxiliary])
+    for (const filePath of inventory) {
+      if (filePath.endsWith('.json')) continue
+      const filename = this.runtime.path.abs(this.config.cwd, filePath)
+      const sourceKey = filename.replaceAll('\\', '/')
+      let prepared = this.nativePreparedSources.get(sourceKey)
+      if (!prepared) {
+        let original = this.project.getSourceText(filename)
+        if (original === undefined) {
+          try {
+            original = this.runtime.fs.readFileSync(filename)
+          } catch (error) {
+            // A source can disappear between the inventory glob and this batched read. It no
+            // longer contributes styles, so the watcher handles the deletion on its own event.
+            if (['ENOENT', 'EISDIR', 'ENOTDIR'].includes((error as NodeJS.ErrnoException).code ?? '')) continue
+            throw error
+          }
+        }
+        prepared = this.prepareNativeSource(filename, original)
+      }
+      if (owners.has(sourceKey)) {
+        this.nativeSourceMetadata.set(sourceKey, prepared.metadata)
+        sources.push({ filename, source: prepared.source })
+      } else if (
+        prepared.source !== prepared.original ||
+        this.runtime !== nodeRuntime ||
+        this.project.sourceIsOverridden(filename)
+      ) {
+        // The Rust resolver can read an ordinary dependency itself. Only bytes it cannot see
+        // on disk need to enlarge the cross-language source map.
+        sources.push({ filename, source: prepared.source })
+      }
+    }
+    if (!sources.length) {
+      this.nativePreparedSources.clear()
+      return
+    }
+
+    const entrypoints: NativeEntrypoint[] = [
+      {
+        kind: 'css',
+        modules: this.imports.value.css,
+        names: ['css', 'cva', 'sva', 'cx', 'fallback', 'viewTransition'],
+      },
+      { kind: 'token', modules: this.imports.value.tokens, names: ['token'] },
+      { kind: 'recipe', modules: this.imports.value.recipe, names: this.recipes.keys },
+      { kind: 'pattern', modules: this.imports.value.pattern, names: this.patterns.keys },
+    ]
+    const { baseUrl, paths = {} } = this.project.resolutionOptions
+    const options: NativeProjectOptions = {
+      cwd: this.config.cwd,
+      baseUrl,
+      paths: Object.entries(paths).map(([pattern, values]) => ({ pattern, paths: values })),
+      tokens: this.tokens.allTokens.map((token) => ({
+        path: token.name,
+        value: this.tokens.view.get(token.name),
+        variable: this.tokens.view.getVar(token.name),
+      })),
+      jsx: this.jsx.isEnabled,
+    }
+    let analyses: NativeFileAnalysis[]
+    try {
+      analyses = this.loadNativeExtractor().analyzeMany(sources, entrypoints, options)
+    } finally {
+      this.nativePreparedSources.clear()
+    }
+    for (const analysis of analyses) {
+      const owner = analysis.filename.replaceAll('\\', '/')
+      if (!owners.has(owner)) continue
+      this.nativeExtractions.set(owner, analysis)
+      this.nativeDependencies.set(owner, analysis.dependencies)
+      this.nativePendingCandidates.set(owner, analysis.pendingCandidates)
+      this.nativeConfigurationFiles.set(owner, analysis.configurationFiles)
+    }
+  }
+
+  /** Included extraction owners whose native value graph reaches `filePath`, transitively. */
+  getNativeDependents = (filePath: string): string[] => {
+    const changed = filePath.replaceAll('\\', '/')
+    const selected = new Set<string>()
+    let frontier = [changed]
+    while (frontier.length) {
+      const next: string[] = []
+      for (const dependency of frontier) {
+        for (const [owner, dependencies] of this.nativeDependencies) {
+          const pending = this.nativePendingCandidates.get(owner) ?? []
+          if (
+            selected.has(owner) ||
+            ![...dependencies, ...pending].some((item) => item.replaceAll('\\', '/') === dependency)
+          )
+            continue
+          selected.add(owner)
+          next.push(owner)
+        }
+      }
+      frontier = next
+    }
+    return [...selected]
+  }
+
+  /** @internal Native dependency edges, from dependency to extraction owner. */
+  getNativeDependencyLedger = (): Array<readonly [string, string]> =>
+    [...this.nativeDependencies].flatMap(([owner, dependencies]) =>
+      dependencies.map((dependency) => [dependency.replaceAll('\\', '/'), owner] as const),
+    )
+
+  forgetNativeFile = (filePath: string) => {
+    const file = this.runtime.path.abs(this.config.cwd, filePath).replaceAll('\\', '/')
+    this.nativeDependencies.delete(file)
+    this.nativePendingCandidates.delete(file)
+    this.nativeConfigurationFiles.delete(file)
+    this.nativeExtractions.delete(file)
+    this.nativeSourceMetadata.delete(file)
+  }
+
+  private parseNativeFile = (filePath: string, native: NativeFileAnalysis, encoder: StyleEncoder) => {
+    if (native.errors.length) {
+      throw new BambooError(
+        'NATIVE_EXTRACTION',
+        `Native extraction failed for ${filePath}:\n${native.errors.join('\n')}`,
+      )
+    }
+    const result = new ParserResult(this.parserOptions, encoder).setFilePath(filePath)
+    ;(
+      result as ParserResult & {
+        native?: boolean
+        nativePendingCandidates?: readonly string[]
+        nativeConfigurationFiles?: readonly string[]
+      }
+    ).native = true
+    ;(result as ParserResult & { nativePendingCandidates?: readonly string[] }).nativePendingCandidates =
+      native.pendingCandidates
+    ;(result as ParserResult & { nativeConfigurationFiles?: readonly string[] }).nativeConfigurationFiles =
+      native.configurationFiles
+    for (const dependency of native.dependencies) result.addDependency(dependency)
+    const metadata = this.nativeSourceMetadata.get(filePath.replaceAll('\\', '/'))
+    result.origins = metadata?.origins ?? true
+    for (const call of native.calls) {
+      const atomOrigin =
+        encoder.recordOrigins && result.origins ? { filePath, line: call.line, column: call.column } : undefined
+      if (call.kind === 'jsx') {
+        const tags = [call.name, call.importedName]
+        const recipeTag = tags.find((tag) => this.jsx.isJsxTagRecipe(tag))
+        const isBambooComponent = Boolean(recipeTag)
+        const matches = metadata?.options.matchTag
+          ? metadata.options.matchTagMode === 'override'
+            ? metadata.options.matchTag(call.name, isBambooComponent)
+            : isBambooComponent || metadata.options.matchTag(call.name, isBambooComponent)
+          : isBambooComponent
+        if (!matches || !recipeTag) continue
+
+        const data = (call.arguments as Record<string, unknown>[]).map((properties) =>
+          Object.fromEntries(
+            Object.entries(properties).filter(([property]) => {
+              const isRecipeProperty = this.jsx.isRecipeProp(recipeTag, property)
+              return metadata?.options.matchTagProp
+                ? isRecipeProperty && metadata.options.matchTagProp(call.name, property)
+                : isRecipeProperty
+            }),
+          ),
+        )
+        for (const recipe of this.recipes.filter(recipeTag)) {
+          result.setRecipe(recipe.baseName, {
+            type: 'jsx-recipe',
+            name: call.name,
+            data,
+            atomOrigin,
+          })
+        }
+        continue
+      }
+      const item = {
+        name: call.importedName,
+        data: call.arguments as Record<string, unknown>[],
+        atomOrigin,
+        tokenCalleeRange:
+          call.kind === 'token' || call.kind === 'tokenValue'
+            ? { start: call.calleeStart, end: call.calleeEnd }
+            : undefined,
+      }
+      const recipeConfig = call.kind === 'css' && (call.importedName === 'cva' || call.importedName === 'sva')
+      const explicitlyNamed =
+        recipeConfig && item.data.every((data) => typeof data.className === 'string' && data.className !== '')
+      if (!explicitlyNamed) {
+        for (const loss of call.losses) {
+          result.unresolved.push({
+            kind: recipeConfig ? 'recipe' : 'atomic',
+            prop: loss.prop,
+            filePath,
+            line: call.line,
+            column: call.column,
+            reason: loss.reason,
+          })
+        }
+      }
+      if (call.kind === 'css' && ['css', 'cva', 'sva'].includes(call.importedName)) {
+        result.set(call.importedName as 'css' | 'cva' | 'sva', item)
+      } else if (call.kind === 'css' && call.importedName === 'viewTransition') {
+        result.setViewTransition(item)
+      } else if (call.kind === 'pattern') result.setPattern(call.importedName, item)
+      else if (call.kind === 'recipe') result.setRecipe(call.importedName, item)
+      else if (call.kind === 'token' || call.kind === 'tokenValue') {
+        result.setToken(item, call.kind)
+      } else if (call.kind === 'dead') {
+        result.deadCalls.push({
+          name: call.importedName,
+          alias: call.name,
+          mod: call.module,
+          entrypoint: this.imports.value.pattern.some((module) => call.module.includes(module)) ? 'pattern' : 'recipe',
+        })
+      }
+    }
+    this.parserHooks['parser:after']?.({ filePath, result })
+    return result
+  }
+
   parseFile = (filePath: string, styleEncoder?: StyleEncoder) => {
     const file = this.runtime.path.abs(this.config.cwd, filePath)
+    const nativeFile = file.replaceAll('\\', '/')
     logger.debug('file:extract', file)
 
     const measure = logger.time.debug(`Parsed ${file}`)
@@ -380,9 +700,30 @@ export class BambooContext extends Generator {
       // The extraction pass's reading of this file, which replaces whatever its last reading
       // encoded. A bundler that also parses the module during `transform` records that
       // separately -- see `StyleEncoder.withOwner` for why the two are not one owner.
-      result = encoder.withOwner('extract', file, () => this.project.parseSourceFile(file, encoder))
+      if (file.endsWith('.json')) {
+        result = encoder.withOwner('extract', file, () => this.project.parseJson(file, encoder))
+      } else {
+        if (!this.nativeExtractions.has(nativeFile)) this.prepareNativeExtraction([file])
+        const native = this.nativeExtractions.get(nativeFile)
+        if (!native && !this.runtime.fs.existsSync(file)) {
+          encoder.releaseFile(file)
+          this.parseFailures.delete(file)
+          this.deadCalls.delete(file)
+          measure()
+          return undefined
+        }
+        if (!native) throw new BambooError('NATIVE_EXTRACTION', `Native extraction produced no result for ${file}.`)
+        result = encoder.withOwner('extract', file, () => this.parseNativeFile(file, native, encoder))
+      }
+      this.nativeExtractions.delete(nativeFile)
+      this.nativeSourceMetadata.delete(nativeFile)
       this.parseFailures.delete(file)
     } catch (error) {
+      // A failed result cannot be retried after an edit. Successful parses consume their
+      // prepared result above; failures must do the same or the stale native analysis wedges
+      // every later incremental pass on the original error.
+      this.nativeExtractions.delete(nativeFile)
+      this.nativeSourceMetadata.delete(nativeFile)
       // A compiler that has died is not a parse failure, and must not be recorded as one.
       // Bamboo parses every file through one Go process, so once it is gone every remaining
       // file fails identically — reporting each of them names a project's worth of perfectly
@@ -433,6 +774,7 @@ export class BambooContext extends Generator {
    * what is *parsed*, not what the project holds.
    */
   extractableFiles = (files: readonly string[]): string[] => {
+    this.nativePreparedSources.clear()
     const { baseUrl, paths } = this.project.resolutionOptions
     const measure = logger.time.debug('Selected extractable files')
     const { auxiliary, extractable } = selectExtractable(files, {
@@ -440,9 +782,14 @@ export class BambooContext extends Generator {
       cwd: this.config.cwd,
       entrypoints: this.entrypointSpecifiers,
       paths,
+      fileExists: this.project.sourceExists,
       readFile: (filePath) => {
         try {
-          return this.runtime.fs.readFileSync(filePath)
+          const original = this.project.getSourceText(filePath) ?? this.runtime.fs.readFileSync(filePath)
+          const filename = this.runtime.path.abs(this.config.cwd, filePath)
+          const prepared = this.prepareNativeSource(filename, original)
+          this.nativePreparedSources.set(filename.replaceAll('\\', '/'), prepared)
+          return prepared.source
         } catch {
           // Unreadable is not "contributes nothing"; `selectExtractable` keeps it.
           return undefined
@@ -450,16 +797,11 @@ export class BambooContext extends Generator {
       },
     })
 
-    // Handed over together, before anything reads. Each of these is demanded by the resolution
-    // walk sooner or later, and a module that arrives on its own is a membership change: the
-    // synthesized config is rewritten and the compiler re-derives its program. Measured at
-    // **409ms** each on a real application, six hundred times over — against one bulk update
-    // here, because the scan above already knows every path the walk is going to ask for.
-    //
-    // Installing is not parsing. A file named here is one nothing can originate a call from, so
-    // it is never added to the extraction list; it is put where the walk will find it already
-    // loaded.
-    if (auxiliary.length) this.project.addSourceFiles(this.readSources(auxiliary))
+    this.nativeAuxiliaryFiles = auxiliary
+
+    // Auxiliary modules remain outside the TypeScript project. The native resolver reads
+    // ordinary files lazily; virtual, overridden, and parser-transformed sources cross in the
+    // same coarse source map as their extraction owners.
 
     // The first question to ask of a rule that went missing is whether its file was read at
     // all, so the count is reachable without a debugger — `BAMBOO_DEBUG=file:extract`.
@@ -467,28 +809,17 @@ export class BambooContext extends Generator {
       'file:extract',
       `${extractable.length} of ${files.length} file(s) can reach a bamboo entrypoint; ` +
         `${files.length - extractable.length} cannot and are not parsed; ` +
-        `${auxiliary.length} import target(s) outside the inventory installed up front`,
+        `${auxiliary.length} local import target(s) sit outside the inventory`,
     )
     measure()
     return extractable
-  }
-
-  /** Path/content pairs for a bulk install, skipping anything that cannot be read. */
-  private readSources = function* (this: BambooContext, files: readonly string[]) {
-    for (const file of files) {
-      try {
-        yield [file, this.runtime.fs.readFileSync(file)] as const
-      } catch {
-        // A path the scan resolved and the disk no longer has. The walk will report it if it
-        // genuinely needed it; pre-installing is an optimisation, not a demand.
-      }
-    }
   }
 
   parseFiles = (styleEncoder?: StyleEncoder) => {
     const encoder = styleEncoder || this.parserOptions.encoder
 
     const files = this.extractableFiles(this.getFiles())
+    this.prepareNativeExtraction(files)
     const filesWithCss = [] as string[]
     const results = [] as ParserResult[]
 

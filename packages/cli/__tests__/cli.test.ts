@@ -1,10 +1,10 @@
 import { execSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs'
+import fs from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, test } from 'vitest'
-import fs from 'node:fs/promises'
-import { afterAll } from 'vitest'
-import { beforeAll } from 'vitest'
+import { afterAll, describe, expect, test } from 'vitest'
 
 // Helper to run command and capture output even if it fails
 function runCommand(cmd: string, options: any) {
@@ -30,11 +30,23 @@ function runCommand(cmd: string, options: any) {
 }
 
 describe('CLI', () => {
-  const cwd = process.cwd()
   const _dirname = path.dirname(fileURLToPath(import.meta.url))
-  const binPath = path.resolve(cwd, _dirname, '../bin.js')
+  const binPath = path.resolve(_dirname, '../bin.js')
 
-  const testsCwd = path.resolve(cwd, _dirname, './samples')
+  // Keep generated `styled-system` files outside the checkout. The TypeScript compiler is
+  // process-global, so resolution-ledger tests running in parallel could otherwise discover
+  // this temporary package and mistake it for part of their virtual `/app` project.
+  const testsCwd = mkdtempSync(path.join(tmpdir(), 'bamboo-cli-'))
+  writeFileSync(path.join(testsCwd, 'tsconfig.json'), '{}')
+
+  const packageScope = path.join(testsCwd, 'node_modules/@bamboocss')
+  mkdirSync(packageScope, { recursive: true })
+  symlinkSync(
+    path.resolve(_dirname, '..'),
+    path.join(packageScope, 'dev'),
+    process.platform === 'win32' ? 'junction' : 'dir',
+  )
+
   const paths = {
     config: path.resolve(testsCwd, 'bamboo.config.ts'),
     styledSystem: path.resolve(testsCwd, 'styled-system'),
@@ -42,21 +54,8 @@ describe('CLI', () => {
     pkgJson: path.resolve(testsCwd, 'package.json'),
   }
 
-  beforeAll(async () => {
-    // Create the `samples` folder
-    await fs.mkdir(testsCwd, { recursive: true })
-  })
-
   afterAll(async () => {
-    try {
-      await Promise.allSettled([
-        fs.unlink(paths.config),
-        fs.unlink(paths.logFile),
-        fs.rm(paths.styledSystem, { recursive: true }),
-      ])
-    } catch {
-      //
-    }
+    await fs.rm(testsCwd, { force: true, recursive: true })
   })
 
   test('init', async () => {

@@ -67,12 +67,11 @@ export async function generate(config: Config, configPath?: string) {
      */
     const bundleStyles = async (ctx: BambooContext, changedFilePaths: string[], inventoryChanged = false) => {
       let parsed = 0
-      const encoder = ctx.parserOptions.encoder
+      ctx.prepareNativeExtraction(changedFilePaths)
       for (const filePath of changedFilePaths) {
-        // The initial `build` records this disk extraction under `extract`. Keep watch
-        // rebuilds on the same owner so replacing a file retracts its previous atoms instead
-        // of adding a second, independent `parse` reading beside them.
-        const result = encoder.withOwner('extract', filePath, () => ctx.project.parseSourceFile(filePath, encoder))
+        // The initial `build` and watch rebuilds share the native extraction owner, so a
+        // replacement retracts its previous atoms instead of adding a second reading.
+        const result = ctx.parseFile(filePath)
         recordResolvedTokenReferences(sourceScanCache, filePath, result)
         if (result) parsed++
       }
@@ -91,35 +90,24 @@ export async function generate(config: Config, configPath?: string) {
     ctx.watchFiles(async (event, file) => {
       const filePath = ctx.runtime.path.abs(cwd, file)
       if (event === 'unlink') {
-        // Consumers folded this file's styles into their own output, so they have
-        // to be rebuilt to stop emitting them.
-        const dependents = ctx.project.getDependents(filePath)
+        // Snapshot before removing the native edges: consumers folded this file's values into
+        // their own output and have to be rebuilt to stop emitting them.
+        const dependents = ctx.getNativeDependents(filePath)
         ctx.project.removeSourceFile(filePath)
+        ctx.forgetNativeFile(filePath)
         sourceScanCache.entries.delete(filePath)
         sourceScanCache.resolvedTokenReferences.delete(filePath)
         await bundleStyles(ctx, dependents, true)
       } else if (event === 'change') {
-        // Absolute, like every other call here: a relative specifier is not
-        // guaranteed to match the file the project holds, and a reload that
-        // silently matched nothing would leave the edit unread.
+        const dependents = ctx.getNativeDependents(filePath)
         ctx.project.reloadSourceFile(filePath)
-        // Styles imported from this file are folded into its consumers' output, so
-        // they have to be re-parsed too or they keep emitting the previous values.
-        await bundleStyles(ctx, [filePath, ...ctx.project.getDependents(filePath)])
+        await bundleStyles(ctx, [...new Set([filePath, ...dependents])])
       } else if (event === 'add') {
-        // Read the pre-add resolution ledger before changing the file tree. A pending
-        // importer may itself feed another file, and rebuilding only that importer leaves
-        // every transitive consumer encoded with the old fallback value.
-        const pendingImporters = ctx.project.getUnresolvedImporters()
-        const pendingClosure = pendingImporters.flatMap((importer) => [
-          importer,
-          ...ctx.project.getDependents(importer),
-        ])
+        // Missing higher-priority candidates are part of the native read graph, so ask before
+        // replacing those pending edges with the newly resolved ones.
+        const dependents = ctx.getNativeDependents(filePath)
         ctx.project.createSourceFile(filePath)
-        // A new file can satisfy an import that previously resolved to nothing.
-        // Those importers have no edge to this path yet — the specifier resolved to
-        // nowhere when they were parsed — so they are tracked separately.
-        await bundleStyles(ctx, [...new Set([filePath, ...ctx.project.getDependents(filePath), ...pendingClosure])])
+        await bundleStyles(ctx, [...new Set([filePath, ...dependents])])
       }
     })
   }

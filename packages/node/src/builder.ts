@@ -162,6 +162,7 @@ export class Builder {
   removeSource = (filePath: string) => {
     const ctx = this.getContextOrThrow()
     this.captureResolutionLedger(ctx)
+    ctx.forgetNativeFile(filePath)
     return ctx.project.removeSourceFile(filePath)
   }
 
@@ -485,6 +486,7 @@ export class Builder {
     for (const file of changed) {
       if (current.has(file)) affected.add(file)
       for (const dependent of project.getDependents(file)) affected.add(this.sourcePath(dependent))
+      for (const dependent of ctx.getNativeDependents(file)) affected.add(this.sourcePath(dependent))
 
       if (existsSync(file) && !project.getSourceFile(file)) added.push(file)
     }
@@ -544,6 +546,7 @@ export class Builder {
     }
 
     for (const fact of ledger) addEdge(fact.target, fact.importer)
+    for (const [target, importer] of this.getContextOrThrow().getNativeDependencyLedger()) addEdge(target, importer)
     for (const [target, importer] of syntheticEdges) addEdge(target, importer)
 
     const compare = (left: string, right: string) => (inventoryRank.get(left) ?? 0) - (inventoryRank.get(right) ?? 0)
@@ -753,8 +756,18 @@ export class Builder {
             | { getExportReads?: () => ReadonlyArray<{ file: string; name: string; digest: string | undefined }> }
             | undefined
         )?.getExportReads?.() ?? []
-      this.extractionReadsByOwner.set(owner, reads)
-      const surface = ctx.project ? this.digestRecipeSurface(ctx, file, parserResult) : undefined
+      const parsedNatively = Boolean((parserResult as { native?: boolean } | undefined)?.native)
+      if (parsedNatively) {
+        // The Rust evaluator records dependency paths rather than TypeScript export-node
+        // digests. An unchanged native owner selected by one of those paths must therefore be
+        // re-extracted; an empty digest set would incorrectly certify stale output as stable.
+        this.extractionReadsByOwner.delete(owner)
+      } else {
+        this.extractionReadsByOwner.set(owner, reads)
+      }
+      // Asking for export declarations materializes a TypeScript tree. Native extraction
+      // deliberately trades this skip optimization for staying compiler-free.
+      const surface = !parsedNatively && ctx.project ? this.digestRecipeSurface(ctx, file, parserResult) : undefined
       if (this.changedThisPass.has(owner)) {
         const previous = this.recipeSurfaceByOwner.get(owner)
         this.recipeSurfaceStable.set(owner, previous !== undefined && surface !== undefined && previous === surface)
@@ -769,13 +782,30 @@ export class Builder {
             pendingCandidates: previousCandidates,
           }
         : undefined
-      const readSet = ctx.project.getResolutionReadSet(file, parserResult.getDependencies(), previousReadSet)
+      const nativeResult = parserResult as {
+        native?: boolean
+        nativePendingCandidates?: readonly string[]
+        nativeConfigurationFiles?: readonly string[]
+      }
+      const native = Boolean(nativeResult.native)
+      const dependencies = parserResult.getDependencies()
+      const readSet = native
+        ? {
+            dependencies: uniq(dependencies).sort(),
+            pendingCandidates: uniq([...(nativeResult.nativePendingCandidates ?? [])]).sort(),
+          }
+        : ctx.project.getResolutionReadSet(file, dependencies, previousReadSet)
       const currentReads = readSet.dependencies
-      const currentConfigurations = ctx.project.getResolutionConfigurationFiles(
-        file,
-        parserResult.getDependencies(),
-        meta.isUnchanged ? previousConfigurations : [],
-      )
+      const currentConfigurations = native
+        ? uniq([
+            ...(currentReads.length || readSet.pendingCandidates.length ? this.tsconfigResolutionFiles : []),
+            ...(nativeResult.nativeConfigurationFiles ?? []),
+          ]).sort()
+        : ctx.project.getResolutionConfigurationFiles(
+            file,
+            dependencies,
+            meta.isUnchanged ? previousConfigurations : [],
+          )
       this.resolutionReadSets.set(owner, currentReads)
       if (readSet.pendingCandidates.length) {
         this.resolutionCandidateSets.set(owner, readSet.pendingCandidates)
@@ -874,6 +904,8 @@ export class Builder {
     this.readDigestMemo.clear()
 
     const done = logger.time.info('Extracted in')
+
+    ctx.prepareNativeExtraction(filesToExtract)
 
     // `for…of` rather than `.map`, whose result is discarded. `.map` also builds an array
     // holding every `ParserResult` until the statement ends, keeping the whole set reachable

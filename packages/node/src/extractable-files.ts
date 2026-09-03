@@ -10,14 +10,14 @@ import { dirname, isAbsolute, resolve } from 'node:path'
  * from one. A file with no such chain cannot hold a call, whatever else is in it.
  *
  * On a real application that is most of the tree. Measured over 6,425 files: 4,062 could reach
- * an entrypoint and 2,363 provably could not, and not handing the compiler the latter took the
+ * an entrypoint and 2,363 provably could not, and not handing the extractor the latter took the
  * pass from 88.9s to 26.3s with byte-identical CSS out. The scan itself costs ~300ms, because
  * it reads text and never parses.
  *
  * ## Skipping is not the same as ignoring
  *
  * A file left out here is still *reachable*. Cross-file composition works by resolving an
- * import and installing what it names, so a module that exports a style object still arrives
+ * import and reading what it names, so a module that exports a style object still arrives
  * the moment something that qualifies imports it. What is skipped is only asking "does this
  * file *originate* a call", of a file that has no binding to originate one with.
  *
@@ -143,11 +143,9 @@ export interface ExtractableSelection {
    * Local modules something imports that `include` never matched.
    *
    * Not parsed — nothing in them can *originate* a call, or they would be in `extractable`.
-   * They are named because the resolution walk demands them one at a time, and each arrival is
-   * a membership change: the synthesized config is rewritten and the compiler re-derives its
-   * whole program, which measured **409ms** on a real application. Six hundred of those, one
-   * per importer that reached outside the inventory, is four minutes of a build spent telling
-   * the compiler about files it could have been handed at the start.
+   * They are named so transformed or virtual bytes can join the native source map in the same
+   * batched boundary as extraction owners. Ordinary files remain lazy Rust filesystem reads;
+   * neither path materializes TypeScript trees.
    *
    * A generated tree is where they come from — an `exclude` that keeps Relay artifacts and
    * generated icons out of extraction does not stop the app importing them.
@@ -164,8 +162,8 @@ export interface ExtractableSelection {
  * one — a recipe defined with `cva` in one file and called in another is exactly that shape.
  *
  * The edges are worth more than the walk they were built for. Every one of them names a module
- * that is *going* to be demanded, so the same scan that decides what to parse also says what to
- * install — see `auxiliary`.
+ * that is *going* to be demanded, so the same scan that decides what to parse also says which
+ * virtual or transformed sources the native source map may need — see `auxiliary`.
  */
 export const selectExtractable = (files: readonly string[], options: ExtractableOptions): ExtractableSelection => {
   const keep = new Set<string>()
@@ -218,7 +216,7 @@ export const selectExtractable = (files: readonly string[], options: Extractable
   }
 
   // Everything an edge pointed at that the inventory does not already hold. Ordered by first
-  // sighting, so a build installs them in the order the walk would have asked for them.
+  // sighting, so a build reads them in the order the walk would have asked for them.
   const inventory = new Set(files)
   const auxiliary = [...importers.keys()].filter((target) => !inventory.has(target))
 

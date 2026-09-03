@@ -127,6 +127,7 @@ export interface ProjectOptions extends TsProjectOptions {
    */
   deferInitialSourceFiles?: boolean
   readFile: Runtime['fs']['readFileSync']
+  fileExists?: Runtime['fs']['existsSync']
   getFiles(): string[]
   hooks: Partial<BambooHooks>
   parserOptions: ParserOptions
@@ -576,6 +577,8 @@ export class Project {
    * files.
    */
   private auxiliarySources = new Set<string>()
+  /** Bytes explicitly supplied by a caller rather than read from disk. */
+  private overriddenSources = new Map<string, string>()
 
   /** File-tree changes invalidate even successful resolutions (extension precedence can move). */
   #fileTreeRevision = 0
@@ -598,6 +601,7 @@ export class Project {
     this.sourcePreparations = new Map()
     this.removedSourcePaths = new Set()
     this.auxiliarySources = new Set()
+    this.overriddenSources = new Map()
     this.resolutionWork = {
       moduleResolutionsAttempted: 0,
       sourceFilesAdded: 0,
@@ -637,6 +641,28 @@ export class Project {
     this.#assertNotLoading()
     return Object.freeze({ ...this.resolutionWork })
   }
+
+  /** @internal Whether an operation has crossed into the TypeScript-backed API. */
+  hasMaterializedCompiler = (): boolean => this.#sourceFiles.project !== undefined
+
+  /** Source bytes from overlays, virtual filesystems, or disk, without creating a compiler. */
+  getSourceText = (filePath: string): string | undefined => {
+    const override = this.overriddenSources.get(this.normalizePath(filePath))
+    if (override !== undefined) return override
+    try {
+      return this.options.readFile(filePath)
+    } catch {
+      return undefined
+    }
+  }
+
+  /** Whether that same compiler-free source view can read a path. */
+  sourceExists = (filePath: string): boolean =>
+    this.overriddenSources.has(this.normalizePath(filePath)) ||
+    (this.options.fileExists?.(filePath) ?? this.getSourceText(filePath) !== undefined)
+
+  /** Whether a caller supplied bytes that can differ from the path on disk. */
+  sourceIsOverridden = (filePath: string): boolean => this.overriddenSources.has(this.normalizePath(filePath))
 
   getSourceFile = (filePath: string): SourceFile | undefined => {
     this.#assertNotLoading()
@@ -1657,6 +1683,7 @@ export class Project {
      */
     if (existing && existing.getFullText() === content) {
       this.markAuxiliary(pathOf(existing), options.auxiliary)
+      this.overriddenSources.set(this.normalizePath(pathOf(existing)), content)
       return existing
     }
 
@@ -1678,6 +1705,7 @@ export class Project {
     if (!sourceFile) throw new Error(`bamboo: could not add ${filePath} to the project`)
     // Keyed on the source file's own spelling, which is the one the ledger records.
     this.markAuxiliary(pathOf(sourceFile), options.auxiliary)
+    this.overriddenSources.set(this.normalizePath(pathOf(sourceFile)), content)
     return sourceFile
   }
 
@@ -1702,8 +1730,10 @@ export class Project {
       // would otherwise outlive it for as long as the context does.
       this.options.parserOptions.encoder.releaseFile(pathOf(sourceFile))
       this.auxiliarySources.delete(this.normalizePath(pathOf(sourceFile)))
+      this.overriddenSources.delete(this.normalizePath(pathOf(sourceFile)))
       return this.project.removeSourceFile(pathOf(sourceFile))
     }
+    this.overriddenSources.delete(this.normalizePath(filePath))
     return false
   }
 
@@ -1734,7 +1764,11 @@ export class Project {
     // unconditional clear this path always performed.
     const sourceFile = this.getSourceFile(filePath)
     this.invalidate(false, pathOf(sourceFile))
-    if (!sourceFile) return
+    if (!sourceFile) {
+      this.overriddenSources.delete(this.normalizePath(filePath))
+      return
+    }
+    this.overriddenSources.delete(this.normalizePath(pathOf(sourceFile)))
     this.invalidateSourcePreparation(filePath, sourceFile)
     // The re-read belongs to the project now: the compiler holds the tree in another process,
     // so a file refreshes by telling it the bytes moved rather than by asking a node to reload
@@ -1752,6 +1786,7 @@ export class Project {
     this.invalidate()
 
     for (const file of files) {
+      this.overriddenSources.delete(this.normalizePath(file))
       const source = this.getSourceFile(file)
       if (source) {
         this.invalidateSourcePreparation(file, source)

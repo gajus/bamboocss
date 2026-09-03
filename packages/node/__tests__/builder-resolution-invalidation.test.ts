@@ -441,10 +441,9 @@ describe('Builder resolution-ledger invalidation', () => {
     builder.extract()
 
     expect(builder.getContextOrThrow()).toBe(context)
-    // The cold source scan left `dependency.ts` and `bridge.ts` to on-demand value resolution,
-    // so neither has a prior extraction digest that can prove its output stable. This first edit
-    // conservatively re-parses both before `app.ts`, which sees the changed `bridged` value.
-    expect(parse.mock.calls.map(([file]) => basename(file))).toEqual(['dependency.ts', 'bridge.ts', 'app.ts'])
+    // Native extraction evaluates the non-authoring bridge inside app.ts's project graph. The
+    // changed file is observed, while only the extraction owner has to be re-parsed.
+    expect(parse.mock.calls.map(([file]) => basename(file))).toEqual(['dependency.ts', 'app.ts'])
 
     const incremental = builder.toCss({ layerParams: true })
     expect(incremental).toContain('red')

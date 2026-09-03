@@ -23,6 +23,8 @@ export interface ResultItem {
     | 'jsx-recipe'
     | 'cva-call'
   box?: BoxNodeMap | BoxNodeLiteral | BoxNodeArray
+  /** Source location supplied by an AST-free extraction backend. */
+  atomOrigin?: { filePath: string; line: number; column: number }
   /** Root binding range for a token call, retained when argument boxes resolve into another file. */
   tokenCalleeRange?: { start: number; end: number }
   /**

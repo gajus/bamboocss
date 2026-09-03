@@ -2,11 +2,11 @@ import { createContext } from '@bamboocss/fixture'
 import { describe, expect, test } from 'vitest'
 
 /**
- * A module reached only by a type-only import must not be pulled into the program.
+ * A module reached only by a type-only import must not be pulled into extraction.
  *
  * `import type { X } from './x'` is erased before anything runs, so `./x` cannot contribute a
- * declaration to any stylesheet. Resolving it installs a file into the compiler and parses it
- * for an answer that is nothing by construction.
+ * declaration to any stylesheet. Native extraction reads value dependencies without installing
+ * either kind of module into the TypeScript compiler.
  *
  * The cost is set by how a codebase generates its types rather than by how it writes its styles.
  * An application whose components each import a generated artifact type-only — a Relay fragment
@@ -14,8 +14,8 @@ import { describe, expect, test } from 'vitest'
  * this was found in, that was 2,945 files and 35.7 MB, and not installing them took the
  * extraction pass from 830s to 116s with byte-identical CSS.
  *
- * Asserted through `has()`, which answers what bamboo *installed*, rather than through a timing.
- * The count is the exact quantity; the seconds it costs are a property of the machine.
+ * Asserted through `has()`, which answers what bamboo installed into TypeScript, rather than
+ * through a timing. Native cross-file evaluation should leave both type and value modules out.
  */
 const build = () => {
   const ctx = createContext({}) as never as {
@@ -43,7 +43,7 @@ const build = () => {
 }
 
 describe('a module imported only for its types', () => {
-  test('is not installed into the compiler', () => {
+  test('leaves the native value graph out of the compiler too', () => {
     const { ctx, cwd, has } = build()
     const entry = `${cwd}/src/entry.tsx`
     ctx.project.addSourceFile(
@@ -57,17 +57,17 @@ describe('a module imported only for its types', () => {
     ctx.getFiles = () => [entry]
     ctx.parseFiles()
 
-    // The value import still has to be read — its export is composed into a style.
-    expect(has('kept')).toBe(true)
-    // The type-only one does not, even though the module also exports a value.
+    // The value import is read by Rust and the type-only one is ignored. Neither is installed
+    // into the compiler merely to extract this file.
+    expect(has('kept')).toBe(false)
     expect(has('erased')).toBe(false)
   })
 
-  test('is installed when the same declaration also names a value', () => {
+  test('evaluates a mixed declaration without installing it into the compiler', () => {
     const { ctx, cwd, has } = build()
     const entry = `${cwd}/src/entry.tsx`
-    // `import { type A, B }` is a value import that happens to name a type. Skipping it would
-    // lose `B`, and with it whatever styles `B` composes.
+    // `import { type A, B }` is a value import that happens to name a type. Rust still reads
+    // `B` for extraction, but does not need to install its module into TypeScript.
     ctx.project.addSourceFile(
       entry,
       `import { type Mixed, mixedValue } from './mixed'\n` +
@@ -78,6 +78,6 @@ describe('a module imported only for its types', () => {
     ctx.getFiles = () => [entry]
     ctx.parseFiles()
 
-    expect(has('mixed')).toBe(true)
+    expect(has('mixed')).toBe(false)
   })
 })

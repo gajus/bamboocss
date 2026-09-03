@@ -128,7 +128,9 @@ describe('generate watch add invalidation', () => {
     await onFile('add', 'src/target.ts')
 
     const relative = reparsed.map((file) => path.relative(directory, file)).sort()
-    expect(relative).toEqual(['src/app.tsx', 'src/bridge.ts', 'src/target.ts'])
+    // The bridge is evaluated inside the app's native project graph; it does not originate a
+    // Bamboo call and therefore needs no independent extraction pass.
+    expect(relative).toEqual(['src/app.tsx', 'src/target.ts'])
     expect(relative).not.toContain('src/unrelated.ts')
 
     const css = readFileSync(outfile, 'utf8')

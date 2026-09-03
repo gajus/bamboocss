@@ -2254,10 +2254,13 @@ const runMixedOutputEpochWatchRebuild = async (
   let siblingWatcher: TestBuildWatcher | undefined
   let siblingGeneration = 1
   const rebuildSibling = async () => {
-    const callsBefore = calls.client
     rmSync(siblingOutDir, { force: true, recursive: true })
     const built = nextEnvironmentWatchCycle(siblingWatcher!)
+    // Rolldown reports an aggregate output failure while another configured output task can
+    // still be finishing. Drain that task before measuring whether this sibling-only edit
+    // touched the client graph.
     await new Promise((settle) => setTimeout(settle, 800))
+    const callsBefore = calls.client
     writeWatchTrigger(siblingTrigger, `export const generation = '${++siblingGeneration}'`)
     expect(await built).toBeUndefined()
     expect(calls.client, `${label}: sibling-only edit rebuilt the client graph`).toBe(callsBefore)
@@ -2497,10 +2500,12 @@ const runRemovedLiveRuleWatchRebuild = async (
         .map((file) => [file, readFileSync(join(directory, file), 'utf8')]),
     )
 
-  let rejectSecondOutput = false
+  let rejectOneOutput = false
+  let rejectedOutput: 1 | 2 | undefined
   let firstOutputWritten = Promise.resolve()
   let markFirstOutputWritten = () => {}
   const armFirstOutput = () => {
+    rejectedOutput = undefined
     firstOutputWritten = new Promise<void>((resolveFirstOutput) => {
       markFirstOutputWritten = resolveFirstOutput
     })
@@ -2516,13 +2521,21 @@ const runRemovedLiveRuleWatchRebuild = async (
   const outputPlugin = (output: 1 | 2): VitePlugin => ({
     name: `bamboocss:test-removed-live-rule-output-${label}-${output}`,
     async generateBundle() {
-      if (output !== 2 || !rejectSecondOutput) return
+      if (!rejectOneOutput) return
+      // Rolldown runs configured outputs as separate tasks and does not promise their order.
+      // Let whichever task starts first reach disk, then reject the other one. Waiting for a
+      // designated output deadlocks when the scheduler happens to start the waiter first.
+      if (rejectedOutput === undefined) {
+        rejectedOutput = output === 1 ? 2 : 1
+        return
+      }
+      if (output !== rejectedOutput) return
       await firstOutputWritten
       releaseSibling()
-      throw new Error(`test rejected second removed-rule output (${label})`)
+      throw new Error(`test rejected removed-rule output ${output} (${label})`)
     },
     writeBundle() {
-      if (output === 1) markFirstOutputWritten()
+      if (output !== rejectedOutput) markFirstOutputWritten()
     },
   })
   const siblingBarrier: VitePlugin = {
@@ -2607,21 +2620,24 @@ const runRemovedLiveRuleWatchRebuild = async (
     expect(initialCss).toContain(widths.old)
     expect(initialCss).not.toContain(widths.replacement)
 
-    // The physical source now contains only NEW. Output zero reaches disk before output one
+    // The physical source now contains only NEW. One output reaches disk before the other
     // rejects, while the sibling stylesheet generation is held until that mixed state exists.
     armFirstOutput()
     holdSibling()
-    rejectSecondOutput = true
+    rejectOneOutput = true
     const mixedClientBuild = nextEnvironmentWatchCycle(clientWatcher)
     const rejectedSiblingBuild = nextEnvironmentWatchCycle(siblingWatcher)
     await new Promise((settle) => setTimeout(settle, 800))
     writeFileSync(clientEntry, clientSource(widths.replacement))
 
-    expect((await mixedClientBuild)?.message).toContain(`test rejected second removed-rule output (${label})`)
+    expect((await mixedClientBuild)?.message).toContain(`test rejected removed-rule output`)
     const siblingError = await rejectedSiblingBuild
-    expect(readOutputFiles(firstOutDir, '.js')).toContain(`w_[${widths.replacement}]`)
-    expect(readOutputFiles(firstOutDir, '.js')).not.toContain(`w_[${widths.old}]`)
-    expect(readOutputFiles(secondOutDir, '.js')).toBe(initialSecondJs)
+    const writtenOutDir = rejectedOutput === 1 ? secondOutDir : firstOutDir
+    const rejectedOutDir = rejectedOutput === 1 ? firstOutDir : secondOutDir
+    const rejectedInitialJs = rejectedOutput === 1 ? initialFirstJs : initialSecondJs
+    expect(readOutputFiles(writtenOutDir, '.js')).toContain(`w_[${widths.replacement}]`)
+    expect(readOutputFiles(writtenOutDir, '.js')).not.toContain(`w_[${widths.old}]`)
+    expect(readOutputFiles(rejectedOutDir, '.js')).toBe(rejectedInitialJs)
     expect(siblingError?.message).toContain(esc(`w_[${widths.old}]`))
     expect(siblingError?.message).toContain('sibling')
     expect(siblingError?.message).toContain('source generation')
@@ -2631,7 +2647,7 @@ const runRemovedLiveRuleWatchRebuild = async (
 
     // Once both configured outputs move to NEW, no live JavaScript names OLD and the same
     // physical extraction is safe to publish.
-    rejectSecondOutput = false
+    rejectOneOutput = false
     releaseSibling()
     const acceptedClientBuild = nextEnvironmentWatchCycle(clientWatcher)
     await new Promise((settle) => setTimeout(settle, 800))
@@ -2660,7 +2676,7 @@ const runRemovedLiveRuleWatchRebuild = async (
     const cleanCss = cssFromBuild(await cleanBuilder.build(cleanBuilder.environments.sibling))
     expect(convergedCss.trim(), `${label}: converged sheet differs from a clean accepted build`).toBe(cleanCss.trim())
   } finally {
-    rejectSecondOutput = false
+    rejectOneOutput = false
     markFirstOutputWritten()
     releaseSibling()
     await Promise.all([clientWatcher?.close(), siblingWatcher?.close()])

@@ -1,0 +1,28 @@
+[package]
+name = "bamboo-native-extractor"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+napi = { version = "3.12.2", default-features = false, features = ["napi8", "serde-json"] }
+napi-derive = "3.6.3"
+oxc_allocator = "0.148.0"
+oxc_ast = "0.148.0"
+oxc_ast_visit = "0.148.0"
+oxc_parser = "0.148.0"
+oxc_semantic = "0.148.0"
+oxc_span = "0.148.0"
+oxc_syntax = "0.148.0"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = { version = "1.0.149", features = ["preserve_order"] }
+
+[build-dependencies]
+napi-build = "2.4.1"
+
+[profile.release]
+lto = "thin"
+strip = "symbols"

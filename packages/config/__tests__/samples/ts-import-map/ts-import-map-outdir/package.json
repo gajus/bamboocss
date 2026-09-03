@@ -1,7 +1,11 @@
 {
   "name": "sandbox-ts-import-map-outdir",
-  "type": "module",
   "private": true,
+  "type": "module",
+  "sideEffects": [
+    "*.css",
+    "**/*.css"
+  ],
   "exports": {
     "./css": {
       "types": "./css/index.d.ts",
@@ -32,9 +36,5 @@
       "types": "./types/index.d.ts"
     },
     "./styles.css": "./styles.css"
-  },
-  "sideEffects": [
-    "*.css",
-    "**/*.css"
-  ]
+  }
 }

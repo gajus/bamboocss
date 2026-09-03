@@ -1,5 +1,43 @@
 # @bamboocss/generator
 
+## 1.54.0
+
+### Minor Changes
+
+- 353392c: Serve the development stylesheet with a source map to each rule's first call site.
+  - With Vite's `css.devSourcemap` on, the dev server's `virtual:bamboo.css` carries a map from every rule to the
+    `css()`, pattern, `cva()` or `sva()` call that first wrote its atom, so DevTools names the file and line beside a
+    rule instead of the virtual module. Vite reads the sources in and inlines the map, as it does for any stylesheet's.
+  - The extraction pass records each atom's first call site only when asked — `StyleEncoder.recordOrigins`, set through
+    `Builder.setup({ atomOrigins: true })` — and reads them back with `getAtomOrigins()`, by class name. Nothing is
+    recorded otherwise, and builds are unaffected.
+  - Config recipes, `staticCss` and `globalCss` have no call site and stay unattributed, as does a file a
+    `parser:before` hook rewrote.
+  - `getLineAndColumnAtPos` in `@bamboocss/ts-ast` now computes a file's line starts once and searches them, instead of
+    slicing and splitting the text up to every offset.
+
+- 8ae0339: Report a declaration in the emitted stylesheet that is not valid CSS for its property.
+  - New `invalidDeclaration` option — `'off' | 'warn' | 'error'`, default `'warn'` — asked of the finished sheet, after
+    every utility transform, mixin, recipe and the reset has had its say. `bgLinear: '65deg'` reaches the sheet as
+    `background-image: 65deg`, which parses, so nothing objected; the browser drops it at compute time.
+  - `error` fails the build with `ERR_BAMBOO_INVALID_DECLARATION`, listing every such declaration in the sheet. `warn`
+    reports each one once per process.
+  - A value reading `var()`, `env()`, `attr()` or `if()` is not checked, since the grammar cannot see what will be
+    substituted, and a property the grammar does not know is not reported. A value naming a token that does not exist
+    belongs to `unresolvedToken`, whatever that is set to, and is never reported here.
+
+### Patch Changes
+
+- Updated dependencies [353392c]
+- Updated dependencies [8ae0339]
+- Updated dependencies [de93fc6]
+  - @bamboocss/core@1.54.0
+  - @bamboocss/types@1.54.0
+  - @bamboocss/shared@1.54.0
+  - @bamboocss/logger@1.54.0
+  - @bamboocss/token-dictionary@1.54.0
+  - @bamboocss/is-valid-prop@1.54.0
+
 ## 1.53.1
 
 ### Patch Changes

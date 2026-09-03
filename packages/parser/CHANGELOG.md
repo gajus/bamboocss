@@ -1,5 +1,47 @@
 # @bamboocss/parser
 
+## 1.54.0
+
+### Patch Changes
+
+- 195f150: Compile only the modules that can reach bamboo, and stop a bundler transform from invalidating every import
+  resolution.
+  - A module `include` does not reach, or `exclude` drops, yields no stylesheet rule whatever it calls, so the compiler
+    now leaves it alone — as it does a rewrite of an included module that a framework plugin hands over, such as the
+    export-name stubs a router derives from its page modules. A module still compiles when it names a bamboo entrypoint,
+    so the build-end check for classes without rules keeps reporting a misconfigured project, or when it imports a
+    module the project holds, by relative path or through a package an included file already resolved.
+  - With the TypeScript 7 backend, each such module was parked in the shared project under an auxiliary path, and every
+    file joining the project reloads the whole program in the Go compiler. A 7,000-file app whose config excludes 3,000
+    generated GraphQL artifacts paid that reload 3,000 times per build environment, about a second each, and its
+    production build stopped finishing inside a 30-minute CI timeout.
+  - An auxiliary source no longer counts as a change to the file tree: nothing imports `X.__bamboo__.tsx`, so no
+    resolution can move. Every importer's cached import resolutions now survive it, where each one used to make every
+    module parsed afterwards re-resolve its imports with filesystem probes.
+
+- 353392c: Serve the development stylesheet with a source map to each rule's first call site.
+  - With Vite's `css.devSourcemap` on, the dev server's `virtual:bamboo.css` carries a map from every rule to the
+    `css()`, pattern, `cva()` or `sva()` call that first wrote its atom, so DevTools names the file and line beside a
+    rule instead of the virtual module. Vite reads the sources in and inlines the map, as it does for any stylesheet's.
+  - The extraction pass records each atom's first call site only when asked — `StyleEncoder.recordOrigins`, set through
+    `Builder.setup({ atomOrigins: true })` — and reads them back with `getAtomOrigins()`, by class name. Nothing is
+    recorded otherwise, and builds are unaffected.
+  - Config recipes, `staticCss` and `globalCss` have no call site and stay unattributed, as does a file a
+    `parser:before` hook rewrote.
+  - `getLineAndColumnAtPos` in `@bamboocss/ts-ast` now computes a file's line starts once and searches them, instead of
+    slicing and splitting the text up to every offset.
+
+- Updated dependencies [353392c]
+- Updated dependencies [8ae0339]
+- Updated dependencies [de93fc6]
+  - @bamboocss/core@1.54.0
+  - @bamboocss/ts-ast@1.54.0
+  - @bamboocss/types@1.54.0
+  - @bamboocss/shared@1.54.0
+  - @bamboocss/extractor@1.54.0
+  - @bamboocss/config@1.54.0
+  - @bamboocss/logger@1.54.0
+
 ## 1.53.1
 
 ### Patch Changes

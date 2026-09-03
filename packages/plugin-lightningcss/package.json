@@ -1,6 +1,6 @@
 {
   "name": "@bamboocss/plugin-lightningcss",
-  "version": "1.54.0",
+  "version": "1.54.1",
   "description": "Bamboo CSS plugin for LightningCSS optimization",
   "homepage": "https://bamboocss.com",
   "license": "MIT",

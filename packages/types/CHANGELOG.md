@@ -1,5 +1,11 @@
 # @bamboocss/types
 
+## 1.54.1
+
+### Patch Changes
+
+- b541413: Add `watermark: false`, which drops the 🎋 from the stylesheet's `--made-with-bamboo` declaration.
+
 ## 1.54.0
 
 ### Minor Changes

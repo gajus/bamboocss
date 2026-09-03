@@ -84,7 +84,12 @@ describe('what the compiler transforms', () => {
   })
 
   test('the entrypoint test reads the outdir name and every import map path', () => {
-    const ctx = { imports: { outdir: './generated/styled', value: { css: ['@acme/styled/css'], recipe: [] } } }
+    const ctx = {
+      imports: {
+        outdir: './generated/styled',
+        value: { css: ['@acme/styled/css'], recipe: [], pattern: [], tokens: [] },
+      },
+    }
 
     expect(namesEntrypoint(ctx, `import { css } from '../generated/styled/css'`)).toBe(true)
     expect(namesEntrypoint(ctx, `import { button } from '@acme/styled/css'`)).toBe(true)

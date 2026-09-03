@@ -73,6 +73,10 @@ a green check that was actually failing. Capture the real one:
 pnpm check > /tmp/check.log 2>&1; echo "EXIT=$?"
 ```
 
+**`tsc` colours its diagnostics, so `error` and `TS2345` are separated by escape codes.** Grepping a `pnpm typecheck`
+run for `error TS` prints nothing whether or not it failed; one commit reached CI that way with a type error a plain
+`pnpm typecheck; echo "EXIT=$?"` would have shown. Read the exit code, and the lines above it.
+
 **`git checkout HEAD -- <file>` discards uncommitted work, with no reflog entry to recover it.** So does a `git stash`
 whose flag is malformed — `--keep-index=false` is not a valid form, and the stash silently does not happen, which leaves
 a "before" measurement that is really the "after" tree. Commit or copy to a scratch directory first, then confirm the

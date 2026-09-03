@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 
 import { logger } from '@bamboocss/logger'
+import type { ImportMapOutput } from '@bamboocss/types'
 import { truncateList } from '@bamboocss/shared'
 import { markStaticCompilerActive } from '@bamboocss/node/static-compiler'
 import type { Plugin } from 'vite'
@@ -172,10 +173,7 @@ const entrypointNeedles = new WeakMap<object, string[]>()
  * extraction inventory, to decide whether parsing is worth it. The outdir's own name is among
  * the needles, so a relative import of the generated `styled-system` counts too.
  */
-export const namesEntrypoint = (
-  ctx: { imports: { outdir: string; value: Record<string, string[]> } },
-  code: string,
-) => {
+export const namesEntrypoint = (ctx: { imports: { outdir: string; value: ImportMapOutput<string> } }, code: string) => {
   let needles = entrypointNeedles.get(ctx)
   if (!needles) {
     const outdirName = ctx.imports.outdir.split('/').filter(Boolean).at(-1)

@@ -1,5 +1,17 @@
 # @bamboocss/parser
 
+## 1.54.2
+
+### Patch Changes
+
+- @bamboocss/config@1.54.2
+- @bamboocss/core@1.54.2
+- @bamboocss/extractor@1.54.2
+- @bamboocss/logger@1.54.2
+- @bamboocss/shared@1.54.2
+- @bamboocss/ts-ast@1.54.2
+- @bamboocss/types@1.54.2
+
 ## 1.54.1
 
 ### Patch Changes

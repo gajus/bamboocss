@@ -5,8 +5,8 @@ description: Frequently asked questions and how to resolve common issues
 
 ## How does Bamboo manage style conflicts ?
 
-When you combine shorthand and longhand properties, Bamboo will resolve the styles in a predictable way. The shorthand
-property will take precedence over the longhand property.
+When a shorthand and a longhand set the same part of a style at equal specificity and condition, the longhand wins. For
+example, this gives `padding-top: 20px` and `10px` on the other sides:
 
 ```jsx
 import { css } from '../styled-system/css'
@@ -17,31 +17,40 @@ const styles = css({
 })
 ```
 
-The styles generated at build time will look like this:
+The utility rules are placed in ordered sublayers (shown here without minification):
 
 ```css
 @layer utilities {
-  .p_10px {
-    padding: 10px;
-  }
+  @layer s010-c0-p1000, s010-c0-p4000;
 
-  .pt_20px {
-    padding-top: 20px;
+  @layer s010-c0-p1000 {
+    .p_10px {
+      padding: 10px;
+    }
+  }
+  @layer s010-c0-p4000 {
+    .pt_20px {
+      padding-top: 20px;
+    }
   }
 }
 ```
+
+See [utility sublayers](/docs/concepts/cascade-layers#sublayers-of-utilities) for conditions, specificity, and important
+styles. When you compose two style objects, a later value for the same property wins before class allocation.
 
 ---
 
 ## Why didn't my `className` override the component's styles?
 
 With Vite, `cx()` resolves conflicts only when the compiler can see every Bamboo argument. An arbitrary `className` prop
-remains a runtime string, so `cx(componentStyles, props.className)` is only a join and the browser picks between
-same-layer declarations by stylesheet order.
+remains a runtime string, so `cx(componentStyles, props.className)` is only a join. The browser applies the
+[cascade and utility sublayers](/docs/concepts/cascade-layers); the argument order of a string join does not set
+priority.
 
-The reliable fix is to stop expressing the override as an opaque class name. Accept a style object and compile
-`css(base, props.css)`, where later properties win before class allocation. A declared recipe variant is another good
-fit when the choices are finite.
+Use a declared recipe variant for finite component choices. When both style objects are statically available,
+`css(base, override)` merges their properties before class allocation. An arbitrary runtime style-object prop cannot be
+compiled, so changing `className` to an open `css` prop does not solve that case.
 
 If both arguments are analyzable at the call site, `cx(css(base), css(override))` is also composed semantically and
 losing declarations are never allocated. Recipes and utilities share the global atom layer.
@@ -75,39 +84,17 @@ const Demo = () => {
 
 ## How to get Bamboo to work with Jest?
 
-If you run into error messages like `SyntaxError: Unexpected token 'export'` when running Jest tests. Here's what you
-can:
+Bamboo's style calls must pass through `@bamboocss/vite` before a test executes them. `ts-jest`, Babel, and changing
+`outExtension` handle syntax or module-format concerns; they do not compile Bamboo styles.
 
-In your tsconfig, add
+For Jest, build your components with Vite first and have tests import the compiled output. The
+[component-library build](/docs/guides/component-library#ship-a-static-css-file) emits JavaScript that can run without
+Bamboo's compiler. Keep Jest's module-format and DOM setup appropriate for that output. Tests of ordinary helpers that
+never execute style calls can continue to run directly.
 
-```json
-{
-  "compilerOptions": {
-    "allowJs": true
-  }
-}
-```
-
-In your Jest configuration, add the `ts-jest` transformer:
-
-```ts
-export default {
-  // ...
-  transform: {
-    '^.+\\.tsx?$': 'ts-jest',
-    '^.+\\.(ts|tsx|js|jsx)?$': 'ts-jest',
-  },
-}
-```
-
-In your Bamboo config, set the `outExtension` to `js`:
-
-```ts
-export default defineConfig({
-  // ...
-  outExtension: 'js',
-})
-```
+For tests that import application source, use a Vite-based test pipeline that runs `bamboocss()` on those modules and
+includes them in Bamboo's `include`. A missed style call throws an error containing `was not compiled`; changing the
+output extension cannot fix that error.
 
 ---
 
@@ -212,18 +199,15 @@ export type ButtonVariantProps = RecipeVariantProps<typeof buttonStyle>
 You can split recipe props by using `xxx.splitVariantProps`. Let's say you have a `recipe` named `button`, you can split
 its props like this:
 
-```tsx Button.tsx {8}
-import { css, cx } from '../styled-system/css'
-import { ButtonVariantProps, button } from '../styled-system/recipes'
+```tsx filename="Button.tsx"
+import type { ComponentPropsWithoutRef } from 'react'
+import { button, type ButtonVariantProps } from '../styled-system/recipes'
 
-interface ButtonProps extends ButtonVariantProps {
-  children: React.ReactNode
-}
+type ButtonProps = ButtonVariantProps & Omit<ComponentPropsWithoutRef<'button'>, keyof ButtonVariantProps | 'className'>
 
 export function Button(props: ButtonProps) {
-  const { children, ...rest } = props
-  const [buttonProps, cssProps] = button.splitVariantProps(rest)
-  return <button className={cx(button(buttonProps), css(cssProps))}>{children}</button>
+  const [variantProps, buttonProps] = button.splitVariantProps(props)
+  return <button type="button" {...buttonProps} className={button(variantProps)} />
 }
 ```
 
@@ -357,22 +341,20 @@ style values are compiler errors; there is no option that restores a runtime sty
 
 ## How does Bamboo work?
 
-When running `pnpm bamboo`, here's what's happening under the hood:
+The CLI resolves the config and presets, generates the typed `styled-system` authoring surface, and uses Rust/Oxc to
+extract styles from the configured source graph. `bamboo` and `bamboo cssgen` can write the extracted CSS.
 
-- **Load Bamboo context**:
-  - Find and evaluate app config, merge result with presets.
-  - Create bamboo context: prepare code generator from config, parse user's file as AST.
-- **Generating artifacts**:
-  - Write lightweight JS runtime and types to output directory
-- **Extracting used styles in app code**:
-  - Run parser on each user's file: identify and extract styles, compute CSS, write to styles.css.
+During development and production builds, the required Vite plugin also compiles style calls to class strings or finite
+lookups, checks that their rules exist, and serves `virtual:bamboo.css`. Production builds can prune unreachable atoms
+and split exclusive utilities into lazy chunks. See [Source compilation](/docs/guides/source-transformation).
 
 ---
 
 ## I'm seeing a "Could not resolve xxx" error with esbuild/tsdown. What should I do?
 
-In such a case, check the [`outExtension`](/docs/references/config#outextension) in your `bamboo.config` and set it to
-"js". This will ensure your modules are resolved correctly.
+Generate the authoring surface with `bamboo codegen`, then check the import path, package exports, and
+[`outExtension`](/docs/references/config#outextension). Resolving an import does not compile its style calls: components
+must still pass through Vite. See [component-library builds](/docs/guides/component-library#ship-a-static-css-file).
 
 ---
 
@@ -519,7 +501,7 @@ First of all you cast the css from the other library(s) to a css layer:
 Then update the default layer list to deprioritize the styles from the other library(s):
 
 ```css
-@layer bootstrap, reset, base, tokens, recipes, utilities;
+@layer bootstrap, reset, base, tokens, utilities;
 
-@layer ionic, reset, base, tokens, recipes, utilities;
+@layer ionic, reset, base, tokens, utilities;
 ```

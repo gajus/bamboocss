@@ -272,21 +272,31 @@ Measured on the example apps in this repository:
 | vite-ts | -21.6% | -5.6% |  -4.8% |
 | svelte  | -20.4% | -6.6% |  -7.3% |
 
-If you import the stylesheet through a bundler you probably do not need this – Vite, Next.js and any PostCSS setup with
-`cssnano` already minify CSS in their production build. It matters when you ship `styled-system/styles.css` as-is:
-linked straight from an HTML file, served from a CDN, or published inside a component library.
+If you import the stylesheet through Vite you probably do not need this. Vite and any PostCSS setup with `cssnano`
+already minify CSS in their production build. It matters when you ship `styled-system/styles.css` as-is: linked straight
+from an HTML file, served from a CDN, or published inside a component library.
 
 Pass `--minify` to [`bamboo cssgen`](/docs/references/cli#cssgen) to enable it for a single build without changing the
 config. [`bamboo debug`](/docs/references/cli#debug) always writes unminified css, whatever this is set to.
 
 ### hash
 
-**Type**: `boolean | { cssVar: boolean; className: boolean }`
+**Type**: `boolean | 'auto' | { cssVar?: boolean | 'auto'; className?: boolean | 'auto' }`
 
 **Default**: `false`
 
 Whether to hash the generated class names / css variables. This is useful if want to shorten the class names or css
-variables. `true` hashes both; the object form hashes each independently.
+variables. `true` hashes both; the object form controls each independently, with omitted keys defaulting to `false`.
+`'auto'` keeps names readable in the Vite dev server and hashes them in production builds and CLI output. The Vite
+integration sets the development mode for you.
+
+```ts
+export default defineConfig({
+  hash: 'auto',
+  // Or hash only class names in production:
+  // hash: { className: 'auto', cssVar: false },
+})
+```
 
 For the [shared example](#prefix), the emitted class and variable are:
 
@@ -300,6 +310,23 @@ For the [shared example](#prefix), the emitted class and variable are:
 This option applies to every build path, Vite included — it is the only thing that shortens class names. Vite's compiler
 composes StyleSets before naming and then emits the names the stylesheet is written under, so hashing changes what those
 names look like without changing `cx` semantics.
+
+### watermark
+
+**Type**: `boolean`
+
+**Default**: `true`
+
+Whether to include the 🎋 emoji in the stylesheet's `--made-with-bamboo` declaration on `:root`.
+
+```ts
+export default defineConfig({
+  watermark: false,
+})
+```
+
+`false` changes the value to an empty string. The declaration stays in the CSS because the Vite plugin uses it to
+recognize Bamboo's stylesheet after a bundler merges or minifies it.
 
 ## File system options
 
@@ -715,8 +742,8 @@ import { token } from '@acme/ui' // a barrel Bamboo cannot classify
   extraction, not everything that may import — a build script, a config file, or a sibling workspace package calling
   `token()` is invisible, and pruning against it produces a `var()` with no declaration, which inherits rather than
   falling back. Check that `include` covers every file that reaches for a token before turning this on. `bamboo init`
-  scaffolds `./src/**` and `./pages/**`; a Next App Router `./app/**`, a Remix `./app/root.tsx`, or plain `.ts` files
-  under a `.tsx`-only glob are the common gaps.
+  scaffolds `./src/**` and `./pages/**`; a React Router `./app/**` directory, including `./app/root.tsx`, or plain `.ts`
+  files under a `.tsx`-only glob are the common gaps.
 </Callout>
 
 #### prune.keyframes
@@ -1164,18 +1191,13 @@ Pass a single severity to apply it to both:
 }
 ```
 
-Token resolution falls back to the value it was given, so an unknown path is emitted as written —
-`css({ background: 'accent.default' })` ships as `background: accent.default`. That parses, so the stylesheet is valid
-and no build step objects; the browser drops the declaration at compute time and the style is simply absent. It surfaces
-as "this colour never applied", a long way from the typo that caused it.
-
-The default is `warn` because the test is a **shape**: a dotted value, against the set of values the property
-enumerates. That is right about a mistyped token and cannot be certain about a literal, so escalating it is a choice a
-project makes once it knows its own source is clean. A property that enumerates nothing — `gridTemplateAreas` — is never
-reported, and `[accent.default]` marks a value as literal.
+A missing token such as `css({ background: 'accent.default' })` fails the build by default. If you lower the token
+severity to `warn` or `off`, resolution falls back to the original value: `background: accent.default` can reach the
+stylesheet, where the browser drops it. Use `[accent.default]` only when you intend a literal value; that bypasses this
+token check, but [`invalidDeclaration`](#invaliddeclaration) can still report invalid CSS.
 
 Every style the build transforms is graded, wherever it was written — a `css()` call, `staticCss`, and the styles your
-config supplies: `globalCss`, the preflight scope, config recipes and mixins. The three settings differ in what they do
+config supplies: `global.css`, the preflight scope, config recipes and mixins. The three settings differ in what they do
 about a finding, never in which styles they look at.
 
 The modifiers a path can carry are stripped before it is resolved, so `accent.default!`, `accent.default !important` and
@@ -1190,10 +1212,8 @@ value in `font: 12px/1.5 serif`.
 </Callout>
 
 Under `error` the check is asked of the stylesheet being emitted rather than of the calls that built it, so it reports
-exactly what the file about to be written contains. Extraction is additive within a watch process — the rule for a style
-deleted from source stays in the sheet until the process restarts — so a dev server reports a value you have already
-fixed for the same reason it still serves its rule. A production build is a fresh process and sees only what its source
-asked for.
+what the file about to be written contains. The Vite builder re-extracts affected sources when they change, including
+removing contributions from deleted files.
 
 A **binding that does not exist** is not graded here and always fails the build; see below.
 

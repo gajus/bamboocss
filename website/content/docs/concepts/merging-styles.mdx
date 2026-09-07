@@ -184,38 +184,36 @@ class, `cx` remains a string join and makes no conflict guarantee — see
 
 ## Merging within JSX component
 
-Using these techniques, you can apply them to a component by exposing a `css` prop and merge with local styles.
+Use statically available objects for composition. For component choices that vary at runtime, expose a finite recipe
+variant instead of accepting an arbitrary style object:
 
-```jsx
-const cardStyles = css.raw({
-  bg: 'red',
-  color: 'white',
+```tsx
+import { cva } from '../styled-system/css'
+
+const card = cva({
+  base: { color: 'white' },
+  variants: {
+    tone: {
+      red: { bg: 'red.500' },
+      blue: { bg: 'blue.500' },
+    },
+  },
+  defaultVariants: { tone: 'red' },
 })
 
-function Card({ title, description, css: cssProp }) {
+function Card({ title, tone }: { title: string; tone?: 'red' | 'blue' }) {
   return (
-    // merge the `cardStyles` with the `cssProp` passed in
-    <div className={css(cardStyles, cssProp)}>
+    <div className={card({ tone })}>
       <h1>{title}</h1>
-      <p>{description}</p>
     </div>
   )
 }
 
-// usage
 function Demo() {
-  return <Card title="Hello World" description="This is a card component" css={{ bg: 'blue' }} />
+  return <Card title="Hello World" tone="blue" />
 }
 ```
 
-Any prop name other than `css` works the same way, except the caller must wrap the object in `css.raw(...)` for Bamboo
-to extract it:
-
-```jsx
-function Card({ title, description, style }) {
-  return <div className={css(cardStyles, style)}>{/* ... */}</div>
-}
-
-// usage
-;<Card title="Hello World" description="This is a card component" style={css.raw({ bg: 'blue' })} />
-```
+`css(base, props.css)` with an open runtime prop cannot be compiled. Renaming the prop or wrapping its value in
+`css.raw()` does not change that requirement. For values such as a dragged offset or user-selected color, use an inline
+style or a CSS variable as described in [dynamic styling](/docs/guides/dynamic-styling).

@@ -3,6 +3,24 @@ title: Using Vite
 description: Easily use Bamboo with Vite, React and Typescript with our dedicated integration.
 ---
 
+## Build platform requirements
+
+Bamboo extracts styles with a required Rust/Oxc native binary bundled in `@bamboocss/node`. Published packages include
+prebuilt binaries for these machines running the CLI, dev server, or production build:
+
+| Operating system | Architectures |
+| ---------------- | ------------- |
+| macOS            | arm64, x64    |
+| Linux with glibc | arm64, x64    |
+| Windows          | x64           |
+
+Installing the published packages does not require Rust. Alpine Linux/musl and Windows arm64 have no bundled binary; use
+a supported build environment. There is no JavaScript or TypeScript extraction fallback. These requirements apply to
+build machines; browsers receive the compiled JavaScript and CSS.
+
+For a missing or unloadable binary, see
+[native extraction errors](/docs/concepts/build-diagnostics#native-extraction-is-unavailable).
+
 ## Start a new project
 
 <Steps>

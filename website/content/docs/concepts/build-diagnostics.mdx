@@ -75,9 +75,24 @@ asked it for a class, so no rule is missing.
 
 `ERR_BAMBOO_NAMING_DISAGREEMENT`
 
-A class name is derived twice — once here, and once by the generated runtime in the browser — and the two only meet in
-the DOM, where a mismatch is silent and total. Checked once per build, against the config actually being built. Failing
-costs a build; not failing ships a blank app.
+Bamboo checks that the encoder and class-name generation agree for the resolved config. The Vite compiler writes those
+names into application code; generated style calls do not run in the browser. A mismatch would leave compiled classes
+without matching CSS rules, so this check fails the build.
+
+### Native extraction is unavailable
+
+`ERR_BAMBOO_NATIVE_EXTRACTION`
+
+Stylesheet extraction requires the Rust/Oxc binary bundled with `@bamboocss/node`. Check the
+[build platform requirements](/docs/installation/vite#build-platform-requirements) against the machine running Bamboo.
+Alpine Linux/musl and Windows arm64 do not have bundled binaries; use a supported build environment.
+
+On a supported platform, a load error can mean the installed package is incomplete or its binary cannot load. Reinstall
+from your lockfile on the build machine and inspect the original error in `cause`. In a Bamboo source checkout, build
+`@bamboocss/native-extractor` with Cargo through `pnpm --filter=@bamboocss/native-extractor build-fast`.
+
+There is no TypeScript fallback or environment-variable opt-out. This code also reports native analysis failures; use
+the error message and `cause` to distinguish a load failure from an extraction failure.
 
 ## What you can grade
 
@@ -86,11 +101,15 @@ might be wrong about your code; escalating is a choice you make once you know yo
 
 ### A value naming a token that does not exist
 
-[`unresolvedToken`](/docs/references/config#unresolvedtoken) — `off` | `warn` | `error`, default `warn`
+[`unresolvedToken`](/docs/references/config#unresolvedtoken) defaults to `{ token: 'error', grammar: 'warn' }`. The two
+checks have independent severities:
 
-Token resolution ends in the value it was given, so an unknown path is emitted as written and
-`background: 'accent.default'` ships as `background: accent.default`. That parses. The stylesheet is valid, no build
-step objects, and the browser drops the declaration at compute time.
+| Check                                                                    | Example                     | Default |
+| ------------------------------------------------------------------------ | --------------------------- | ------- |
+| Missing token or unknown name on a token-backed property                 | `color: 'brand.foreground'` | `error` |
+| Bare name rejected by CSS grammar on a property without a token category | `display: 'flexx'`          | `warn`  |
+
+A missing token fails the build:
 
 ```
 ERR_BAMBOO_UNRESOLVED_TOKEN: 2 style value(s) name a token that does not exist:
@@ -99,13 +118,14 @@ ERR_BAMBOO_UNRESOLVED_TOKEN: 2 style value(s) name a token that does not exist:
 - `color: brand.foreground`. Check the path against your `colors` tokens.
 ```
 
-At `warn` the same findings are logged and the build carries on; at `error` the list is capped at 25, and the count
-tells you what was withheld. Both grade the same styles — a `css()` call, `staticCss`, and what your config supplies:
-`globalCss`, the preflight scope, config recipes and mixins.
+Set either half to `off`, `warn`, or `error`, or pass one severity to apply it to both. At `warn` the build carries on;
+at `error` the reported list is capped at 25. Both inspect styles from calls, `staticCss`, global CSS, config recipes,
+and mixins. Lowering the token severity can emit the unresolved value as written, leaving a declaration the browser
+drops.
 
-The default is `warn` because the test is a _shape_: a dotted value against the set of values the property enumerates.
-That is right about a mistyped token and cannot be certain about a literal. A property that enumerates nothing is never
-reported, and `[accent.default]` marks a value as literal.
+The grammar check defaults to `warn` because its data can lag CSS support. `[accent.default]` explicitly marks a literal
+and bypasses token checking; the finished-sheet [`invalidDeclaration`](#a-declaration-the-browser-would-drop) check can
+still report invalid CSS.
 
 ### A declaration the browser would drop
 
@@ -130,14 +150,15 @@ with — so a build is never failed by how fresh a grammar is until you say so.
 
 ### A call the build could not fully see
 
-Always a warning, on the `css` and `recipe` log channels.
+The extraction pass reports unresolved values on the `css` and `recipe` warning channels, with a file, line, and
+property when available. These warnings describe what extraction could recover; they do not permit runtime styling. The
+Vite compiler separately rejects style-producing calls it cannot resolve to a finite set of classes.
 
-A `css()` call degrades: the declarations the build resolved still apply, and only the ones it could not are missing. A
-recipe does not degrade at all — its classes are named from a hash of its config, so a declaration the build cannot see
-gives the build and the browser different names and _every_ style is lost. The two are worded differently for that
-reason, and the recipe message tells you to set `className` so the name stops depending on what the build could resolve.
+Make the value statically recoverable, express finite choices as recipe variants, or put an open dynamic value in an
+inline style or CSS variable. Setting a recipe's `className` or requesting `staticCss` does not make an open runtime
+style call compilable. See [dynamic styling](/docs/guides/dynamic-styling).
 
-Nothing under [`outdir`](/docs/references/config#outdir) is reported, because it is not yours to rewrite.
+Generated files under [`outdir`](/docs/references/config#outdir) are not reported as authored unresolved-style warnings.
 
 ### A token path the prune scan could not follow
 

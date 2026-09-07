@@ -32,7 +32,7 @@ styles, where the last write wins per property:
 
 ```jsx
 css({ padding: '4' }, { padding: '8' }) // → padding 8
-css(base, props.css) // the overridable-component idiom
+css(css.raw({ padding: '4' }), { padding: '8' }) // both objects are statically available
 css.raw({ padding: '4' }) // a style object to merge later
 ```
 

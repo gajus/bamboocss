@@ -7,6 +7,11 @@ guidelines that should help you as you prepare your contribution.
 
 The following steps will get you up and running to contribute to Bamboo CSS:
 
+Install Node.js and the pnpm version named in the root `package.json`, plus Rust through rustup. The native extractor's
+`packages/native-extractor/rust-toolchain.toml` pins the Rust toolchain; rustup installs it when the package builds.
+`cargo --version` should work before you run `pnpm install`, whose prepare step builds the Rust/Oxc extractor as well as
+the TypeScript packages. Consumers of published Bamboo packages use bundled binaries and do not need Rust.
+
 1. Fork the repo (click the <kbd>Fork</kbd> button at the top right of [this page](https://github.com/gajus/bamboocss))
 
 2. Clone your fork locally
@@ -38,6 +43,8 @@ following structure:
 | [parser](packages/parser)                     | Contains code for parsing a source code                      |
 | [is-valid-prop](packages/is-valid-prop)       | Contains code for checking if a prop is a valid css prop     |
 | [node](packages/node)                         | Contains the Node.js API of Bamboo's features                |
+| [native-extractor](packages/native-extractor) | Rust/Oxc stylesheet extraction and static evaluation         |
+| [ts-ast](packages/ts-ast)                     | TypeScript 7 project and AST access for source compilation   |
 | [token-dictionary](packages/token-dictionary) | Contains code used to process tokens and semantic tokens     |
 | [shared](packages/shared)                     | Contains shared TS                                           |
 
@@ -45,6 +52,7 @@ following structure:
 
 - [PNPM](https://pnpm.io/) to manage packages and dependencies
 - [tsdown](https://tsdown.dev/) to bundle packages
+- Rust/Cargo to build the native stylesheet extractor
 - [Vitest](https://vitest.dev/) for testing, mostly using snapshots
 - [Changeset](https://github.com/atlassian/changesets) for changes documentation, changelog generation, and release
   management.

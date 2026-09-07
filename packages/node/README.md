@@ -16,7 +16,8 @@ Everything below is exported from `@bamboocss/node`.
 - `loadConfigAndCreateContext({ cwd?, config?, configPath? })` – resolve the config file, merge presets and inline
   overrides, auto-inject the built-in plugins (`vue`, `svelte`), and return a `BambooContext`.
 - `BambooContext` – the resolved config plus everything derived from it: tokens, utilities, conditions, recipes,
-  patterns, the `ts-morph` project, the output engine and the diff engine.
+  patterns, the TypeScript 7 project used by the source compiler, the output engine and the diff engine. Stylesheet
+  extraction runs through the Rust/Oxc native evaluator.
 - `Builder` – the incremental driver the bundler plugins use. It owns context setup, tracks which files and config
   dependencies changed, re-extracts only those, and hands back the stylesheet (`toCss`).
 

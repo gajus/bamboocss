@@ -45,15 +45,19 @@ differently beyond the smaller surface — see [why Bamboo](/docs/overview/why-b
 
 ## How it works
 
-Bamboo scans your configured source graph and Vite compiles its style calls, globally pools recipe and utility atoms,
-and prunes the stylesheet against the module graph. The CLI generates the typed `styled-system` authoring surface and
-can inspect or preassemble CSS; it is not a styling integration. PostCSS does not emit Bamboo CSS.
+Bamboo's Rust/Oxc extractor scans your configured source graph and Vite compiles its style calls, globally pools recipe
+and utility atoms, and prunes the stylesheet against the module graph. The CLI generates the typed `styled-system`
+authoring surface and can inspect or preassemble CSS; it is not a styling integration. PostCSS does not emit Bamboo CSS.
 
 You author styles as plain objects. Tokens, recipes and variants are generated from your config as types, so the editor
 autocompletes them and the compiler checks them.
 
 ## Features
 
+- 📦 [Per-route CSS](/docs/installation/vite#per-route-stylesheets) – lazy chunks load their exclusive utilities with
+  them
+- 🔎 [Development source maps](/docs/installation/vite#source-maps-in-development) – trace a rule to its first style
+  call
 - ✨ Modern CSS output – cascade layers (`@layer`) and custom properties
 - 🎯 [Predictable composition](/docs/concepts/cascade-layers) – analyzable style sets merge before class allocation;
   cascade layers still define precedence between Bamboo and authored CSS
@@ -72,6 +76,9 @@ autocompletes them and the compiler checks them.
 Every API on one page, with the class strings each call returns — see [Cheat Sheet](/docs/overview/cheat-sheet).
 
 ## Installation
+
+Check the [build platform requirements](/docs/installation/vite#build-platform-requirements) before installing locally
+or configuring CI.
 
 ### General Guides
 
@@ -100,7 +107,7 @@ Get familiar with the core features and concepts in Bamboo.
   <Card
     arrow
     title="Recipes"
-    description="Create composable style variants that are typed and generates the atomic or layer recipe"
+    description="Create typed style variants that compile to shared utility atoms"
     href="/docs/concepts/recipes"
   />
   <Card

@@ -84,7 +84,7 @@ scheme.
 ## Multi-Themes
 
 The above example shows you how to define multi-theme tokens using nested conditions but you can also define clearly
-separated themes using the `themes` property in the config.
+separated themes using `theme.variants` in the config.
 
 This allows you to apply a `theme` on multiple tokens at once, using data attributes and CSS variables.
 
@@ -174,14 +174,14 @@ export default defineConfig({
 })
 ```
 
-This will generate the following CSS:
+An excerpt of the generated CSS, showing the base tokens and the `primary` variant:
 
 ```css
 @layer tokens {
   :where(:root, :host) {
     color-scheme: light dark;
-    --colors-text: blue;
-    --colors-body: light-dark(var(--colors-blue-600), var(--colors-blue-400));
+    --colors-text: green;
+    --colors-body: light-dark(var(--colors-green-600), var(--colors-green-400));
   }
 
   [data-bamboo-theme='primary'] {
@@ -236,67 +236,67 @@ const theme = await getTheme('primary')
 #### Inject the theme styles into the DOM:
 
 ```ts
-import { injectTheme } from '../styled-system/themes'
+import { getTheme, injectTheme } from '../styled-system/themes'
 
 const theme = await getTheme('primary')
 injectTheme(document.documentElement, theme) // this returns the injected style element
 ```
 
-#### SSR example with NextJS:
+#### SSR example with React Router
 
-```tsx
-// app/layout.tsx
-import { cookies } from 'next/headers'
-import './globals.css'
-import { getTheme, type ThemeName } from '../../styled-system/themes'
+In [React Router framework mode](/docs/installation/react-router) with SSR enabled, load the selected theme in the root
+loader and include its CSS in the initial document. This example assumes the `primary` and `secondary` variants above
+and a root-level `styled-system` directory:
 
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const store = cookies()
-  const themeName = store.get('theme')?.value as ThemeName
-  const theme = themeName && (await getTheme(themeName))
+```tsx filename="app/root.tsx"
+import { Links, Meta, Outlet, Scripts, ScrollRestoration, useLoaderData, type LoaderFunctionArgs } from 'react-router'
+import { getTheme } from '../styled-system/themes'
+import 'virtual:bamboo.css'
+
+export async function loader({ request }: LoaderFunctionArgs) {
+  const cookie = request.headers.get('Cookie') ?? ''
+  const savedTheme = cookie
+    .split(';')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith('theme='))
+    ?.slice(6)
+  const themeName = savedTheme === 'secondary' ? 'secondary' : 'primary'
+  return { theme: await getTheme(themeName) }
+}
+
+export default function App() {
+  const { theme } = useLoaderData<typeof loader>()
 
   return (
-    <html lang="en" data-bamboo-theme={themeName ? themeName : undefined}>
-      {themeName && (
-        <head>
-          <style type="text/css" id={theme.id} dangerouslySetInnerHTML={{ __html: theme.css }} />
-        </head>
-      )}
-      <body>{children}</body>
+    <html lang="en" data-bamboo-theme={theme.name}>
+      <head>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <Meta />
+        <Links />
+        <style id={theme.id} dangerouslySetInnerHTML={{ __html: theme.css }} />
+      </head>
+      <body>
+        <Outlet />
+        <ScrollRestoration />
+        <Scripts />
+      </body>
     </html>
   )
 }
 ```
 
-```tsx
-// app/page.tsx
-'use client'
-import { getTheme, injectTheme } from '../../styled-system/themes'
+Only configured theme names reach `getTheme`; a missing or unrecognized cookie selects `primary`. The CSS comes from
+Bamboo's generated theme files. For client-side switching, use `getTheme` and `injectTheme` as above, and save the
+selection in the same cookie if it should survive a reload:
 
-export default function Home() {
-  return (
-    <>
-      <button
-        onClick={async () => {
-          const current = document.documentElement.dataset.bambooTheme
-          const next = current === 'primary' ? 'secondary' : 'primary'
-          const theme = await getTheme(next)
-          setCookie('theme', next, 7)
-          injectTheme(document.documentElement, theme)
-        }}
-      >
-        swap theme
-      </button>
-    </>
-  )
-}
+```ts
+import { getTheme, injectTheme, type ThemeName } from '../styled-system/themes'
 
-// Set a Cookie
-function setCookie(cName: string, cValue: any, expDays: number) {
-  let date = new Date()
-  date.setTime(date.getTime() + expDays * 24 * 60 * 60 * 1000)
-  const expires = 'expires=' + date.toUTCString()
-  document.cookie = cName + '=' + cValue + '; ' + expires + '; path=/'
+export async function selectTheme(name: ThemeName) {
+  const theme = await getTheme(name)
+  injectTheme(document.documentElement, theme)
+  document.cookie = `theme=${encodeURIComponent(name)}; Path=/; SameSite=Lax`
 }
 ```
 

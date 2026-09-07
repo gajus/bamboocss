@@ -315,100 +315,51 @@ const result = css({ mx: '3', paddingTop: '4' }, { mx: '10', pt: '6' })
 //    ^? result = "mx_10 pt_6"
 ```
 
-To design a component that supports style overrides, you can provide the `css` prop as a style object, and it'll be
-merged correctly.
+All objects passed to `css()` must be statically recoverable. For a component with runtime choices, declare the choices
+as recipe variants:
 
 ```tsx filename="src/components/Button.tsx"
-import { css } from '../styled-system/css'
+import type { ReactNode } from 'react'
+import { cva } from '../../styled-system/css'
 
-export const Button = ({ css: cssProp = {}, children }) => {
-  const className = css({ display: 'flex', alignItems: 'center', color: 'black' }, cssProp)
-  return <button className={className}>{children}</button>
-}
-```
-
-Then you can use the `Button` component like this:
-
-```tsx filename="src/app/page.tsx"
-import { Button } from './Button'
-
-export default function Page() {
-  return (
-    <Button css={{ color: 'pink', _hover: { color: 'red' } }}>
-      will result in `class="d_flex ai_center c_pink hover:c_red"`
-    </Button>
-  )
-}
-```
-
----
-
-You can use this approach as well with the `{cvaFn}.raw`, `{svaFn}.raw` and `{patternFn}.raw` functions, allowing style
-objects to be merged as expected in any situation.
-
-**Pattern Example:**
-
-```tsx filename="src/components/Button.tsx"
-import { flex } from '../styled-system/patterns'
-import { css } from '../styled-system/css'
-
-export const Button = ({ css: cssProp = {}, children }) => {
-  // using the flex pattern
-  const flexProps = flex.raw({
-    align: 'center',
-    border: '1px solid',
-    _hover: { color: 'blue.400' },
-  })
-
-  // merging the styles
-  const className = css(flexProps, cssProp)
-
-  return <button className={className}>{children}</button>
-}
-```
-
-**CVA Example:**
-
-```tsx filename="src/components/Button.tsx"
-import { css, cva } from '../styled-system/css'
-
-const buttonRecipe = cva({
-  base: { display: 'flex', fontSize: 'lg' },
+const button = cva({
+  base: { display: 'flex', alignItems: 'center' },
   variants: {
-    variant: {
-      primary: { color: 'white', backgroundColor: 'blue.500' },
+    tone: {
+      neutral: { color: 'black' },
+      brand: { color: 'pink.500', _hover: { color: 'red.500' } },
     },
   },
+  defaultVariants: { tone: 'neutral' },
 })
 
-export const Button = ({ css: cssProp = {}, children }) => {
-  const className = css(
-    // using the button recipe
-    buttonRecipe.raw({ variant: 'primary' }),
-
-    // adding style overrides (internal)
-    { _hover: { color: 'blue.400' } },
-
-    // adding style overrides (external)
-    cssProp,
+export function Button({ tone, children }: { tone?: 'neutral' | 'brand'; children: ReactNode }) {
+  return (
+    <button type="button" className={button({ tone })}>
+      {children}
+    </button>
   )
-
-  return <button className={className}>{children}</button>
 }
 ```
 
-**SVA Example:**
+The compiler can enumerate both tones and compile the runtime selection. An arbitrary `css` prop containing an open
+style object has no such finite set; use [dynamic styling](/docs/guides/dynamic-styling) for values that must remain
+open.
 
-An `sva` recipe's `.raw()` returns one style object per slot, so each slot merges the same way:
+For a statically known pattern or recipe selection, compose the resulting styles through `cx()`:
 
 ```tsx
-const slotStyles = checkbox.raw({ size: 'md' })
+import { css, cva, cx } from '../styled-system/css'
+import { flex } from '../styled-system/patterns'
 
-// rootProps is a `css.raw({ ... })` object supplied by the caller
-;<label className={css(slotStyles.root, rootProps)} />
+const patternClass = cx(flex({ align: 'center' }), css({ color: 'blue.400' }))
+
+const button = cva({ base: { display: 'flex', color: 'red.500' } })
+const recipeClass = cx(button(), css({ color: 'blue.400' }))
 ```
 
-See [Slot recipes](/docs/concepts/slot-recipes) for the recipe this comes from.
+Both examples preserve the layout and select the blue color before allocating classes. The same static-composition
+requirement applies when using `.raw()` style objects from inline recipes and individual slots.
 
 ### Classname concatenation
 
@@ -440,26 +391,30 @@ cx(css({ paddingX: '4' }), css({ paddingX: '2' }))
 // one atom for padding-inline: 2
 ```
 
-The compiler cannot infer the declarations behind `className` in the component example. Take a style object when a
-component needs a reliable override: `css(base, props.css)` merges per property before any class name exists.
+The compiler cannot infer the declarations behind `className` in the component example. When style objects are
+statically available, compose them before allocating classes:
 
 ```jsx
-const Card = ({ css: cssProp, ...rest }) => <div className={css({ p: '4' }, cssProp)} {...rest} />
+const base = { padding: '4' }
+const compact = { padding: '2' }
+const className = css(base, compact)
 ```
 
-Use `css(a, b)` directly when both style objects are already available. Use a recipe variant when the choices form a
-finite public API.
+Use a declared recipe variant when a component needs a finite public choice. An arbitrary runtime style-object prop is
+not statically available, so replacing `className` with `css(base, props.css)` does not make it compilable.
 
 <Callout type="warning">
-  A component that styles itself with bare `css()` and accepts a `className` is the case to watch. Both end up in
-  `utilities`, and an opaque runtime class cannot be composed by the compiler. Prefer a style-object prop or a declared
-  variant for an intentional override.
+  Recipes and `css()` share utility atoms. An opaque runtime class cannot be composed by the compiler, and its position
+  in a `cx()` call does not give it override priority. Use analyzable composition or a declared variant for an
+  intentional override.
 </Callout>
 
 ### Hashing
 
 The `hash` option shortens class names and CSS variables, and it is the only thing that does. The Vite compiler and CLI
-artifacts read the same setting, so a project sets it here rather than per command.
+artifacts read the same setting, so a project sets it here rather than per command. Use `hash: 'auto'` for readable
+names in the Vite dev server and hashed names in production and CLI output. See the
+[hash reference](/docs/references/config#hash) for independent class-name and CSS-variable settings.
 
 ```ts filename="bamboo.config.ts"
 import { defineConfig } from '@bamboocss/dev'

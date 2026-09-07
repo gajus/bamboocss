@@ -29,8 +29,8 @@ The generated CSS for the reset layer looks like this:
 }
 ```
 
-- `@layer base` - The base layer contains global styles defined in the `globalStyles` key in the config. You can also
-  use this layer to add your own global styles.
+- `@layer base` - The base layer contains global styles defined in the `global.css` key in the config. You can also use
+  this layer to add your own global styles.
 
 The generated CSS for the base layer looks like this:
 
@@ -113,12 +113,12 @@ property's priority, shorthands before longhands. Every `!important` declaration
 `important`, because importance inverts layer order and one layer is the only place two important declarations still
 resolve by specificity and then source order.
 
-This exists so that a rule's precedence never depends on where it sits in the file. One flat layer carried precedence in
-its source order — shorthands before longhands, bare rules before conditional ones, each breakpoint in its place — and
-source order is the one thing a stylesheet split per chunk cannot promise, since chunks load in whichever order a route
-needs them. Layer order is decided by the statement, whatever order the rules arrive in. That is what lets the Vite
-plugin give each lazily loaded chunk a [sheet of its own](/docs/installation/vite#per-route-stylesheets): every chunk
-sheet repeats the statement, so whichever the document parses first establishes the same order.
+This fixes precedence between sublayers regardless of where their rules sit in the file. One flat layer carried
+precedence in its source order — shorthands before longhands, bare rules before conditional ones, each breakpoint in its
+place — and source order is the one thing a stylesheet split per chunk cannot promise, since chunks load in whichever
+order a route needs them. Layer order is decided by the statement, whatever order the rules arrive in. That is what lets
+the Vite plugin give each lazily loaded chunk a [sheet of its own](/docs/installation/vite#per-route-stylesheets): every
+chunk sheet repeats the statement, so whichever the document parses first establishes the same order.
 
 Nothing resolves differently. Specificity comes first in the key because layer order outranks it: two rules of different
 specificity used to resolve by specificity alone, and now the more specific one sits in the later sublayer. Two rules of
@@ -140,9 +140,10 @@ order so the compiler can remove overridden declarations before CSS is emitted.
 
 ## Inside a layer, specificity still decides
 
-Layers decide between rules in **different** layers. Within one layer nothing has changed about CSS: specificity
-decides, and source order breaks the tie. Two `css()` calls are always in the same layer, so one can outrank the other —
-and nesting is what makes their specificity unequal.
+Two `css()` calls share the top-level `utilities` layer, but their rules can occupy different sublayers. For normal
+utility declarations, Bamboo places a more specific selector in a later sublayer, preserving its priority. Within the
+same sublayer, specificity still decides and source order breaks ties. Class-name order on an element does not change
+that ranking.
 
 ```tsx
 const prose = css({

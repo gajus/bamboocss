@@ -11,7 +11,7 @@ style APIs in application source are compile-time syntax. There is no switch tha
 export const title = css({ display: 'flex', color: 'red.300' })
 
 // transformed module
-export const title = 'fs_lg fw_bold'
+export const title = 'd_flex c_red.300'
 ```
 
 The virtual stylesheet contains the two shared declaration atoms. A second `css()` call or any recipe selecting either
@@ -50,11 +50,12 @@ The production CSS emitter:
 2. omits the recipe layer and all named recipe rules;
 3. keeps explicit `staticCss` atoms as a safelist;
 4. removes source-graph atoms no transformed module can emit;
-5. compacts the remaining class names; and
+5. names classes using the configured [`hash`](/docs/references/config#hash) setting; and
 6. hashes the final CSS bytes after pruning.
 
-Development uses the same atoms and compact naming. It keeps the full extracted atom set because Vite loads modules
-lazily, and hot-replaces the virtual stylesheet when source changes.
+Development uses the same atoms and naming setting. Names are readable by default; `hash: true` hashes them in every
+mode, while `hash: 'auto'` keeps them readable in development and hashes them in production. Development keeps the full
+extracted atom set because Vite loads modules lazily, and hot-replaces the virtual stylesheet when source changes.
 
 ## What compiles
 

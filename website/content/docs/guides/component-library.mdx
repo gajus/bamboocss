@@ -1,83 +1,133 @@
 ---
 title: Using Bamboo in a Component Library
-description: How to set up Bamboo in a component library
+description: Publish compiled components and CSS, or share source and presets with a Vite application.
 ---
 
-When creating a component library that uses Bamboo which can be used in a variety of different projects, you have four
-options:
+Choose the publishing model based on who owns the styles:
 
-1. Ship a Bamboo [preset](/docs/customization/presets)
-2. Ship a static CSS file
-3. Use Bamboo as external package, and ship the src files
-4. Use Bamboo as external package, and ship the build info file
+| You want to ship                               | Build and consumption model                                           |
+| ---------------------------------------------- | --------------------------------------------------------------------- |
+| Tokens, patterns, or recipes                   | [Publish a preset](#ship-a-bamboo-preset) for the app's Bamboo config |
+| Components with their own compiled styles      | [Build JavaScript and CSS with Vite](#ship-a-static-css-file)         |
+| Components styled by the consuming app's theme | [Share source](#include-the-src-files) for the app's Vite compiler    |
 
-> In the examples below, we use `tsdown` as the build tool. You can use any other build tool.
-
-## Recommendations
-
-- If your library code shouldn't be published on npm and App code uses Bamboo, use
-  [ship build info](#ship-the-build-info-file) approach
-- If your app code doesn't use Bamboo, use the [static css](#ship-a-static-css-file) file approach
-- If your app code lives in a monorepo, use the [include src files](#include-the-src-files) approach
-- If your library code doesn't ship components but only ships tokens, patterns or recipes, use the
-  [ship preset](#ship-a-bamboo-preset) approach
-
-> ⚠️ If you use the `include src files` or `ship build info` approach, you might also need to ship a `preset` if your
-> library code has any custom tokens, patterns or recipes.
+Every component that executes a Bamboo style call must pass through `@bamboocss/vite`. Running `tsdown` and then
+`bamboo cssgen` generates JavaScript and CSS separately, but leaves the JavaScript's style calls uncompiled. Those calls
+throw when a consumer renders the component.
 
 ## Ship a Bamboo Preset
 
-This is the simplest approach. You can include the token, semantic tokens, text styles, etc. within a preset and consume
-them in your projects.
+A preset contains configuration rather than components. It can be built with a regular TypeScript bundler.
 
-**Library code**
-
-```tsx filename="src/index.ts"
+```ts filename="src/index.ts"
 import { definePreset } from '@bamboocss/dev'
 
 export const acmePreset = definePreset({
   theme: {
     extend: {
       tokens: {
-        colors: { primary: { value: 'blue.500' } },
+        colors: { primary: { value: '#2563eb' } },
       },
     },
   },
 })
 ```
 
-Build the preset code
-
 ```bash
 pnpm tsdown src/index.ts
 ```
 
-**App code**
+The consuming app includes the default presets alongside yours:
 
-```tsx filename="bamboo.config.ts"
+```ts filename="bamboo.config.ts"
 import { acmePreset } from '@acme-org/bamboo-preset'
 import { defineConfig } from '@bamboocss/dev'
+import { defaultPresets } from '@bamboocss/dev/presets'
 
 export default defineConfig({
-  //...
-  presets: ['@bamboocss/dev/presets', acmePreset],
+  presets: [...defaultPresets, acmePreset],
+  include: ['./src/**/*.{ts,tsx,js,jsx}'],
+  outdir: 'styled-system',
 })
 ```
 
-> Adding a preset will remove the default theme from Bamboo. To add it back, you need to include the
-> `@bamboocss/dev/presets` preset.
+`presets` is the complete list. Omitting the defaults also omits their utilities, patterns, conditions, and tokens. The
+app still needs the [Vite integration](/docs/installation/vite).
 
 ## Ship a Static CSS File
 
-This approach involves extracting the static css of your library at build time. Then you can import the CSS file in your
-app code.
+Build the library's JavaScript and stylesheet together with Vite. Consumers import the compiled components and CSS; they
+do not need Bamboo to execute those components.
 
-**Library code**
+### Configure the library
+
+Install the build dependencies and React, then initialize Bamboo:
+
+```bash
+pnpm add -D @bamboocss/dev @bamboocss/vite vite typescript @types/react
+pnpm add react
+pnpm bamboo init
+```
+
+```ts filename="bamboo.config.ts"
+import { defineConfig } from '@bamboocss/dev'
+
+export default defineConfig({
+  include: ['./src/**/*.{ts,tsx}'],
+  outdir: 'styled-system',
+  prefix: 'acme',
+})
+```
+
+The prefix separates this library's classes and variables from a consuming app's Bamboo output.
+
+```json filename="tsconfig.json"
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "types": ["vite/client", "@bamboocss/vite/client"],
+    "strict": true
+  },
+  "include": ["src"]
+}
+```
+
+```ts filename="vite.config.ts"
+import bamboocss from '@bamboocss/vite'
+import { defineConfig } from 'vite'
+
+export default defineConfig({
+  plugins: [bamboocss({ pruneCss: false })],
+  build: {
+    lib: {
+      entry: 'src/index.tsx',
+      formats: ['es'],
+      fileName: 'index',
+      cssFileName: 'styles',
+    },
+    rollupOptions: {
+      external: ['react', 'react/jsx-runtime'],
+    },
+  },
+})
+```
+
+`pruneCss: false` keeps the library's extracted utility sheet and its stable `styles.css` filename. Vite library mode
+uses one stylesheet by default. Declare React as a peer dependency in the published package.
+
+### Author and build the components
+
+Set `"type": "module"` in the library's `package.json` before building so the ESM entry uses the `.js` extension.
 
 ```tsx filename="src/index.tsx"
+import type { ReactNode } from 'react'
 import { css } from '../styled-system/css'
+import 'virtual:bamboo.css'
 
-export function Button({ children }) {
+export function Button({ children }: { children: ReactNode }) {
   return (
     <button type="button" className={css({ bg: 'red.300', px: '2', py: '3' })}>
       {children}
@@ -86,263 +136,142 @@ export function Button({ children }) {
 }
 ```
 
-Then you can build the library code and generate the static CSS file:
-
 ```bash
-# build the library code
-tsdown src/index.tsx
-
-# generate the static CSS file
-bamboo cssgen --outfile dist/styles.css
+pnpm vite build
 ```
 
-Finally, don't forget to include the [cascade layers](/docs/concepts/cascade-layers) as well in your app code:
+For an ESM package (`"type": "module"` in `package.json`), this writes `dist/index.js` and `dist/styles.css`. The
+stylesheet includes its own layer order. Export both files and keep CSS imports from being dropped as side effects:
 
-**App code**
-
-```tsx filename="src/App.tsx"
-import { Button } from '@acme-org/design-system'
-import './main.css'
-
-export function App() {
-  return <Button>Click me</Button>
-}
-```
-
-**main.css**
-
-```css filename="src/main.css"
-@layer reset, base, tokens, recipes, utilities;
-@import url('@acme-org/design-system/dist/styles.css');
-
-/* Your own styles here */
-```
-
-This approach comes with a few downsides:
-
-- You can't customize the styles since the css is already generated
-- You might need add the [prefix](/docs/references/config#prefix) option to avoid className conflicts
-
-  ```tsx filename="bamboo.config.ts"
-  import { defineConfig } from '@bamboocss/dev'
-
-  export default defineConfig({
-    //...
-    prefix: 'acme',
-  })
-  ```
-
-- You might have duplicate CSS classes when using multiple atomic css libraries
-
-## Use Bamboo as external package
-
-### Summary
-
-- create a Bamboo [preset](/docs/customization/presets) so that you (and your users) can share the same design system
-  tokens
-- create a workspace package for your outdir (`@acme-org/styled-system`) and use that package name as the `importMap` in
-  your app code
-- have your component library (`@acme-org/components`) use the `@acme-org/styled-system` package as external
-
-De-coupling the component library from the `styled-system` lets your users share one copy of the runtime between your
-library and their app code, and lets them pass styles in:
-
-```tsx filename="component-lib/src/button.tsx"
-import { css } from '@acme-org/styled-system/css'
-
-export function Button({ children, css: cssProp }) {
-  return (
-    <button type="button" className={css({ bg: 'red.300', px: '2', py: '3' }, cssProp)}>
-      {children}
-    </button>
-  )
-}
-```
-
-```tsx filename="app/src/App.tsx"
-import { Button } from '@acme-org/design-system'
-
-export function App() {
-  return <Button css={{ color: 'white' }}>Click me</Button>
-}
-```
-
----
-
-Let's make a dedicated workspace package for your `outdir`:
-
-1. Create a new directory `packages/styled-system` (or any other name)
-2. Install `@bamboocss/dev` as a dev dependency
-3. Run the `bamboo init` command in there to generate a `bamboo.config.ts` file, don't forget to set the `importMap` if
-   needed
-4. [optional] you might want to install and import your [preset](/docs/customization/presets) in this `bamboo.config.ts`
-   file as well
-5. Run the [`bamboo emit-pkg`](/docs/references/cli#emit-pkg) command to set the entrypoints in
-   [`exports`](https://nodejs.org/api/packages.html#exports)
-
-This should look similar to this:
-
-```json
+```json filename="package.json"
 {
-  "name": "@acme-org/styled-system",
-  "version": "1.0.0",
+  "name": "@acme-org/design-system",
+  "type": "module",
+  "files": ["dist"],
   "exports": {
-    "./css": {
-      "types": "./css/index.d.ts",
-      "require": "./css/index.mjs",
-      "import": "./css/index.mjs"
-    },
-    "./tokens": {
-      "types": "./tokens/index.d.ts",
-      "require": "./tokens/index.mjs",
-      "import": "./tokens/index.mjs"
-    },
-    "./types": {
-      "types": "./types/index.d.ts",
-      "require": "./types/index.mjs",
-      "import": "./types/index.mjs"
-    },
-    "./patterns": {
-      "types": "./patterns/index.d.ts",
-      "require": "./patterns/index.mjs",
-      "import": "./patterns/index.mjs"
-    },
-    "./recipes": {
-      "types": "./recipes/index.d.ts",
-      "require": "./recipes/index.mjs",
-      "import": "./recipes/index.mjs"
-    },
-    "./styles.css": "./styles.css"
+    ".": "./dist/index.js",
+    "./styles.css": "./dist/styles.css"
   },
-  "devDependencies": {
-    "@bamboocss/dev": "^1.28.0",
-    "@types/react": "19.2.2",
-    "react": "^19.2.0"
-  },
+  "sideEffects": ["**/*.css"],
   "peerDependencies": {
     "react": ">=19"
   }
 }
 ```
 
-> Notice that we've included the `react` and its corresponding `@types/react` in the `devDependencies` and
-> `peerDependencies`. This is to ensure the types are correctly set up in the `styled-system` package.
+This is the runtime export setup. If you publish TypeScript declarations, generate them separately and add a `types`
+entry for the component export; Vite's JavaScript build does not emit declarations.
 
-Going forward, you'll now import the functions from the `@acme-org/styled-system` monorepo package.
+### Consume the library
 
-```tsx
+```tsx filename="src/App.tsx"
+import { Button } from '@acme-org/design-system'
+import '@acme-org/design-system/styles.css'
+
+export function App() {
+  return <Button>Click me</Button>
+}
+```
+
+The library's theme and class names were resolved when it was built. A consumer's Bamboo config does not regenerate
+them. Expose finite recipe variants for supported component choices, or publish a preset and source when the consuming
+app needs to control the theme.
+
+## Use Bamboo as external package
+
+When the app compiles shared component source, the library's imports identify an authoring surface owned by the app.
+Keep those imports available to the app's compiler instead of bundling a generated styling runtime into the library.
+
+### Include the src files
+
+For example, a workspace can contain `packages/app` and `packages/components`. The component package exports source:
+
+```tsx filename="packages/components/src/index.tsx"
 import { css } from '@acme-org/styled-system/css'
 
-export function Button({ children }) {
+export function Button() {
   return (
-    <button type="button" className={css({ bg: 'red.300', px: '2', py: '3' })}>
-      {children}
+    <button type="button" className={css({ color: 'primary' })}>
+      Save
     </button>
   )
 }
 ```
 
-**App code**
+Configure Bamboo in `packages/app`, including both source trees and the preset that supplies `primary`:
 
-Install the newly created `@acme-org/styled-system` package in your app code.
-
-```bash
-pnpm add @acme-org/styled-system
-```
-
-Configure the `importMap` in your `bamboo.config.ts` to match the `name` field of your outdir `package.json`. This will
-inform Bamboo which imports belong to the `styled-system`.
-
-```tsx filename="bamboo.config.ts"
+```ts filename="packages/app/bamboo.config.ts"
+import { acmePreset } from '@acme-org/bamboo-preset'
 import { defineConfig } from '@bamboocss/dev'
+import { defaultPresets } from '@bamboocss/dev/presets'
 
 export default defineConfig({
-  //...
+  presets: [...defaultPresets, acmePreset],
+  include: ['./src/**/*.{ts,tsx}', '../components/src/**/*.{ts,tsx}'],
   importMap: '@acme-org/styled-system',
   outdir: 'styled-system',
 })
 ```
 
-Mark the `@acme-org/styled-system` as an external package in your library build tool. This ensures that the generated JS
-runtime code is imported only once, avoiding duplication.
+Resolve the component import to source and the authoring import to the app's generated directory:
 
-```bash
-tsdown src/index.tsx --external @acme-org/styled-system
-```
-
-Both variants below share that setup. They differ only in what the app's `include` points at.
-
-### Include the src files
-
-Include the `src` directory from the library code in the bamboo config.
-
-```tsx {6} filename="bamboo.config.ts"
-import { defineConfig } from '@bamboocss/dev'
+```ts filename="packages/app/vite.config.ts"
+import bamboocss from '@bamboocss/vite'
+import { fileURLToPath, URL } from 'node:url'
+import { defineConfig } from 'vite'
 
 export default defineConfig({
-  //...
-  include: ['../@acme-org/design-system/src/**/*.tsx', './src/**/*.{ts,tsx}'],
-  importMap: '@acme-org/styled-system',
-  outdir: 'styled-system',
+  plugins: [bamboocss()],
+  resolve: {
+    alias: {
+      '@acme-org/components': fileURLToPath(new URL('../components/src/index.tsx', import.meta.url)),
+      '@acme-org/styled-system': fileURLToPath(new URL('./styled-system', import.meta.url)),
+    },
+  },
 })
 ```
+
+The app imports `Button` from `@acme-org/components` and imports `virtual:bamboo.css` once in its entry module. Its Vite
+compiler sees the component source, and its Bamboo config controls token values. Add matching TypeScript `paths` if your
+editor needs to resolve these aliases; Vite aliases alone configure the bundler.
+
+For a published source package, resolve its exports to those source files, include them in Bamboo's source inventory,
+and ensure Vite transforms them rather than treating them as a prebundled or external dependency. During SSR that can
+require Vite's `ssr.noExternal` for the component package. Merely adding source to Bamboo's `include` does not make an
+external dependency pass through Vite's compiler.
 
 ### Ship the build info file
 
-This approach is similar to the previous one, but instead of shipping the source code, you ship the Bamboo build info
-file. This will have **the exact same end-result** as adding the sources files in the `include`, but it will allow you
-not to ship the source code.
-
-The build info file is a JSON file that **only** contains the information about the static extraction result, you still
-need to ship your app build/dist by yourself. It can be used by Bamboo to generate CSS classes without the need for
-parsing the source code.
-
-Generate the build info file:
-
-```bash
-bamboo ship --outfile dist/bamboo.buildinfo.json
-```
-
-Next, you need to include the build info file from the library code in the bamboo config.
-
-```tsx {6} filename="bamboo.config.ts"
-import { defineConfig } from '@bamboocss/dev'
-
-export default defineConfig({
-  //...
-  include: ['./node_modules/@acme-org/design-system/dist/bamboo.buildinfo.json', './src/**/*.{ts,tsx}'],
-  importMap: '@acme-org/styled-system',
-  outdir: 'styled-system',
-})
-```
+`bamboo ship --outfile dist/bamboo.buildinfo.json` serializes extraction results. It does not compile a component's
+JavaScript, and a build-info file cannot replace the source modules the Vite compiler must transform. Do not use it to
+ship uncompiled components while hiding their source. Use the [compiled library](#ship-a-static-css-file) approach when
+consumers should receive only your build output.
 
 ## FAQ
 
 ### How to override tokens used by the `@acme-org/styled-system` package?
 
-You can override the tokens used by the `@acme-org/styled-system` package by extending the `theme` in your
-`bamboo.config.ts` file.
+With shared source, extend the token in the consuming app's config:
 
-```tsx filename="bamboo.config.ts"
+```ts filename="bamboo.config.ts"
 import { defineConfig } from '@bamboocss/dev'
 
 export default defineConfig({
-  //...
-  presets: ['@acme-org/preset']
+  // Keep the presets, include, importMap, and outdir from the source-sharing setup.
   theme: {
     extend: {
       tokens: {
-        colors: { primary: { value: 'blue.500' } }
-      }
-    }
-  }
+        colors: { primary: { value: '#dc2626' } },
+      },
+    },
+  },
 })
 ```
 
+With a precompiled library, use that library's documented theming API; the app's config does not recompile its styles.
+
 ## Troubleshooting
 
-- When using `tsdown` or any other build tool for your component library, if you run into a module resolution error that
-  looks similar to `ERROR: Could not resolve "../styled-system/xxx"`. Consider setting the `outExtension`in the bamboo
-  config to`js`
-
-- If you use Yarn PnP, you might need to set the `nodeLinker: node-modules` in the `.yarnrc.yml` file.
+An error containing `was not compiled` means a style call survived the build. Check that `bamboocss()` transforms the
+actual module the consumer imports, its source is in Bamboo's `include`, and the build imports `virtual:bamboo.css`.
+Changing `outExtension` or adding a CSS file alone does not compile the JavaScript.

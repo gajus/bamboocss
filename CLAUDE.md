@@ -196,23 +196,12 @@ A bench that measures a shape nothing calls is worse than no bench, because it r
 spent a while measuring only the four-group shape that went away with the JSX factory, which left the one-array-group
 shape every recipe actually uses with nothing at all. When a caller is removed, check what its benchmarks were for.
 
-**Where a cold build's time actually goes.** Profiled with `bamboo --cpu-prof` over 2,000 files, 12 `css()` calls each
-(2.9s sampled):
-
-| area                            | self   | share     |
-| ------------------------------- | ------ | --------- |
-| ts-morph                        | 1675ms | **57.7%** |
-| node internals (GC alone 296ms) | 580ms  | 20.0%     |
-| extractor                       | 345ms  | 11.9%     |
-| core + parser                   | 180ms  | 6.2%      |
-| generator + postcss             | 9ms    | 0.3%      |
-
-So bamboo's own logic is ~12% of an extraction pass and the rest is AST construction and traversal. Micro-optimising the
-extractor is capped at that 12%; the two levers that reach the 58% are **sharding extraction across workers** (the loop
-in `builder.ts` is serial, and measures ~1.2x CPU-to-wall, so it is not doing any of this in parallel today) and a
-**persistent cache** keyed on content, since nothing survives the process — `fileModifiedMap` is module state, so
-touching one file in a 2,000-file project still costs a full 2.3s re-parse from the CLI, which is what every CI run and
-dev-server cold start pays. Neither is a small change; both are the right shape. Do not spend effort on the 12% first.
+**Profile the current extraction pipeline.** Stylesheet extraction runs in Rust/Oxc through `packages/native-extractor`,
+with hooks and result encoding at the JavaScript boundary in `packages/node/src/create-context.ts`. The Vite source
+compiler still uses the TypeScript 7 project. A V8 CPU profile can show time crossing the native boundary but cannot
+attribute Rust internals; pair it with a native profiler when investigating the evaluator. Use
+`packages/native-extractor/__tests__/analyze.bench.ts` for the native batch boundary and an end-to-end build for total
+cost. The former ts-morph profile describes a retired backend and must not guide current optimization decisions.
 
 🚨 **Nothing in CI catches a performance regression.** The Quality workflow runs format, tests, lint, knip and typecheck
 — benchmarks are excluded on purpose, for the reason below. That makes measuring a _manual obligation before
@@ -381,11 +370,12 @@ Brief description of the change and its impact.
 
 1. Style objects → `packages/core/src/rule-processor.ts`
 2. CSS generation → `packages/core/src/stylesheet.ts`. Utilities are written into cascade sublayers keyed by
-   specificity, condition and property priority (`packages/core/src/layers.ts`), so precedence never depends on source
-   order. `packages/core/__tests__/cascade-oracle.test.ts` models the browser's cascade and pins the winner of every
-   competing pair in a corpus; a change to where rules are written has to leave that snapshot untouched. Rules enter the
-   postcss tree as strings, which strips their positions, so the dev server's source map for the stylesheet is read off
-   the served text (`cssSourceMap` in `packages/vite/src/css-output-module.ts`) against call sites the encoder recorded
+   specificity, condition and property priority (`packages/core/src/layers.ts`), so precedence between sublayers does
+   not depend on rule arrival order. Source order still breaks ties within a sublayer.
+   `packages/core/__tests__/cascade-oracle.test.ts` models the browser's cascade and pins the winner of every competing
+   pair in a corpus; a change to where rules are written has to leave that snapshot untouched. Rules enter the postcss
+   tree as strings, which strips their positions, so the dev server's source map for the stylesheet is read off the
+   served text (`cssSourceMap` in `packages/vite/src/css-output-module.ts`) against call sites the encoder recorded
    under `recordOrigins` — on only when Vite's `css.devSourcemap` is.
 3. Optimization → `packages/core/src/optimize.ts` dispatches; the PostCSS plugin order lives in
    `packages/core/src/plugins/optimize-postcss.ts`
@@ -432,9 +422,9 @@ Brief description of the change and its impact.
 4. **Workspace protocol**: Internal packages use `workspace:*` in dependencies
 5. **Multiple package.json**: Each package has its own, plus root package.json
 6. **Sandbox warnings**: Even if main packages are fine, check sandbox projects for warnings
-7. **TypeScript version sync**: The TypeScript version in the root `package.json` must match the version used by
-   `ts-morph`'s dependency. Mismatches can cause parsing errors and type issues. Always verify `ts-morph` compatibility
-   when updating TypeScript.
+7. **Compiler dependencies**: The TypeScript 7 backend is accessed through `@bamboocss/ts-ast`; stylesheet extraction
+   uses Rust/Oxc. Validate the affected parser, compiler, and native-extraction tests when updating either backend. The
+   ordinary TypeScript type checker is a separate dependency; there is no ts-morph version to synchronize.
 
 ## Package Relationships
 

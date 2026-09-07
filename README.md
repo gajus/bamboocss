@@ -13,8 +13,8 @@ const title = cva({ variants: { weight: { bold: { fontWeight: 'bold' }, normal: 
 <div className={title({ weight: active ? 'bold' : 'normal' })}>Title</div>
 
 // the bundle gets
-<div className="_4p9d _7bc2">Title</div>
-<div className={cvaMap(/* finite compact-class leaves */)}>Title</div>
+<div className="fs_lg fw_bold">Title</div>
+<div className={cvaMap(/* finite precompiled class leaves */)}>Title</div>
 ```
 
 The Vite compiler rejects style calls it cannot analyze, so nothing imports the styling engine and zero-runtime styling
@@ -39,8 +39,12 @@ covered by more than 3,000 tests.
 
 ## Features
 
-- 🎯 [Predictable overrides](https://bamboocss.com/docs/concepts/cascade-layers) – precedence comes from cascade layers
-  rather than source order, so a consumer's `css()` wins over a component's `cva`/`sva` recipe
+- 🎯 [Predictable composition](https://bamboocss.com/docs/concepts/cascade-layers) – analyzable style sets merge before
+  class allocation; recipes and `css()` share utility atoms
+- 📦 [Per-route CSS](https://bamboocss.com/docs/installation/vite#per-route-stylesheets) – lazy chunks load their
+  exclusive utilities with them
+- 🔎 [Development source maps](https://bamboocss.com/docs/installation/vite#source-maps-in-development) – DevTools can
+  point from a CSS rule to its first style call
 - 🤖 [MCP server](https://bamboocss.com/docs/ai/mcp-server) – AI assistants read your tokens, recipes and usage
 
 Plus design tokens with simultaneous themes, type-safe styles and autocomplete via codegen, recipes and variants
@@ -51,6 +55,10 @@ Plus design tokens with simultaneous themes, type-safe styles and autocomplete v
 ---
 
 ## Install
+
+Bamboo requires Vite and a supported build platform: macOS arm64/x64, glibc Linux arm64/x64, or Windows x64. Rust/Oxc
+extracts the styles through a bundled native binary; installing the published packages does not require Rust. See
+[platform requirements](https://bamboocss.com/docs/installation/vite#build-platform-requirements).
 
 Install the CLI and the Vite plugin, then scaffold the config:
 

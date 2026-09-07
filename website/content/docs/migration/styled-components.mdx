@@ -249,8 +249,8 @@ const GlobalStyle = createGlobalStyle`
 `
 ```
 
-In Bamboo, you can use the `global.css` key of the `bamboo.config.ts` file to define global styles. This will
-automatically add styles to the project via PostCSS.
+In Bamboo, you can use the `global.css` key of the `bamboo.config.ts` file to define global styles. The Vite plugin
+emits them automatically under the `base` cascade layer.
 
 ```tsx
 // bamboo.config.ts
@@ -377,8 +377,8 @@ const button = css({
 styled-components needs per-framework SSR wiring — a `ServerStyleSheet`, `collectStyles`, and the collected tags placed
 into the document.
 
-Bamboo needs none of it. Styles are extracted and emitted at build time by PostCSS, so there is nothing to collect at
-request time.
+Bamboo needs none of it. Styles are extracted and emitted at build time by the Vite plugin, so there is nothing to
+collect at request time.
 
 ## Conclusion
 

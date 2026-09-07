@@ -156,8 +156,8 @@ export default defineConfig({
 
 ### Transforming the generated css
 
-`cssgen:done` runs just before the CSS is written to disk or injected by the PostCSS plugin. It receives the artifact
-being written and the CSS as a string, and whatever you return replaces it — return nothing to leave it alone.
+`cssgen:done` runs just before the CSS is written to disk by the CLI or emitted by the Vite plugin. It receives the
+artifact being written and the CSS as a string, and whatever you return replaces it — return nothing to leave it alone.
 
 Rewriting asset URLs so the stylesheet can be served from a CDN:
 
@@ -269,7 +269,7 @@ export interface BambooHooks {
   /**
    * Called right before adding the design-system CSS (global, static, preflight, tokens, keyframes) to the final CSS
    * Called right before writing/injecting the final CSS (styles.css) that contains the design-system CSS and the parser CSS
-   * You can use it to tweak the CSS content before it is emitted by the Vite plugin.
+   * You can use it to tweak the CSS content before it's written to disk by the CLI or emitted by the Vite plugin.
    */
   'cssgen:done': (args: CssgenDoneHookArgs) => string | void
   /**

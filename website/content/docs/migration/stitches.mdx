@@ -488,7 +488,7 @@ globalStyles()
 In Bamboo, you define the global styles in the `bamboo.config.ts` under `global.css`, using the `defineGlobalStyles`
 helper.
 
-> The styles are injected automatically under the `base` cascade layer via PostCSS
+> The styles are emitted automatically under the `base` cascade layer by the Vite plugin
 
 ```ts {3-5}
 import { defineConfig, defineGlobalStyles } from '@bamboocss/dev'
@@ -546,8 +546,8 @@ const buttonClass = css({
 Stitches needs per-framework SSR wiring — `getCssText()` from `createStitches`, and its output placed into the document
 head by hand.
 
-Bamboo needs none of it. Styles are extracted and emitted at build time by PostCSS, so there is nothing to collect at
-request time.
+Bamboo needs none of it. Styles are extracted and emitted at build time by the Vite plugin, so there is nothing to
+collect at request time.
 
 ## Conclusion
 

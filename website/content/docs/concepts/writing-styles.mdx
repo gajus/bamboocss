@@ -153,7 +153,7 @@ dropped by the browser at compute time — surfacing as a colour that never appl
 
 The build reports it now, with no setting to turn on and no migration to do:
 
-```
+```text
 `color: mutedd` — no such `colors` token. It is emitted as written, and the browser will drop it.
 Write `[mutedd]` to mean it literally.
 ```
@@ -161,7 +161,7 @@ Write `[mutedd]` to mean it literally.
 It reads the CSS grammar rather than a TypeScript union, which is what lets it be precise about the interesting case — a
 name that exists, on the wrong shelf:
 
-```
+```text
 `top: navH` — `navH` is declared under `sizes`, but `top` reads `spacing`.
 It is emitted as written, and the browser will drop it.
 Use a `spacing` token, or write `[navH]` to mean it literally.
@@ -553,7 +553,7 @@ declarations for a number and one for `none`, and `divideX` emits a nested rule.
 the contest – they'd apply unconditionally, whichever candidate the browser actually took, so the variable and the
 property could end up disagreeing. Bamboo will not guess: it warns and applies your preferred candidate on its own.
 
-```
+```text
 ⚠️ `lineClamp: fallback(none, 3)` does not resolve to a single declaration per candidate,
    so no fallback was emitted. Only `none` was applied.
 ```

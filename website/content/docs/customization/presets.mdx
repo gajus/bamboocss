@@ -24,8 +24,7 @@ Presets are also valid Bamboo configuration objects, taking a similar shape to t
 
 > **Note:** Every preset must have a unique name.
 
-```js
-// my-preset.js
+```js filename="my-preset.js"
 import { definePreset } from '@bamboocss/dev'
 
 export default definePreset({
@@ -46,8 +45,7 @@ export default definePreset({
 
 You can then use this preset in your `bamboo.config.ts` file:
 
-```js
-// bamboo.config.ts
+```js filename="bamboo.config.ts"
 import { defineConfig } from '@bamboocss/dev'
 import myPreset from './my-preset'
 
@@ -75,8 +73,7 @@ The available keys for a preset are:
 There are cases where you need to perform logic to determine the content of your preset, you'd call functions to do
 this. In cases where they're asynchronous; bamboo allows promises, given that they resolve to a valid preset object.
 
-```js
-// my-preset.js
+```js filename="my-preset.js"
 export default async function myPreset() {
   const roseColors = await getRoseColors()
 
@@ -95,8 +92,7 @@ export default async function myPreset() {
 
 You can then use this preset in your `bamboo.config.ts` file:
 
-```js
-// bamboo.config.ts
+```js filename="bamboo.config.ts"
 import { defineConfig } from '@bamboocss/dev'
 import myPreset from './my-preset'
 

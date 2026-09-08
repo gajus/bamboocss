@@ -283,7 +283,7 @@ that produces the bytes already on disk, and nothing moves. When a later environ
 under a new name and every reference to it is rewritten in place: the HTML, the manifest, a server bundle that embeds
 the client's asset names, and any copy of the sheet a framework wrote into another output.
 
-```
+```text
 🎋 info [vite] Pruned assets/index-C3xT9k.css against every environment once the last had written, which restored a rule the earlier prune removed: 3959 → 4102 bytes, now assets/index-C3xT9k.b-cUVtMv.css.
 ```
 
@@ -296,7 +296,7 @@ An in-memory build (`write: false`) has no file to finalize, and a run that buil
 announcing them has no last environment to wait for. Both prune the sheet as it is emitted, and a class a later
 environment compiles that the sheet no longer carries fails that build, naming the classes:
 
-```
+```text
 bamboocss: 2 class(es) compiled in the "ssr" environment were already pruned out of a
 stylesheet emitted by an earlier one. Elements carrying them would render unstyled.
 

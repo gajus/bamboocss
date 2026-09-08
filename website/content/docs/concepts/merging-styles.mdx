@@ -29,8 +29,7 @@ use the `css.raw` function to preserve the original style object.
 > to the compiler that the value is a style object. `cva(...).raw(...)` and `sva(...).raw(...)` are not — they resolve
 > the variants and return the merged style object, which is what makes the `cva` example below work.
 
-```js
-// style.js
+```js filename="style.js"
 import { css } from 'styled-system/css'
 
 export const style1 = css.raw({

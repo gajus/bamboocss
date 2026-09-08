@@ -29,7 +29,7 @@ configuration under which the answer is what you meant.
 Extraction threw. The file's styles never reach the encoder, so every rule it would have contributed is absent and every
 class its components ask for has nothing behind it.
 
-```
+```text
 ERR_BAMBOO_EXTRACT_FAILED: 2 file(s) could not be extracted:
 
 src/checkout/summary.tsx
@@ -53,7 +53,7 @@ The `patterns` and `recipes` entrypoints are generated from your config, so what
 — a pattern dropped from a preset, a recipe renamed. The import survives that as a binding to nothing: nothing extracts
 the call, and every rule it would have contributed is gone.
 
-```
+```text
 ERR_BAMBOO_DEAD_IMPORT: 400 call(s) name a binding that does not exist:
 
 `stack` is not a pattern — `../styled-system/patterns` does not export it.
@@ -111,7 +111,7 @@ checks have independent severities:
 
 A missing token fails the build:
 
-```
+```text
 ERR_BAMBOO_UNRESOLVED_TOKEN: 2 style value(s) name a token that does not exist:
 
 - `background: accent.default`. Check the path against your `colors` tokens.
@@ -135,7 +135,7 @@ The other end of the pipeline from the token check. That one reads the values yo
 the finished sheet contains, after every utility transform, mixin and recipe has had its say — which is the only place a
 transform that handed a value through unchanged, or a `[…]` literal that was never valid CSS, can be seen at all.
 
-```
+```text
 1 declaration(s) in the stylesheet are not valid CSS for their property:
 
 - `background-image: 65deg` in `.bg-linear_65deg`, `@layer utilities`

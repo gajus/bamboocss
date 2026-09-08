@@ -136,7 +136,7 @@ saves 450 bytes of a 2,973-byte reset, or 165 compressed.
 
 Because being wrong is silent, the build names what it removed — all of it, once per project — whenever this is on:
 
-```
+```text
 🎋 info [prune:preflight] Reset rules removed for 20 element(s) your source never renders: abbr, audio, b, canvas,
 dialog, embed, h5, h6, iframe, input, menu, object, optgroup, progress, samp, select, small, sub, sup, textarea.
 Anything rendered by a dependency, by markdown, or through `dangerouslySetInnerHTML` is invisible to this scan —
@@ -600,7 +600,7 @@ nothing else. It is inert under `tokens: false`, which keeps everything and runs
 It defaults to `'off'` because pruning is an inference the build makes on its own rather than a claim you asked it to
 check. Reach for `'warn'` when the token layer is larger than you expect — it names what is holding the keep set open:
 
-```
+```text
 ⚠ tokens:unresolved  2 token reference(s) could not be resolved, so every token declaration is kept.
 
   src/chart.tsx
@@ -1235,7 +1235,7 @@ the sheet as `background-image: 65deg`, and `width: '[10px 20px]'` as `width: 10
 is valid and nothing downstream objects; the browser drops the declaration at compute time and the style is simply
 absent.
 
-```
+```text
 2 declaration(s) in the stylesheet are not valid CSS for their property:
 
 - `background-image: 65deg` in `.bg-linear_65deg`, `@layer utilities`
@@ -1263,7 +1263,7 @@ does: a pattern dropped from a preset, a recipe renamed. The import survives tha
 extracts the call, so every rule it would have contributed is absent and the class the component asks for has nothing
 behind it — while the build prints its ticks and exits 0.
 
-```
+```text
 error: 1 call(s) name a binding that does not exist:
 
 src/modal.tsx

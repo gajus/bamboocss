@@ -10,8 +10,7 @@ to model this in Bamboo.
 
 We'll start by defining the following conditions for these theme and color modes:
 
-```js
-// bamboo.config.ts
+```js filename="bamboo.config.ts"
 const config = {
   conditions: {
     light: '[data-color-mode=light] &',
@@ -26,8 +25,7 @@ const config = {
 
 Next, we'll define a `colors.text` semantic token for the pink and blue theme.
 
-```js
-// bamboo.config.ts
+```js filename="bamboo.config.ts"
 const theme = {
   // ...
   semanticTokens: {
@@ -45,8 +43,7 @@ const theme = {
 
 Next, we'll modify `colors.text` to support light and dark color modes for each theme.
 
-```js
-// bamboo.config.ts
+```js filename="bamboo.config.ts"
 const theme = {
   // ...
   semanticTokens: {
@@ -90,8 +87,7 @@ This allows you to apply a `theme` on multiple tokens at once, using data attrib
 
 > Theme variants can be applied using the `data-bamboo-theme` attribute with the theme key as the value.
 
-```ts
-// bamboo.config.ts
+```ts filename="bamboo.config.ts"
 import { defineConfig } from '@bamboocss/dev'
 
 export default defineConfig({
@@ -162,8 +158,7 @@ export default defineConfig({
 By default, no additional theme variant is generated, you need to specify the specific themes you want to generate in
 `staticCss.themes` to include them in the CSS output.
 
-```ts
-// bamboo.config.ts
+```ts filename="bamboo.config.ts"
 import { defineConfig } from '@bamboocss/dev'
 
 export default defineConfig({

@@ -12,7 +12,7 @@ const styles = cva({
     overflowWrap: 'break-word',
     fontFamily: 'mono',
     borderRadius: 'md',
-    py: '0.5',
+    py: '0',
     fontSize: '0.9em',
   },
   variants: {

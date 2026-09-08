@@ -142,8 +142,7 @@ const App = () => (
 In Bamboo, you define tokens in the `theme` key of the `bamboo.config.ts` file. This allows you to access the tokens in
 your styles without the need for React's context API.
 
-```tsx
-// bamboo.config.ts
+```tsx filename="bamboo.config.ts"
 import { defineConfig } from '@bamboocss/dev'
 
 export default defineConfig({
@@ -189,8 +188,7 @@ declare module 'styled-components' {
 In Bamboo, the tokens defined above are automatically available in your styles and connected to each css property,
 removing the need for an interpolation function and for the ambient declarations.
 
-```tsx
-// link.tsx
+```tsx filename="link.tsx"
 import { css } from '../styled-system/css'
 
 const styledLink = css({
@@ -252,8 +250,7 @@ const GlobalStyle = createGlobalStyle`
 In Bamboo, you can use the `global.css` key of the `bamboo.config.ts` file to define global styles. The Vite plugin
 emits them automatically under the `base` cascade layer.
 
-```tsx
-// bamboo.config.ts
+```tsx filename="bamboo.config.ts"
 import { defineConfig } from '@bamboocss/dev'
 
 export default defineConfig({

@@ -106,9 +106,7 @@ scenarios where the hot module replacement doesn't work.
 To fix this add the `importMap` option to your `bamboo.config.js` file, setting it's value to the specified `paths` in
 your `tsconfig.json` file.
 
-```json
-// tsconfig.json
-
+```json filename="tsconfig.json"
 {
   "compilerOptions": {
     "baseUrl": "./src",
@@ -119,9 +117,7 @@ your `tsconfig.json` file.
 }
 ```
 
-```js
-// bamboo.config.js
-
+```js filename="bamboo.config.js"
 module.exports = {
   importMap: '@my-path',
 }

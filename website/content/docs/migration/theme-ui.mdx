@@ -56,8 +56,7 @@ object to the `bamboo.config.js` file.
 The theme object in Bamboo is broken down into multiple parts, `tokens` and `semanticTokens`. The theme specification
 also required passing the tokens as `{ value: XX }`
 
-```js
-// bamboo.config.js
+```js filename="bamboo.config.js"
 import { defineConfig } from '@bamboocss/dev'
 
 export default defineConfig({
@@ -129,9 +128,7 @@ several components.
 - `Input`, `Select`, `Textarea` maps to `theme.forms`
 - `Heading`, `Text` maps to `theme.text`
 
-```js
-// theme.js
-
+```js filename="theme.js"
 export default {
   colors: {
     primary: '#07c',
@@ -193,8 +190,7 @@ and projects and generates only the variants the project uses. You then import i
 In Theme UI, colors modes can be used to create a user-configurable light and dark mode values that are automatically
 applied to components depending on color mode.
 
-```jsx
-// theme.js
+```jsx filename="theme.js"
 const theme = {
   colors: {
     primary: '#07c',
@@ -213,8 +209,7 @@ const Demo = () => <button sx={{ color: 'primary' }} />
 In Bamboo, color mode values are defined as `semanticTokens` in the theme. Semantic tokens change depending on the color
 mode, so the call site stays an ordinary `css({ color: 'primary' })`.
 
-```js
-// bamboo.config.js
+```js filename="bamboo.config.js"
 import { defineConfig } from '@bamboocss/dev'
 
 export default defineConfig({
@@ -253,8 +248,7 @@ export default (props) => (
 
 In Bamboo, global styles are defined in the top-level `global.css` property of the bamboo config — not under `theme`.
 
-```js
-// bamboo.config.js
+```js filename="bamboo.config.js"
 import { defineConfig } from '@bamboocss/dev'
 
 export default defineConfig({

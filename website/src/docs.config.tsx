@@ -60,7 +60,6 @@ export const docsNavigation: NavItem = {
     {
       title: 'AI for Agents',
       url: 'ai',
-      tag: 'new',
       items: [
         { title: 'LLMs.txt', url: 'llms-txt' },
         { title: 'MCP Server', url: 'mcp-server' },

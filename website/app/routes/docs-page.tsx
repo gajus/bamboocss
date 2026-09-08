@@ -1,23 +1,23 @@
-import { docs } from '.velite'
 import { Breadcrumb } from '@/components/docs/breadcrumb'
 import { Header } from '@/components/docs/header'
 import { MDXContent } from '@/components/docs/mdx-content'
 import { Pagination } from '@/components/docs/pagination'
 import { Sidebar } from '@/components/docs/sidebar'
 import { Toc } from '@/components/ui/toc'
+import { docsSource } from '@/lib/source'
 import { css, cx } from '@/styled-system/css'
 import type { LoaderFunctionArgs, MetaFunction } from 'react-router'
 import { useLoaderData } from 'react-router'
 
 export function loader({ params }: LoaderFunctionArgs) {
   const slug = (params['*'] ?? '').replace(/\/$/, '')
-  const doc = docs.find((candidate) => candidate.slug === `docs/${slug}`)
+  const page = docsSource.getPage(slug.split('/'))
 
-  if (!doc) {
+  if (!page) {
     throw new Response('Not Found', { status: 404 })
   }
 
-  return { doc, slug }
+  return { page, slug }
 }
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
@@ -25,25 +25,25 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
     return [{ title: 'Bamboo CSS' }]
   }
 
-  const { doc } = loaderData
-  const image = `/og/${doc.slug.replace(/^docs\//, '')}.png`
-  const description = doc.description ?? ''
+  const { page } = loaderData
+  const image = `/og/${page.slugs.join('/')}.png`
+  const description = page.data.description ?? ''
   return [
-    { title: `${doc.title} | Bamboo CSS` },
+    { title: `${page.data.title} | Bamboo CSS` },
     { name: 'description', content: description },
-    { property: 'og:title', content: doc.title },
+    { property: 'og:title', content: page.data.title },
     { property: 'og:description', content: description },
     { property: 'og:type', content: 'article' },
     { property: 'og:image', content: image },
     { name: 'twitter:card', content: 'summary_large_image' },
-    { name: 'twitter:title', content: doc.title },
+    { name: 'twitter:title', content: page.data.title },
     { name: 'twitter:description', content: description },
     { name: 'twitter:image', content: image },
   ]
 }
 
 export default function DocsPage() {
-  const { doc, slug } = useLoaderData<typeof loader>()
+  const { page, slug } = useLoaderData<typeof loader>()
 
   return (
     <div
@@ -77,8 +77,8 @@ export default function DocsPage() {
 
       <article className={css({ flex: '1', minW: '0', px: { base: '4', lg: '10' }, pt: '8' })}>
         <Breadcrumb slug={slug} />
-        <Header doc={doc} />
-        <MDXContent code={doc.code} />
+        <Header doc={page} />
+        <MDXContent code={page.data.code} />
         <Pagination slug={slug} />
       </article>
 
@@ -94,11 +94,11 @@ export default function DocsPage() {
             maxH: 'calc(100vh - var(--content-top))',
             overflowY: 'auto',
           }),
-          doc.hideToc && css({ visibility: 'hidden' }),
+          page.data.hideToc && css({ visibility: 'hidden' }),
           'scroll-area',
         )}
       >
-        <Toc data={doc.toc} />
+        <Toc data={page.data.toc} />
       </div>
     </div>
   )

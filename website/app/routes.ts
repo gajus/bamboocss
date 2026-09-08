@@ -9,5 +9,6 @@ export default [
   route('llms.txt', './routes/llms-index.ts'),
   route('llms-full.txt', './routes/llms-full.ts'),
   route('llms/*', './routes/llms-doc.ts'),
+  route('static.json', './routes/search-index.ts'),
   route('*', './routes/not-found.tsx'),
 ] satisfies RouteConfig

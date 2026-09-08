@@ -1,6 +1,6 @@
 'use client'
 
-import { Docs } from '.velite'
+import type { BambooPageData } from '@/lib/source'
 import { sva } from '@/styled-system/css'
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
@@ -13,11 +13,16 @@ interface HeadingState {
   isActive: boolean
 }
 
-function useTocState() {
+function useTocState(data: BambooPageData['toc']) {
   const [headingStates, setHeadingStates] = useState<Record<string, HeadingState>>({})
   const observerRef = useRef<IntersectionObserver | null>(null)
 
   useEffect(() => {
+    // Re-run per page: the route component persists across client-side navigation, so without
+    // `data` in the dependency array this only ever observes the first page's headings — every
+    // page visited after that shows no active heading at all, however far you scroll.
+    setHeadingStates({})
+
     // Get all headings
     const elements = Array.from(document.querySelectorAll('article h2, article h3, article h4')).filter((el) => el.id)
 
@@ -125,7 +130,7 @@ function useTocState() {
         observerRef.current = null
       }
     }
-  }, [])
+  }, [data])
 
   useEffect(() => {
     // Find the active heading for auto-scrolling TOC
@@ -167,12 +172,12 @@ function useTocState() {
 }
 
 export interface TocProps {
-  data: Docs['toc']
+  data: BambooPageData['toc']
 }
 
 export const Toc = (props: TocProps) => {
   const { data } = props
-  const { isCurrent, onLinkClick } = useTocState()
+  const { isCurrent, onLinkClick } = useTocState(data)
 
   if (data.length === 0) {
     return null

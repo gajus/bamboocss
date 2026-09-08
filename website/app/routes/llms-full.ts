@@ -1,38 +1,42 @@
-import { docs } from '.velite'
+import { DOC_CATEGORIES } from '@/lib/docs-categories'
+import { docsSource } from '@/lib/source'
 
-const categories = [
-  ['overview', 'Overview'],
-  ['installation', 'Installation'],
-  ['concepts', 'Concepts'],
-  ['theming', 'Theming'],
-  ['utilities', 'Utilities'],
-  ['customization', 'Customization'],
-  ['guides', 'Guides'],
-  ['migration', 'Migration'],
-  ['references', 'References'],
-] as const
+const CATEGORY_TITLES: Record<(typeof DOC_CATEGORIES)[number], string> = {
+  overview: 'Overview',
+  installation: 'Installation',
+  concepts: 'Concepts',
+  theming: 'Theming',
+  utilities: 'Utilities',
+  customization: 'Customization',
+  guides: 'Guides',
+  migration: 'Migration',
+  references: 'References',
+}
 
 export function loader() {
-  const sortedDocs = [...docs].sort((a, b) => a.slug.localeCompare(b.slug))
+  const sortedPages = [...docsSource.getPages()].sort((a, b) => a.slugs.join('/').localeCompare(b.slugs.join('/')))
   const toc: string[] = []
   const sections: string[] = []
 
-  for (const [key, title] of categories) {
-    const categoryDocs = sortedDocs.filter((doc) => doc.slug.startsWith(`docs/${key}`))
-    if (categoryDocs.length === 0) continue
+  for (const key of DOC_CATEGORIES) {
+    const title = CATEGORY_TITLES[key]
+    const categoryPages = sortedPages.filter((page) => page.slugs.join('/').startsWith(key))
+    if (categoryPages.length === 0) continue
 
     toc.push(`\n### ${title}`)
-    toc.push(...categoryDocs.map((doc) => `- [${doc.title}](#${doc.title.toLowerCase().replace(/\s+/g, '-')})`))
+    toc.push(
+      ...categoryPages.map((page) => `- [${page.data.title}](#${page.data.title.toLowerCase().replace(/\s+/g, '-')})`),
+    )
     sections.push(`\n# ${title}\n`)
 
-    for (const doc of categoryDocs) {
-      const level = doc.slug.replace('docs/', '').split('/').length
+    for (const page of categoryPages) {
+      const level = page.slugs.length
       sections.push(`
-${'#'.repeat(Math.min(level, 6))} ${doc.title}
+${'#'.repeat(Math.min(level, 6))} ${page.data.title}
 
-${doc.description || ''}
+${page.data.description || ''}
 
-${doc.llm}
+${page.data.llm}
 
 ---`)
     }

@@ -1,10 +1,10 @@
-import { Docs } from '.velite'
 import { css } from '@/styled-system/css'
+import type { DocsPage } from '@/lib/source'
 import { flex } from '@/styled-system/patterns'
 import { CopyMdxWidget } from './copy-mdx-widget'
 
 interface Props {
-  doc: Docs
+  doc: DocsPage
 }
 
 export const Header = ({ doc }: Props) => {
@@ -33,10 +33,10 @@ export const Header = ({ doc }: Props) => {
             mb: 2,
           })}
         >
-          {doc.title}
+          {doc.data.title}
         </h1>
-        {doc.description && (
-          <p className={css({ fontSize: 'lg', color: 'fg.muted', maxW: '3xl' })}>{doc.description}</p>
+        {doc.data.description && (
+          <p className={css({ fontSize: 'lg', color: 'fg.muted', maxW: '3xl' })}>{doc.data.description}</p>
         )}
       </div>
 

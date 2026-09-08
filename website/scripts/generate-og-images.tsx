@@ -6,7 +6,7 @@
  * writes into public/), which is why the build script names its steps rather than
  * globbing them.
  */
-import { docs } from '../.velite/index.js'
+import { docsSource } from '../src/lib/source'
 import { renderOgImage } from '../src/lib/og/render'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -21,21 +21,23 @@ const main = async () => {
   const defaultImage = await renderOgImage({})
   await writeFile(DEFAULT_IMAGE, Buffer.from(await defaultImage.arrayBuffer()))
 
-  for (const doc of docs) {
-    const relative = doc.slug.replace(/^docs\//, '')
+  const pages = docsSource.getPages()
+
+  for (const page of pages) {
+    const relative = page.slugs.join('/')
     const file = path.join(OUT_DIR, `${relative}.png`)
 
     const image = await renderOgImage({
       category: 'Docs',
-      description: doc.description,
-      title: doc.title,
+      description: page.data.description,
+      title: page.data.title,
     })
 
     await mkdir(path.dirname(file), { recursive: true })
     await writeFile(file, Buffer.from(await image.arrayBuffer()))
   }
 
-  console.log(`🎋 info [og] rendered ${docs.length} cards to public/og`)
+  console.log(`🎋 info [og] rendered ${pages.length} cards to public/og`)
 }
 
 // Not top-level await: the website package is CJS, and a build step that swallowed a

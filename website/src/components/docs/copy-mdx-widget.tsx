@@ -1,8 +1,8 @@
 'use client'
 
-import { Docs } from '.velite'
 import { Button } from '@/components/ui/button'
 import { getPublicUrl } from '@/lib/public-url'
+import type { DocsPage } from '@/lib/source'
 import { css } from '@/styled-system/css'
 import { flex } from '@/styled-system/patterns'
 import { useClipboard } from '@ark-ui/react/clipboard'
@@ -11,7 +11,7 @@ import { Portal } from '@ark-ui/react/portal'
 import { BsMarkdown } from 'react-icons/bs'
 import { LuCheck, LuChevronDown } from 'react-icons/lu'
 
-export const CopyMdxWidget = (props: { doc: Docs }) => {
+export const CopyMdxWidget = (props: { doc: DocsPage }) => {
   const { doc } = props
   return (
     <div
@@ -28,11 +28,11 @@ export const CopyMdxWidget = (props: { doc: Docs }) => {
   )
 }
 
-const CopyPageButton = (props: { doc: Docs }) => {
+const CopyPageButton = (props: { doc: DocsPage }) => {
   const { doc } = props
 
   const clipboard = useClipboard({
-    value: doc.llm,
+    value: doc.data.llm,
     timeout: 1000,
   })
 
@@ -43,18 +43,19 @@ const CopyPageButton = (props: { doc: Docs }) => {
   )
 }
 
-const ActionMenu = (props: { doc: Docs }) => {
+const ActionMenu = (props: { doc: DocsPage }) => {
   const { doc } = props
+  const rawUrl = `/docs/${doc.slugs.join('/')}.mdx`
 
   const readUrl = encodeURIComponent(
-    `Use web browsing to access links and information: ${getPublicUrl(`/${doc.slug}.mdx`)}/\n\nI want to ask some questions
+    `Use web browsing to access links and information: ${getPublicUrl(rawUrl)}/\n\nI want to ask some questions
     `,
   )
 
   const items = [
     {
       label: 'View as markdown',
-      href: `${getPublicUrl(`/${doc.slug}.mdx`)}`,
+      href: `${getPublicUrl(rawUrl)}`,
       icon: BsMarkdown,
     },
     {

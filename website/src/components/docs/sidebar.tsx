@@ -76,9 +76,7 @@ export function Sidebar({ slug: currentSlug }: Props) {
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 w: 'full',
-                // Leading edge flush with the column so the label lines up with the
-                // logo; the hover fill runs the full width rather than sitting inset.
-                px: 0,
+                px: 3,
                 py: 2,
                 rounded: 'md',
                 fontWeight: 'semibold',
@@ -89,6 +87,11 @@ export function Sidebar({ slug: currentSlug }: Props) {
                 _hover: {
                   bg: 'bg.subtle',
                 },
+                // The default focus ring draws 2px outside the box; flush against the
+                // sidebar's own scroll container (overflow-y: auto, no left padding),
+                // that outer half gets clipped. Drawing it inset keeps the ring inside
+                // bounds that are already visible.
+                outlineOffset: '-2px',
                 cursor: 'pointer',
               })}
             >

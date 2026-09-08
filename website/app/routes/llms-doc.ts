@@ -1,7 +1,8 @@
-import { docs } from '.velite'
+import { DOC_CATEGORIES } from '@/lib/docs-categories'
+import { docsSource } from '@/lib/source'
 import type { LoaderFunctionArgs } from 'react-router'
 
-const categoryTitles: Record<string, string> = {
+const categoryTitles: Record<(typeof DOC_CATEGORIES)[number], string> = {
   overview: 'Bamboo CSS Overview',
   installation: 'Bamboo CSS Installation Guides',
   concepts: 'Bamboo CSS Core Concepts',
@@ -18,14 +19,14 @@ export function loader({ params }: LoaderFunctionArgs) {
   const slug = path.replace(/\.(?:mdx|txt)$/, '')
 
   if (slug.includes('/')) {
-    const doc = docs.find((candidate) => candidate.slug === `docs/${slug}`)
-    if (!doc) throw new Response('Not Found', { status: 404 })
+    const page = docsSource.getPage(slug.split('/'))
+    if (!page) throw new Response('Not Found', { status: 404 })
 
-    return text(`# ${doc.title}
+    return text(`# ${page.data.title}
 
-${doc.description || ''}
+${page.data.description || ''}
 
-${doc.llm}
+${page.data.llm}
 
 ---
 
@@ -33,29 +34,32 @@ _This content is automatically generated from the official Bamboo CSS documentat
 `)
   }
 
-  const categoryDocs = docs
-    .filter((doc) => doc.slug.startsWith(`docs/${slug}/`))
-    .sort((a, b) => a.slug.localeCompare(b.slug))
-  if (categoryDocs.length === 0) throw new Response('Not Found', { status: 404 })
+  const categoryPages = docsSource
+    .getPages()
+    .filter((page) => page.slugs.join('/').startsWith(`${slug}/`))
+    .sort((a, b) => a.slugs.join('/').localeCompare(b.slugs.join('/')))
+  if (categoryPages.length === 0) throw new Response('Not Found', { status: 404 })
 
-  const sections = categoryDocs
-    .map((doc) => {
-      const level = doc.slug.replace('docs/', '').split('/').length - 1
-      return `${'#'.repeat(Math.min(level + 1, 6))} ${doc.title}
+  const sections = categoryPages
+    .map((page) => {
+      const level = page.slugs.length - 1
+      return `${'#'.repeat(Math.min(level + 1, 6))} ${page.data.title}
 
-${doc.description || ''}
+${page.data.description || ''}
 
-${doc.llm}`
+${page.data.llm}`
     })
     .join('\n\n---\n\n')
 
-  return text(`# ${categoryTitles[slug] || slug}
+  const title = (categoryTitles as Record<string, string>)[slug] || slug
+
+  return text(`# ${title}
 
 > This document contains all ${slug} documentation for Bamboo CSS
 
 ## Table of Contents
 
-${categoryDocs.map((doc) => `- [${doc.title}](#${doc.title.toLowerCase().replace(/\s+/g, '-')})`).join('\n')}
+${categoryPages.map((page) => `- [${page.data.title}](#${page.data.title.toLowerCase().replace(/\s+/g, '-')})`).join('\n')}
 
 ---
 

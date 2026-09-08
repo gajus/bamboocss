@@ -67,6 +67,7 @@ export type SkipReason =
   | 'unresolved-token' // `token(...)` resolves to no usable string, so the call has to stay
   | 'runtime-binding' // a bamboo import still referenced after the rewrite, whoever left it
   | 'compile-failed' // compilation threw on this module, so nothing about it was established
+  | 'opaque-composition' // a `cx()` joining compiled atoms with a class the build cannot see
 
 export interface FoldedCall {
   name: string
@@ -309,6 +310,12 @@ const FOLDABLE_TYPES = new Set(['css', 'pattern', 'viewTransition'])
  */
 export const SURVIVES_TO_RUNTIME = new Set<SkipReason>([
   'dynamic',
+  // The `cx()` half of `dynamic`, told apart only so it can be reported differently. It has to
+  // be here for the same reason `dynamic` is: the range it covers suppresses a `runtime-binding`
+  // report for a watched binding standing among the call's arguments, which the declined call
+  // already accounts for. Not for `cx` itself — that name is permitted and never watched, so it
+  // is the argument that would otherwise be reported twice.
+  'opaque-composition',
   // Not a declined call at all: a binding the rewrite left referenced. It is the one entry
   // here that does not depend on something having recognised a call, which is what makes the
   // guarantee independent of the recogniser rather than a restatement of it.
@@ -1669,13 +1676,44 @@ export const foldSource = (options: FoldOptions): FoldResult => {
           break
         }
 
-        if (dynamic.length > 1) {
-          skipped.push({ name: 'cx', reason: 'dynamic', start: call.getStart(), end: call.getEnd() })
-          continue
-        }
+        // One declined call, classified once. Two runtime maps cannot be reduced to a single
+        // lookup, so more than one declines the call whether or not the walk finished — and
+        // deciding that first used to decide the *reason* too, which made `cx(a(x), b(y), rest)`
+        // read as `dynamic` while the same three arguments in any other order read as a mix.
+        if (!supported || dynamic.length > 1) {
+          /**
+           * Does this argument carry declarations Bamboo compiled?
+           *
+           * Only the candidate half of `take`, because the other half is already known here:
+           * `take` returned false, which happens precisely when an argument is opaque. What is
+           * missing after that abort is whether a *later* argument was one of ours, which the
+           * partially populated `matched`/`dynamic` lists cannot answer — the walk stops at the
+           * first thing it cannot take, and everything after it is unvisited.
+           *
+           * Declared inside the branch so the common path — every `cx()` that compiles — does
+           * not allocate a closure it never calls. The fold runs on every module of every dev
+           * transform, so per-call-site work here is not free.
+           */
+          const composesStyleSet = (arg: Node): boolean => {
+            const candidate = byRange.get(`${arg.getStart()}:${arg.getEnd()}`)
+            if (candidate?.styleSet || candidate?.styleMap?.outputKind === 'class' || candidate?.replacement)
+              return true
+            return Node.isArrayLiteralExpression(arg) && arg.elements.some(composesStyleSet)
+          }
 
-        if (!supported) {
-          skipped.push({ name: 'cx', reason: 'dynamic', start: call.getStart(), end: call.getEnd() })
+          // Two opaque classes joined together promise nothing and mislead nobody. It is the
+          // *mix* that is worth a word: the atoms were merged semantically before any string
+          // existed, the opaque class was not, and a conflict between the two halves falls back
+          // to the cascade. `supported` is the whole test for whether there is an opaque half,
+          // because a walk that finished took every argument — several runtime maps and nothing
+          // foreign among them is the one shape that arrives here still deserving `dynamic`.
+          const mixed = !supported && (childOf<Node[]>(call, 'arguments') ?? []).some(composesStyleSet)
+          skipped.push({
+            name: 'cx',
+            reason: mixed ? 'opaque-composition' : 'dynamic',
+            start: call.getStart(),
+            end: call.getEnd(),
+          })
           continue
         }
 

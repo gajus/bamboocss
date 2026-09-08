@@ -409,6 +409,15 @@ not statically available, so replacing `className` with `css(base, props.css)` d
   intentional override.
 </Callout>
 
+In practice a foreign class wins that race: everything Bamboo emits lives in a cascade layer, and unlayered CSS beats
+layered CSS whatever its specificity. The case to watch is an opaque class that is _itself_ a Bamboo class — one
+assembled at runtime, or arriving through a prop the compiler cannot follow — because then both sides are in
+`@layer utilities`, and the sublayer order decides rather than the `cx()` argument order.
+
+Which of the two you handed it is not something the compiler can see — an opaque string is opaque — so it reports every
+such mix under `opaque-composition`, apart from an ordinary rejected call, so
+[`reportSkipped`](/docs/guides/source-transformation) and the build summary can name them.
+
 ### Hashing
 
 The `hash` option shortens class names and CSS variables, and it is the only thing that does. The Vite compiler and CLI

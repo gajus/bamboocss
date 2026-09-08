@@ -698,7 +698,10 @@ describe.sequential('vite plugin, real rebuild', () => {
       expect(transformCalls, 'the entry took Rollup’s cached transform path').toHaveLength(1)
       const cachedCss = writtenCss()
       expect(summaries).toHaveLength(2)
-      expect(summaries[0]).toContain('declined: dynamic=1')
+      // `cx(external, css(shared))` joins a class the build cannot read with one it compiled,
+      // which is reported apart from a plain dynamic skip so the warning can name it. What
+      // this test is about is the line below: the cached rebuild has to reach the same verdict.
+      expect(summaries[0]).toContain('declined: opaque-composition=1')
       expect(summaries[1], 'cached coverage and diagnostics must match the clean build').toBe(summaries[0])
 
       expect(cachedCss).toContain(width)

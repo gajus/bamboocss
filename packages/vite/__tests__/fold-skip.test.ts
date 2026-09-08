@@ -141,3 +141,144 @@ describe('inline recipe declarations are compile-time only', () => {
     expect(result.folded).toContainEqual(expect.objectContaining({ kind: 'definition', name: 'badge' }))
   })
 })
+
+/**
+ * `cx()` is the one call that is allowed to survive compilation, because forwarding a
+ * `className` prop has no other shape. What it gives up is the guarantee the rest of the
+ * compiler provides: arguments Bamboo can read are merged into shared atoms before a string
+ * exists, and an argument it cannot read is concatenated after. A declaration set on both
+ * sides is then resolved by the cascade instead of by the merge.
+ *
+ * In practice the foreign class wins that race, because everything Bamboo emits is inside a
+ * cascade layer and unlayered CSS outranks layered CSS. Worse is the narrower case underneath
+ * it: an opaque class that is itself a Bamboo class, where both sides are in `@layer utilities`
+ * and the sublayer order decides instead of argument order. Which of the two arrived is not
+ * something the compiler can see — an opaque string is opaque — so `opaque-composition` covers
+ * every mix rather than that subset.
+ *
+ * It separates all of them from a plain `dynamic` skip so `reportSkipped` and the coverage
+ * summary can name them. It still passes the build — `strict-compiler.test.ts` pins that — and
+ * changes no compiled output.
+ */
+describe('cx composing an opaque class', () => {
+  const fold = (body: string) =>
+    createFoldFixture()
+      .fold(`import { css, cx } from 'styled-system/css'\n${body}\n`)
+      .skipped.filter((entry) => entry.name === 'cx')
+      .map((entry) => entry.reason)
+
+  test('reports the mix of compiled atoms and a class the build cannot see', () => {
+    expect(fold(`export const f = (rest) => cx(css({ color: 'red.300' }), rest.className)`)).toEqual([
+      'opaque-composition',
+    ])
+  })
+
+  test('reports it when the opaque argument comes first', () => {
+    // The argument walk aborts on the first thing it cannot take, so the Bamboo call here was
+    // never visited. Reading the mix off the partially populated match list missed this.
+    expect(fold(`export const f = (rest) => cx(rest.className, css({ color: 'red.300' }))`)).toEqual([
+      'opaque-composition',
+    ])
+  })
+
+  test('reports it through an array literal', () => {
+    expect(fold(`export const f = (rest) => cx([css({ color: 'red.300' }), rest.className])`)).toEqual([
+      'opaque-composition',
+    ])
+  })
+
+  test('stays `dynamic` when nothing in the join was ours', () => {
+    // Two opaque classes promise nothing and mislead nobody. Warning here would be noise in
+    // every codebase that uses `cx` as a plain class joiner.
+    expect(fold(`export const f = (a, b) => cx(a, b)`)).toEqual(['dynamic'])
+  })
+
+  test('says nothing when every argument resolved', () => {
+    expect(fold(`export const f = cx(css({ color: 'red.300' }), 'external')`)).toEqual([])
+  })
+})
+
+describe('a config recipe joined with an opaque class', () => {
+  test('reports the mix rather than a bare dynamic skip', () => {
+    const result = createFoldFixture().fold(`
+      import { cx } from 'styled-system/css'
+      import { buttonStyle } from 'styled-system/recipes'
+      export const f = (props) => cx(buttonStyle({ size: 'sm' }), props.className)
+    `)
+
+    expect(result.skipped.filter((entry) => entry.name === 'cx').map((entry) => entry.reason)).toEqual([
+      'opaque-composition',
+    ])
+  })
+})
+
+/**
+ * Several runtime maps decline the call on their own — one `cx()` cannot reduce to one lookup —
+ * and that verdict is reached before the argument walk's result is read. It must not also decide
+ * the *reason*, or the classification becomes a fact about argument order: the walk aborts at the
+ * first opaque argument, so how many maps it had already taken by then is what changes.
+ */
+describe('two runtime recipe maps joined with an opaque class', () => {
+  const reasons = (body: string) =>
+    createFoldFixture()
+      .foldStyleSets(
+        `import { cva, cx } from 'styled-system/css'
+` +
+          `const badge = cva({ variants: { tone: { quiet: { color: 'gray.500' }, loud: { color: 'red.500' } } } })
+` +
+          `const chip = cva({ variants: { size: { sm: { padding: '2' }, md: { padding: '4' } } } })
+` +
+          `${body}
+`,
+      )
+      .skipped.filter((entry) => entry.name === 'cx')
+      .map((entry) => entry.reason)
+
+  test.each([
+    ['last', `export const f = (tone, size, props) => cx(badge({ tone }), chip({ size }), props.className)`],
+    [
+      'between the maps',
+      `export const f = (tone, size, props) => cx(badge({ tone }), props.className, chip({ size }))`,
+    ],
+    ['first', `export const f = (tone, size, props) => cx(props.className, badge({ tone }), chip({ size }))`],
+  ])('reports the mix with the opaque argument %s', (_position, body) => {
+    expect(reasons(body)).toEqual(['opaque-composition'])
+  })
+
+  test('stays `dynamic` when the maps are the only reason it declined', () => {
+    // Nothing foreign is in this join. It survives to runtime because two maps cannot be merged,
+    // which is what `dynamic` has always meant, and there is no second half to warn about.
+    expect(reasons(`export const f = (tone, size) => cx(badge({ tone }), chip({ size }))`)).toEqual(['dynamic'])
+  })
+})
+
+/**
+ * The declined `cx()` covers a range, and that range is what stops the survivor scan reporting a
+ * Bamboo binding standing inside it a second time under `runtime-binding` — a reason that *does*
+ * fail the build. That suppression is `SURVIVES_TO_RUNTIME` membership and nothing else, so the
+ * new reason had to join the set; deleting it there leaves every other test in this package green
+ * and turns the build below red.
+ */
+describe('a binding inside a declined cx', () => {
+  const survivors = (body: string) =>
+    createFoldFixture()
+      .foldStrict(
+        `import { css, cx } from 'styled-system/css'
+` +
+          `import { buttonStyle } from 'styled-system/recipes'
+` +
+          `${body}
+`,
+      )
+      .skipped.map((entry) => [entry.name, entry.reason])
+
+  test('is not also reported as a runtime binding', () => {
+    expect(
+      survivors(`export const f = (props) => cx(css({ color: 'red.300' }), buttonStyle, props.className)`),
+    ).toEqual([['cx', 'opaque-composition']])
+  })
+
+  test('is not reported when the join declines as `dynamic` either', () => {
+    expect(survivors(`export const f = (props) => cx(buttonStyle, props.className)`)).toEqual([['cx', 'dynamic']])
+  })
+})

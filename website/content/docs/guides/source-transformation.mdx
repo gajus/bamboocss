@@ -217,7 +217,11 @@ Common reasons:
 | `compile-failed`   | Compilation of the module threw; no clean result can be claimed.           |
 
 `not-imported` is not an error: it means a local or third-party function happened to use the same name. An `overlapping`
-inner candidate is owned by the enclosing compiled expression.
+inner candidate is owned by the enclosing compiled expression. Neither is `opaque-composition`, which is a `cx()` that
+joins classes the compiler resolved with one it cannot read — a component forwarding a `className` prop, usually. It is
+separated from `dynamic` so per-file diagnostics can name it, and it never fails the build; see
+[classname concatenation](/docs/concepts/writing-styles#classname-concatenation) for what it does and does not
+guarantee.
 
 Use `reportSkipped: true` for per-file diagnostics. The summary is enabled by default.
 

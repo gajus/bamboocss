@@ -444,6 +444,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     'unresolved-token',
     'runtime-binding',
     'compile-failed',
+    'opaque-composition',
   ])
   const isRecord = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -2748,7 +2749,12 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       // tiny class-string joiner, not a styling engine. Bamboo only promises semantic
       // StyleSet composition when every argument is analyzable; nested Bamboo calls are
       // still compiled independently before this runtime join.
-      if (entry.name === 'cx' && entry.reason === 'dynamic') continue
+      //
+      // `opaque-composition` is the subset where the join also carries atoms Bamboo compiled.
+      // It is reported apart so `reportSkipped` and the coverage summary can name it, and it
+      // passes for the same reason the rest of `cx` passes: forwarding a `className` prop is
+      // how components are written, and there is usually no other shape available.
+      if (entry.name === 'cx' && (entry.reason === 'dynamic' || entry.reason === 'opaque-composition')) continue
       // Every skipped entry indexes the module being folded: each module reports only about
       // its own text, so there is no foreign offset to translate.
       survivorsHere.push({ line: lineAt(code, entry.start), name: entry.name, reason: entry.reason })

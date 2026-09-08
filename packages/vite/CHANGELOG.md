@@ -1,5 +1,26 @@
 # @bamboocss/vite
 
+## 1.55.1
+
+### Patch Changes
+
+- 24c933a: Report a `cx()` that joins compiled atoms with an opaque class under its own diagnostic reason.
+
+  Such a call was counted as a plain `dynamic` skip, which is also what an unanalyzable `css()` argument produces — so
+  `reportSkipped` and the build summary could not tell the two apart. They are now separated as `opaque-composition`.
+
+  This does not change what compiles. The call still passes the build, for the reason it always has: forwarding a
+  `className` prop is how components are written, and there is usually no other shape available. Only calls that mix
+  both halves are classified this way; a `cx()` whose arguments are all opaque stays `dynamic`.
+  - @bamboocss/config@1.55.1
+  - @bamboocss/core@1.55.1
+  - @bamboocss/extractor@1.55.1
+  - @bamboocss/logger@1.55.1
+  - @bamboocss/node@1.55.1
+  - @bamboocss/shared@1.55.1
+  - @bamboocss/ts-ast@1.55.1
+  - @bamboocss/types@1.55.1
+
 ## 1.55.0
 
 ### Patch Changes

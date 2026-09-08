@@ -1,5 +1,12 @@
 # @bamboocss/extractor
 
+## 1.55.1
+
+### Patch Changes
+
+- @bamboocss/shared@1.55.1
+- @bamboocss/ts-ast@1.55.1
+
 ## 1.55.0
 
 ### Patch Changes

@@ -194,6 +194,10 @@ and recipe-specific selectors do not ship. Bamboo has no extraction-only runtime
 
   `jsxFramework`, `jsxFactory` and `jsxStyleProps` are gone from the config with it — delete them.
 
+  `createStyleContext` wrapped each slot in a component so it could see the root's variant. A slot recipe returns a
+  record of class strings, so a compound component carries that record in an ordinary context and needs no wrapper per
+  part — see [styling compound components](/docs/concepts/slot-recipes#styling-jsx-compound-components).
+
 - **There are no JSX pattern components.** `<Stack>`, `<Box>`, `<HStack>` and the rest are not generated, and
   `styled-system/jsx` does not exist to import them from. The pattern **functions** are unchanged and are what those
   components wrapped, so the rewrite is mechanical:

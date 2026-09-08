@@ -260,7 +260,8 @@ Bamboo deliberately has one way to write a style, rather than several.
 - **There is no JSX factory.** `styled.div`, `styled('button', recipe)`, `createStyleContext` and `splitCssProps` have
   no equivalent, and `styled-system/jsx` is not generated at all. Style props become a `css()` call, and a recipe
   component becomes an ordinary component that calls the recipe. `jsxFramework`, `jsxFactory` and `jsxStyleProps` are
-  gone from the config with them.
+  gone from the config with them. A compound component carries its slot classes in a context of your own — see
+  [styling compound components](/docs/concepts/slot-recipes#styling-jsx-compound-components).
 - **There are no JSX pattern components.** `<Stack>`, `<Box>` and the rest are not generated. The pattern _functions_
   are what those components wrapped — see [patterns](/docs/concepts/patterns) for the set that survives.
 - **There is no template literal syntax.** ``css`color: red` `` is not supported; write the object form.

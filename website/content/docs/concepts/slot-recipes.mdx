@@ -209,6 +209,88 @@ const Checkbox = (props: CheckboxVariants) => {
 }
 ```
 
+## Styling JSX Compound Components
+
+A slot recipe call returns a record of class strings, one per slot:
+
+```ts
+const classes = checkbox({ size: 'md' })
+// { root: '_a _b _c', control: '_d _e', label: '_f' }
+```
+
+That record is the only thing a compound component's parts need. There is no `createStyleContext` — what it delivered
+was a wrapper component per slot, and a record of strings needs no wrapper.
+
+### The root renders every part
+
+Most components are this shape, and it needs no context at all:
+
+```tsx filename="checkbox.tsx"
+import { type ReactNode } from 'react'
+import { checkbox, type CheckboxVariants } from './checkbox.recipe'
+
+export const Checkbox = ({ size, children }: CheckboxVariants & { children: ReactNode }) => {
+  const classes = checkbox({ size })
+  return (
+    <label className={classes.root}>
+      <div className={classes.control} />
+      <span className={classes.label}>{children}</span>
+    </label>
+  )
+}
+```
+
+### The consumer composes the parts
+
+When the parts are exposed — `<Checkbox.Control />` authored as a sibling of the element the variants were given to —
+the record has to reach them. That is an ordinary context, and it is the whole pattern:
+
+```tsx filename="checkbox.tsx"
+'use client'
+import { createContext, useContext, type ReactNode } from 'react'
+import { checkbox, type CheckboxVariants } from './checkbox.recipe'
+
+const SlotContext = createContext<ReturnType<typeof checkbox> | null>(null)
+
+const useSlots = () => {
+  const slots = useContext(SlotContext)
+  if (!slots) throw new Error('A Checkbox part must render inside <Checkbox>')
+  return slots
+}
+
+export const Checkbox = ({ size, children }: CheckboxVariants & { children: ReactNode }) => {
+  const slots = checkbox({ size })
+  return (
+    <SlotContext.Provider value={slots}>
+      <label className={slots.root}>{children}</label>
+    </SlotContext.Provider>
+  )
+}
+
+Checkbox.Control = () => <div data-slot="control" className={useSlots().control} />
+Checkbox.Label = ({ children }: { children: ReactNode }) => (
+  <span data-slot="label" className={useSlots().label}>
+    {children}
+  </span>
+)
+```
+
+Carry the class record rather than the variants. Both work — a part can equally read `size` from a context and call
+`checkbox({ size }).control` itself — but the record is one call for the whole component instead of one per part, and
+each part is then a property read.
+
+A part rendered through a portal needs nothing extra: the record is plain strings, and React context crosses a portal.
+
+<Callout type="warning">
+  Put the recipe's **result** in the context, never the recipe itself. An inline `sva` declaration is erased at build
+  time, so its binding has nothing behind it at runtime: `checkbox({ size })` compiles, including from another module,
+  while `<SlotContext.Provider value={checkbox}>` fails the build with a `runtime-binding` diagnostic pointing at the
+  read.
+</Callout>
+
+`data-slot` is not required, but generated class names are opaque atoms carrying no slot identity, so it is what
+application CSS or a test selects a part by — see [Targeting slots](#targeting-slots).
+
 ## Legacy named-recipe scoping
 
 <Callout type="warning">
@@ -414,22 +496,6 @@ for that explicitly with an empty list:
 ```ts
 scopeRoots: [] // every slot keeps its own variant class, and stays callable
 ```
-
-### Styling JSX Compound Components
-
-With scoping, a compound component needs no context and no wrapper per part — a slot's class is a constant, so each part
-reads its own:
-
-```jsx
-// no provider, no context, no wrapper per part
-const Checkbox = ({ size, children }) => <label className={checkbox.root({ size })}>{children}</label>
-Checkbox.Control = () => <div className={checkbox.control} />
-Checkbox.Label = ({ children }) => <span className={checkbox.label}>{children}</span>
-```
-
-The one shape that still needs a context is a component spanning a portal, and it needs it for its second _anchor_
-rather than for its slots — see [The second anchor still needs the variant](#the-second-anchor-still-needs-the-variant).
-In React that makes the file a client component, so add `'use client'` at the top.
 
 ## Config Slot Recipe
 

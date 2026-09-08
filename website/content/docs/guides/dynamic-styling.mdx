@@ -14,6 +14,7 @@ Choose the representation from the shape of the value:
 | A finite branch between complete styles    | A branch between separately compiled calls                                    |
 | A continuous value such as width or offset | The `style` attribute, or a CSS variable when the cascade must still reach it |
 | A dynamic token name                       | A recipe variant that names the allowed token set                             |
+| An opaque class alongside Bamboo styles    | `cx()` — merged semantically if analyzable, a plain string-join otherwise     |
 
 ## Finite choices
 
@@ -94,6 +95,34 @@ const text = cva({
   },
 })
 ```
+
+## Composing with an opaque class
+
+A forwarded `className` prop has no declarations the compiler can see. `cx()` is the one call allowed to degrade instead
+of reject:
+
+```jsx
+import { css, cx } from '../styled-system/css'
+
+const styles = css({ borderWidth: '1px', paddingX: '12px' })
+
+const Card = ({ className, ...props }) => <div className={cx('group', styles, className)} {...props} />
+```
+
+When every argument is analyzable, `cx()` merges the underlying styles before allocating classes and later declarations
+win:
+
+```tsx
+cx(css({ paddingX: '4' }), css({ paddingX: '2' }))
+// one atom for padding-inline: 2
+```
+
+An opaque argument like `className` above removes that guarantee: `cx()` falls back to a plain string-join, and the
+opaque class's position in the call gives it no override priority over the compiled styles beside it. This does not fail
+the build — it is `cx()`'s documented second contract — but the two are worth telling apart. See
+[classname concatenation](/docs/concepts/writing-styles#classname-concatenation) for how the resulting cascade race
+resolves, and [source compilation](/docs/guides/source-transformation) for the `opaque-composition` diagnostic that
+flags it.
 
 ## `css.raw()`
 

@@ -436,6 +436,99 @@ describe('the virtual stylesheet', () => {
     expect(reloaded).toEqual([])
   }, 60_000)
 
+  /**
+   * A `<link>` to the stylesheet's URL loads it as a module of its own, `?direct`, and a project
+   * that only links the sheet has no other. A file the extractor reads that never became a module
+   * has to repaint that one too, since Vite matches nothing for it.
+   */
+  test('forces a reload of the linked stylesheet as well', async () => {
+    const plugin = bamboocssCss({ cwd, session: createStaticCompilationSession() })
+    await hookOf(plugin.configResolved)?.call(
+      {} as never,
+      { build: { sourcemap: false }, command: 'serve', configFileDependencies: [], root: cwd } as never,
+    )
+    const resolved = hookOf(plugin.resolveId)!.call(
+      {} as never,
+      `${VIRTUAL_CSS_ID}?direct`,
+      undefined,
+      {} as never,
+    ) as string
+
+    const watched: string[] = []
+    const context = { addWatchFile: (file: string) => watched.push(file) }
+    const css = await hookOf(plugin.load)!.call(context as never, resolved, undefined as never)
+    await hookOf(plugin.transform)!.call(context as never, css as string, resolved, undefined as never)
+    const edited = watched.find((file) => file.endsWith('.tsx'))!
+
+    const reloaded: string[] = []
+    const listeners = new Map<string, (file: string) => void>()
+    hookOf(plugin.configureServer)!.call(
+      {} as never,
+      {
+        environments: { client: { moduleGraph: { getModulesByFile: () => undefined } } },
+        moduleGraph: {
+          getModuleById: (id: string) => (id === resolved ? { id } : undefined),
+          getModulesByFile: () => undefined,
+          invalidateModule: () => {},
+        },
+        reloadModule: (mod: { id: string }) => void reloaded.push(mod.id),
+        watcher: { on: (event: string, listener: (file: string) => void) => listeners.set(event, listener) },
+      } as never,
+    )
+
+    listeners.get('change')!(edited)
+    expect(reloaded, 'nothing else would repaint the linked sheet').toEqual([resolved])
+  }, 60_000)
+
+  /**
+   * `?url` on a dev server, which Vite leaves to its asset plugin, and that plugin skips an id with
+   * no file behind it. The CSS itself came back as the module instead of the URL.
+   */
+  test('a dev server answers ?url with the URL a link fetches the stylesheet from', async () => {
+    // Vite 6 and up carry the base decoded as `decodedBase`. Vite 5 has only the encoded `base`.
+    const configs = [
+      { server: { origin: 'http://localhost:4000' }, base: '/my%20app/', decodedBase: '/my app/' },
+      { server: { origin: 'http://localhost:4000' }, base: '/my%20app/' },
+    ]
+
+    for (const config of configs) {
+      const plugin = bamboocssCss({ cwd, session: createStaticCompilationSession() })
+      await hookOf(plugin.configResolved)?.call(
+        {} as never,
+        { build: { sourcemap: false }, command: 'serve', configFileDependencies: [], root: cwd } as never,
+      )
+      hookOf(plugin.configureServer)!.call(
+        {} as never,
+        {
+          config,
+          environments: { client: { moduleGraph: { getModulesByFile: () => undefined } } },
+          moduleGraph: { getModuleById: () => undefined, getModulesByFile: () => undefined, invalidateModule() {} },
+          reloadModule() {},
+          watcher: { on() {} },
+        } as never,
+      )
+      const resolved = hookOf(plugin.resolveId)!.call(
+        {} as never,
+        `${VIRTUAL_CSS_ID}?url`,
+        undefined,
+        {} as never,
+      ) as string
+
+      const watched: string[] = []
+      const context = { addWatchFile: (file: string) => watched.push(file) }
+      const code = await hookOf(plugin.load)!.call(context as never, resolved, undefined as never)
+      await hookOf(plugin.transform)!.call(context as never, code as string, resolved, undefined as never)
+
+      // Behind the server's origin and base, with the base escaped exactly once.
+      expect(code, JSON.stringify(config)).toBe(
+        'export default "http://localhost:4000/my%20app/@id/__x00__virtual:bamboo.css"',
+      )
+      // The URL does not change with the sources. Registered here, Vite's import analysis would
+      // make every extracted file an import of this module.
+      expect(watched).toEqual([])
+    }
+  }, 60_000)
+
   test('recipe declarations are atoms and recipe rules are never emitted', async () => {
     const fixtureDir = join(cwd, 'src/__static-composition-css-test')
     const fixture = join(fixtureDir, 'styles.ts')

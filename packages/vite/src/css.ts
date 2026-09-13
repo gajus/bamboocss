@@ -42,6 +42,24 @@ const queryOf = (id: string) => {
   return at === -1 ? '' : id.slice(at)
 }
 
+/** `?url`, tested the way Vite's asset plugin tests it — the plugin a dev server leaves it to. */
+const URL_QUERY = /(?:\?|&)url(?:&|$)/
+
+/**
+ * Where a dev server serves the stylesheet, spelled the way Vite writes the URL of any module with
+ * no file behind it: `/@id/`, then the resolved id with its NUL as `__x00__`, behind the server's
+ * `origin` and base.
+ *
+ * The base is taken decoded, so `encodeURI` applies its escapes exactly once, as Vite does for an
+ * asset's URL. Vite 6 and up carry it as `decodedBase`, which is missing from the published types,
+ * hence the cast; Vite 5 has only `base`, decoded here instead.
+ */
+const devStylesheetUrl = (config: ViteDevServer['config'] | undefined) => {
+  const join = (a: string, b: string) => (a && b ? `${a.replace(/\/$/, '')}/${b.replace(/^\//, '')}` : a || b)
+  const base = (config as { decodedBase?: string } | undefined)?.decodedBase ?? decodeURI(config?.base ?? '/')
+  return encodeURI(join(join(config?.server.origin ?? '', base), `@id/__x00__${VIRTUAL_CSS_ID}`))
+}
+
 /**
  * A thrown value Vite can actually report.
  *
@@ -702,6 +720,17 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
       // module was asked for, and `buildEnd` fails a build that compiled classes without it.
       session.cssLoaded = true
 
+      // `?url` asks where the stylesheet is served, not for the stylesheet. A build never gets here
+      // with it: Vite's CSS plugin loads it first, emitting the sheet as an asset and exporting that
+      // asset's name. A dev server leaves `?url` to its asset plugin, which skips an id with no file
+      // behind it, so the CSS itself came back as the module: a parse failure in the SSR runner and
+      // a syntax error in the browser. Answered the way that plugin answers for a file, with the URL
+      // a `<link>` fetches, which the dev server serves as the stylesheet since the request accepts
+      // `text/css`.
+      if (command === 'serve' && URL_QUERY.test(query)) {
+        return `export default ${JSON.stringify(devStylesheetUrl(server?.config))}`
+      }
+
       const generationAtStart = changeGeneration
       if (command === 'serve' && servedCss?.generation === generationAtStart) {
         // The environment that hit the memo still has to register the extracted files against its
@@ -792,6 +821,11 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
         if (command !== 'serve') return
         const query = queryOf(id)
         if (id.slice(0, id.length - query.length) !== RESOLVED_ID) return
+        // A `?url` module exports a URL no source edit changes. Vite's import analysis treats the
+        // files a JavaScript module registers as its imports, so registering them here would make
+        // every extracted file one. The stylesheet behind that URL is `?direct`, which registers
+        // them itself.
+        if (URL_QUERY.test(query)) return
         if (this.addWatchFile) {
           for (const file of session.extractedFiles) this.addWatchFile(file)
         }
@@ -845,8 +879,13 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
         // requested — exactly the state in which that pass is still waiting to be handed over.
         prebuilt = undefined
 
-        const mod = server?.moduleGraph.getModuleById(RESOLVED_ID)
-        if (!mod) return
+        // The module an import of the stylesheet loads, and the one a `<link>` to its `?url` loads —
+        // the only one a project that links the sheet has.
+        const sheets = [RESOLVED_ID, `${RESOLVED_ID}?direct`].flatMap((sheetId) => {
+          const sheet = server?.moduleGraph.getModuleById(sheetId)
+          return sheet ? [sheet] : []
+        })
+        if (!sheets.length) return
 
         // Already Vite's job. Forcing it as well does not merge with that pass — it is a second
         // `updateModules`, so the browser is told twice and refetches the whole stylesheet
@@ -855,8 +894,10 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
         // Vite matches nothing and nothing would repaint at all.
         if (wasExtracted && clientGraph.getModulesByFile(absoluteFile)?.size) return
 
-        server?.moduleGraph.invalidateModule(mod)
-        void server?.reloadModule(mod)
+        for (const sheet of sheets) {
+          server?.moduleGraph.invalidateModule(sheet)
+          void server?.reloadModule(sheet)
+        }
         logger.debug('vite', `styles invalidated by ${absoluteFile}`)
       }
 

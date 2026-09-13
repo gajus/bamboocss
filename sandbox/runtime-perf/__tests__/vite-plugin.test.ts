@@ -3651,6 +3651,77 @@ describe('the stylesheet URL', () => {
     expect(js).not.toContain('virtual:bamboo.css')
     expect(js).toContain(sheet!.fileName.split('/').pop()!)
   }, 120_000)
+
+  /**
+   * The same import on a dev server, which leaves `?url` to Vite's asset plugin, and that plugin
+   * skips an id with no file behind it. The CSS itself came back as the module, which neither the
+   * SSR runner nor the browser could parse. TanStack Start's template links its stylesheet exactly
+   * this way, so the first server render failed outright.
+   *
+   * Fetched over HTTP the way a `<link>` fetches it, accepting `text/css`, which is what makes the
+   * dev server answer with the stylesheet rather than a module. An edit then has to reach that
+   * stylesheet too: it is a module of its own, `?direct`, with its own edges.
+   */
+  const devCases: Array<[string, typeof createServer, number]> = [
+    ['Vite 7', createServer, 24795],
+    ['Vite 8', createVite8Server as unknown as typeof createServer, 24796],
+  ]
+
+  for (const [label, createDevServer, port] of devCases) {
+    test(`${label} serves the stylesheet at the URL a dev server exports`, async () => {
+      const writeEntry = (width: string) =>
+        writeFileSync(
+          urlEntry,
+          `import href from 'virtual:bamboo.css?url'\nimport { css } from '../styled-system/css'\nexport const a = css({ width: '[${width}]' })\nexport const url = href\n`,
+        )
+      writeEntry('52.1px')
+
+      const server = await createDevServer({
+        root: cwd,
+        configFile: false,
+        logLevel: 'silent',
+        css: { postcss: { plugins: [] } },
+        plugins: [bamboocss({ cwd, reportSummary: false }) as never],
+        server: { port, strictPort: true },
+      })
+
+      try {
+        await server.listen()
+        const href = '/@id/__x00__virtual:bamboo.css'
+        for (const environment of ['client', 'ssr'] as const) {
+          const module = await server.environments[environment].transformRequest('virtual:bamboo.css?url')
+          expect(module?.code, environment).toContain(JSON.stringify(href))
+        }
+
+        const fetchSheet = async () => {
+          const response = await fetch(new URL(href, server.resolvedUrls!.local[0]), {
+            headers: { accept: 'text/css,*/*;q=0.1' },
+          })
+          return { type: response.headers.get('content-type'), css: await response.text() }
+        }
+        const served = await fetchSheet()
+        expect(served.type).toContain('text/css')
+        expect(served.css).toContain('w_\\[52\\.1px\\]')
+
+        // A page linking the sheet has loaded its modules too, which leaves the edit to Vite's own
+        // propagation rather than to the watcher's forced reload.
+        await server.environments.client.transformRequest('/src/__url-entry.tsx')
+        writeEntry('52.2px')
+        server.watcher.emit('change', urlEntry)
+
+        const deadline = Date.now() + 10_000
+        let css = ''
+        do {
+          // A macrotask between reads, so the update being waited for is not starved.
+          await new Promise((resolve) => setTimeout(resolve, 50))
+          css = (await fetchSheet()).css
+        } while (!css.includes('w_\\[52\\.2px\\]') && Date.now() < deadline)
+        expect(css, 'the edit never reached the linked stylesheet').toContain('w_\\[52\\.2px\\]')
+      } finally {
+        await server.close()
+      }
+    }, 120_000)
+  }
 })
 
 /**

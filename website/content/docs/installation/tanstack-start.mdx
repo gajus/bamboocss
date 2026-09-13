@@ -164,8 +164,10 @@ server links them into the server-rendered page, so the first paint is already s
 emitted stylesheet the same way. Imported from `src/router.tsx` instead, the stylesheet still applies, but the
 development server does not collect it for server-rendered HTML, so pages render unstyled until the client hydrates.
 
-Import the stylesheet itself, not its URL. The template links `src/styles.css` with a `?url` import and a `links` entry,
-but the development server cannot load `virtual:bamboo.css?url`.
+The template links `src/styles.css` through a `?url` import and a `links` entry instead. Bamboo's stylesheet can be
+linked the same way, with `import bambooCss from 'virtual:bamboo.css?url'` and `{ rel: 'stylesheet', href: bambooCss }`
+in `links`, but that makes it an asset of its own rather than part of the CSS Vite bundles with the root route. Prefer
+the import above unless you need the URL itself.
 
 It also has to be a JavaScript import. `@import` from a stylesheet does not reach it, because Vite resolves CSS
 `@import` before plugin resolution and the id names a virtual module this plugin resolves.

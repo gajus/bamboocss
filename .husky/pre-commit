@@ -17,4 +17,7 @@ staged=$(git diff --cached --name-only --diff-filter=ACMR)
 # `git add -A` this replaces, which committed the whole working tree every time.
 pnpm fmt:fix
 
-git diff --cached --name-only --diff-filter=ACMR -z | xargs -0 git add --
+# Forced: the list is exactly what is already staged, so nothing new can be swept in, and
+# some of it can sit under an ignored path. `.gitignore` ignores `sandbox`, whose tests are
+# tracked all the same, and a plain `git add` exits 1 on them, aborting the commit.
+git diff --cached --name-only --diff-filter=ACMR -z | xargs -0 git add -f --

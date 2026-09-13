@@ -51,7 +51,7 @@ beforeAll(() => {
     if (!existsSync(manifestPath)) continue
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
       dependencies?: Record<string, string>
-      exports?: { '.'?: { import?: { types?: string } } }
+      exports?: { '.'?: { import?: { types?: string }; types?: string } }
       name?: string
       types?: string
     }
@@ -61,7 +61,10 @@ beforeAll(() => {
       Object.keys(manifest.dependencies ?? {}).filter((name) => name.startsWith('@bamboocss/')),
     )
     packageDirectories.set(manifest.name, directory)
-    declarationEntries.set(manifest.name, manifest.exports?.['.']?.import?.types ?? manifest.types)
+    declarationEntries.set(
+      manifest.name,
+      manifest.exports?.['.']?.import?.types ?? manifest.exports?.['.']?.types ?? manifest.types,
+    )
   }
 
   // Pack the complete internal runtime closure. A link to one unchanged workspace package is
@@ -403,10 +406,14 @@ describe('packed and installed NodeNext consumers', () => {
     const assertPackIsComplete = (name: string, directory: string) => {
       const packed = packedFiles(name)
       const exported = exportedFiles(directory)
-      expect(packed).toEqual(expect.arrayContaining(exported))
+      expect(packed, name).toEqual(expect.arrayContaining(exported))
 
       for (const declaration of exported.filter((file) => /\.d\.[cm]ts$/.test(file))) {
+        // Strip comments first: JSDoc quotes imports as examples (core's `rewriteTypeImport`,
+        // ts-ast's export readers), and a quoted `from './a'` names no file the pack needs.
         const source = readFileSync(join(directory, declaration), 'utf8')
+          .replace(/\/\*[\s\S]*?\*\//g, '')
+          .replace(/^\s*\/\/.*$/gm, '')
         for (const match of source.matchAll(/\bfrom\s+["'](\.[^"']+)["']/g)) {
           const specifier = match[1]
           const dependency = specifier.endsWith('.mjs')
@@ -414,7 +421,7 @@ describe('packed and installed NodeNext consumers', () => {
             : specifier.endsWith('.cjs')
               ? `${specifier.slice(0, -4)}.d.cts`
               : specifier
-          expect(packed).toContain(join(dirname(declaration), dependency))
+          expect(packed, name).toContain(join(dirname(declaration), dependency))
         }
       }
 
@@ -426,12 +433,16 @@ describe('packed and installed NodeNext consumers', () => {
           // Extensionless requires inside bundled third-party code are runtime resolution
           // branches, not emitted chunks. Tsdown's own chunks always carry the target format.
           if (!/\.[cm]js$/.test(match[1])) continue
-          expect(packed).toContain(join(dirname(runtime), match[1]))
+          expect(packed, name).toContain(join(dirname(runtime), match[1]))
         }
       }
     }
 
-    assertPackIsComplete('@bamboocss/vite', packageRoot)
+    // Every package the consumer installs, not only the two it imports. `@bamboocss/types` sat in
+    // this closure while its manifest named a `dist/index.d.cts` its build never writes, and nothing
+    // asserted on it: installed consumers resolved no types, and `--skipLibCheck` above hid the
+    // unresolved import inside `@bamboocss/node`'s declarations.
+    for (const name of packs.keys()) assertPackIsComplete(name, packageDirectories.get(name)!)
     expect(packedFiles('@bamboocss/vite')).toEqual(
       expect.arrayContaining([
         'dist/config-module.mjs',

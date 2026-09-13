@@ -1,5 +1,22 @@
 # @bamboocss/node
 
+## 1.55.2
+
+### Patch Changes
+
+- @bamboocss/config@1.55.2
+- @bamboocss/core@1.55.2
+- @bamboocss/generator@1.55.2
+- @bamboocss/logger@1.55.2
+- @bamboocss/parser@1.55.2
+- @bamboocss/plugin-svelte@1.55.2
+- @bamboocss/plugin-vue@1.55.2
+- @bamboocss/reporter@1.55.2
+- @bamboocss/shared@1.55.2
+- @bamboocss/token-dictionary@1.55.2
+- @bamboocss/ts-ast@1.55.2
+- @bamboocss/types@1.55.2
+
 ## 1.55.1
 
 ### Patch Changes

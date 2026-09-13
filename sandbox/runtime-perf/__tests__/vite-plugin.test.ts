@@ -3753,6 +3753,80 @@ describe('vite plugin, real dev server', () => {
 })
 
 /**
+ * The stylesheet requested before anything in its environment imports it.
+ *
+ * Vite attaches what a module's `load` registers with `addWatchFile` to that module's node in the
+ * graph, and a request for a module the graph has no node for yet runs `load` first and creates
+ * the node afterwards. The registrations were dropped, `vite:css-analysis` recorded no importer
+ * edges, and an edit never reached the sheet in that environment: the component repainted with a
+ * class whose rule never arrived, until a restart.
+ *
+ * TanStack Start does this on every page load when `__root.tsx` imports the stylesheet. Its
+ * dev-only SSR style collection transforms the sheet in the client environment on the server,
+ * before the browser's import has put a node there. A browser's own import does not, because the
+ * importer's analysis creates the node first — which is why a plain Vite app never showed it.
+ *
+ * The consumer is transformed after the sheet on purpose. With a module of its own in the client
+ * graph, the watcher leaves the update to Vite's propagation rather than forcing a reload, so the
+ * edge is the only thing that can carry the edit to the sheet.
+ */
+describe('the stylesheet requested before its importer', () => {
+  const consumer = join(cwd, 'src/__sheet-first-consumer.tsx')
+  const writeConsumer = (width: string) =>
+    writeFileSync(
+      consumer,
+      `import 'virtual:bamboo.css'\nimport { css } from '../styled-system/css'\nexport const title = css({ width: '[${width}]' })\n`,
+    )
+
+  afterEach(() => {
+    rmSync(consumer, { force: true })
+  })
+
+  const cases: Array<[string, typeof createServer, number]> = [
+    ['Vite 7', createServer, 24793],
+    ['Vite 8', createVite8Server as unknown as typeof createServer, 24794],
+  ]
+
+  for (const [label, createDevServer, port] of cases) {
+    test(`${label} still carries an edit to the sheet`, async () => {
+      writeConsumer('731.1px')
+      const server = await createDevServer({
+        root: cwd,
+        configFile: false,
+        logLevel: 'silent',
+        css: { postcss: { plugins: [] } },
+        plugins: [bamboocss({ cwd, reportSummary: false }) as never],
+        server: { middlewareMode: true, hmr: { port } },
+      })
+      const sheet = async () => (await server.environments.client.transformRequest('virtual:bamboo.css'))?.code ?? ''
+
+      try {
+        expect(await sheet()).toContain('w_\\\\[731\\\\.1px\\\\]')
+        await server.environments.client.transformRequest('/src/__sheet-first-consumer.tsx')
+
+        writeConsumer('731.2px')
+        // Dispatched asynchronously and not awaitable, hence the poll. A stale read cannot mask the
+        // defect: it only polls again, and the invalidation this is about is not consumed by a read.
+        server.watcher.emit('change', consumer)
+
+        const deadline = Date.now() + 10_000
+        let code = ''
+        do {
+          // A macrotask between reads. Vite 8 answers a cached module without leaving the microtask
+          // queue, so a tight loop would starve the update it is waiting for.
+          await new Promise((resolve) => setTimeout(resolve, 50))
+          code = await sheet()
+        } while (!code.includes('w_\\\\[731\\\\.2px\\\\]') && Date.now() < deadline)
+
+        expect(code, 'the edit never reached the stylesheet').toContain('w_\\\\[731\\\\.2px\\\\]')
+      } finally {
+        await server.close()
+      }
+    }, 120_000)
+  }
+})
+
+/**
  * With Vite's `css.devSourcemap` on, the served stylesheet carries a source map from each rule
  * to the call site that first wrote its atom, which is what DevTools shows beside a rule.
  *

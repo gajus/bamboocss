@@ -415,7 +415,7 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
    * for the client graph and once for SSR — and each load used to run a complete extraction
    * and optimization pass to produce byte-identical CSS. The sheet is a function of the source
    * files alone, and the watcher below is the single point every event that can reach it
-   * passes through — Vite's own propagation only arrives via the watch edges `load` registers,
+   * passes through — Vite's own propagation only arrives via the watch edges `transform` registers,
    * over the same extracted files the watcher checks. A monotonic counter bumped there is
    * therefore enough to know whether a build already reflects the world a load is asking about.
    *
@@ -704,14 +704,8 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
 
       const generationAtStart = changeGeneration
       if (command === 'serve' && servedCss?.generation === generationAtStart) {
-        // Still a load of this module: the watch edges have to be re-registered for the graph
-        // Vite is asking in, or the environment that hit the memo would never be invalidated.
-        // From the session's set rather than `extractedSourceFiles()`, which re-globs the
-        // include patterns per call — the build that produced this memo assigned the set from
-        // that same expression, so the lists are identical by construction.
-        if (this.addWatchFile) {
-          for (const file of session.extractedFiles) this.addWatchFile(file)
-        }
+        // The environment that hit the memo still has to register the extracted files against its
+        // own graph, or it would never be invalidated. `transform` does that, after every load.
         return servedCss.map ? { code: servedCss.css, map: servedCss.map } : servedCss.css
       }
 
@@ -756,15 +750,52 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
       }
 
       // Every file the extractor reads is a source for this module, so editing one has to
-      // invalidate it. In build this is what makes `vite build --watch` correct; in dev the
-      // watcher below does the same job earlier. The session set was assigned from
-      // `extractedSourceFiles()` by the generation just awaited, so reading it back avoids
-      // re-globbing the include patterns once per environment per rebuild.
-      if (this.addWatchFile) {
+      // invalidate it, which is what makes `vite build --watch` correct. The dev server registers
+      // the same set from `transform` instead, where Vite cannot drop it. The session set was
+      // assigned from `extractedSourceFiles()` by the generation just awaited, so reading it back
+      // avoids re-globbing the include patterns once per environment per rebuild.
+      if (command === 'build' && this.addWatchFile) {
         for (const file of session.extractedFiles) this.addWatchFile(file)
       }
 
       return map ? { code: css, map } : css
+    },
+
+    /**
+     * Register every extracted file against the stylesheet, in the graph that just asked for it.
+     *
+     * In dev this has to happen here rather than in `load`. Vite attaches what `load` registers to
+     * the module's node in the graph, and a request for a module the graph has no node for yet runs
+     * `load` first and creates the node afterwards, so everything `load` registered is dropped
+     * without a word. `vite:css-analysis` then records no importer edges, Vite's own propagation
+     * never reaches the sheet in that environment, and the watcher below does not force a reload
+     * either, because the edited file does have a module there. The component repaints with a class
+     * whose rule never arrives, and stays that way until a restart.
+     *
+     * A browser's import never meets it, since the importer's analysis creates the node before the
+     * sheet is requested. A `transformRequest` that reaches the sheet first does. TanStack Start
+     * sends one on every page load when `__root.tsx` imports the stylesheet: its dev-only SSR style
+     * collection transforms the sheet in the client environment on the server, before the browser's
+     * import has put a node there.
+     *
+     * By `transform` the node exists, and the context is the one `vite:css-analysis` reads after
+     * every plugin has run, so the edges are recorded however the request arrived. From the
+     * session's set rather than `extractedSourceFiles()`, which re-globs the include patterns per
+     * call; every pass assigns the set from that same expression.
+     *
+     * Filtered by id, so a bundler that honours hook filters never calls in for any other module.
+     * The exact check stays for one that does not.
+     */
+    transform: {
+      filter: { id: /virtual:bamboo\.css/ },
+      handler(_code, id) {
+        if (command !== 'serve') return
+        const query = queryOf(id)
+        if (id.slice(0, id.length - query.length) !== RESOLVED_ID) return
+        if (this.addWatchFile) {
+          for (const file of session.extractedFiles) this.addWatchFile(file)
+        }
+      },
     },
 
     configureServer(devServer) {
@@ -773,7 +804,7 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
       /**
        * The graph the stylesheet's own module lives in, which is the one that has to reach it.
        *
-       * `load` registers every extracted file with `addWatchFile`, and `vite:css-analysis`
+       * `transform` registers every extracted file with `addWatchFile`, and `vite:css-analysis`
        * turns those into real importer edges — the virtual module ends up a direct importer of
        * each file the extractor read. So an edit to any of them propagates to the stylesheet on
        * Vite's own pass, in whichever environment holds that edge.

@@ -72,6 +72,7 @@ export const docsNavigation: NavItem = {
         { title: 'CLI', url: 'cli' },
         { title: 'Astro', url: 'astro' },
         { title: 'React Router', url: 'react-router' },
+        { title: 'TanStack Start', url: 'tanstack-start' },
         { title: 'Qwik', url: 'qwik' },
         { title: 'Vite', url: 'vite' },
         { title: 'Vue', url: 'vue' },

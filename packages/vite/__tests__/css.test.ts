@@ -99,11 +99,10 @@ describe('the virtual stylesheet', () => {
     try {
       await hookOf(plugin.configResolved)?.call({} as never, { command: 'serve', build: { sourcemap: false } } as never)
       const resolved = hookOf(plugin.resolveId)!.call({} as never, VIRTUAL_CSS_ID, undefined, {} as never) as string
-      const css = await hookOf(plugin.load)!.call(
-        { addWatchFile: (file: string) => watched.push(file) } as never,
-        resolved,
-        undefined as never,
-      )
+      const context = { addWatchFile: (file: string) => watched.push(file) }
+      const css = await hookOf(plugin.load)!.call(context as never, resolved, undefined as never)
+      // A dev server registers them from `transform`, which Vite runs after every load.
+      await hookOf(plugin.transform)!.call(context as never, css as string, resolved, undefined as never)
 
       expect(css).toContain('--colors-red-300')
       expect(watched).toContain(entry)
@@ -268,6 +267,61 @@ describe('the virtual stylesheet', () => {
     }
   }, 60_000)
 
+  /**
+   * Where the extracted files are registered decides whether Vite keeps them.
+   *
+   * Vite attaches what `load` registers to the module's node, and a request for a module its graph
+   * has no node for yet loads first and creates the node afterwards, dropping the registrations
+   * without a word. TanStack Start requests the sheet that way on every page load when
+   * `__root.tsx` imports it, and an edit then never reached the sheet. `transform` runs once the
+   * node exists, so a dev server registers there and only there: both would walk the whole
+   * inventory twice per request. A build keeps registering from `load`, which is what
+   * `vite build --watch` relies on.
+   */
+  test('a dev server registers the extracted files from transform, a build from load', async () => {
+    const registrations = async (command: 'build' | 'serve', id: string) => {
+      const plugin = bamboocssCss({ cwd, session: createStaticCompilationSession() })
+      await hookOf(plugin.configResolved)?.call(
+        {} as never,
+        { build: { sourcemap: false }, command, configFileDependencies: [], root: cwd } as never,
+      )
+      const resolved = hookOf(plugin.resolveId)!.call({} as never, id, undefined, {} as never) as string
+      const fromLoad: string[] = []
+      const css = await hookOf(plugin.load)!.call(
+        { addWatchFile: (file: string) => fromLoad.push(file) } as never,
+        resolved,
+        undefined as never,
+      )
+      const fromTransform: string[] = []
+      const transform = (moduleId: string) =>
+        hookOf(plugin.transform)!.call(
+          { addWatchFile: (file: string) => fromTransform.push(file) } as never,
+          css as string,
+          moduleId,
+          undefined as never,
+        )
+      await transform(resolved)
+      return { fromLoad, fromTransform, transform }
+    }
+
+    const dev = await registrations('serve', VIRTUAL_CSS_ID)
+    expect(dev.fromLoad).toEqual([])
+    expect(dev.fromTransform.some((file) => file.endsWith('.tsx'))).toBe(true)
+
+    // Every other module is left alone, or each would become an importer of the whole inventory.
+    const registered = dev.fromTransform.length
+    await dev.transform(join(cwd, 'src/main.tsx'))
+    expect(dev.fromTransform).toHaveLength(registered)
+
+    // The query forms are the same stylesheet, with the same edges.
+    const direct = await registrations('serve', `${VIRTUAL_CSS_ID}?direct`)
+    expect([...direct.fromTransform].sort()).toEqual([...dev.fromTransform].sort())
+
+    const build = await registrations('build', VIRTUAL_CSS_ID)
+    expect([...build.fromLoad].sort()).toEqual([...dev.fromTransform].sort())
+    expect(build.fromTransform).toEqual([])
+  }, 60_000)
+
   test('one generation serves every load until a watched file changes', async () => {
     const emit = vi.spyOn(Builder.prototype, 'emit')
     const plugin = bamboocssCss({ cwd, session: createStaticCompilationSession() })
@@ -280,21 +334,17 @@ describe('the virtual stylesheet', () => {
       const resolved = hookOf(plugin.resolveId)!.call({} as never, VIRTUAL_CSS_ID, undefined, {} as never) as string
 
       const watched: string[] = []
-      const first = await hookOf(plugin.load)!.call(
-        { addWatchFile: (file: string) => watched.push(file) } as never,
-        resolved,
-        undefined as never,
-      )
+      const firstContext = { addWatchFile: (file: string) => watched.push(file) }
+      const first = await hookOf(plugin.load)!.call(firstContext as never, resolved, undefined as never)
+      await hookOf(plugin.transform)!.call(firstContext as never, first as string, resolved, undefined as never)
       const builds = emit.mock.calls.length
 
       // Nothing changed, so the SSR environment's load is answered from the pass above — and
       // still registers its own watch files, or that graph would never invalidate the sheet.
       const laterWatched: string[] = []
-      const second = await hookOf(plugin.load)!.call(
-        { addWatchFile: (file: string) => laterWatched.push(file) } as never,
-        resolved,
-        undefined as never,
-      )
+      const laterContext = { addWatchFile: (file: string) => laterWatched.push(file) }
+      const second = await hookOf(plugin.load)!.call(laterContext as never, resolved, undefined as never)
+      await hookOf(plugin.transform)!.call(laterContext as never, second as string, resolved, undefined as never)
       expect(second).toBe(first)
       expect(emit).toHaveBeenCalledTimes(builds)
       expect(laterWatched).toEqual(watched)
@@ -345,11 +395,9 @@ describe('the virtual stylesheet', () => {
     const resolved = hookOf(plugin.resolveId)!.call({} as never, VIRTUAL_CSS_ID, undefined, {} as never) as string
 
     const watched: string[] = []
-    await hookOf(plugin.load)!.call(
-      { addWatchFile: (file: string) => watched.push(file) } as never,
-      resolved,
-      undefined as never,
-    )
+    const context = { addWatchFile: (file: string) => watched.push(file) }
+    const css = await hookOf(plugin.load)!.call(context as never, resolved, undefined as never)
+    await hookOf(plugin.transform)!.call(context as never, css as string, resolved, undefined as never)
     const edited = watched.find((file) => file.endsWith('.tsx'))!
 
     const inGraph = new Set<string>()

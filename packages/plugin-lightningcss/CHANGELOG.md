@@ -1,5 +1,13 @@
 # @bamboocss/plugin-lightningcss
 
+## 1.55.4
+
+### Patch Changes
+
+- Updated dependencies [100becd]
+  - @bamboocss/types@1.55.4
+  - @bamboocss/logger@1.55.4
+
 ## 1.55.3
 
 ### Patch Changes

@@ -1,5 +1,19 @@
 # @bamboocss/shared
 
+## 1.55.5
+
+### Patch Changes
+
+- 8284292: Keep negative tokens pointing at their variable when its name contains "calc". Negating a token removed every
+  "calc" from its expression rather than only a nested `calc(`, so under `prefix: 'calcite'` a negative spacing value
+  such as `marginTop: '-4'` referenced `var(--ite-spacing-4)` — a variable that is never declared, which leaves the
+  margin at its initial value. A token named, say, `spacing.calculated` was cut the same way.
+- 8284292: Merge a top-level `base` into the rest of a `css()` call instead of letting it replace the blocks they share.
+  `css({ _hover: { color: 'red.300' } }, { base: { _hover: { bg: 'blue.500' } } })` compiled to `hover:bg_blue.500`
+  alone: the `_hover` block in `base` replaced the one beside it, so the red declaration's class was never put on the
+  element, although its rule was still emitted into the stylesheet. Both classes are now named, and a declaration
+  repeated in `base` still wins.
+
 ## 1.55.4
 
 ## 1.55.3

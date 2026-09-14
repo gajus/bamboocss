@@ -1,5 +1,31 @@
 # @bamboocss/token-dictionary
 
+## 1.55.5
+
+### Patch Changes
+
+- 8284292: Keep negative tokens pointing at their variable when its name contains "calc". Negating a token removed every
+  "calc" from its expression rather than only a nested `calc(`, so under `prefix: 'calcite'` a negative spacing value
+  such as `marginTop: '-4'` referenced `var(--ite-spacing-4)` — a variable that is never declared, which leaves the
+  margin at its initial value. A token named, say, `spacing.calculated` was cut the same way.
+- 8f636b5: Declare semantic tokens whose value is a number. `zIndex: { layer: { value: 10 } }` declared no variable at
+  all, and `opacity: { overlay: { value: { base: 0, _open: 1 } } }` declared only its `_open` value, because a base of
+  `0` was dropped as empty. Plain tokens already accepted numbers, and semantic tokens now do too.
+- 8f636b5: Fix two ways an opacity modifier broke the token that used it.
+  - A semantic token whose `base` mixed a color, such as
+    `{ base: 'token(colors.black/87)', _dark: 'token(colors.white)' }`, lost its `_dark` value: no `.dark` block was
+    emitted for it.
+  - A value that combined a modifier reference with any other reference failed the build with `Invalid color mix` — for
+    example `0 0 0 1px token(colors.bg), 0 0 0 3px token(colors.red/50)`, or relative color syntax such as
+    `rgb(from token(colors.red) r g b / 50%)`, whose slash is no modifier at all. Only references that carry a modifier
+    are mixed now.
+
+- Updated dependencies [8284292]
+- Updated dependencies [8284292]
+  - @bamboocss/shared@1.55.5
+  - @bamboocss/types@1.55.5
+  - @bamboocss/logger@1.55.5
+
 ## 1.55.4
 
 ### Patch Changes

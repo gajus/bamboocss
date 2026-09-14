@@ -1,5 +1,25 @@
 # @bamboocss/vite
 
+## 1.55.5
+
+### Patch Changes
+
+- 8284292: Merge a top-level `base` into the rest of a `css()` call instead of letting it replace the blocks they share.
+  `css({ _hover: { color: 'red.300' } }, { base: { _hover: { bg: 'blue.500' } } })` compiled to `hover:bg_blue.500`
+  alone: the `_hover` block in `base` replaced the one beside it, so the red declaration's class was never put on the
+  element, although its rule was still emitted into the stylesheet. Both classes are now named, and a declaration
+  repeated in `base` still wins.
+- Updated dependencies [8284292]
+- Updated dependencies [8284292]
+  - @bamboocss/shared@1.55.5
+  - @bamboocss/config@1.55.5
+  - @bamboocss/core@1.55.5
+  - @bamboocss/extractor@1.55.5
+  - @bamboocss/node@1.55.5
+  - @bamboocss/types@1.55.5
+  - @bamboocss/logger@1.55.5
+  - @bamboocss/ts-ast@1.55.5
+
 ## 1.55.4
 
 ### Patch Changes

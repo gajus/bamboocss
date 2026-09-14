@@ -34,7 +34,9 @@ jobs:
 
   # Split three ways because this job was the critical path: ~47s of install
   # followed by ~295s of tests, while no other job in the workflow ran past 2
-  # minutes. vitest divides by file, and the split is even -- 70/69/69 of 208.
+  # minutes. vitest divides by file count rather than duration, so the shard that
+  # draws the packed consumer test -- which waits for every other file in its
+  # shard -- tends to run longest.
   #
   # `fail-fast: false` so one failing shard does not cancel the others; knowing
   # only that "a shard failed" means re-running to find out what else broke.
@@ -60,9 +62,11 @@ jobs:
       - name: Run tests
         run: pnpm test run --shard=${{ matrix.shard }}/3
 
-  # Separate job, not a fourth shard. The root vitest config excludes
-  # sandbox/codegen/__tests__/frameworks, so the Solid, Vue, Preact and Qwik
-  # suites only ever run here -- sharding `pnpm test` would never reach them.
+  # Separate job, not a fourth shard. The shards do collect the scenario suites
+  # under sandbox/codegen/__tests__, but the strict suites assert types --
+  # `@ts-expect-error` and `assertType` against each scenario's generated
+  # styled-system -- which only a type check reads. This job runs them under
+  # `vitest --typecheck`, and the sandbox under `tsc`.
   codegen:
     name: Codegen Tests
     runs-on: ubuntu-latest

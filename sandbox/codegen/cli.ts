@@ -14,6 +14,9 @@ const isValidScenario = (scenario) => {
   return true
 }
 
+// Rejects with an `Error` that names the command. It used to reject with nothing, and the handler
+// at the bottom then read `.stack` off `undefined`, so a failed codegen ended in a TypeError about
+// this file instead of saying which command failed.
 const runCommand = (command: string, envVars = {}) => {
   return new Promise((resolve, reject) => {
     const [cmd, ...args] = command.split(' ')
@@ -22,10 +25,10 @@ const runCommand = (command: string, envVars = {}) => {
       stdio: 'inherit',
     })
 
-    proc.on('close', (code) => {
+    proc.on('error', (error) => reject(new Error(`\`${command}\` could not start: ${error.message}`)))
+    proc.on('close', (code, signal) => {
       if (code !== 0) {
-        console.error(`Command failed with exit code ${code}`)
-        reject()
+        reject(new Error(`\`${command}\` failed with ${signal ? `signal ${signal}` : `exit code ${code}`}`))
         return
       }
       resolve(0)
@@ -53,8 +56,8 @@ cli
     for (const command of commands) {
       try {
         await runCommand(command.cmd, command.env)
-      } catch {
-        console.error('Some commands failed:')
+      } catch (error) {
+        console.error(`Scenario ${command.env.MODE}: ${error instanceof Error ? error.message : error}`)
         process.exit(1)
       }
     }
@@ -79,7 +82,7 @@ cli.command('codegen [scenario]', 'Generate code').action(async (scenario) => {
   // thing that creates it there.
   if (!scenario) commands.push('pnpm bamboo codegen --clean')
 
-  await Promise.all(commands.map(runCommand))
+  await Promise.all(commands.map((command) => runCommand(command)))
 })
 
 cli.help()
@@ -88,6 +91,6 @@ cli.parse(process.argv, { run: false })
 try {
   await cli.runMatchedCommand()
 } catch (error) {
-  console.error(error.stack)
+  console.error(error instanceof Error ? error.message : error)
   process.exit(1)
 }

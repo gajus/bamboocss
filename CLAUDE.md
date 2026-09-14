@@ -19,6 +19,7 @@ with workspace support.
   /cli/            # CLI tool (@bamboocss/dev package)
   /parser/         # Static analysis and extraction
   /extractor/      # Expression evaluation behind the parser
+  /ts-ast/         # AST backend on TypeScript 7's Go compiler, used by parser, extractor, node and vite
   /generator/      # Code generation for styled-system
   /config/         # Config loading and resolution
   /types/          # Type definitions (config options live here)

@@ -99,6 +99,13 @@ runs `pnpm build` for any package whose `dist` lacks declarations, and a run sto
 `ERR_MODULE_NOT_FOUND`, and some of them hang instead of failing, which read as a stuck suite for over an hour. After
 stopping a run, `ls packages/*/dist/index.mjs` and run `pnpm build` before trusting anything.
 
+That build is a hazard even when nothing is stopped. tsdown deletes a package's `dist` entry for much of its build, and
+the eslint plugin's synckit worker loads `@bamboocss/config` and `@bamboocss/generator` from `dist` when it starts, so a
+test starting a worker inside that window hangs until the CI job's 20-minute limit — `Unit Tests 2/3` did, three times.
+The root `vitest.config.ts` runs the file as its own project in a later `sequence.groupOrder`, after every other file in
+the run or shard, and sets `SYNCKIT_TIMEOUT` so a worker that never starts fails within a minute. Keep it out of the
+main project.
+
 **Generated artifacts under `packages/generator/src/artifacts/generated` are built from `dist`, not from the working
 tree.** Committing source that has not been rebuilt leaves those artifacts generated from a different revision, and CI
 fails on the "Check generated output is committed" step. Run `pnpm build` before committing anything that changes what

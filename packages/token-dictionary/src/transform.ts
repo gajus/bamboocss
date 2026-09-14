@@ -6,7 +6,7 @@ import type { TokenTransformer } from './dictionary'
 import { isCompositeBorder, isCompositeGradient, isCompositeShadow } from './is-composite'
 import { svgToDataUri } from './mini-svg-uri'
 import type { Token } from './token'
-import { expandReferences, getReferences, hasReference, replaceReference } from './utils'
+import { expandReferences, getReferences, hasReference, referenceOf, replaceReference } from './utils'
 
 function toUnit(v: string | number) {
   return isCssUnit(v) || hasReference(v.toString()) ? v : `${v}px`
@@ -147,9 +147,16 @@ const transformColorMix: TokenTransformer = {
     return token.extensions.category === 'colors' && token.value.includes('/')
   },
   transform(token, dict) {
-    if (!token.value.includes('/')) return token
+    // A condition value arrives as a bare `{ value }` rather than a token, and what this returns
+    // replaces it, so it has to be the value. Returning the wrapper filed `_dark` under
+    // `_dark:value`, which no stylesheet emits.
+    if (!token.value.includes('/')) return token.value
 
     return expandReferences(token.value, (path) => {
+      // The slash that matched can sit anywhere in the value — `rgb(from token(colors.red) r g b / 50%)` —
+      // and only a reference carrying one is a mix. The rest are resolved later.
+      if (!path.includes('/')) return referenceOf(path)
+
       const tokenFn = (tokenPath: string) => {
         const token = dict.getByName(tokenPath)
         return token?.extensions.varRef
@@ -211,6 +218,9 @@ export const addConditionalCssVariables: TokenTransformer = {
       }
 
       token.value = expandReferences(token.value, (path) => {
+        // One reference with a modifier sends the whole value here, and the others are plain.
+        if (!path.includes('/')) return dictionary.formatCssVar(path.split('.'), { prefix, hash }).ref
+
         const mix = dictionary.colorMix(path, tokenFn)
         if (mix.invalid) {
           throw new BambooError('INVALID_TOKEN', 'Invalid color mix at ' + path + ': ' + mix.value)

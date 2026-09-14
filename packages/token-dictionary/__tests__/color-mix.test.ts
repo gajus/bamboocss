@@ -71,9 +71,48 @@ test('color-mix with semanticTokens', () => {
         "--colors-white" => "white",
         "--colors-fg-default" => "color-mix(in srgb, var(--colors-black) 87%, transparent)",
       },
-      "_dark:value" => Map {
+      "_dark" => Map {
         "--colors-fg-default" => "var(--colors-white)",
       },
     }
   `)
+})
+
+test('a slash outside a reference does not make that reference a color mix', () => {
+  const dictionary = new TokenDictionary({
+    tokens: {
+      colors: {
+        red: { value: '#f00' },
+        overlay: { value: 'rgb(from token(colors.red) r g b / 50%)' },
+      },
+    },
+  })
+
+  dictionary.init()
+
+  expect(dictionary.view.vars.get('base')?.get('--colors-overlay')).toBe('rgb(from var(--colors-red) r g b / 50%)')
+})
+
+test('only the references carrying a modifier are mixed', () => {
+  const dictionary = new TokenDictionary({
+    tokens: {
+      colors: {
+        red: { value: '#f00' },
+      },
+      shadows: {
+        ring: { value: '0 0 0 1px token(colors.bg), 0 0 0 3px token(colors.red/50)' },
+      },
+    },
+    semanticTokens: {
+      colors: {
+        bg: { value: { base: 'white', _dark: 'black' } },
+      },
+    },
+  })
+
+  dictionary.init()
+
+  expect(dictionary.view.vars.get('base')?.get('--shadows-ring')).toBe(
+    '0 0 0 1px var(--colors-bg), 0 0 0 3px color-mix(in srgb, var(--colors-red) 50%, transparent)',
+  )
 })

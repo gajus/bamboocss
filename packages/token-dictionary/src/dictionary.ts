@@ -200,15 +200,20 @@ export class TokenDictionary {
       const category = path[0]
       const name = this.formatTokenName(path)
 
+      // A number is a value in its own right, as it is for a plain token, so it is wrapped like a
+      // string. Unwrapped, it was read as a map of conditions with no `base`, and a base of `0` was
+      // dropped as falsy; either way the variable was never declared.
       const normalizedToken =
-        isString(token.value) || isCompositeTokenValue(token.value) ? { value: { base: token.value } } : token
+        isString(token.value) || typeof token.value === 'number' || isCompositeTokenValue(token.value)
+          ? { value: { base: token.value } }
+          : token
 
       const { value, ...restData } = normalizedToken
 
       const node = new Token({
         ...restData,
         name,
-        value: value.base || '',
+        value: value.base ?? '',
         path,
       })
 

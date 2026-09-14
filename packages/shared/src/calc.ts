@@ -12,7 +12,9 @@ function getRef(operand: Operand): string {
   return isCssVar(operand) ? operand.ref : operand.toString()
 }
 
-const calcRegex = /calc/g
+// Unwraps a nested `calc(` into the outer one. Only the function name: a bare `/calc/` also cut
+// it out of variable names, so `prefix: 'calcite'` referenced `var(--ite-spacing-4)`.
+const calcRegex = /(?<![\w-])calc(?=\()/g
 const toExpression = (operator: Operator, ...operands: Array<Operand>) =>
   operands.map(getRef).join(` ${operator} `).replace(calcRegex, '')
 

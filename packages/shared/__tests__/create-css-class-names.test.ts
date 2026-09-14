@@ -82,3 +82,15 @@ describe('createCss class name assembly', () => {
     expect(createCss(context)({ color: 'red' })).toBe('')
   })
 })
+
+describe('createCss top-level base', () => {
+  test('merges into the styles, so a condition block written in both keeps every declaration', () => {
+    expect(createCss(makeContext())({ _hover: { color: 'red' }, base: { _hover: { bg: 'blue' } } })).toBe(
+      'hover:color_red hover:bg_blue',
+    )
+  })
+
+  test('still overrides a declaration it repeats', () => {
+    expect(createCss(makeContext())({ color: 'red', base: { color: 'blue' } })).toBe('color_blue')
+  })
+})

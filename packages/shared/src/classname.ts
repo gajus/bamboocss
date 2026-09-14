@@ -87,7 +87,11 @@ export function createCssUncached(context: CreateCssContext) {
   }
 
   return ({ base, ...styles }: Record<string, any> = {}) => {
-    const styleObject = Object.assign(styles, base)
+    // Merged, not assigned: `Object.assign` let a block in `base` replace the same block in
+    // `styles`, so `_hover` written in both kept only base's declarations, and the others were
+    // never named although their rules were emitted. The guard keeps a call with no `base`, the
+    // common one, off the merge.
+    const styleObject = base === undefined ? styles : mergeProps(styles, base)
     const normalizedObject = normalizeStyleObject(styleObject, context)
     const classNames = new Set<string>()
 

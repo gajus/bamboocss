@@ -929,7 +929,9 @@ type OrderableCollection = OrderableSet | OrderableMap<unknown>
  * One shared key would let each replace the other's record, and a file's rules would disappear
  * on whichever read was narrower. Two keys let the refcounts hold the union instead.
  */
-const ownerKey = (kind: OwnerKind, path: string) => `${kind}:${kind === 'recipe' ? path : path.replace(/\\/g, '/')}`
+const normalizeOwnerPath = (path: string) => path.replace(/\\/g, '/')
+
+const ownerKey = (kind: OwnerKind, path: string) => `${kind}:${kind === 'recipe' ? path : normalizeOwnerPath(path)}`
 
 /**
  * Which entry point read a file.
@@ -943,6 +945,16 @@ type OwnerKind = FileOwnerKind | 'recipe'
 
 /** Every owner kind keyed by a file path, for releasing one whose file was deleted. */
 const FILE_OWNER_KINDS: FileOwnerKind[] = ['extract', 'parse']
+
+/**
+ * Where each lane's reading of one file sits relative to the other's.
+ *
+ * The two lanes are separate owners over the same path (see `ownerKey`) but they share the
+ * file's position in the inventory, so something has to break the tie between them and it
+ * must not be arrival order. Extraction reads the file off disk and is the lane whose order
+ * `reconcileFileOwnerOrder` is given authority over, so it goes first.
+ */
+const FILE_OWNER_LANE: Record<FileOwnerKind, number> = { extract: 0, parse: 1 }
 
 export class StyleEncoder {
   static separator = ']___['
@@ -1013,6 +1025,20 @@ export class StyleEncoder {
 
   /** Stable owner rank shared by every ordered registry, including registries first touched later. */
   private ownerOrderRanks = new Map<string, OrderOwnerRank>()
+  /**
+   * Each source file's position in the emitted sheet, keyed by path rather than by owner.
+   *
+   * The unit of ordering is the file, not the lane that read it. Ranking per owner meant the
+   * `parse` lane — a bundler transform, which arrives in whatever order the module graph is
+   * walked — numbered its files by arrival, so a client and an SSR environment compiling the
+   * same project emitted the same atoms in different orders. Rules that share a utility
+   * sublayer resolve by source order within it, so that divergence changed which declaration
+   * won between the two builds of one app.
+   *
+   * `reconcileFileOwnerOrder` still has the authority: it writes concrete sequences here for
+   * a known inventory, and this table is only consulted for a path it has not ranked yet.
+   */
+  private fileOwnerSequences = new Map<string, number>()
   private nextFileOwnerOrderRank = 0
   private nextRecipeOwnerOrderRank = 0
   private nextOwnerOrderSerial = 0
@@ -1095,27 +1121,41 @@ export class StyleEncoder {
    * are repaired through each collection's indexed rank updater; no unrelated owner or key is
    * scanned.
    *
+   * Ranks the path, not one lane's reading of it. `kind` names the inventory being reported,
+   * but the sequence it produces is recorded against the file and applied to every lane that
+   * has read it — otherwise the unreconciled lane keeps its arrival-order number and the two
+   * disagree about where the same file sits.
+   *
    * @internal Watch/build consumers provide a complete deterministic inventory for `kind`.
    */
   reconcileFileOwnerOrder = (kind: FileOwnerKind, paths: readonly string[]) => {
     const seen = new Set<string>()
-    const entries: Array<{ owner: string; rank: OrderOwnerRank | undefined }> = []
+    const entries: Array<{ path: string; rank: OrderOwnerRank | undefined }> = []
     for (const path of paths) {
-      const owner = ownerKey(kind, path)
-      if (seen.has(owner)) continue
-      seen.add(owner)
-      entries.push({ owner, rank: this.ownerOrderRanks.get(owner) })
+      const normalized = normalizeOwnerPath(path)
+      if (seen.has(normalized)) continue
+      seen.add(normalized)
+      // The rank of the lane being reconciled, where it has one, so an inventory that has not
+      // moved leaves every existing anchor exactly where it is.
+      entries.push({ path: normalized, rank: this.ownerOrderRanks.get(ownerKey(kind, normalized)) })
     }
 
     const updates = new Map<string, OrderOwnerRank>()
     const rankAt = (index: number, sequence: number) => {
       const entry = entries[index]!
-      updates.set(entry.owner, {
-        phase: 0,
-        sequence,
-        subSequence: 0,
-        serial: entry.rank?.serial ?? this.nextOwnerOrderSerial++,
-      })
+      this.fileOwnerSequences.set(entry.path, sequence)
+      // Every lane that has read this file, so both move together and keep one position.
+      for (const lane of FILE_OWNER_KINDS) {
+        const owner = ownerKey(lane, entry.path)
+        const existing = this.ownerOrderRanks.get(owner)
+        if (!existing) continue
+        updates.set(owner, {
+          phase: 0,
+          sequence,
+          subSequence: FILE_OWNER_LANE[lane],
+          serial: existing.serial,
+        })
+      }
     }
 
     // Existing members are stable anchors. New members receive labels in the gaps, so adding
@@ -1171,10 +1211,14 @@ export class StyleEncoder {
       entries.forEach((_, index) => rankAt(index, index))
     }
 
-    const maxSequence = Math.max(
-      -1,
-      ...entries.map(({ rank, owner }) => updates.get(owner)?.sequence ?? rank!.sequence),
-    )
+    // An anchor keeps its sequence, so record it against the path as well: the other lane may
+    // not have read this file yet, and when it does it has to find the anchor's position
+    // rather than take a fresh arrival number.
+    for (const { path, rank } of entries) {
+      if (rank && !updates.has(ownerKey(kind, path))) this.fileOwnerSequences.set(path, rank.sequence)
+    }
+
+    const maxSequence = Math.max(-1, ...entries.map(({ path }) => this.fileOwnerSequences.get(path)!))
     // A later unranked file remains after the explicitly ranked inventory until the next
     // reconciliation gives it a concrete position.
     this.nextFileOwnerOrderRank = Math.max(this.nextFileOwnerOrderRank, Math.ceil(maxSequence) + 1)
@@ -1511,14 +1555,42 @@ export class StyleEncoder {
     }
   }
 
+  /** Split a file owner key back into the path it ranks by and which lane read it. */
+  private fileOwnerLane = (owner: string) => {
+    const separator = owner.indexOf(':')
+    const kind = owner.slice(0, separator) as FileOwnerKind
+    return { path: owner.slice(separator + 1), lane: FILE_OWNER_LANE[kind] ?? 0 }
+  }
+
+  /**
+   * The sequence for a path, assigned once and shared by both lanes that read it.
+   *
+   * A path reached before any reconciliation still has to be given a position, and the only
+   * information available is that it is new — so it goes after everything ranked so far, which
+   * is what the arrival counter already meant. The difference is that the number is recorded
+   * against the *path*, so the other lane reaching the same file later inherits it instead of
+   * taking a fresh one.
+   */
+  private fileOwnerSequence = (path: string) => {
+    const existing = this.fileOwnerSequences.get(path)
+    if (existing !== undefined) return existing
+    const sequence = this.nextFileOwnerOrderRank++
+    this.fileOwnerSequences.set(path, sequence)
+    return sequence
+  }
+
   private ensureOrderOwner = (collection: Set<string> | Map<string, unknown>, owner: string) => {
     let rank = this.ownerOrderRanks.get(owner)
     if (rank === undefined) {
       const recipeOwner = owner.startsWith('recipe:')
+      // A file owner's sequence comes from the file, not from when this lane happened to
+      // reach it. Both lanes over one path therefore land on one sequence, separated only by
+      // `subSequence`; see `fileOwnerSequence`.
+      const lane = recipeOwner ? undefined : this.fileOwnerLane(owner)
       rank = {
         phase: recipeOwner ? 1 : 0,
-        sequence: recipeOwner ? Number.MAX_SAFE_INTEGER : this.nextFileOwnerOrderRank++,
-        subSequence: recipeOwner ? this.nextRecipeOwnerOrderRank++ : 0,
+        sequence: recipeOwner ? Number.MAX_SAFE_INTEGER : this.fileOwnerSequence(lane!.path),
+        subSequence: recipeOwner ? this.nextRecipeOwnerOrderRank++ : lane!.lane,
         serial: this.nextOwnerOrderSerial++,
       }
       this.ownerOrderRanks.set(owner, rank)

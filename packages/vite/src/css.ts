@@ -140,7 +140,15 @@ interface OutputChunkShape {
 const chunkOwnership = (bundle: object, environment: string, session: StaticCompilationSession) => {
   const classNamesOf = session.classNamesOf
   const ownership = new Map<string, string>()
-  if (!classNamesOf) return ownership
+  /**
+   * Which atoms were emitted onto one element together.
+   *
+   * Collected on the same walk that decides ownership, from the same class strings, because
+   * the split has to know which pairs can compete before it may move either of them. Only
+   * strings naming more than one class say anything.
+   */
+  const coOccurrences = new Map<string, Set<string>>()
+  if (!classNamesOf) return { ownership, coOccurrences }
 
   const chunks = Object.values(bundle as Record<string, { type: string }>).filter(
     (output): output is OutputChunkShape => output.type === 'chunk',
@@ -160,12 +168,21 @@ const chunkOwnership = (bundle: object, environment: string, session: StaticComp
     const owner = eager.has(chunk.fileName) ? null : chunk.fileName
     for (const moduleId of Object.keys(chunk.modules)) {
       for (const classNames of classNamesOf(environment, moduleId) ?? []) {
+        const together: string[] = []
         for (const token of classNames.split(' ')) {
           if (!token) continue
           const className = bare(token)
+          together.push(className)
           const previous = owners.get(className)
           if (previous === undefined) owners.set(className, owner)
           else if (previous !== owner) owners.set(className, null)
+        }
+        // These reached one element, so any two of them can compete in the cascade.
+        if (together.length < 2) continue
+        for (const className of together) {
+          const neighbours = coOccurrences.get(className) ?? new Set<string>()
+          for (const neighbour of together) if (neighbour !== className) neighbours.add(neighbour)
+          coOccurrences.set(className, neighbours)
         }
       }
     }
@@ -176,7 +193,7 @@ const chunkOwnership = (bundle: object, environment: string, session: StaticComp
     `Split: ${chunks.length} chunk(s), ${eager.size} loaded with an entry, ${owners.size} atom(s) seen, ` +
       `${ownership.size} owned by a lazy chunk.`,
   )
-  return ownership
+  return { ownership, coOccurrences }
 }
 
 /**
@@ -266,7 +283,7 @@ const pruneEmittedSheets = async (
     const split =
       splitCss && session.splitCss && pruneCss && cssCodeSplit && context.emitFile && context.getFileName
         ? {
-            ownership: chunkOwnership(bundle, environmentName, session),
+            ...chunkOwnership(bundle, environmentName, session),
             emit: (chunkFileName: string, css: string) => {
               const chunk = (bundle as Record<string, OutputChunkShape | undefined>)[chunkFileName]
               const referenceId = context.emitFile!({

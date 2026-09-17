@@ -157,6 +157,8 @@ export interface SplitOptions {
   ownership: ChunkOwnership
   /** Emit one chunk's sheet, and attach it to that chunk. */
   emit: (chunk: string, css: string) => void
+  /** Escape-free class names observed together on one element. @see `CoOccurrences` */
+  coOccurrences?: CoOccurrences
 }
 
 export const optimizeStaticCssAssets = (
@@ -221,7 +223,7 @@ export const optimizeStaticCssAssets = (
     let optimized = pruned
     let moved: ReadonlySet<string> = new Set()
     if (split?.ownership.size) {
-      const divided = splitStaticCss(pruned, session, split.ownership)
+      const divided = splitStaticCss(pruned, session, split.ownership, split.coOccurrences)
       optimized = divided.css
       moved = divided.moved
       for (const [chunk, css] of divided.chunks) split.emit(chunk, css)
@@ -446,6 +448,53 @@ export { pruneStaticCss } from './prune-static-css'
  */
 export type ChunkOwnership = ReadonlyMap<string, string>
 
+/**
+ * For each escape-free class, the classes seen alongside it on one element.
+ *
+ * Built from the class strings the compiler emitted, which is exactly the set of atoms that
+ * can end up on the same element together — and therefore the only pairs that can compete in
+ * the cascade at all. Two atoms never written together cannot resolve against each other
+ * however the sheet is arranged.
+ */
+export type CoOccurrences = ReadonlyMap<string, ReadonlySet<string>>
+
+/**
+ * Which atoms must not leave the entry sheet, because moving them would change a winner.
+ *
+ * Sublayers carry precedence *between* different specificity/condition/priority groups, but
+ * two atoms that agree on all of those share a sublayer, and within one sublayer the winner is
+ * still decided by source order — `cx(css({color}), css({color}))` is exactly that shape. The
+ * entry sheet and a chunk sheet have no defined order relative to each other, so moving one
+ * member of such a pair makes the winner depend on which file the browser parses first, which
+ * varies with caching and preload.
+ *
+ * So a class is held back when some element carries it together with another class in the same
+ * sublayer and the two would not travel to the same sheet. Everything else still splits: atoms
+ * that never co-occur, and co-occurring atoms whose sublayers already order them.
+ */
+const unsafeToMove = (
+  bySublayer: ReadonlyMap<string, string>,
+  ownership: ChunkOwnership,
+  coOccurrences: CoOccurrences,
+) => {
+  const held = new Set<string>()
+  const destinationOf = (className: string) => ownership.get(className) ?? ''
+
+  for (const [className, neighbours] of coOccurrences) {
+    const sublayer = bySublayer.get(className)
+    if (sublayer === undefined) continue
+    for (const neighbour of neighbours) {
+      if (neighbour === className) continue
+      if (bySublayer.get(neighbour) !== sublayer) continue
+      // Same sublayer, so order decides between them. Safe only if they stay together.
+      if (destinationOf(className) === destinationOf(neighbour)) continue
+      held.add(className)
+      held.add(neighbour)
+    }
+  }
+  return held
+}
+
 export interface SplitStaticCssResult {
   /** The entry sheet with the owned rules taken out. */
   css: string
@@ -503,6 +552,7 @@ export const splitStaticCss = (
   css: string,
   session: StaticCompilationSession,
   ownership: ChunkOwnership,
+  coOccurrences?: CoOccurrences,
 ): SplitStaticCssResult => {
   const chunks = new Map<string, string>()
   const moved = new Set<string>()
@@ -538,6 +588,56 @@ export const splitStaticCss = (
     if (parent?.type === 'atrule' && (parent as postcss.AtRule).params === session.utilityLayer) order = atRule
   })
 
+  /** The sublayer each single-class utility selector was written into. */
+  const sublayerOf = (rule: postcss.Rule) => {
+    let parent = rule.parent as postcss.Node | undefined
+    while (parent) {
+      if (parent.type === 'atrule') {
+        const atRule = parent as postcss.AtRule
+        if (atRule.name === 'layer') {
+          const grandparent = atRule.parent as postcss.AtRule | undefined
+          if (grandparent?.type === 'atrule' && grandparent.params === session.utilityLayer) return atRule.params
+        }
+      }
+      parent = parent.parent as postcss.Node | undefined
+    }
+    return undefined
+  }
+
+  const soleClassOf = (selector: string) => {
+    let only: string | undefined
+    try {
+      selectorParser((selectors) => {
+        const classes = new Set<string>()
+        selectors.walkClasses((classNode) => {
+          classes.add(bare(classNode.toString().slice(1)))
+        })
+        if (classes.size === 1) only = [...classes][0]
+      }).processSync(selector)
+    } catch {
+      // An authored selector the parser cannot read is not a compiler-owned atom.
+    }
+    return only
+  }
+
+  // Which sublayer each atom sits in, so co-occurring atoms that share one — and therefore
+  // still resolve by source order — can be kept together. Only needed when the caller knows
+  // what co-occurs; without that, nothing can be judged and the split stays as it was.
+  const held = new Set<string>()
+  if (coOccurrences?.size) {
+    const bySublayer = new Map<string, string>()
+    root.walkRules((rule) => {
+      if (!isUtilityRule(rule)) return
+      const sublayer = sublayerOf(rule)
+      if (sublayer === undefined) return
+      for (const selector of rule.selectors) {
+        const className = soleClassOf(selector)
+        if (className !== undefined) bySublayer.set(className, sublayer)
+      }
+    })
+    for (const className of unsafeToMove(bySublayer, ownership, coOccurrences)) held.add(className)
+  }
+
   root.walkRules((rule) => {
     if (!isUtilityRule(rule)) return
 
@@ -545,19 +645,10 @@ export const splitStaticCss = (
     const taken = new Map<string, string[]>()
     for (const selector of rule.selectors) {
       let owner: string | undefined
-      try {
-        selectorParser((selectors) => {
-          const classes = new Set<string>()
-          selectors.walkClasses((classNode) => {
-            classes.add(bare(classNode.toString().slice(1)))
-          })
-          if (classes.size !== 1) return
-          const [className] = classes
-          owner = ownership.get(className!)
-          if (owner !== undefined) moved.add(className!)
-        }).processSync(selector)
-      } catch {
-        // An authored selector the parser cannot read is not a compiler-owned atom.
+      const className = soleClassOf(selector)
+      if (className !== undefined && !held.has(className)) {
+        owner = ownership.get(className)
+        if (owner !== undefined) moved.add(className)
       }
       if (owner === undefined) kept.push(selector)
       else (taken.get(owner) ?? taken.set(owner, []).get(owner)!).push(selector)

@@ -267,14 +267,21 @@ export const optimizeStaticCssAssets = (
     // Re-keyed as well, where the bundler allows it, so a plugin that looks the asset up by the
     // name it now carries finds it. `@vitejs/plugin-rsc` does exactly that: it keeps the server
     // build's bundle and, in the client build, reads each stylesheet its chunks imported back
-    // out of it by name. Rolldown ignores the assignment — and logs so — in which case the old
-    // key stays and the rename still reaches disk; the guard keeps a refused assignment from
-    // deleting the asset outright.
-    try {
-      bundle[nextName] = output
-      if (bundle[nextName] === output && nextName !== previous) delete bundle[previous]
-    } catch {
-      // A bundle that refuses new keys keeps the old one.
+    // out of it by name.
+    //
+    // Skipped entirely on a bundler that refuses new keys. Rolldown ignores the assignment and
+    // logs a warning for it on every build — a warning about a write it then discards, which
+    // reads as a Bamboo error in the build output and is not one. It cannot be caught, because
+    // it is logged rather than thrown. Not attempting it is the only way to stay quiet, and it
+    // loses nothing: the rename still reaches disk through `fileName`, and
+    // `replaceAssetReferences` has already carried every recorded reference across.
+    if (!session.refusesBundleKeys) {
+      try {
+        bundle[nextName] = output
+        if (bundle[nextName] === output && nextName !== previous) delete bundle[previous]
+      } catch {
+        // A bundle that refuses new keys keeps the old one.
+      }
     }
   }
 

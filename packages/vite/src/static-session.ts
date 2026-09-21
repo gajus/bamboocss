@@ -135,6 +135,17 @@ export interface StaticCompilationSession {
   /** `build.cssCodeSplit` of the run's own config, for a bundler with no per-environment one. */
   cssCodeSplit?: boolean
   /**
+   * Whether the bundler driving this run refuses new keys on the output bundle.
+   *
+   * Rolldown does, and says so: assigning `bundle[name]` logs "This plugin assigns to bundle
+   * variable… This will be ignored" once per build. The assignment is optional — it exists so
+   * a plugin that looks the renamed stylesheet up by its new key finds it, and Rollup allows
+   * it — but the warning is printed by the bundler rather than thrown, so a `try/catch` around
+   * the assignment cannot suppress it. Knowing the bundler up front is the only way not to
+   * make the call, and skipping it there costs nothing: Rolldown was ignoring it anyway.
+   */
+  refusesBundleKeys?: boolean
+  /**
    * The class strings a module's compiled calls emit, as the compiler recorded them.
    *
    * Installed by the compiler, which owns the transform artifacts. The output hook uses it to

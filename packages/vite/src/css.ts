@@ -61,6 +61,27 @@ const devStylesheetUrl = (config: ViteDevServer['config'] | undefined) => {
 }
 
 /**
+ * Whether the bundler behind this run refuses new keys on the output bundle.
+ *
+ * Rolldown does, and logs a warning naming this plugin when one is attempted — see
+ * `StaticCompilationSession.refusesBundleKeys`.
+ *
+ * Read off the *resolved config*, which is the only place that answers for the run actually
+ * happening. Importing `vite` from this module and testing its `rolldownVersion` looks like
+ * the same question and is not: this package declares `vite` as a peer, so in a pnpm project
+ * the import resolves to Bamboo's own devDependency — Vite 7, rollup — while the user builds
+ * with Vite 8 and rolldown. That version answered "rollup", the assignment went ahead, and the
+ * warning this exists to remove was still printed on every build. `build.rolldownOptions` is
+ * present only on a rolldown build and belongs to the config the user's Vite handed us.
+ *
+ * Synchronous on purpose. `configResolved` is not a place to introduce a yield: two test files
+ * sharing one sandbox race on temporary sources, and an `await` here widened that window
+ * enough to fail a registration assertion.
+ */
+const bundlerRefusesBundleKeys = (config: { build?: object }) =>
+  config.build !== undefined && 'rolldownOptions' in config.build
+
+/**
  * A thrown value Vite can actually report.
  *
  * `catch` binds `unknown`, and anything under compilation — a dependency, a config hook, a
@@ -637,6 +658,7 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
       host.setDevSourcemap(devSourcemap)
       session.sourcemap = config.build.sourcemap
       session.cssCodeSplit = config.build.cssCodeSplit
+      session.refusesBundleKeys = bundlerRefusesBundleKeys(config)
       ssrBuildOptions = { ssr: config.build.ssr, ssrEmitAssets: config.build.ssrEmitAssets }
 
       /**

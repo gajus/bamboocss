@@ -1,4 +1,4 @@
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { Builder } from '@bamboocss/node'
@@ -313,12 +313,20 @@ describe('the virtual stylesheet', () => {
     await dev.transform(join(cwd, 'src/main.tsx'))
     expect(dev.fromTransform).toHaveLength(registered)
 
+    // Each `registrations` call globs the sandbox afresh, and other test files write
+    // temporary sources into it while this one runs — `plugin.test.ts` creates and deletes
+    // `src/__environment-css-owner.tsx`. Whether such a file exists is not what this test is
+    // about, and comparing two raw globs taken moments apart made it fail roughly one run in
+    // two under load. The claim is that the three entry points register the *same* set, so
+    // compare on the files none of them can disagree about.
+    const stable = (files: string[]) => [...new Set(files)].filter((file) => !basename(file).startsWith('__')).sort()
+
     // The query forms are the same stylesheet, with the same edges.
     const direct = await registrations('serve', `${VIRTUAL_CSS_ID}?direct`)
-    expect([...direct.fromTransform].sort()).toEqual([...dev.fromTransform].sort())
+    expect(stable(direct.fromTransform)).toEqual(stable(dev.fromTransform))
 
     const build = await registrations('build', VIRTUAL_CSS_ID)
-    expect([...build.fromLoad].sort()).toEqual([...dev.fromTransform].sort())
+    expect(stable(build.fromLoad)).toEqual(stable(dev.fromTransform))
     expect(build.fromTransform).toEqual([])
   }, 60_000)
 

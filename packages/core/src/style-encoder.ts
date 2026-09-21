@@ -521,6 +521,74 @@ class ViewTransitionPayloadIndex {
   }
 }
 
+/**
+ * Which atoms can override one another, and so must respect each other's declared order.
+ *
+ * Two utility rules resolve against each other only inside one cascade sublayer, and a
+ * sublayer is keyed by specificity, condition and property priority. The atom hash carries
+ * the property it was written as and the conditions it sits under, which is what the
+ * specificity and condition halves of that key are derived from — so grouping by those two is
+ * the conservative reading of "these compete": never chaining a pair the cascade already
+ * separates, while still chaining every pair it does not.
+ *
+ * Property is taken verbatim rather than through `getPropertyPriority`. Two properties that
+ * share a priority are still different declarations and cannot override one another, so
+ * chaining them would be a constraint nothing asked for.
+ */
+const competitionGroup = (hash: string) => {
+  const propertyEnd = hash.indexOf(StyleEncoder.separator)
+  const property = propertyEnd === -1 ? hash : hash.slice(0, propertyEnd)
+  const conditionAt = hash.indexOf(`${StyleEncoder.separator}cond:`)
+  const condition = conditionAt === -1 ? '' : hash.slice(conditionAt + StyleEncoder.separator.length + 'cond:'.length)
+  return `${property}\u0000${condition}`
+}
+
+/** Minimal binary heap over keys ordered by a numeric priority. */
+class KeyPriorityQueue {
+  private heap: Array<{ key: string; priority: number }> = []
+
+  get size() {
+    return this.heap.length
+  }
+
+  push = (key: string, priority: number) => {
+    const heap = this.heap
+    heap.push({ key, priority })
+    let index = heap.length - 1
+    while (index > 0) {
+      const parent = (index - 1) >> 1
+      if (heap[parent]!.priority <= heap[index]!.priority) break
+      const swapped = heap[parent]!
+      heap[parent] = heap[index]!
+      heap[index] = swapped
+      index = parent
+    }
+  }
+
+  pop = () => {
+    const heap = this.heap
+    const top = heap[0]
+    if (!top) return undefined
+    const last = heap.pop()!
+    if (heap.length) {
+      heap[0] = last
+      let index = 0
+      for (;;) {
+        const left = index * 2 + 1
+        if (left >= heap.length) break
+        const right = left + 1
+        const next = right < heap.length && heap[right]!.priority < heap[left]!.priority ? right : left
+        if (heap[next]!.priority >= heap[index]!.priority) break
+        const swapped = heap[next]!
+        heap[next] = heap[index]!
+        heap[index] = swapped
+        index = next
+      }
+    }
+    return top.key
+  }
+}
+
 /** Linked iteration order whose touched nodes can move without scanning unrelated entries. */
 class OrderIndex {
   private nodes = new Map<string, OrderNode>()
@@ -809,7 +877,146 @@ class OrderIndex {
         work += keys.length
         this.repositionAfterOwner(keys, owner)
       })
+    work += this.rebuildOrder()
     return work
+  }
+
+  /**
+   * Lay every key out so that no file's own declaration order is contradicted.
+   *
+   * Positioning a shared key by its earliest owner alone — "first active occurrence" — throws
+   * away what every *later* owner said about it. A file declaring `base` before `variant` had
+   * `base` pushed after it whenever some earlier file happened to mention `variant` first, and
+   * since both are `color` atoms of equal specificity they share a utility sublayer, where the
+   * later rule wins. The element then rendered with the variant's colour overridden by nothing,
+   * or the base's colour overridden by the variant, depending purely on which unrelated file
+   * was read first. That is what un-styled the `cx(base, variant)` buttons in css-in-js-bench.
+   *
+   * So the order is a topological sort of the constraints instead: every owner contributes the
+   * edges `k(i) -> k(i+1)` over the keys it declares, and the result honours all of them at
+   * once. Ties — keys no chain relates — are broken by current position, so a project whose
+   * files never disagree lays out exactly as before.
+   *
+   * Only keys that can actually compete are chained. Two atoms resolve against each other in
+   * the browser when they share a utility sublayer, and a sublayer is keyed by specificity,
+   * condition and property priority; an atom under `_disabled` is in a different sublayer from
+   * a bare one and cannot override it wherever either sits. Chaining those anyway invents a
+   * constraint the cascade does not have, and in the benchmark corpus one such false edge —
+   * `controls.ts` writing a `_disabled` grey before its plain white — dragged the plain white
+   * behind two variants and un-styled the buttons this was meant to fix. The condition and
+   * property are read off the hash, which is what the sublayer key is derived from.
+   *
+   * A cycle means two files genuinely demand opposite orders of the same pair. There is one
+   * rule per atom and no arrangement satisfies both, so the tie-break decides and the sheet
+   * stays deterministic rather than dropping to insertion order.
+   */
+  private rebuildOrder = () => {
+    if (!this.nodes.size) return 0
+
+    let work = 0
+    // In current linked-list order, so a key nothing constrains keeps the position it has and
+    // this pass is a no-op for a project whose files never disagree. `nodes` is not a
+    // substitute: it retains insertion order rather than live order.
+    const sequence = new Map<string, number>()
+    let next = 0
+    for (const key of this.keys()) sequence.set(key, next++)
+
+    // Current position is the whole tie-break. It already encodes the earliest-owner order
+    // the previous model produced, and for a pinned key — `staticCss`, a restored dump —
+    // there is no owner to consult at all; ranking those by a sentinel put every one of them
+    // last and dropped a `staticCss` atom out of the layer it belonged to.
+    const priorities = sequence
+
+    const successors = new Map<string, string[]>()
+    const indegree = new Map<string, number>()
+    for (const key of sequence.keys()) indegree.set(key, 0)
+
+    for (const [owner, keys] of this.ownerKeys) {
+      if (!this.owners.has(owner)) continue
+      const declared = Array.from(keys)
+        .filter(([key]) => sequence.has(key))
+        .sort((left, right) => left[1] - right[1])
+      work += declared.length
+
+      // Chain each competition group separately, so a file's order constrains only the atoms
+      // that can actually override one another.
+      const lastOfGroup = new Map<string, string>()
+      for (const [key] of declared) {
+        const group = competitionGroup(key)
+        const from = lastOfGroup.get(group)
+        lastOfGroup.set(group, key)
+        if (from === undefined || from === key) continue
+        const list = successors.get(from)
+        if (list) list.push(key)
+        else successors.set(from, [key])
+        indegree.set(key, indegree.get(key)! + 1)
+      }
+    }
+
+    const queue = new KeyPriorityQueue()
+    for (const [key, degree] of indegree) {
+      if (degree === 0) queue.push(key, priorities.get(key)!)
+    }
+
+    const ordered: string[] = []
+    while (queue.size) {
+      const key = queue.pop()!
+      ordered.push(key)
+      work++
+      for (const successor of successors.get(key) ?? []) {
+        const remaining = indegree.get(successor)! - 1
+        indegree.set(successor, remaining)
+        if (remaining === 0) queue.push(successor, priorities.get(successor)!)
+      }
+    }
+
+    // Whatever a cycle held back keeps its existing relative order, appended.
+    if (ordered.length !== sequence.size) {
+      const placed = new Set(ordered)
+      for (const key of sequence.keys()) if (!placed.has(key)) ordered.push(key)
+    }
+
+    this.relink(ordered)
+    return work
+  }
+
+  /**
+   * Rebuild the linked list to `ordered`, which must name every live key exactly once.
+   *
+   * Owner markers are nodes in this same list with no key, and they are what
+   * `repositionAfterOwner` splices against, so they are carried across rather than dropped.
+   * Each keeps the predecessor it had: its position only has to remain a valid anchor, and
+   * the keys it once preceded have been laid out by constraint here instead.
+   */
+  private relink = (ordered: readonly string[]) => {
+    const markersAfter = new Map<OrderNode | null, OrderNode[]>()
+    for (let node = this.first; node; node = node.next) {
+      if (node.key !== undefined) continue
+      let anchor: OrderNode | null = node.previous
+      while (anchor && anchor.key === undefined) anchor = anchor.previous
+      const list = markersAfter.get(anchor)
+      if (list) list.push(node)
+      else markersAfter.set(anchor, [node])
+    }
+
+    let previous: OrderNode | null = null
+    this.first = null
+    const append = (node: OrderNode) => {
+      node.previous = previous
+      node.next = null
+      if (previous) previous.next = node
+      else this.first = node
+      previous = node
+    }
+
+    for (const marker of markersAfter.get(null) ?? []) append(marker)
+    for (const key of ordered) {
+      const node = this.nodes.get(key)
+      if (!node) continue
+      append(node)
+      for (const marker of markersAfter.get(node) ?? []) append(marker)
+    }
+    this.last = previous
   }
 
   private detach = (node: OrderNode) => {

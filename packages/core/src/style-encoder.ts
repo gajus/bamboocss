@@ -23,6 +23,7 @@ import type {
   StyleResultObject,
 } from '@bamboocss/types'
 import { version } from '../package.json'
+import { canonicalValue } from './canonical-value'
 import type { Context } from './context'
 import { COMPOUND_VARIANT, Recipes } from './recipes'
 import {
@@ -2054,6 +2055,9 @@ export class StyleEncoder {
 
     // { mx: 4 } => { marginX: 4 }
     const isRecipe = !!baseEntry?.variants
+    // The same flag, named for what it means to value folding below: on this path the leaf
+    // is a variant key, not a CSS value.
+    const isRecipeVariant = isRecipe
     const normalized = normalizeStyleObject(obj, this.context, !isRecipe)
 
     traverse(
@@ -2068,7 +2072,27 @@ export class StyleEncoder {
           return
         }
 
-        const value = rawValue
+        // One spelling per value, here as well as in `Utility.transform`.
+        //
+        // An atom's identity is this hash; the class name it ships under comes from
+        // `transform`, which folds the value first. Hashing the value as *written* therefore
+        // minted a separate atom for every spelling — `#ffffff` and `#fff` are two hashes
+        // that both resolve to `.c_\#fff` — so one rule had two atoms competing for its
+        // position, and which one landed there depended on the order files were read in.
+        //
+        // That is what un-styled `cx(base, variant)` in css-in-js-bench: the base wrote
+        // `#ffffff` while other case files wrote `#fff`, so the base's own declaration order
+        // was never what positioned the rule.
+        //
+        // Declarations only. On the `variants: true` path the "value" is a key of the
+        // recipe's `variants` object — an identifier that merely looks like a quantity — and
+        // it is looked up as written by both the decoder and the generated runtime. Folding
+        // `1.0` to `1` there makes the lookup miss and drops the rule while the runtime still
+        // asks for `--size_1.0`.
+        //
+        // The same function as `transform` uses, so the two agree by construction rather than
+        // by coincidence; `canonicalValue` is idempotent, so folding twice is harmless.
+        const value = !isRecipeVariant && typeof rawValue === 'string' ? canonicalValue(rawValue) : rawValue
 
         prop = key
 

@@ -508,11 +508,11 @@ describe('style encoder', () => {
         "recipes_base": Map {
           "button" => Set {
             "background]___[value:dark]___[cond:&[data-part="blur"]<___>_dark]___[recipe:button",
-            "boxShadow]___[value:0 -1px 0 rgba(255,255,255,.1) inset]___[cond:&[data-part="blur"]<___>_dark]___[recipe:button",
-            "boxShadow]___[value:0 2px 4px rgba(0,0,0,.02),0 1px 0 rgba(0,0,0,.06)]___[cond:&[data-part="blur"]]___[recipe:button",
+            "boxShadow]___[value:0 -1px 0 rgba(255,255,255,0.1) inset]___[cond:&[data-part="blur"]<___>_dark]___[recipe:button",
+            "boxShadow]___[value:0 2px 4px rgba(0,0,0,0.02),0 1px 0 rgba(0,0,0,0.06)]___[cond:&[data-part="blur"]]___[recipe:button",
             "backdropFilter]___[value:blur(8px)]___[cond:&[data-part="blur"]<___>_supportsBackdrop]___[recipe:button",
             "backgroundColor]___[value:rgba(255, 255, 255, 0.85) !important]___[cond:&[data-part="blur"]<___>_supportsBackdrop]___[recipe:button",
-            "backgroundColor]___[value:hsla(0,0%,7%,.8) !important]___[cond:&[data-part="blur"]<___>_supportsBackdrop<___>_dark]___[recipe:button",
+            "backgroundColor]___[value:hsla(0,0%,7%,0.8) !important]___[cond:&[data-part="blur"]<___>_supportsBackdrop<___>_dark]___[recipe:button",
           },
         },
         "view_transitions": Map {},

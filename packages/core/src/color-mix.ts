@@ -1,3 +1,4 @@
+import { opacityPercent } from '@bamboocss/token-dictionary'
 import type { TransformArgs } from '@bamboocss/types'
 
 export const colorMix = (value: string, token: TransformArgs['token']) => {
@@ -16,7 +17,7 @@ export const colorMix = (value: string, token: TransformArgs['token']) => {
     return { invalid: true, value: rawColor }
   }
 
-  const percent = opacityToken ? Number(opacityToken) * 100 + '%' : `${rawOpacity}%`
+  const percent = opacityToken ? opacityPercent(opacityToken) : `${rawOpacity}%`
   const color = colorToken ?? rawColor
 
   return {

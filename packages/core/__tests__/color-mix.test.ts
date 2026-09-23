@@ -27,6 +27,7 @@ describe('color-mix', () => {
         tokens: {
           opacity: {
             half: { value: 0.5 },
+            subtle: { value: 0.07 },
           },
         },
       },
@@ -305,6 +306,11 @@ describe('color-mix', () => {
       }",
       }
     `)
+  })
+
+  /** `0.07 * 100` is `7.000000000000001` in floating point, which used to reach the stylesheet. */
+  test('opacity token without float noise', () => {
+    expect(css({ bg: 'red/subtle' }).css).toContain('color-mix(in srgb, red 7%, transparent)')
   })
 
   test('WebkitTextFillColor with color token', () => {

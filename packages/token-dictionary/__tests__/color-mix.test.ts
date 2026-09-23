@@ -39,6 +39,28 @@ test('color-mix', () => {
   `)
 })
 
+test('an opacity token becomes an exact percentage, without float noise', () => {
+  const dictionary = new TokenDictionary({
+    tokens: {
+      colors: { pink: { value: '#ff00ff' } },
+      // Each of these multiplies to a non-integer in binary floating point.
+      opacity: { a: { value: 0.07 }, b: { value: 0.29 }, c: { value: '0.57' }, d: { value: 0.125 } },
+    },
+  })
+
+  dictionary.init()
+
+  expect(['a', 'b', 'c', 'd'].map((o) => dictionary.expandReferenceInValue(`token(colors.pink/${o})`)))
+    .toMatchInlineSnapshot(`
+    [
+      "color-mix(in srgb, var(--colors-pink) 7%, transparent)",
+      "color-mix(in srgb, var(--colors-pink) 29%, transparent)",
+      "color-mix(in srgb, var(--colors-pink) 57%, transparent)",
+      "color-mix(in srgb, var(--colors-pink) 12.5%, transparent)",
+    ]
+  `)
+})
+
 test('color-mix with semanticTokens', () => {
   const dictionary = new TokenDictionary({
     tokens: {

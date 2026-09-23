@@ -3,6 +3,20 @@ import { BambooError, esc, isObject } from '@bamboocss/shared'
 import type { Token } from '@bamboocss/types'
 
 /* -----------------------------------------------------------------------------
+ * Color mix
+ * -----------------------------------------------------------------------------*/
+
+/**
+ * An opacity token's value (`0.07`) as the percentage a `color-mix()` takes (`7%`).
+ *
+ * Multiplying by 100 in binary floating point is not exact: `0.07 * 100` is `7.000000000000001`
+ * and `0.29 * 100` is `28.999999999999996`, which reached the stylesheet verbatim. Twelve
+ * significant digits is far beyond what a color can resolve and well short of where the error
+ * lives, so rounding there removes the noise without touching any intended value.
+ */
+export const opacityPercent = (value: unknown) => `${Number((Number(value) * 100).toPrecision(12))}%`
+
+/* -----------------------------------------------------------------------------
  * Token references
  * -----------------------------------------------------------------------------*/
 

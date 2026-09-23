@@ -34,6 +34,7 @@ import {
   getReferences,
   isToken,
   mapToJson,
+  opacityPercent,
   referenceOf,
 } from './utils'
 import { expandTokenReferences } from './expand-token-references'
@@ -450,7 +451,7 @@ export class TokenDictionary {
       return { invalid: true, value: colorPath }
     }
 
-    const percent = opacityToken ? Number(opacityToken) * 100 + '%' : `${rawOpacity}%`
+    const percent = opacityToken ? opacityPercent(opacityToken) : `${rawOpacity}%`
     const color = colorToken ?? colorPath
 
     return {

@@ -31,7 +31,6 @@ export function generateConditions(ctx: Context) {
 
     export type ConditionalValue<V> =
       | V
-      | Array<V | null>
       | {
           [K in keyof Conditions]?: ConditionalValue<V>
         }

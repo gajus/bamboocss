@@ -40,22 +40,14 @@ const rule = createRule({
       return false
     }
 
-    // Function to check array elements for dynamic values
-    function checkArrayElements(array: TSESTree.ArrayExpression) {
-      for (const element of array.elements) {
-        if (!element) {
-          continue
-        }
-
-        if (isStaticValue(element)) {
-          continue
-        }
-
-        context.report({
-          messageId: 'dynamic',
-          node: element,
-        })
-      }
+    // An array is not a style value: the runtime throws on one and the compiler fails the build.
+    // It used to be read as one value per breakpoint, which is why this rule once accepted an
+    // array of literals — the one shape that now always fails.
+    function reportArray(array: TSESTree.ArrayExpression) {
+      context.report({
+        messageId: 'array',
+        node: array,
+      })
     }
 
     return {
@@ -84,7 +76,7 @@ const rule = createRule({
           }
 
           if (isArrayExpression(expr)) {
-            checkArrayElements(expr)
+            reportArray(expr)
             return
           }
 
@@ -116,7 +108,7 @@ const rule = createRule({
         }
 
         if (isArrayExpression(node.value)) {
-          checkArrayElements(node.value)
+          reportArray(node.value)
           return
         }
 
@@ -147,6 +139,8 @@ const rule = createRule({
         "Ensure users don't use dynamic styling. Prefer static styles, leverage CSS variables, or recipes for known dynamic styles.",
     },
     messages: {
+      array:
+        'An array is not a style value. Write a responsive value as a condition object, e.g. { base: "medium", lg: "bold" }.',
       dynamic: 'Remove dynamic value. Prefer static styles.',
       dynamicProperty: 'Remove dynamic property. Prefer static style property.',
       dynamicRecipeVariant: 'Remove dynamic variant. Prefer static variant definition.',

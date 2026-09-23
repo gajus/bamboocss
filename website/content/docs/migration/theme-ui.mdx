@@ -283,14 +283,16 @@ const Demo = () => (
 ```
 
 In Bamboo, these are called "layout patterns", or "patterns" for short. Each one is a function that returns a class
-name, so it composes with any element.
+name, so it composes with any element. Theme UI's `width` on a `Grid` is the minimum column width, which is
+`minChildWidth` here. Its responsive array becomes a condition object — an array is not a style value in Bamboo — so
+`[128, null, 192]` becomes `{ base: '128px', md: '192px' }`.
 
 ```jsx
 import { css } from '../styled-system/css'
 import { grid } from '../styled-system/patterns'
 
 const Demo = () => (
-  <div className={grid({ width: [128, null, 192] })}>
+  <div className={grid({ minChildWidth: { base: '128px', md: '192px' } })}>
     <div className={css({ bg: 'primary' })}>Box</div>
     <div className={css({ bg: 'muted' })}>Box</div>
   </div>

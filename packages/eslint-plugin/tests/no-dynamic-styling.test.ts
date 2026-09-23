@@ -19,7 +19,16 @@ eslintTester.run(RULE_NAME, rule, {
   
   const size = '8';
   const styles = css({ padding: ['4', size] })`,
-      errors: [{ messageId: 'dynamic' }],
+      errors: [{ messageId: 'array' }],
+    },
+
+    // An array of literals is still not a style value: the runtime throws and the build fails.
+    {
+      code: multiline`
+  import { css } from './bamboo/css';
+  
+  const styles = css({ padding: ['4', '8'] })`,
+      errors: [{ messageId: 'array' }],
     },
 
     {
@@ -85,13 +94,6 @@ eslintTester.run(RULE_NAME, rule, {
   import { css } from './bamboo/css';
   
   const styles = css({ bg: 'gray.900' })`,
-    },
-
-    {
-      code: multiline`
-  import { css } from './bamboo/css';
-  
-  const styles = css({ padding: ['4', '8'] })`,
     },
 
     {

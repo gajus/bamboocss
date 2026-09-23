@@ -1,8 +1,8 @@
 ---
-'@bamboocss/generator': patch
-'@bamboocss/shared': patch
-'@bamboocss/types': patch
-'@bamboocss/config': patch
+'@bamboocss/generator': minor
+'@bamboocss/shared': minor
+'@bamboocss/types': minor
+'@bamboocss/config': minor
 ---
 
 Remove the recipe runtime engine that no compiled build could reach, along with `auditSlotScopes`.

@@ -1,6 +1,6 @@
 ---
-'@bamboocss/generator': patch
-'@bamboocss/eslint-plugin': patch
+'@bamboocss/generator': minor
+'@bamboocss/eslint-plugin': minor
 ---
 
 Stop typing arrays as style values, and have `no-dynamic-styling` report them.

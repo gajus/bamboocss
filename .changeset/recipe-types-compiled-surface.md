@@ -1,6 +1,6 @@
 ---
-'@bamboocss/types': patch
-'@bamboocss/generator': patch
+'@bamboocss/types': minor
+'@bamboocss/generator': minor
 ---
 
 Declare only the recipe members a compiled build accepts.

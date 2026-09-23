@@ -98,6 +98,12 @@ describe('mandatory compiler bundle size', () => {
     expect(runtime.code).toContain('red600')
     // The engine leaves; the atom names stay, since compaction is core `hash`'s job now.
     expect(compiled.code).not.toContain('createCss')
+    // Not even the uncompiled `cva` carries a recipe engine: it is a callable that throws plus
+    // `splitVariantProps`. The removed one pulled in the compound-variant matcher and the
+    // recipe composer, both unreachable from any build that compiled.
+    for (const removed of ['getCompoundVariantCss', 'composeRecipes', 'resolveVariants']) {
+      expect(runtime.code, removed).not.toContain(removed)
+    }
     expect(compiled.raw).toBeLessThan(runtime.raw)
     expect(compiled.gzip).toBeLessThan(runtime.gzip)
   }, 120_000)

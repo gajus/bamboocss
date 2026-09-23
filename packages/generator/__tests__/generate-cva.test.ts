@@ -1,51 +1,34 @@
 import { createGeneratorContext } from '@bamboocss/fixture'
 import { describe, expect, test } from 'vitest'
 import { generateCvaFn } from '../src/artifacts/js/cva'
+import { generateSvaFn } from '../src/artifacts/js/sva'
 
-describe('generate cva', () => {
-  /**
-   * `cva` names its classes the way a config recipe does — `name--variant_value`, from the
-   * config — rather than by property. That is what puts it in the `recipes` layer, so a
-   * consumer's `css()` beats it by cascade rather than by stylesheet order.
-   *
-   * It used to call `__atomicCss(resolve(props))`: resolve the whole style object, then
-   * name a class per property. Reaching for the shared `css` instead would have returned a
-   * grouped class no rule was emitted for, which is why the atomic seam existed at all.
-   * Semantic naming removes the question.
-   */
-  test('names classes semantically, without resolving styles', () => {
-    const { js } = generateCvaFn(createGeneratorContext() as any)
+/**
+ * The runtime `cva`/`sva` a compiled build keeps is a callable that throws and
+ * `splitVariantProps` — everything else compiles away or fails the build.
+ *
+ * Pinned by what the module imports rather than by a snapshot of its text, because the imports
+ * are what decide the bundle: the removed engine pulled `mergeCss`, and through it the shorthand
+ * table, into every bundle that imported `cva`.
+ */
+describe.each([
+  ['cva', generateCvaFn],
+  ['sva', generateSvaFn],
+])('generate %s', (name, generate) => {
+  const { js } = generate(createGeneratorContext() as any)
 
-    expect(js).toContain('uncompiledStyle')
-    expect(js).not.toContain('__atomicCss')
-
-    // `resolve` still exists, for `raw()` — which returns styles rather than classes — so
-    // the check is that `cvaFn` is not what calls it. Asserted against the function body
-    // rather than the whole artifact, which discusses the old shape in a comment.
-    const start = js.indexOf('function cvaFn')
-    expect(start).toBeGreaterThan(-1)
-    const body = js.slice(start, start + 200)
-    expect(body).toContain('uncompiledStyle')
-    expect(body).not.toContain('getRecipeClassNames')
-    expect(body).not.toContain('resolve(props)')
+  test('imports only splitProps and uncompiledStyle', () => {
+    const imports = [...js.matchAll(/^import .*$/gm)].map((match) => match[0])
+    expect(imports).toEqual([`import { splitProps, uncompiledStyle } from '../helpers.mjs';`])
   })
 
-  test('derives the name from the config, not from a build-time rewrite', () => {
-    // The runtime and the build each derive this independently, so it has to come from
-    // something both of them see. See `getRecipeIdentity`.
-    const { js } = generateCvaFn(createGeneratorContext() as any)
-    expect(js).toContain('const name = getRecipeIdentity(config)')
+  test('carries none of the removed engine', () => {
+    for (const removed of ['mergeCss', 'raw', 'resolve', 'merge', 'variantMap', 'getVariantProps', 'config,']) {
+      expect(js, removed).not.toMatch(new RegExp(`\\b${removed}\\b`))
+    }
   })
 
-  test('applies the same prefix and hashing the stylesheet does', () => {
-    const hashed = generateCvaFn(createGeneratorContext({ hash: true, prefix: 'bam' }) as any).js
-    // `checkNamingAgreement` compares the two derivations; this is the half that lives here.
-    expect(hashed).toContain('formatRecipeClass')
-    expect(hashed).toContain('"bam"')
-    expect(hashed).toContain('toHash')
-
-    const plain = generateCvaFn(createGeneratorContext() as any).js
-    // No prefix and no hash means the formatter is the identity, costing nothing.
-    expect(plain).toContain('const withPrefix = (className) => className')
+  test(`throws until compiled, naming ${name}`, () => {
+    expect(js).toContain(`uncompiledStyle('${name}')`)
   })
 })

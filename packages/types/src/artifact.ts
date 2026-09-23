@@ -14,7 +14,6 @@ export type ArtifactId =
   | 'cva'
   | 'sva'
   | 'cx'
-  | 'create-recipe'
   | 'recipes'
   | 'recipes-index'
   | 'patterns'

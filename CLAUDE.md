@@ -190,7 +190,7 @@ Perf-sensitive code has Vitest benchmarks in `{packages,sandbox}/*/__tests__/**/
 | `extractor/extract-speed`                       | expression evaluation, one file                               |
 | `extractor/cross-file-cost`                     | extraction cost as a function of _project_ size               |
 | `parser/ts-eval`, `parser/extract-modes`        | extraction                                                    |
-| `generator/css-fn`, `cva`, `recipe`             | the generated runtime, cached path                            |
+| `generator/css-fn`                              | the generated runtime, cached path                            |
 | `generator/css-fn-miss`                         | the uncached path; kept in its own file so ordering can't lie |
 | `native-extractor/analyze`                      | batched Rust parsing, analysis and compact result transfer    |
 | `shared/split-props`, `shared/leaf-class`       | runtime helpers on the per-render path                        |
@@ -203,6 +203,9 @@ dev-server transform, not just production builds, so that gap is wider than it w
 A bench that measures a shape nothing calls is worse than no bench, because it reads as coverage. `split-props.bench.ts`
 spent a while measuring only the four-group shape that went away with the JSX factory, which left the one-array-group
 shape every recipe actually uses with nothing at all. When a caller is removed, check what its benchmarks were for.
+`generator/cva` and `generator/recipe` went this way: they measured `resolve`/`raw` and `createRecipe`, which the
+runtime recipe no longer has — it is a callable that throws plus `splitVariantProps`, and `shared/split-props` covers
+that.
 
 **Profile the current extraction pipeline.** Stylesheet extraction runs in Rust/Oxc through `packages/native-extractor`,
 with hooks and result encoding at the JavaScript boundary in `packages/node/src/create-context.ts`. The Vite source

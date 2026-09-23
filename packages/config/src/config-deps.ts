@@ -43,7 +43,6 @@ const artifactConfigDeps: Record<ArtifactId, ConfigPath[]> = {
   cva: [],
   sva: [],
   cx: [],
-  'create-recipe': ['separator', 'prefix', 'hash'],
   'recipes-index': ['theme.recipes', 'theme.slotRecipes'],
   recipes: ['theme.recipes', 'theme.slotRecipes'],
   'patterns-index': ['patterns'],

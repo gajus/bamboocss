@@ -9,7 +9,7 @@ import { generateCx } from './js/cx'
 import { generateHelpers } from './js/helpers'
 import { generatePackageJson } from './js/package-json'
 import { generatePattern } from './js/pattern'
-import { generateCreateRecipe, generateRecipes } from './js/recipe'
+import { generateRecipes } from './js/recipe'
 import { generateSvaFn } from './js/sva'
 import { generateTokenJs } from './js/token'
 import { getGeneratedSystemTypes, getGeneratedTypes } from './types/generated'
@@ -165,22 +165,6 @@ function setupCx(ctx: Context): Artifact {
   }
 }
 
-function setupCreateRecipe(ctx: Context): Artifact | undefined {
-  if (ctx.recipes.isEmpty()) return
-
-  const createRecipe = generateCreateRecipe(ctx)
-  if (!createRecipe) return
-
-  return {
-    id: 'create-recipe',
-    dir: ctx.paths.recipe,
-    files: [
-      { file: ctx.file.ext(createRecipe.name), code: createRecipe.js },
-      { file: ctx.file.extDts(createRecipe.name), code: createRecipe.dts },
-    ],
-  }
-}
-
 function setupRecipesIndex(ctx: Context): Artifact | undefined {
   if (ctx.recipes.isEmpty()) return
 
@@ -261,7 +245,7 @@ function setupCssIndex(ctx: Context): Artifact {
   ${ctx.file.reExport('css, fallback, viewTransition', './css')}
   ${ctx.file.reExport('cx', './cx')}
   ${ctx.file.reExport('cva', './cva')}
-  ${ctx.file.reExport('sva, auditSlotScopes', './sva')}
+  ${ctx.file.reExport('sva', './sva')}
 
   // Written by the source transform, never by hand. They are exported here because the
   // transform adds them to whatever \`styled-system/css\` import the file already has, so
@@ -278,8 +262,7 @@ function setupCssIndex(ctx: Context): Artifact {
   ${ctx.file.reExportDts('cx', './cx')}
   ${ctx.file.reExportDts('cva', './cva')}
   ${ctx.file.exportType('RecipeVariant, RecipeVariantProps', './cva')}
-  ${ctx.file.reExportDts('sva, auditSlotScopes', './sva')}
-  ${ctx.file.exportType('SlotScopeProblem, AuditSlotScopesOptions', './sva')}
+  ${ctx.file.reExportDts('sva', './sva')}
   `,
   }
 
@@ -374,7 +357,6 @@ const entries: ArtifactEntry[] = [
   ['cva', setupCva],
   ['sva', setupSva],
   ['cx', setupCx],
-  ['create-recipe', setupCreateRecipe],
   ['recipes-index', setupRecipesIndex],
   ['recipes', setupRecipes],
   ['patterns-index', setupPatternsIndex],

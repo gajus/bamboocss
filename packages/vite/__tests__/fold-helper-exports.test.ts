@@ -11,7 +11,7 @@ import { RECIPE_MAP_HELPER, SPLIT_PROPS_HELPER } from '../src/fold-recipe'
 const INJECTED = [RECIPE_MAP_HELPER, SPLIT_PROPS_HELPER]
 
 /** The authoring API the barrel exists to expose. */
-const AUTHORING = ['css', 'cx', 'cva', 'sva', 'fallback', 'viewTransition', 'auditSlotScopes']
+const AUTHORING = ['css', 'cx', 'cva', 'sva', 'fallback', 'viewTransition']
 
 const barrel = (extension: 'mjs' | 'd.ts') => {
   const [artifact] = createGeneratorContext().getArtifacts(['css-index'])

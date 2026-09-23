@@ -3,82 +3,11 @@ import { Recipes } from '@bamboocss/core'
 import { isBoolean, unionType } from '@bamboocss/shared'
 import type { ArtifactFilters } from '@bamboocss/types'
 import { outdent } from 'outdent'
-import { match } from 'ts-pattern'
 import { isBooleanValue } from '../../shared'
 
-const stringify = (value: any) => JSON.stringify(value, null, 2)
 const hasOwn = (obj: any | undefined, key: string): obj is Record<string, any> => {
   if (!obj) return false
   return Object.prototype.hasOwnProperty.call(obj, key)
-}
-
-export function generateCreateRecipe(ctx: Context) {
-  const { recipes, prefix, hash, utility } = ctx
-
-  if (recipes.isEmpty()) return
-
-  return {
-    name: 'create-recipe',
-    dts: '',
-    js: outdent`
-   ${ctx.file.import(
-     hash.className
-       ? 'compact, splitProps, toHash, uniq, uncompiledStyle'
-       : 'compact, splitProps, uniq, uncompiledStyle',
-     '../helpers',
-   )}
-
-   const withPrefix = ${
-     prefix.className
-       ? `(className) => className ? ${JSON.stringify(prefix.className)} + '-' + className : ${JSON.stringify(prefix.className)}`
-       : `(className) => className`
-   }
-   export const formatRecipeClass = ${
-     hash.className ? `(className) => withPrefix((${utility.toHash})([className], toHash))` : `withPrefix`
-   }
-
-   export const createRecipe = (name, defaultVariants, _compoundVariants, _variantMap) => {
-    const getVariantProps = (variants) => {
-      return {
-        [name]: '__ignore__',
-        ...defaultVariants,
-        ...compact(variants),
-      };
-    };
-
-     const recipeFn = (_variants) => uncompiledStyle(name)
-
-      return {
-        recipeFn,
-        getVariantProps,
-        __getCompoundVariantCss__: (_variants) => uncompiledStyle(name),
-      }
-   }
-
-   export const mergeRecipes = (recipeA, recipeB) => {
-    if (recipeA && !recipeB) return recipeA
-    if (!recipeA && recipeB) return recipeB
-
-    const recipeFn = (..._args) => uncompiledStyle(recipeA.__name__ || 'recipe')
-    const variantKeys = uniq(Object.keys(recipeA.variantMap), Object.keys(recipeB.variantMap))
-    const variantMap = variantKeys.reduce((acc, key) => {
-      acc[key] = uniq(recipeA.variantMap[key], recipeB.variantMap[key])
-      return acc
-    }, {})
-
-    return Object.assign(recipeFn, {
-      __recipe__: true,
-      __name__: \`$\{recipeA.__name__} \${recipeB.__name__}\`,
-      raw: (props) => props,
-      variantMap,
-      splitVariantProps(props) {
-        return splitProps(props, variantKeys)
-      },
-    })
-    }
-  }
-  `,
-  }
 }
 
 export function generateRecipes(ctx: Context, filters?: ArtifactFilters) {
@@ -105,137 +34,27 @@ export function generateRecipes(ctx: Context, filters?: ArtifactFilters) {
       return ctx.file.jsDocComment('', { default: defaultValue })
     }
 
-    const slotNames = Recipes.isSlotRecipeConfig(config) ? config.slots : []
-    const anchorSlotNames = Recipes.isSlotRecipeConfig(config) ? Recipes.getScopeRoots(config) : []
+    /**
+     * A config recipe as a compiled build keeps it: a callable that throws, and
+     * `splitVariantProps`. See `generateCvaFn` for why nothing else survives.
+     *
+     * The slot accessors went with the rest. `recipe.root(props)` and `recipe.icon` read the
+     * binding rather than calling it, so both fail the build with `runtime-binding`; the
+     * compiled spelling is `recipe(props).root`, which folds to the slot's atoms. They were
+     * also what the retired `@scope` model needed — anchors took variants, other slots were
+     * constants — and the Vite compiler emits no `@scope` rules.
+     */
+    const jsCode = outdent`
+        ${ctx.file.import('splitProps, uncompiledStyle', '../helpers')}
 
-    const jsCode = match(config)
-      .when(Recipes.isSlotRecipeConfig, (config) => {
-        const anchors = Recipes.getScopeRoots(config)
+        const ${baseName}VariantKeys = ${JSON.stringify(Object.keys(variantKeyMap))}
 
-        /**
-         * Which slots each variant writes styles for.
-         *
-         * A scope reaches every slot inside an anchor's subtree. A slot under no anchor at
-         * all is not reached, and nothing here can detect that — reachability is a fact
-         * about the DOM. This is what says which slots a variant has to get to, so the
-         * component layer can thread the ones a scope cannot.
-         */
-        const slotsAffectedBy = Object.fromEntries(
-          Object.entries(config.variants ?? {}).map(([variant, values]) => [
-            variant,
-            Array.from(new Set(Object.values(values ?? {}).flatMap((slotStyles) => Object.keys(slotStyles ?? {})))),
-          ]),
-        )
-
-        return outdent`
-        ${ctx.file.import('compact, getSlotCompoundVariant, memo, splitProps', '../helpers')}
-        ${ctx.file.import('createRecipe, formatRecipeClass', './create-recipe')}
-
-        const ${baseName}DefaultVariants = ${stringify(defaultVariants ?? {})}
-        const ${baseName}CompoundVariants = ${stringify(compoundVariants ?? [])}
-
-        // Formatted, not raw. A scoped slot's class is a constant that never passes through
-        // \`createCss\`, so \`hash.className\` and \`prefix\` have to be applied here to match
-        // the rule the stylesheet emits.
-        const ${baseName}SlotNames = ${stringify(config.slots.map((slot) => [slot, `${config.className}__${slot}`]))}.map(
-          ([slotName, className]) => [slotName, formatRecipeClass(className)],
-        )
-        ${
-          anchors.length
-            ? outdent`
-        /**
-         * Only the anchors take variants: ${anchors.map((slot) => `\`${baseName}.${slot}\``).join(', ')}.
-         * Every other slot's variant styles are emitted as rules scoped by a class an anchor
-         * carries, so that slot's class is a constant and nothing has to reach it at runtime.
-         */
-        const ${baseName}Anchors = ${JSON.stringify(anchors)}
-        const ${baseName}AnchorFns = /* @__PURE__ */ ${baseName}Anchors.map((slotName) => [slotName, createRecipe(\`${config.className}__\${slotName}\`, ${baseName}DefaultVariants, getSlotCompoundVariant(${baseName}CompoundVariants, slotName), ${stringify(variantKeyMap)})])
-        const ${baseName}StaticSlots = /* @__PURE__ */ Object.fromEntries(
-          ${baseName}SlotNames.filter(([slotName]) => !${baseName}Anchors.includes(slotName)),
-        )
-
-        const ${baseName}Fn = memo((props = {}) => ({
-          ...${baseName}StaticSlots,
-          ...Object.fromEntries(${baseName}AnchorFns.map(([slotName, anchorFn]) => [slotName, anchorFn.recipeFn(props)])),
-        }))`
-            : outdent`
-        /**
-         * Raw, not the formatted name. \`createRecipe\` routes what it is given through
-         * \`createCss\`, which applies \`hash.className\` and \`prefix.className\` itself — so
-         * passing the already formatted \`slotKey\` applied both a second time. The runtime
-         * asked for \`toHash(toHash(name))\` while the stylesheet emitted \`toHash(name)\`, and
-         * every slot on such a recipe rendered unstyled.
-         *
-         * Invisible only when neither \`hash\` nor \`prefix\` is set, where both applications
-         * are identities. A prefixed build was equally broken — \`bam-bam-menu__trigger\`
-         * against a stylesheet emitting \`.bam-menu__trigger\` — which is easy to miss, since
-         * the obvious reading is that this is a hashing problem.
-         */
-        const ${baseName}SlotFns = /* @__PURE__ */ ${baseName}SlotNames.map(([slotName]) => [slotName, createRecipe(\`${config.className}__\${slotName}\`, ${baseName}DefaultVariants, getSlotCompoundVariant(${baseName}CompoundVariants, slotName), ${stringify(variantKeyMap)})])
-
-        const ${baseName}Fn = memo((props = {}) => {
-          return Object.fromEntries(${baseName}SlotFns.map(([slotName, slotFn]) => [slotName, slotFn.recipeFn(props)]))
-        })`
-        }
-
-        const ${baseName}VariantKeys = ${stringify(Object.keys(variantKeyMap))}
-        const getVariantProps = (variants) => ({ ...${baseName}DefaultVariants, ...compact(variants) })
-
-        export const ${baseName} = /* @__PURE__ */ Object.assign(${baseName}Fn, {
-          __recipe__: false,
-          __name__: '${baseName}',
-          raw: (props) => props,
-          /** Each slot's constant class, for targeting a slot in the DOM. */
-          classNameMap: /* @__PURE__ */ Object.fromEntries(${baseName}SlotNames),
-          /** The slots that enclose other slots, and so anchor their variant rules. */
-          scopeRoots: ${JSON.stringify(anchors)},
-          variantMap: ${stringify(variantKeyMap)},
-          /** Which slots each variant actually reaches, for a slot a scope cannot get to. */
-          slotsAffectedBy: ${stringify(slotsAffectedBy)},
+        export const ${baseName} = /* @__PURE__ */ Object.assign((_props) => uncompiledStyle(${JSON.stringify(config.className)}), {
           splitVariantProps(props) {
             return splitProps(props, ${baseName}VariantKeys)
           },
-          getVariantProps,
-          ${
-            anchors.length
-              ? outdent`
-          ...Object.fromEntries(${baseName}AnchorFns.map(([slotName, anchorFn]) => [slotName, anchorFn.recipeFn])),
-          ...${baseName}StaticSlots,
-          `
-              : ''
-          }
         })
         `
-      })
-      .otherwise(
-        (config) => outdent`
-        ${ctx.file.import('memo, splitProps', '../helpers')}
-        ${ctx.file.import('createRecipe, mergeRecipes', './create-recipe')}
-
-        const ${baseName}VariantMap = ${stringify(variantKeyMap)}
-
-        const ${baseName}Fn = /* @__PURE__ */ createRecipe('${config.className}', ${stringify(
-          defaultVariants ?? {},
-        )}, ${stringify(compoundVariants ?? [])}, ${baseName}VariantMap)
-
-        const ${baseName}VariantKeys = Object.keys(${baseName}VariantMap)
-
-        export const ${baseName} = /* @__PURE__ */ Object.assign(memo(${baseName}Fn.recipeFn), {
-          __recipe__: true,
-          __name__: '${baseName}',
-          __getCompoundVariantCss__: ${baseName}Fn.__getCompoundVariantCss__,
-          raw: (props) => props,
-          variantMap: ${baseName}VariantMap,
-          merge(recipe) {
-            return mergeRecipes(this, recipe)
-          },
-          splitVariantProps(props) {
-            return splitProps(props, ${baseName}VariantKeys)
-          },
-          getVariantProps: ${baseName}Fn.getVariantProps,
-        })
-        `,
-      )
 
     return {
       name: dashName,
@@ -271,17 +90,6 @@ export function generateRecipes(ctx: Context, filters?: ArtifactFilters) {
             Recipes.isSlotRecipeConfig(config) ? `Pretty<Record<${upperName}Slot, string>>` : 'string'
           }
           splitVariantProps<Props extends ${upperName}VariantProps>(props: Props): [${upperName}VariantProps, Pretty<DistributiveOmit<Props, keyof ${upperName}VariantProps>>]
-          ${
-            anchorSlotNames.length
-              ? outdent`
-          /** The slots that take variants — every other one is scoped by a class an anchor carries. */
-          ${anchorSlotNames.map((slot) => `${slot}: (props?: ${upperName}VariantProps) => string`).join('\n')}
-          ${slotNames
-            .filter((slot) => !anchorSlotNames.includes(slot))
-            .map((slot) => `${slot}: string`)
-            .join('\n')}`
-              : ''
-          }
         }
 
         ${ctx.file.jsDocComment(description, { deprecated })}

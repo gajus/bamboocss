@@ -47,6 +47,11 @@ describe('recipe type surface', () => {
     false && slotButton.slotsAffectedBy
     // @ts-expect-error rejected by the compiler (runtime-binding)
     false && slotButton.variantMap
+    // Slot accessors read the binding rather than calling it; `slotButton(props).root` compiles.
+    // @ts-expect-error rejected by the compiler (runtime-binding)
+    false && slotButton.root({ visual: 'solid' })
+    // @ts-expect-error rejected by the compiler (runtime-binding)
+    false && slotButton.icon
 
     expect(true).toBe(true)
   })
@@ -59,5 +64,17 @@ describe('recipe type surface', () => {
     expect(typeof button.splitVariantProps).toBe('function')
     expect(typeof slots.splitVariantProps).toBe('function')
     expect(typeof slotButton.splitVariantProps).toBe('function')
+    // A type-level check that the compiled slot spelling is still declared.
+    const selectRoot = () => slotButton({ visual: 'solid' }).root
+    expect(typeof selectRoot).toBe('function')
+  })
+
+  test('carries nothing else at runtime either', () => {
+    // Own enumerable keys of the objects the generated modules export: the callable itself
+    // contributes none, so this is exactly what was assigned onto it.
+    expect(Object.keys(inline)).toEqual(['splitVariantProps'])
+    expect(Object.keys(slots)).toEqual(['splitVariantProps'])
+    expect(Object.keys(button)).toEqual(['splitVariantProps'])
+    expect(Object.keys(slotButton)).toEqual(['splitVariantProps'])
   })
 })

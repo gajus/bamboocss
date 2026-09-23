@@ -12,14 +12,7 @@ const formatArtifact = (artifact: Artifact) => {
 describe('setup-artifacts', () => {
   test('filter by ArtifactId', () => {
     const generator = new Generator(fixtureDefaults)
-    expect(generator.getArtifacts(['create-recipe']).map(formatArtifact)).toMatchInlineSnapshot(`
-      [
-        [
-          "recipes/create-recipe.mjs",
-        ],
-      ]
-    `)
-    expect(generator.getArtifacts(['create-recipe', 'css-fn']).map(formatArtifact)).toMatchInlineSnapshot(`
+    expect(generator.getArtifacts(['css-fn', 'cva']).map(formatArtifact)).toMatchInlineSnapshot(`
       [
         [
           "css/merge-css.mjs",
@@ -28,7 +21,8 @@ describe('setup-artifacts', () => {
           "css/css.d.ts",
         ],
         [
-          "recipes/create-recipe.mjs",
+          "css/cva.mjs",
+          "css/cva.d.ts",
         ],
       ]
     `)
@@ -166,9 +160,6 @@ describe('setup-artifacts', () => {
         [
           "css/cx.mjs",
           "css/cx.d.ts",
-        ],
-        [
-          "recipes/create-recipe.mjs",
         ],
         [
           "recipes/index.mjs",

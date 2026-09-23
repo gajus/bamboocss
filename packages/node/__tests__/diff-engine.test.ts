@@ -334,8 +334,7 @@ describe('DiffEngine affecteds', () => {
       generator = new Generator({ ...conf, hooks: generator.hooks })
     })
 
-    // The key assertion: create-recipe should be in the affected artifacts!
-    expect(affecteds.artifacts.has('create-recipe')).toBe(true)
+    // The recipe artifacts are rebuilt when the first recipe appears.
     expect(affecteds.artifacts.has('recipes')).toBe(true)
     expect(affecteds.artifacts.has('recipes-index')).toBe(true)
 
@@ -346,8 +345,7 @@ describe('DiffEngine affecteds', () => {
       generator = new Generator({ ...conf, hooks: generator.hooks })
     })
 
-    // The key assertion: create-recipe should be in the affected artifacts when removing all recipes!
-    expect(affectedsAfterReset.artifacts.has('create-recipe')).toBe(true)
+    // ...and again when the last one goes, so the barrel stops exporting it.
     expect(affectedsAfterReset.artifacts.has('recipes')).toBe(true)
     expect(affectedsAfterReset.artifacts.has('recipes-index')).toBe(true)
   })
@@ -689,7 +687,6 @@ describe('DiffEngine affecteds', () => {
       Set {
         "types",
         "css-fn",
-        "create-recipe",
       }
     `)
     expect(affecteds.diffs).toMatchInlineSnapshot(`

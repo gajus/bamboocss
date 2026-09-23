@@ -291,211 +291,16 @@ A part rendered through a portal needs nothing extra: the record is plain string
 `data-slot` is not required, but generated class names are opaque atoms carrying no slot identity, so it is what
 application CSS or a test selects a part by — see [Targeting slots](#targeting-slots).
 
-## Legacy named-recipe scoping
+## Scoping and `scopeRoots`
 
-<Callout type="warning">
-  No supported Bamboo integration emits the model documented in this section. It explains `@scope` found in output from
-  older extraction-only releases; do not design new components around it. Vite returns complete shared atom strings for
-  each selected slot, and `scopeRoots` has no effect on compiled output.
-</Callout>
+Older extraction-only releases scoped a slot's variant styles with `@scope` rules anchored at an enclosing slot, and
+exposed each slot on the recipe — `checkbox.root({ size })`, `checkbox.control` — along with `auditSlotScopes` to report
+slots rendered outside their anchor. None of that exists in a compiled build. Vite returns complete atoms for every
+selected slot, emits no `@scope`, and does not read `scopeRoots`, so no slot depends on where it is rendered.
 
-Older extraction-only output applied the behavior below to both `sva()` and [config slot recipes](#config-slot-recipe).
-
-### Only the root takes variants
-
-A recipe that declares a slot named `root` is scoped: only the root takes variants, and every other slot is a constant
-string.
-
-```jsx
-// a config slot recipe exposes each slot on the recipe
-checkbox.root({ size: 'md' }) // 'checkbox__root checkbox__root--size_md'
-checkbox.control //              'checkbox__control'  — a property, not a call
-
-// an inline sva returns them all from one call
-const classes = checkbox({ size: 'md' })
-classes.root //    'checkbox__root checkbox__root--size_md'
-classes.control // 'checkbox__control'
-```
-
-That is possible because a non-root slot's variant styles are not emitted as a class the slot has to carry. They are
-emitted as rules scoped by the class the root already carries:
-
-```css
-/* not this — the control would have to be told which size it is */
-.checkbox__control--size_md {
-  width: 10;
-}
-
-/* but this — the root already says so */
-@scope (.checkbox__root--size_md) to (.checkbox__root) {
-  .checkbox__control {
-    width: 10;
-  }
-}
-```
-
-So a slot deep inside a tree needs nothing delivered to it. No provider, no context, no wrapper per slot — and it works
-the same in React, Vue, Solid or a plain template.
-
-`to (.checkbox__root)` bounds the scope at the next nested instance, so an outer `size="md"` does not reach the control
-of a checkbox nested inside it.
-
-Precedence is unaffected. The scoped selector is more specific than the slot's base rule, but specificity never crosses
-a [cascade layer](/docs/concepts/cascade-layers) — a consumer's `css()` output sits in `utilities` and still wins.
-
-If the enclosing slot is called something else, name it with `scopeRoots`:
-
-```ts
-defineSlotRecipe({
-  className: 'menu',
-  slots: ['trigger', 'positioner', 'item'],
-  scopeRoots: ['positioner'],
-  variants: { size: { sm: { item: { padding: '2' } } } },
-})
-```
-
-### Components that span a portal
-
-A portal is a real break in the tree, and no CSS mechanism crosses one. A `<Select>` occupies **two** disjoint subtrees
-— the trigger side under `root`, the listbox side under a portaled `positioner` — and a variant writes styles into both.
-One anchor can only ever reach one of them, and the half it misses gets variant rules that can never match. The base
-styles still apply, so the component renders _nearly_ right, which is harder to notice than a total failure.
-
-Name both:
-
-```ts
-defineSlotRecipe({
-  className: 'select',
-  slots: ['root', 'trigger', 'positioner', 'content', 'item'],
-  scopeRoots: ['root', 'positioner'],
-  variants: { size: { lg: { trigger: { h: '11' }, item: { px: '3' } } } },
-})
-```
-
-Each named slot takes variant props; every other slot stays a constant:
-
-```jsx
-<div className={select.root({ size })}>             {/* anchor    — takes the variant */}
-  <button className={select.trigger} />             {/* constant  — reached by the scope */}
-</div>
-<Portal>
-  <div className={select.positioner({ size })}>     {/* anchor    — takes the variant */}
-    <div className={select.item} />                 {/* constant  — reached by the scope */}
-  </div>
-</Portal>
-```
-
-### The second anchor still needs the variant
-
-An anchor is callable, and that is not a detail you can ignore: **the variant has to reach every anchor.** Written flat,
-as above, `size` is in scope at both. In a real compound component it is not — the consumer authors `Select.Positioner`
-as a sibling of `Select.Root`, so it never sees the props the root was given:
-
-```jsx
-const Select = ({ size, children }) => <div className={select.root({ size })}>{children}</div>
-
-Select.Positioner = ({ children }) => (
-  <Portal>
-    <div className={select.positioner({ size })}>{children}</div> {/* ✗ `size` is not in scope here */}
-  </Portal>
-)
-```
-
-So a portaled component keeps **one** context — for its anchors, not for its slots:
-
-```jsx
-const SizeContext = createContext('md')
-
-const Select = ({ size = 'md', children }) => (
-  <SizeContext.Provider value={size}>
-    <div className={select.root({ size })}>{children}</div>
-  </SizeContext.Provider>
-)
-
-Select.Positioner = ({ children }) => (
-  <Portal>
-    <div className={select.positioner({ size: useContext(SizeContext) })}>{children}</div>
-  </Portal>
-)
-
-// every other slot needs nothing
-Select.Trigger = (props) => <button className={select.trigger} {...props} />
-Select.Item = (props) => <div className={select.item} {...props} />
-```
-
-That is the whole cost: one delivery per anchor, and the count is the number of subtrees the component occupies — two —
-rather than the number of slots, which for a real `select` is fifteen. A component with no portal has one anchor, which
-is the element receiving the props already, so it needs no context at all.
-
-You never describe the DOM. The build emits each non-anchor slot's variant rules under **every** anchor, and only the
-anchor that is genuinely an ancestor matches at runtime:
-
-```css
-@scope (.select__root--size_lg) to (.select__root) {
-  .select__trigger {
-    height: 11;
-  } /* matches */
-  .select__item {
-    padding-inline: 3;
-  } /* never matches — item is not under root */
-}
-@scope (.select__positioner--size_lg) to (.select__positioner) {
-  .select__trigger {
-    height: 11;
-  } /* never matches */
-  .select__item {
-    padding-inline: 3;
-  } /* matches */
-}
-```
-
-Read `scopeRoots` as a **cost control**, not a description of the tree. Emitting every slot's variant rules under every
-slot would be correct with nothing declared at all — it is just quadratic in slot count. Naming the enclosing slots
-prunes that to one copy per anchor. On a 15-slot recipe with two anchors that is +84% raw CSS and +24% gzipped against a
-single anchor, and it needs no runtime channel: the alternative, giving those eight slots their own variant classes,
-gzips **larger** and still has to deliver them.
-
-If one anchor is nested inside another and both match a slot, `@scope` picks by proximity — the nearer anchor wins.
-
-A slot under _no_ anchor is still unreachable, and nothing at build time can detect that; reachability is a fact about
-the DOM.
-
-### Catching an unreachable slot in development
-
-That last failure is quiet — the slot keeps its base styles, so it renders _nearly_ right. `auditSlotScopes` turns it
-into a console warning naming the slot:
-
-```js
-import { auditSlotScopes } from '../styled-system/css'
-import { select } from '../styled-system/recipes'
-
-if (process.env.NODE_ENV !== 'production') {
-  auditSlotScopes([select], { observe: true })
-}
-```
-
-It looks for elements carrying a scoped slot's class that have no anchor above them, and warns:
-
-```text
-[bamboo] select: the `item` slot is rendered outside every anchor (root), so its variant
-styles cannot reach it. Add the enclosing slot to `scopeRoots`, or deliver the variant to
-this slot by hand.
-```
-
-`observe: true` re-checks as the DOM changes, which matters because portaled content mounts after the first sweep — and
-that is the case this exists to catch. It returns a function that stops observing.
-
-Keep the call behind a `NODE_ENV` check so your bundler drops both it and the function from production. A recipe with
-`scopeRoots: []` is never reported: nothing is scoped, so no slot depends on where it is rendered.
-
-### Turning scoping off
-
-A recipe whose slots are all siblings has no ancestor to scope by, and gets a variant class per slot automatically. Ask
-for that explicitly with an empty list:
-
-```ts
-scopeRoots: [] // every slot keeps its own variant class, and stays callable
-```
+Select slots from the call instead: `checkbox({ size }).control` compiles, while `checkbox.control` reads the recipe
+binding and fails the build with `runtime-binding`. `scopeRoots` is still accepted in a recipe config so existing
+configs keep loading.
 
 ## Config Slot Recipe
 
@@ -508,8 +313,7 @@ The config slot recipe takes the following additional properties:
 - `jsx`: An array of JSX components that use the recipe. Defaults to the uppercase version of the recipe name
 - `description`: An optional description of the recipe (used in the js-doc comments)
 
-Extraction-only output also accepts `scopeRoots` for its named-rule scoping model; Vite ignores it because selected slot
-styles are returned directly as atoms.
+`scopeRoots` is accepted and ignored — see [Scoping and `scopeRoots`](#scoping-and-scoperoots).
 
 ### Defining the recipe
 

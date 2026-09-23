@@ -172,34 +172,14 @@ export interface SlotRecipeDefinition<
    */
   slots: S[] | Readonly<S[]>
   /**
-   * The slots that enclose other slots in extraction-only named-rule output.
+   * Accepted and ignored.
    *
-   * The Vite compiler returns selected atoms directly for every slot and ignores this field.
-   * In extraction-only output, a slot recipe's variants are chosen once at the top, but the slots that react to them
-   * are authored by the consumer somewhere below. Naming the enclosing slots lets the build
-   * emit their variant styles as rules scoped by a class those slots already carry, so
-   * nothing has to be delivered to a slot at runtime and every other slot's class is a
-   * constant.
+   * Older extraction-only releases scoped a slot's variant styles with `@scope` rules anchored
+   * at the slots named here. The Vite compiler returns complete atoms for every selected slot
+   * and emits no `@scope`, so this has no effect on output; it is still accepted so existing
+   * configs keep loading.
    *
-   * A list, because a portal is a real discontinuity in the tree and no CSS mechanism
-   * crosses one. A `<Select>` occupies two disjoint subtrees — the trigger side under
-   * `root`, the listbox side under a portaled `positioner` — and a variant writes styles
-   * into both. One anchor can only ever reach one of them.
-   *
-   * ```ts
-   * scopeRoots: ['root', 'positioner']
-   * ```
-   *
-   * Each named slot takes variant props; every other slot's class is a constant. The build
-   * emits each non-anchor slot's variant rules under *every* anchor, and only the anchor
-   * that is genuinely an ancestor matches — so the DOM shape never has to be declared.
-   *
-   * Defaults to `['root']` when a slot by that name exists. Set `[]` to turn scoping off
-   * and give every slot a variant class of its own, which is what a recipe whose slots are
-   * siblings wants.
-   *
-   * A slot under *no* anchor is still unreachable, and nothing at build time can detect
-   * that — reachability is a fact about the DOM.
+   * @deprecated Has no effect on compiled output.
    */
   scopeRoots?: S[] | Readonly<S[]>
   /**

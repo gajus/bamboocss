@@ -2,32 +2,18 @@ import { createContext } from '@bamboocss/fixture'
 import { cloneStyles, mergeProps } from '@bamboocss/shared'
 import { describe, expect, test } from 'vitest'
 import { generateCssFn } from '../src/artifacts/js/css-fn'
-import { generateCvaFn } from '../src/artifacts/js/cva'
 
 /**
- * Every `raw()` helper hands its result to user code while the merged object it
- * came from stays in a cache, so each one has to return something independent.
+ * `css.raw()` hands its result to user code while the merged object it came from
+ * stays in a cache, so it has to return something independent. (It was one of three:
+ * `cva.raw` and `sva.raw` went with the runtime recipe engine.)
  * These assert the emitted runtime keeps that guard — the failure it prevents is
  * silent, so nothing else would notice it being dropped.
  */
-describe('raw() helpers return independent objects', () => {
+describe('css.raw() returns an independent object', () => {
   test('css.raw copies the merged result', () => {
     const js = generateCssFn(createContext()).js
     expect(js).toContain('css.raw = (...styles) => cloneStyles(mergeCss(...styles))')
-  })
-
-  test('cva.raw copies the resolved result', () => {
-    const js = generateCvaFn(createContext()).js
-    expect(js).toContain('raw: (...args) => cloneStyles(resolveVariants(...args))')
-  })
-
-  test('the resolve cva.raw copies from is the memoized one', () => {
-    const js = generateCvaFn(createContext()).js
-
-    // Two separate reasons the copy has to be there, and this is the second: `resolve` ends
-    // in `mergeCss`, which was already cached, and now `resolve` itself is cached too. So the
-    // object `raw` starts from is shared twice over.
-    expect(js).toContain('const resolveVariants = memo(resolve)')
   })
 
   test('mergeProps does not copy, so the hot merge path stays cheap', () => {
@@ -38,8 +24,8 @@ describe('raw() helpers return independent objects', () => {
   })
 
   test('the copy helper they rely on is deep', () => {
-    // sva.raw forwards to cva.raw, so all three depend on this being a real copy
-    // rather than a shared reference to a nested style object.
+    // css.raw depends on this being a real copy rather than a shared reference to a
+    // nested style object.
     const source: Record<string, any> = { _hover: { color: 'red.500' }, padding: ['1', '2'] }
     const copy: any = cloneStyles(source)
 

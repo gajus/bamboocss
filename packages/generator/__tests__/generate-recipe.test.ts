@@ -1,13 +1,8 @@
 import type { LoadConfigResult } from '@bamboocss/types'
 import { describe, expect, test } from 'vitest'
 import { Generator } from '../src'
-import { generateCreateRecipe, generateRecipes } from '../src/artifacts/js/recipe'
+import { generateRecipes } from '../src/artifacts/js/recipe'
 import { fixtureDefaults } from '@bamboocss/fixture'
-
-const createRecipeJs = (config: LoadConfigResult) => {
-  const generator = new Generator(config)
-  return generateCreateRecipe(generator)
-}
 
 const recipeJs = (config: LoadConfigResult) => {
   const generator = new Generator(config)
@@ -16,58 +11,6 @@ const recipeJs = (config: LoadConfigResult) => {
 
 describe('generate recipes', () => {
   test('should ', () => {
-    expect(createRecipeJs(fixtureDefaults)).toMatchInlineSnapshot(`
-      {
-        "dts": "",
-        "js": "import { compact, splitProps, uniq, uncompiledStyle } from '../helpers.mjs';
-
-      const withPrefix = (className) => className
-      export const formatRecipeClass = withPrefix
-
-      export const createRecipe = (name, defaultVariants, _compoundVariants, _variantMap) => {
-       const getVariantProps = (variants) => {
-         return {
-           [name]: '__ignore__',
-           ...defaultVariants,
-           ...compact(variants),
-         };
-       };
-
-        const recipeFn = (_variants) => uncompiledStyle(name)
-
-         return {
-           recipeFn,
-           getVariantProps,
-           __getCompoundVariantCss__: (_variants) => uncompiledStyle(name),
-         }
-      }
-
-      export const mergeRecipes = (recipeA, recipeB) => {
-       if (recipeA && !recipeB) return recipeA
-       if (!recipeA && recipeB) return recipeB
-
-       const recipeFn = (..._args) => uncompiledStyle(recipeA.__name__ || 'recipe')
-       const variantKeys = uniq(Object.keys(recipeA.variantMap), Object.keys(recipeB.variantMap))
-       const variantMap = variantKeys.reduce((acc, key) => {
-         acc[key] = uniq(recipeA.variantMap[key], recipeB.variantMap[key])
-         return acc
-       }, {})
-
-       return Object.assign(recipeFn, {
-         __recipe__: true,
-         __name__: \`\${recipeA.__name__} \${recipeB.__name__}\`,
-         raw: (props) => props,
-         variantMap,
-         splitVariantProps(props) {
-           return splitProps(props, variantKeys)
-         },
-       })
-       }
-      ",
-        "name": "create-recipe",
-      }
-    `)
-
     expect(recipeJs(fixtureDefaults)).toMatchInlineSnapshot(`
       [
         {
@@ -89,38 +32,18 @@ describe('generate recipes', () => {
         __type: TextStyleVariantProps
         (props?: TextStyleVariantProps): string
         splitVariantProps<Props extends TextStyleVariantProps>(props: Props): [TextStyleVariantProps, Pretty<DistributiveOmit<Props, keyof TextStyleVariantProps>>]
-        
       }
 
 
       export declare const textStyle: TextStyleRecipe",
-          "js": "import { memo, splitProps } from '../helpers.mjs';
-      import { createRecipe, mergeRecipes } from './create-recipe.mjs';
+          "js": "import { splitProps, uncompiledStyle } from '../helpers.mjs';
 
-      const textStyleVariantMap = {
-        "size": [
-          "h1",
-          "h2"
-        ]
-      }
+      const textStyleVariantKeys = ["size"]
 
-      const textStyleFn = /* @__PURE__ */ createRecipe('textStyle', {}, [], textStyleVariantMap)
-
-      const textStyleVariantKeys = Object.keys(textStyleVariantMap)
-
-      export const textStyle = /* @__PURE__ */ Object.assign(memo(textStyleFn.recipeFn), {
-        __recipe__: true,
-        __name__: 'textStyle',
-        __getCompoundVariantCss__: textStyleFn.__getCompoundVariantCss__,
-        raw: (props) => props,
-        variantMap: textStyleVariantMap,
-        merge(recipe) {
-          return mergeRecipes(this, recipe)
-        },
+      export const textStyle = /* @__PURE__ */ Object.assign((_props) => uncompiledStyle("textStyle"), {
         splitVariantProps(props) {
           return splitProps(props, textStyleVariantKeys)
         },
-        getVariantProps: textStyleFn.getVariantProps,
       })",
           "name": "text-style",
         },
@@ -143,33 +66,18 @@ describe('generate recipes', () => {
         __type: TooltipStyleVariantProps
         (props?: TooltipStyleVariantProps): string
         splitVariantProps<Props extends TooltipStyleVariantProps>(props: Props): [TooltipStyleVariantProps, Pretty<DistributiveOmit<Props, keyof TooltipStyleVariantProps>>]
-        
       }
 
 
       export declare const tooltipStyle: TooltipStyleRecipe",
-          "js": "import { memo, splitProps } from '../helpers.mjs';
-      import { createRecipe, mergeRecipes } from './create-recipe.mjs';
+          "js": "import { splitProps, uncompiledStyle } from '../helpers.mjs';
 
-      const tooltipStyleVariantMap = {}
+      const tooltipStyleVariantKeys = []
 
-      const tooltipStyleFn = /* @__PURE__ */ createRecipe('tooltipStyle', {}, [], tooltipStyleVariantMap)
-
-      const tooltipStyleVariantKeys = Object.keys(tooltipStyleVariantMap)
-
-      export const tooltipStyle = /* @__PURE__ */ Object.assign(memo(tooltipStyleFn.recipeFn), {
-        __recipe__: true,
-        __name__: 'tooltipStyle',
-        __getCompoundVariantCss__: tooltipStyleFn.__getCompoundVariantCss__,
-        raw: (props) => props,
-        variantMap: tooltipStyleVariantMap,
-        merge(recipe) {
-          return mergeRecipes(this, recipe)
-        },
+      export const tooltipStyle = /* @__PURE__ */ Object.assign((_props) => uncompiledStyle("tooltipStyle"), {
         splitVariantProps(props) {
           return splitProps(props, tooltipStyleVariantKeys)
         },
-        getVariantProps: tooltipStyleFn.getVariantProps,
       })",
           "name": "tooltip-style",
         },
@@ -192,37 +100,18 @@ describe('generate recipes', () => {
         __type: CardStyleVariantProps
         (props?: CardStyleVariantProps): string
         splitVariantProps<Props extends CardStyleVariantProps>(props: Props): [CardStyleVariantProps, Pretty<DistributiveOmit<Props, keyof CardStyleVariantProps>>]
-        
       }
 
 
       export declare const cardStyle: CardStyleRecipe",
-          "js": "import { memo, splitProps } from '../helpers.mjs';
-      import { createRecipe, mergeRecipes } from './create-recipe.mjs';
+          "js": "import { splitProps, uncompiledStyle } from '../helpers.mjs';
 
-      const cardStyleVariantMap = {
-        "rounded": [
-          "true"
-        ]
-      }
+      const cardStyleVariantKeys = ["rounded"]
 
-      const cardStyleFn = /* @__PURE__ */ createRecipe('card', {}, [], cardStyleVariantMap)
-
-      const cardStyleVariantKeys = Object.keys(cardStyleVariantMap)
-
-      export const cardStyle = /* @__PURE__ */ Object.assign(memo(cardStyleFn.recipeFn), {
-        __recipe__: true,
-        __name__: 'cardStyle',
-        __getCompoundVariantCss__: cardStyleFn.__getCompoundVariantCss__,
-        raw: (props) => props,
-        variantMap: cardStyleVariantMap,
-        merge(recipe) {
-          return mergeRecipes(this, recipe)
-        },
+      export const cardStyle = /* @__PURE__ */ Object.assign((_props) => uncompiledStyle("card"), {
         splitVariantProps(props) {
           return splitProps(props, cardStyleVariantKeys)
         },
-        getVariantProps: cardStyleFn.getVariantProps,
       })",
           "name": "card-style",
         },
@@ -252,45 +141,18 @@ describe('generate recipes', () => {
         __type: ButtonStyleVariantProps
         (props?: ButtonStyleVariantProps): string
         splitVariantProps<Props extends ButtonStyleVariantProps>(props: Props): [ButtonStyleVariantProps, Pretty<DistributiveOmit<Props, keyof ButtonStyleVariantProps>>]
-        
       }
 
 
       export declare const buttonStyle: ButtonStyleRecipe",
-          "js": "import { memo, splitProps } from '../helpers.mjs';
-      import { createRecipe, mergeRecipes } from './create-recipe.mjs';
+          "js": "import { splitProps, uncompiledStyle } from '../helpers.mjs';
 
-      const buttonStyleVariantMap = {
-        "size": [
-          "sm",
-          "md"
-        ],
-        "variant": [
-          "solid",
-          "outline"
-        ]
-      }
+      const buttonStyleVariantKeys = ["size","variant"]
 
-      const buttonStyleFn = /* @__PURE__ */ createRecipe('buttonStyle', {
-        "size": "md",
-        "variant": "solid"
-      }, [], buttonStyleVariantMap)
-
-      const buttonStyleVariantKeys = Object.keys(buttonStyleVariantMap)
-
-      export const buttonStyle = /* @__PURE__ */ Object.assign(memo(buttonStyleFn.recipeFn), {
-        __recipe__: true,
-        __name__: 'buttonStyle',
-        __getCompoundVariantCss__: buttonStyleFn.__getCompoundVariantCss__,
-        raw: (props) => props,
-        variantMap: buttonStyleVariantMap,
-        merge(recipe) {
-          return mergeRecipes(this, recipe)
-        },
+      export const buttonStyle = /* @__PURE__ */ Object.assign((_props) => uncompiledStyle("buttonStyle"), {
         splitVariantProps(props) {
           return splitProps(props, buttonStyleVariantKeys)
         },
-        getVariantProps: buttonStyleFn.getVariantProps,
       })",
           "name": "button-style",
         },
@@ -316,96 +178,18 @@ describe('generate recipes', () => {
         __type: CheckboxVariantProps
         (props?: CheckboxVariantProps): Pretty<Record<CheckboxSlot, string>>
         splitVariantProps<Props extends CheckboxVariantProps>(props: Props): [CheckboxVariantProps, Pretty<DistributiveOmit<Props, keyof CheckboxVariantProps>>]
-        /** The slots that take variants — every other one is scoped by a class an anchor carries. */
-      root: (props?: CheckboxVariantProps) => string
-      control: string
-      label: string
       }
 
 
       export declare const checkbox: CheckboxRecipe",
-          "js": "import { compact, getSlotCompoundVariant, memo, splitProps } from '../helpers.mjs';
-      import { createRecipe, formatRecipeClass } from './create-recipe.mjs';
+          "js": "import { splitProps, uncompiledStyle } from '../helpers.mjs';
 
-      const checkboxDefaultVariants = {
-        "size": "sm"
-      }
-      const checkboxCompoundVariants = []
+      const checkboxVariantKeys = ["size"]
 
-      // Formatted, not raw. A scoped slot's class is a constant that never passes through
-      // \`createCss\`, so \`hash.className\` and \`prefix\` have to be applied here to match
-      // the rule the stylesheet emits.
-      const checkboxSlotNames = [
-        [
-          "root",
-          "checkbox__root"
-        ],
-        [
-          "control",
-          "checkbox__control"
-        ],
-        [
-          "label",
-          "checkbox__label"
-        ]
-      ].map(
-        ([slotName, className]) => [slotName, formatRecipeClass(className)],
-      )
-      /**
-       * Only the anchors take variants: \`checkbox.root\`.
-       * Every other slot's variant styles are emitted as rules scoped by a class an anchor
-       * carries, so that slot's class is a constant and nothing has to reach it at runtime.
-       */
-      const checkboxAnchors = ["root"]
-      const checkboxAnchorFns = /* @__PURE__ */ checkboxAnchors.map((slotName) => [slotName, createRecipe(\`checkbox__\${slotName}\`, checkboxDefaultVariants, getSlotCompoundVariant(checkboxCompoundVariants, slotName), {
-        "size": [
-          "sm",
-          "md",
-          "lg"
-        ]
-      })])
-      const checkboxStaticSlots = /* @__PURE__ */ Object.fromEntries(
-        checkboxSlotNames.filter(([slotName]) => !checkboxAnchors.includes(slotName)),
-      )
-
-      const checkboxFn = memo((props = {}) => ({
-        ...checkboxStaticSlots,
-        ...Object.fromEntries(checkboxAnchorFns.map(([slotName, anchorFn]) => [slotName, anchorFn.recipeFn(props)])),
-      }))
-
-      const checkboxVariantKeys = [
-        "size"
-      ]
-      const getVariantProps = (variants) => ({ ...checkboxDefaultVariants, ...compact(variants) })
-
-      export const checkbox = /* @__PURE__ */ Object.assign(checkboxFn, {
-        __recipe__: false,
-        __name__: 'checkbox',
-        raw: (props) => props,
-        /** Each slot's constant class, for targeting a slot in the DOM. */
-        classNameMap: /* @__PURE__ */ Object.fromEntries(checkboxSlotNames),
-        /** The slots that enclose other slots, and so anchor their variant rules. */
-        scopeRoots: ["root"],
-        variantMap: {
-        "size": [
-          "sm",
-          "md",
-          "lg"
-        ]
-      },
-        /** Which slots each variant actually reaches, for a slot a scope cannot get to. */
-        slotsAffectedBy: {
-        "size": [
-          "control",
-          "label"
-        ]
-      },
+      export const checkbox = /* @__PURE__ */ Object.assign((_props) => uncompiledStyle("checkbox"), {
         splitVariantProps(props) {
           return splitProps(props, checkboxVariantKeys)
         },
-        getVariantProps,
-        ...Object.fromEntries(checkboxAnchorFns.map(([slotName, anchorFn]) => [slotName, anchorFn.recipeFn])),
-      ...checkboxStaticSlots,
       })",
           "name": "checkbox",
         },
@@ -429,104 +213,18 @@ describe('generate recipes', () => {
         __type: BadgeVariantProps
         (props?: BadgeVariantProps): Pretty<Record<BadgeSlot, string>>
         splitVariantProps<Props extends BadgeVariantProps>(props: Props): [BadgeVariantProps, Pretty<DistributiveOmit<Props, keyof BadgeVariantProps>>]
-        
       }
 
 
       export declare const badge: BadgeRecipe",
-          "js": "import { compact, getSlotCompoundVariant, memo, splitProps } from '../helpers.mjs';
-      import { createRecipe, formatRecipeClass } from './create-recipe.mjs';
+          "js": "import { splitProps, uncompiledStyle } from '../helpers.mjs';
 
-      const badgeDefaultVariants = {}
-      const badgeCompoundVariants = [
-        {
-          "raised": true,
-          "size": "sm",
-          "css": {
-            "title": {
-              "color": "ButtonHighlight"
-            }
-          }
-        }
-      ]
+      const badgeVariantKeys = ["size","raised"]
 
-      // Formatted, not raw. A scoped slot's class is a constant that never passes through
-      // \`createCss\`, so \`hash.className\` and \`prefix\` have to be applied here to match
-      // the rule the stylesheet emits.
-      const badgeSlotNames = [
-        [
-          "title",
-          "badge__title"
-        ],
-        [
-          "body",
-          "badge__body"
-        ]
-      ].map(
-        ([slotName, className]) => [slotName, formatRecipeClass(className)],
-      )
-      /**
-       * Raw, not the formatted name. \`createRecipe\` routes what it is given through
-       * \`createCss\`, which applies \`hash.className\` and \`prefix.className\` itself — so
-       * passing the already formatted \`slotKey\` applied both a second time. The runtime
-       * asked for \`toHash(toHash(name))\` while the stylesheet emitted \`toHash(name)\`, and
-       * every slot on such a recipe rendered unstyled.
-       *
-       * Invisible only when neither \`hash\` nor \`prefix\` is set, where both applications
-       * are identities. A prefixed build was equally broken — \`bam-bam-menu__trigger\`
-       * against a stylesheet emitting \`.bam-menu__trigger\` — which is easy to miss, since
-       * the obvious reading is that this is a hashing problem.
-       */
-      const badgeSlotFns = /* @__PURE__ */ badgeSlotNames.map(([slotName]) => [slotName, createRecipe(\`badge__\${slotName}\`, badgeDefaultVariants, getSlotCompoundVariant(badgeCompoundVariants, slotName), {
-        "size": [
-          "sm"
-        ],
-        "raised": [
-          "true"
-        ]
-      })])
-
-      const badgeFn = memo((props = {}) => {
-        return Object.fromEntries(badgeSlotFns.map(([slotName, slotFn]) => [slotName, slotFn.recipeFn(props)]))
-      })
-
-      const badgeVariantKeys = [
-        "size",
-        "raised"
-      ]
-      const getVariantProps = (variants) => ({ ...badgeDefaultVariants, ...compact(variants) })
-
-      export const badge = /* @__PURE__ */ Object.assign(badgeFn, {
-        __recipe__: false,
-        __name__: 'badge',
-        raw: (props) => props,
-        /** Each slot's constant class, for targeting a slot in the DOM. */
-        classNameMap: /* @__PURE__ */ Object.fromEntries(badgeSlotNames),
-        /** The slots that enclose other slots, and so anchor their variant rules. */
-        scopeRoots: [],
-        variantMap: {
-        "size": [
-          "sm"
-        ],
-        "raised": [
-          "true"
-        ]
-      },
-        /** Which slots each variant actually reaches, for a slot a scope cannot get to. */
-        slotsAffectedBy: {
-        "size": [
-          "title",
-          "body"
-        ],
-        "raised": [
-          "title"
-        ]
-      },
+      export const badge = /* @__PURE__ */ Object.assign((_props) => uncompiledStyle("badge"), {
         splitVariantProps(props) {
           return splitProps(props, badgeVariantKeys)
         },
-        getVariantProps,
-        
       })",
           "name": "badge",
         },

@@ -5,28 +5,26 @@ import { pathToFileURL } from 'node:url'
 import { afterAll, describe, expect, test } from 'vitest'
 
 /**
- * The class a slot recipe hands the DOM has to be a class the stylesheet emits a rule for.
+ * The generated recipe modules load, and every recipe they export throws until compiled — in
+ * every naming mode, and for slot recipes with and without a `root` anchor.
  *
- * `createRecipe` routes its `name` through `createCss`, which applies `hash.className` and
- * `prefix.className` itself. A recipe with no anchors passed the *already formatted* slot key
- * in, so both were applied twice while `cssgen` applied them once. Six recipes rendered
- * completely unstyled.
+ * Loaded from disk rather than read as text, so an import that does not resolve fails here:
+ * the runtime is now a callable plus `splitVariantProps`, and the thing most likely to break
+ * it is a helper it imports going missing from `helpers.mjs`.
  *
- * It is invisible only when neither `hash` nor `prefix` is set, where both applications are
- * identities — which is why the matrix below varies both rather than just `hash`.
- *
- * `classNameMap` is read from the generated artifact. Calling the recipe throws: class
- * strings come from the Vite compiler.
+ * This used to be a class-parity check — `classNameMap` against the emitted stylesheet, after a
+ * bug formatted anchor-less slot classes twice. The runtime no longer carries a class of its own,
+ * so there is nothing left for it to disagree about; `checkNamingAgreement` covers the build.
  */
 
 const RECIPES = {
-  /** No `root` slot, so `getScopeRoots` returns [] — the branch that was broken. */
+  /** No `root` slot. */
   menu: {
     className: 'menu',
     slots: ['trigger', 'positioner', 'content'],
     base: { trigger: { display: 'flex' }, positioner: { zIndex: '1' }, content: { color: 'red.300' } },
   },
-  /** Declares `root`, so it anchors — the branch that was already correct. */
+  /** Declares `root`. */
   combobox: {
     className: 'combobox',
     slots: ['root', 'control', 'content'],
@@ -43,22 +41,6 @@ const build = (options: { hash?: boolean; prefix?: string }) =>
   } as any) as any
 
 /**
- * Every class the emitted stylesheet carries a rule for.
- *
- * A class cannot begin with an unescaped digit, so requiring that of the first character is
- * what stops `0.5rem` inside a declaration being read as a class called `5rem`.
- */
-const CLASS_SELECTOR = /\.((?:\\.|[a-zA-Z_-])(?:\\.|[\w-])*)/g
-
-const emittedClasses = (ctx: any) => {
-  const sheet = ctx.createSheet()
-  ctx.appendLayerParams(sheet)
-  ctx.appendCssOfType('static', sheet)
-  const css = ctx.getCss(sheet)
-  return new Set([...css.matchAll(CLASS_SELECTOR)].map((m) => m[1].replaceAll('\\', '')))
-}
-
-/**
  * Write the generated system to disk and import it, so the runtime answers for itself.
  *
  * Artifacts carry their own `dir`, already including the outdir; the few without one — the
@@ -69,7 +51,7 @@ const written: string[] = []
 const loadRuntime = async (ctx: any) => {
   // Inside the project: vitest resolves a dynamic import through vite, which will not load a
   // file outside the root however it is spelled.
-  const root = mkdtempSync(join(process.cwd(), 'node_modules', '.bamboo-parity-'))
+  const root = mkdtempSync(join(process.cwd(), 'node_modules', '.bamboo-recipe-runtime-'))
   written.push(root)
   for (const artifact of ctx.getArtifacts() ?? []) {
     for (const file of artifact.files ?? []) {
@@ -92,31 +74,17 @@ const MATRIX: [string, { hash?: boolean; prefix?: string }][] = [
   ['hashed and prefixed', { hash: true, prefix: 'bam' }],
 ]
 
-describe('slot recipe class parity', () => {
-  /**
-   * The invariant, with the runtime as its own oracle: every class the generated recipe
-   * returns has to be a class the stylesheet emits.
-   */
-  test.each(MATRIX)('calling a %s slot recipe throws until compiled', async (_label, options) => {
+describe('generated recipe runtime', () => {
+  test.each(MATRIX)('loads, and a slot recipe throws until compiled, in a %s build', async (_label, options) => {
     const ctx = build(options)
     const runtime = await loadRuntime(ctx)
     expect(() => runtime.menu({})).toThrow('was not compiled')
     expect(() => runtime.combobox({})).toThrow('was not compiled')
   })
 
-  /** `classNameMap` is public API and built from the same array the fix re-destructures. */
-  test.each(MATRIX)('classNameMap agrees with the stylesheet in a %s build', async (_label, options) => {
+  test.each(MATRIX)('splitVariantProps still works in a %s build', async (_label, options) => {
     const ctx = build(options)
-    const emitted = emittedClasses(ctx)
     const runtime = await loadRuntime(ctx)
-
-    const missing: string[] = []
-    for (const name of Object.keys(RECIPES)) {
-      for (const [slot, className] of Object.entries(runtime[name]?.classNameMap ?? {})) {
-        if (!emitted.has(String(className))) missing.push(`${name}.${slot} -> ${className}`)
-      }
-    }
-
-    expect(missing).toEqual([])
+    expect(runtime.menu.splitVariantProps({ id: 'x' })).toEqual([{}, { id: 'x' }])
   })
 })

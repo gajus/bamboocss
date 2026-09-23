@@ -23,10 +23,7 @@ function runOptimize(code: string | Root | Document, css: () => string, options:
       minify: options.minify,
       browserslist: options.browserslist,
     })
-    // Note that a hook merged through `mergeHooks` returns the css it was handed rather than
-    // `undefined` when every registered implementation declines, so this branch is what runs
-    // for any project with a plugin that defines `css:optimize` at all. Longstanding, and
-    // unrelated to the tree/string split here.
+    // `undefined` means every registered implementation declined, which falls through to postcss.
     if (result !== undefined) {
       return result
     }

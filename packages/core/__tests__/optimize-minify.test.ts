@@ -100,6 +100,21 @@ describe('optimize (minify) is independent of the ambient browserslist', () => {
  * `Stylesheet.toCss` reaches the consuming variant (`optimizeCssRoot`) instead, on a clone it
  * owns.
  */
+describe('css:optimize', () => {
+  const input = `.x{color:red} .y{color:red}`
+
+  test('a hook that declines falls through to postcss', () => {
+    const hooks = { 'css:optimize': () => undefined }
+    expect(optimizeCss(input, { hooks })).toBe(optimizeCss(input))
+    expect(optimizeCss(input)).not.toBe(input)
+  })
+
+  test('a hook that answers replaces postcss', () => {
+    const hooks = { 'css:optimize': () => '/* hook */' }
+    expect(optimizeCss(input, { hooks })).toBe('/* hook */')
+  })
+})
+
 describe('optimizeCss leaves a Root argument alone', () => {
   test.each([
     ['mergeable selectors and an empty layer', `@layer a{ .x{color:red} .y{color:red} } @layer b{}`],

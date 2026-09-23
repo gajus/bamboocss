@@ -116,15 +116,20 @@ const reducers = {
     const args = Object.assign({}, _args)
     const original = _args.css
     let css = args.css
+    let optimized = false
 
     for (const hookFn of fns) {
       const result = hookFn(Object.assign(args, { css, original }))
       if (result !== undefined) {
         css = result
+        optimized = true
       }
     }
 
-    return css
+    // Unlike the other reducers, "nobody answered" must stay distinguishable from an answer:
+    // `void` is the documented signal to fall through to the PostCSS optimizer. Returning the
+    // input here instead shipped it unoptimized whenever every registered hook declined (or threw).
+    return optimized ? css : undefined
   }),
 }
 

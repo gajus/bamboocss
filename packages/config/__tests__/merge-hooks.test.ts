@@ -88,6 +88,40 @@ describe('mergeConfigs / theme', () => {
     expect(result).toMatchInlineSnapshot(`"0bbb bbb xxx1"`)
   })
 
+  test('css:optimize answers undefined when every hook declines, so postcss still runs', () => {
+    const hooks = mergeHooks([
+      { name: 'declines', hooks: { 'css:optimize': () => undefined } },
+      {
+        name: 'throws',
+        hooks: {
+          'css:optimize': () => {
+            throw new Error('boom')
+          },
+        },
+      },
+    ])
+
+    expect(hooks['css:optimize']?.({ css: '.a{color:red}' })).toBeUndefined()
+  })
+
+  test('css:optimize chains answers and keeps one when a later hook declines', () => {
+    const hooks = mergeHooks([
+      { name: 'first', hooks: { 'css:optimize': ({ css }) => css + '/*1*/' } },
+      { name: 'declines', hooks: { 'css:optimize': () => undefined } },
+      {
+        name: 'third',
+        hooks: {
+          'css:optimize': ({ css, original }) => {
+            expect(original).toBe('.a{}')
+            return css + '/*3*/'
+          },
+        },
+      },
+    ])
+
+    expect(hooks['css:optimize']?.({ css: '.a{}' })).toBe('.a{}/*1*//*3*/')
+  })
+
   test('should merge hooks and call sequentially using previous result: codegen:prepare', async () => {
     const order: number[] = []
     let original: Artifact[]

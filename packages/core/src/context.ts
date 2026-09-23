@@ -277,6 +277,7 @@ export class Context {
       shorthands: config.shorthands,
       strictValues: config.strictValues,
       keyframes: config.theme?.keyframes,
+      containerNames: config.theme?.containerNames,
       unresolvedToken: config.unresolvedToken,
       invalidDeclaration: config.invalidDeclaration,
     })

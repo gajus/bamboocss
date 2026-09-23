@@ -107,6 +107,7 @@ export interface UtilityOptions {
   shorthands?: boolean
   strictValues?: boolean
   keyframes?: CssKeyframes
+  containerNames?: string[]
   unresolvedToken?: UnresolvedTokenSeverity | { token?: UnresolvedTokenSeverity; grammar?: UnresolvedTokenSeverity }
   invalidDeclaration?: InvalidDeclarationSeverity
 }
@@ -443,6 +444,13 @@ export class Utility {
 
     if (config.values === 'keyframes') {
       config.values = Object.keys(this.options.keyframes ?? {})
+    }
+
+    // Like `keyframes`, a theme key that is not a token category: `theme.containerNames` is a
+    // plain list and never reaches the token dictionary, so looking it up there answered `{}`
+    // and `containerName` was typed as an open string rather than against the configured names.
+    if (config.values === 'containerNames') {
+      config.values = [...(this.options.containerNames ?? [])]
     }
 
     // set graceful defaults for className

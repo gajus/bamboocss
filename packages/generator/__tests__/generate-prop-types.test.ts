@@ -3,6 +3,21 @@ import { describe, expect, test } from 'vitest'
 import { generatePropTypes } from '../src/artifacts/types/prop-types'
 
 describe('generate property types', () => {
+  test('containerName is typed against theme.containerNames', () => {
+    const line = (config?: Parameters<typeof createContext>[0]) =>
+      generatePropTypes(createContext(config))
+        .split('\n')
+        .find((l) => l.trim().startsWith('containerName:'))
+        ?.trim()
+
+    expect(line({ theme: { extend: { containerNames: ['sidebar', 'content'] } } })).toBe(
+      'containerName: "sidebar" | "content" | CssProperties["containerName"];',
+    )
+
+    // No names configured: the plain css property, as before.
+    expect(line()).toBe('containerName: CssProperties["containerName"];')
+  })
+
   test('should work', () => {
     expect(generatePropTypes(createContext())).toMatchInlineSnapshot(`
       "import type { ConditionalValue } from './conditions';

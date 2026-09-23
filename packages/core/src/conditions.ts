@@ -102,12 +102,13 @@ export class Conditions {
     const { containerNames = [], containerSizes = {} } = this.options
 
     const containers: Record<string, ConditionDetails> = {}
-    containerNames.unshift('') // add empty container name for @/sm, @/md, etc.
 
     const sizes = new Map(sortScale(containerSizes).map(([size, value]) => [size, toRem(value) ?? value]))
     const ranges = expandRange([...sizes.keys()])
 
-    containerNames.forEach((name) => {
+    // The empty name gives the anonymous `@/sm`, `@/md`, … keys. Prepended to a copy: the array is
+    // the user's `theme.containerNames`, and mutating it leaked `''` into every later reader.
+    ;['', ...containerNames].forEach((name) => {
       ranges.forEach(({ key, min, max }) => {
         const query = rangeQuery('inline-size', min && sizes.get(min), max && sizes.get(max))
         if (!query) return

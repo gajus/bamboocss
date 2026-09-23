@@ -339,6 +339,19 @@ describe('Conditions', () => {
     }
   })
 
+  test('container setup does not mutate the configured container names', () => {
+    const containerNames = ['sidebar']
+    const css = new Conditions({ containerNames, containerSizes: { sm: '20rem' } })
+
+    expect(containerNames).toEqual(['sidebar'])
+    expect(css.has('@/sm')).toBe(true)
+    expect(css.has('@sidebar/sm')).toBe(true)
+
+    // A second context over the same config must not see a doubled anonymous name.
+    new Conditions({ containerNames, containerSizes: { sm: '20rem' } })
+    expect(containerNames).toEqual(['sidebar'])
+  })
+
   test('a well-formed condition still parses beside a malformed one', () => {
     const css = new Conditions({ conditions: { busted: '@', hover: '&:hover' }, breakpoints: {} })
     expect(css.has('_busted')).toBe(false)

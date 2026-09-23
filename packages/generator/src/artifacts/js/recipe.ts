@@ -256,10 +256,6 @@ export function generateRecipes(ctx: Context, filters?: ArtifactFilters) {
             .join('\n')}
         }
 
-        type ${upperName}VariantMap = {
-          [key in keyof ${upperName}Variant]: Array<${upperName}Variant[key]>
-        }
-
         ${Recipes.isSlotRecipeConfig(config) ? `type ${upperName}Slot = ${unionType(config.slots)}` : ''}
 
         export type ${upperName}VariantProps = {
@@ -274,18 +270,7 @@ export function generateRecipes(ctx: Context, filters?: ArtifactFilters) {
           (props?: ${upperName}VariantProps): ${
             Recipes.isSlotRecipeConfig(config) ? `Pretty<Record<${upperName}Slot, string>>` : 'string'
           }
-          raw: (props?: ${upperName}VariantProps) => ${upperName}VariantProps
-          /** Each variant and the values it accepts. \`Object.keys\` it for the variant names. */
-          variantMap: ${upperName}VariantMap
           splitVariantProps<Props extends ${upperName}VariantProps>(props: Props): [${upperName}VariantProps, Pretty<DistributiveOmit<Props, keyof ${upperName}VariantProps>>]
-          getVariantProps: (props?: ${upperName}VariantProps) => ${upperName}VariantProps
-          ${
-            Recipes.isSlotRecipeConfig(config)
-              ? outdent`
-          /** Which slots each variant writes styles for. */
-          slotsAffectedBy: Record<keyof ${upperName}Variant, ${upperName}Slot[]>`
-              : ''
-          }
           ${
             anchorSlotNames.length
               ? outdent`

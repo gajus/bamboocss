@@ -575,11 +575,10 @@ Learn more about the [extend](/docs/concepts/extend) keyword.
 
 ## Methods and Properties
 
-Both inline and config recipes ship helper methods and properties that can be used to get information about the recipe.
+A recipe is erased when it compiles, so it has one method besides being called:
 
-- `variantMap`: Each variant and the values it accepts. `Object.keys(recipe.variantMap)` gives you the variant names
-- `splitVariantProps`: A function that takes an object as its argument and returns an array containing the recipe
-  variant props and the rest of the props
+- `splitVariantProps`: takes an object and returns an array containing the recipe variant props and the rest of the
+  props. The compiler lowers it to a plain `splitProps` call, so it does not keep the recipe alive.
 
 ```js
 import { cva } from '../styled-system/css'
@@ -601,32 +600,24 @@ const buttonRecipe = cva({
   },
 })
 
-buttonRecipe.variantMap
-// => { size: ['sm', 'md'] }
-
-Object.keys(buttonRecipe.variantMap)
-// => ['size']
-
 buttonRecipe.splitVariantProps({ size: 'sm', onClick() {} })
 // => [{ size: 'sm'}, { onClick() {} }]
 ```
 
-These methods and properties are useful when creating custom components or writing Storybook stories for your recipes.
-
-Here's a Storybook example.
+Any other read of the recipe — `raw`, `variantMap`, `config`, `getVariantProps`, `merge` — fails the build with
+`runtime-binding` (or `raw-call` for `.raw()`), and the recipe types do not declare them. For a Storybook control, list
+the values where the stories can see them:
 
 ```tsx filename="button.stories.tsx"
-import { Button, buttonRecipe } from './components/button'
+import { Button } from './components/button'
 
 export default {
   title: 'Button',
   component: Button,
   argTypes: {
     size: {
-      control: {
-        type: 'select',
-        options: buttonRecipe.variantMap.size,
-      },
+      control: { type: 'select' },
+      options: ['sm', 'md'],
     },
   },
 }

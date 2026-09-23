@@ -37,15 +37,4 @@ describe('recipe', () => {
       ]
     `)
   })
-
-  test('get variant props', () => {
-    const result = buttonWithCompoundVariants.getVariantProps({ visual: 'outline' })
-
-    expect(result).toMatchInlineSnapshot(`
-      {
-        "button": "__ignore__",
-        "visual": "outline",
-      }
-    `)
-  })
 })

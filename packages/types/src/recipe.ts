@@ -28,24 +28,24 @@ export type RecipeVariant<
   T extends RecipeVariantFn<RecipeVariantRecord> | SlotRecipeVariantFn<string, SlotRecipeVariantRecord<string>>,
 > = Exclude<Pretty<Required<RecipeVariantProps<T>>>, undefined>
 
-type RecipeVariantMap<T extends RecipeVariantRecord> = {
-  [K in keyof T]: Array<keyof T[K]>
-}
-
 /* -----------------------------------------------------------------------------
  * Recipe / Standard
  * -----------------------------------------------------------------------------*/
 
+/**
+ * What a compiled build lets you do with a recipe: call it, or split its variant props.
+ *
+ * Nothing else is declared, because nothing else compiles. The compiler rewrites a call into
+ * the classes it selects and erases the recipe, so any other read of the binding — `raw`,
+ * `variantMap`, `config`, `merge`, `getVariantProps` — would see a value that is no longer
+ * there, and fails the build with `runtime-binding` or `raw-call`. Declaring them only let
+ * that failure type-check.
+ */
 export interface RecipeRuntimeFn<T extends RecipeVariantRecord> extends RecipeVariantFn<T> {
   __type: RecipeSelection<T>
-  /** Each variant and the values it accepts. `Object.keys` it for the variant names. */
-  variantMap: RecipeVariantMap<T>
-  raw: (props?: RecipeSelection<T>) => SystemStyleObject
-  config: RecipeConfig<T>
   splitVariantProps<Props extends RecipeSelection<T>>(
     props: Props,
   ): [RecipeSelection<T>, Pretty<DistributiveOmit<Props, keyof T>>]
-  getVariantProps: (props?: RecipeSelection<T>) => RecipeSelection<T>
 }
 
 type OneOrMore<T> = T | Array<T>
@@ -132,31 +132,17 @@ export type SlotRecipeVariantFn<S extends string, T extends RecipeVariantRecord>
   props?: RecipeSelection<T>,
 ) => SlotRecord<S, string>
 
+/**
+ * A slot recipe as a compiled build allows it: call it, or split its variant props. See
+ * `RecipeRuntimeFn` for why nothing else is declared.
+ */
 export interface SlotRecipeRuntimeFn<
   S extends string,
   T extends SlotRecipeVariantRecord<S>,
 > extends SlotRecipeVariantFn<S, T> {
-  raw: (props?: RecipeSelection<T>) => Record<S, SystemStyleObject>
-  /** Each variant and the values it accepts. `Object.keys` it for the variant names. */
-  variantMap: RecipeVariantMap<T>
-  /** The config this recipe was created from. */
-  config: SlotRecipeDefinition<S, T>
-  /** Each slot's constant class, for targeting a slot in the DOM. */
-  classNameMap: Partial<Record<S, string>>
-  /**
-   * Which slots each variant writes styles for.
-   *
-   * A variant's styles reach a slot through a scope opened at an anchor, which covers every
-   * slot in that anchor's subtree. A slot under no anchor — moved out by a portal, with no
-   * second anchor named in `scopeRoots` — is not reached, and nothing at build time can
-   * detect that. This says which slots a variant has to get to, so whatever a scope cannot
-   * reach can be threaded by hand.
-   */
-  slotsAffectedBy: Record<keyof T, S[]>
   splitVariantProps<Props extends RecipeSelection<T>>(
     props: Props,
   ): [RecipeSelection<T>, Pretty<DistributiveOmit<Props, keyof T>>]
-  getVariantProps: (props?: RecipeSelection<T>) => RecipeSelection<T>
 }
 
 export type SlotRecipeCompoundVariant<S extends string, T> = T & {
@@ -213,8 +199,7 @@ export interface SlotRecipeDefinition<
    * siblings wants.
    *
    * A slot under *no* anchor is still unreachable, and nothing at build time can detect
-   * that — reachability is a fact about the DOM. `recipe.slotsAffectedBy` says which slots
-   * a variant writes to, for whatever still needs threading by hand.
+   * that — reachability is a fact about the DOM.
    */
   scopeRoots?: S[] | Readonly<S[]>
   /**

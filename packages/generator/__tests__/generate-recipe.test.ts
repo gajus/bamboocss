@@ -78,10 +78,6 @@ describe('generate recipes', () => {
         size: "h1" | "h2"
       }
 
-      type TextStyleVariantMap = {
-        [key in keyof TextStyleVariant]: Array<TextStyleVariant[key]>
-      }
-
 
 
       export type TextStyleVariantProps = {
@@ -92,12 +88,7 @@ describe('generate recipes', () => {
         
         __type: TextStyleVariantProps
         (props?: TextStyleVariantProps): string
-        raw: (props?: TextStyleVariantProps) => TextStyleVariantProps
-        /** Each variant and the values it accepts. \`Object.keys\` it for the variant names. */
-        variantMap: TextStyleVariantMap
         splitVariantProps<Props extends TextStyleVariantProps>(props: Props): [TextStyleVariantProps, Pretty<DistributiveOmit<Props, keyof TextStyleVariantProps>>]
-        getVariantProps: (props?: TextStyleVariantProps) => TextStyleVariantProps
-        
         
       }
 
@@ -141,10 +132,6 @@ describe('generate recipes', () => {
         
       }
 
-      type TooltipStyleVariantMap = {
-        [key in keyof TooltipStyleVariant]: Array<TooltipStyleVariant[key]>
-      }
-
 
 
       export type TooltipStyleVariantProps = {
@@ -155,12 +142,7 @@ describe('generate recipes', () => {
         
         __type: TooltipStyleVariantProps
         (props?: TooltipStyleVariantProps): string
-        raw: (props?: TooltipStyleVariantProps) => TooltipStyleVariantProps
-        /** Each variant and the values it accepts. \`Object.keys\` it for the variant names. */
-        variantMap: TooltipStyleVariantMap
         splitVariantProps<Props extends TooltipStyleVariantProps>(props: Props): [TooltipStyleVariantProps, Pretty<DistributiveOmit<Props, keyof TooltipStyleVariantProps>>]
-        getVariantProps: (props?: TooltipStyleVariantProps) => TooltipStyleVariantProps
-        
         
       }
 
@@ -199,10 +181,6 @@ describe('generate recipes', () => {
         rounded: boolean
       }
 
-      type CardStyleVariantMap = {
-        [key in keyof CardStyleVariant]: Array<CardStyleVariant[key]>
-      }
-
 
 
       export type CardStyleVariantProps = {
@@ -213,12 +191,7 @@ describe('generate recipes', () => {
         
         __type: CardStyleVariantProps
         (props?: CardStyleVariantProps): string
-        raw: (props?: CardStyleVariantProps) => CardStyleVariantProps
-        /** Each variant and the values it accepts. \`Object.keys\` it for the variant names. */
-        variantMap: CardStyleVariantMap
         splitVariantProps<Props extends CardStyleVariantProps>(props: Props): [CardStyleVariantProps, Pretty<DistributiveOmit<Props, keyof CardStyleVariantProps>>]
-        getVariantProps: (props?: CardStyleVariantProps) => CardStyleVariantProps
-        
         
       }
 
@@ -268,10 +241,6 @@ describe('generate recipes', () => {
       variant: "solid" | "outline"
       }
 
-      type ButtonStyleVariantMap = {
-        [key in keyof ButtonStyleVariant]: Array<ButtonStyleVariant[key]>
-      }
-
 
 
       export type ButtonStyleVariantProps = {
@@ -282,12 +251,7 @@ describe('generate recipes', () => {
         
         __type: ButtonStyleVariantProps
         (props?: ButtonStyleVariantProps): string
-        raw: (props?: ButtonStyleVariantProps) => ButtonStyleVariantProps
-        /** Each variant and the values it accepts. \`Object.keys\` it for the variant names. */
-        variantMap: ButtonStyleVariantMap
         splitVariantProps<Props extends ButtonStyleVariantProps>(props: Props): [ButtonStyleVariantProps, Pretty<DistributiveOmit<Props, keyof ButtonStyleVariantProps>>]
-        getVariantProps: (props?: ButtonStyleVariantProps) => ButtonStyleVariantProps
-        
         
       }
 
@@ -341,10 +305,6 @@ describe('generate recipes', () => {
       size: "sm" | "md" | "lg"
       }
 
-      type CheckboxVariantMap = {
-        [key in keyof CheckboxVariant]: Array<CheckboxVariant[key]>
-      }
-
       type CheckboxSlot = "root" | "control" | "label"
 
       export type CheckboxVariantProps = {
@@ -355,13 +315,7 @@ describe('generate recipes', () => {
         __slot: CheckboxSlot
         __type: CheckboxVariantProps
         (props?: CheckboxVariantProps): Pretty<Record<CheckboxSlot, string>>
-        raw: (props?: CheckboxVariantProps) => CheckboxVariantProps
-        /** Each variant and the values it accepts. \`Object.keys\` it for the variant names. */
-        variantMap: CheckboxVariantMap
         splitVariantProps<Props extends CheckboxVariantProps>(props: Props): [CheckboxVariantProps, Pretty<DistributiveOmit<Props, keyof CheckboxVariantProps>>]
-        getVariantProps: (props?: CheckboxVariantProps) => CheckboxVariantProps
-        /** Which slots each variant writes styles for. */
-      slotsAffectedBy: Record<keyof CheckboxVariant, CheckboxSlot[]>
         /** The slots that take variants — every other one is scoped by a class an anchor carries. */
       root: (props?: CheckboxVariantProps) => string
       control: string
@@ -464,10 +418,6 @@ describe('generate recipes', () => {
       raised: boolean
       }
 
-      type BadgeVariantMap = {
-        [key in keyof BadgeVariant]: Array<BadgeVariant[key]>
-      }
-
       type BadgeSlot = "title" | "body"
 
       export type BadgeVariantProps = {
@@ -478,13 +428,7 @@ describe('generate recipes', () => {
         __slot: BadgeSlot
         __type: BadgeVariantProps
         (props?: BadgeVariantProps): Pretty<Record<BadgeSlot, string>>
-        raw: (props?: BadgeVariantProps) => BadgeVariantProps
-        /** Each variant and the values it accepts. \`Object.keys\` it for the variant names. */
-        variantMap: BadgeVariantMap
         splitVariantProps<Props extends BadgeVariantProps>(props: Props): [BadgeVariantProps, Pretty<DistributiveOmit<Props, keyof BadgeVariantProps>>]
-        getVariantProps: (props?: BadgeVariantProps) => BadgeVariantProps
-        /** Which slots each variant writes styles for. */
-      slotsAffectedBy: Record<keyof BadgeVariant, BadgeSlot[]>
         
       }
 

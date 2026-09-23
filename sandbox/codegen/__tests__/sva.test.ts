@@ -56,14 +56,4 @@ describe('sva', () => {
       ]
     `)
   })
-
-  test('get variant props', () => {
-    const result = button.getVariantProps()
-
-    expect(result).toMatchInlineSnapshot(`
-      {
-        "visual": "unstyled",
-      }
-    `)
-  })
 })

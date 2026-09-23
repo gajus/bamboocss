@@ -47,38 +47,4 @@ describe('cva', () => {
       ]
     `)
   })
-
-  test('get variant props', () => {
-    const result = button.getVariantProps()
-
-    expect(result).toMatchInlineSnapshot(`
-      {
-        "visual": "unstyled",
-      }
-    `)
-  })
-
-  test('raw returns an object the caller owns', () => {
-    const first = button.raw({ visual: 'solid' })
-    const second = button.raw({ visual: 'solid' })
-
-    expect(first).not.toBe(second)
-
-    const expected = structuredClone(second)
-
-    first.fontWeight = 'poisoned'
-    ;(first.color as Record<string, string>)._dark = 'poisoned'
-
-    expect(button.raw({ visual: 'solid' })).toEqual(expected)
-  })
-
-  test('the copy reaches nested condition blocks', () => {
-    const outline = button.raw({ visual: 'outline' })
-    delete (outline.color as Record<string, unknown>)._dark
-
-    expect(button.raw({ visual: 'outline' }).color).toEqual({
-      base: 'colorPalette.600',
-      _dark: 'colorPalette.200',
-    })
-  })
 })

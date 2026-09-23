@@ -25,9 +25,8 @@ const className = css(style1, style2) // => 'bg_blue c_white'
 In some cases though, the style object might not be colocated in the same file as the component. In this case, you can
 use the `css.raw` function to preserve the original style object.
 
-> `css.raw(...)` and a config recipe's `.raw(...)` are identity functions: they return their input, and serve as a hint
-> to the compiler that the value is a style object. `cva(...).raw(...)` and `sva(...).raw(...)` are not — they resolve
-> the variants and return the merged style object, which is what makes the `cva` example below work.
+> `css.raw(...)` is an identity function: it returns its input, and serves as a hint to the compiler that the value is a
+> style object. Recipes have no `.raw()` — to combine a recipe with other styles, see the `cx()` sections below.
 
 ```js filename="style.js"
 import { css } from 'styled-system/css'
@@ -85,15 +84,11 @@ const card = css({
 
 ## Merging `cva` + `css` styles
 
-The same technique can be used to merge an inline `cva` recipe and a style object.
+Compose an inline `cva` recipe with a style object through `cx()`. The compiler merges both StyleSets before allocating
+classes, so the later argument wins.
 
 ```js
 import { css, cx, cva } from 'styled-system/css'
-
-const overrideStyles = css.raw({
-  bg: 'red',
-  color: 'white',
-})
 
 const buttonStyles = cva({
   base: {
@@ -107,27 +102,25 @@ const buttonStyles = cva({
   },
 })
 
-const className = css(
-  // returns the resolved style object
-  buttonStyles.raw({ size: 'small' }),
+const className = cx(
+  // the selected recipe declarations
+  buttonStyles({ size: 'small' }),
   // add the override styles
-  overrideStyles,
+  css({ bg: 'red', color: 'white' }),
 )
 
-// => 'bg_red bd_1px_solid_black c_white fs_12px'
+// => 'bg_red bd_1px_solid_black fs_12px c_white'
 ```
+
+A recipe's `.raw()` is not a way to do this: the compiler erases the recipe, so reading `buttonStyles.raw` fails the
+build with `runtime-binding`.
 
 ## Merging `sva` + `css` styles
 
-The same technique can be used to merge an inline `sva` recipe and a style object.
+The same works for a slot of an inline `sva` recipe.
 
 ```js
-import { css, sva } from 'styled-system/css'
-
-const overrideStyles = css.raw({
-  bg: 'red',
-  color: 'white',
-})
+import { css, cx, sva } from 'styled-system/css'
 
 const buttonStyles = sva({
   slots: ['root'],
@@ -146,16 +139,13 @@ const buttonStyles = sva({
   },
 })
 
-// returns the resolved style object for all slots
-const { root } = buttonStyles.raw({ size: 'small' })
-
-const className = css(
-  root,
+const className = cx(
+  buttonStyles({ size: 'small' }).root,
   // add the override styles
-  overrideStyles,
+  css({ bg: 'red', color: 'white' }),
 )
 
-// => 'bg_red bd_1px_solid_black c_white fs_12px'
+// => 'bg_red bd_1px_solid_black fs_12px c_white'
 ```
 
 ## Merging config recipe and style object

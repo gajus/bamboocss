@@ -21,14 +21,4 @@ describe('sva', () => {
       ]
     `)
   })
-
-  test('get variant props', () => {
-    const result = slotButton.getVariantProps()
-
-    expect(result).toMatchInlineSnapshot(`
-      {
-        "visual": "unstyled",
-      }
-    `)
-  })
 })

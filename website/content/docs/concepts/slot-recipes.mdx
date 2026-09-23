@@ -458,7 +458,7 @@ gzips **larger** and still has to deliver them.
 If one anchor is nested inside another and both match a slot, `@scope` picks by proximity — the nearer anchor wins.
 
 A slot under _no_ anchor is still unreachable, and nothing at build time can detect that; reachability is a fact about
-the DOM. `slotsAffectedBy` says which slots a variant writes to, for whatever still needs threading by hand.
+the DOM.
 
 ### Catching an unreachable slot in development
 

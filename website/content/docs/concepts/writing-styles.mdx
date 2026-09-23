@@ -359,8 +359,8 @@ const button = cva({ base: { display: 'flex', color: 'red.500' } })
 const recipeClass = cx(button(), css({ color: 'blue.400' }))
 ```
 
-Both examples preserve the layout and select the blue color before allocating classes. The same static-composition
-requirement applies when using `.raw()` style objects from inline recipes and individual slots.
+Both examples preserve the layout and select the blue color before allocating classes. A slot of an inline `sva`
+composes the same way: `cx(card({ size }).root, css({ color: 'blue.400' }))`.
 
 ### Classname concatenation
 

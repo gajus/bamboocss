@@ -1386,6 +1386,15 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
             if members.is_empty() {
                 return self.call_symbol(symbol, arguments);
             }
+            // `helpers.size('sm')` on a local object literal. Values evaluate to JSON, which
+            // cannot hold a function, so the callee is found in the source instead: walk the
+            // member path through object-literal initializers to the property's expression and
+            // call that. Anything the walk cannot follow is unknown, as before.
+            if !self.imports.contains_key(&symbol)
+                && let Some(callee) = self.object_member_expression(symbol, &members)
+            {
+                return self.call_expression_value(callee, arguments);
+            }
         }
 
         // Object.assign({}, a, b) is common in helper modules and remains deterministic.
@@ -1427,6 +1436,50 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
                 }),
             _ => EvalResult::unknown(),
         }
+    }
+
+    /// The source expression at `symbol.a.b`, following object-literal initializers only.
+    ///
+    /// `const o = { a: { f: () => 1 } }` gives `() => 1` for `["a", "f"]`. A spread, a
+    /// computed key, a shorthand or a non-literal anywhere on the path ends the walk, since the
+    /// value there is no longer written in this file where the walk can see it.
+    fn object_member_expression(
+        &self,
+        symbol: SymbolId,
+        members: &[String],
+    ) -> Option<&'a Expression<'a>> {
+        let AstKind::VariableDeclarator(declarator) =
+            self.semantic.symbol_declaration(symbol).kind()
+        else {
+            return None;
+        };
+        // Only a plain binding: a destructured name does not denote the whole initializer.
+        declarator.id.get_binding_identifier()?;
+        let mut current = declarator.init.as_ref()?;
+        for member in members {
+            let Expression::ObjectExpression(object) = current.get_inner_expression() else {
+                return None;
+            };
+            // The last property of that name wins, as in JavaScript.
+            current = object
+                .properties
+                .iter()
+                .rev()
+                .find_map(|property| match property {
+                    ObjectPropertyKind::ObjectProperty(property)
+                        if !property.computed
+                            && !property.shorthand
+                            && property
+                                .key
+                                .static_name()
+                                .is_some_and(|name| name == member.as_str()) =>
+                    {
+                        Some(&property.value)
+                    }
+                    _ => None,
+                })?;
+        }
+        Some(current)
     }
 
     pub fn call_expression_value(

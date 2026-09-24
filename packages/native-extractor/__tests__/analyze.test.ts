@@ -210,6 +210,13 @@ describe('native extraction analysis', () => {
       expect(argument(`const o = null\ncss({ color: o?.a, bg: o?.a.b.c })`)).toEqual({ value: {}, complete: true })
     })
 
+    test('a method of a local object literal is called', () => {
+      expect(argument(`const o = { a: { f(v) { return v + 'px' } } }\ncss({ width: o.a.f(3) })`)).toEqual({
+        value: { width: '3px' },
+        complete: true,
+      })
+    })
+
     test('a declare const is ambient, not undefined', () => {
       expect(argument(`declare const d: string\ncss({ color: d })`).complete).toBe(false)
     })

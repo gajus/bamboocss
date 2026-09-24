@@ -24,3 +24,6 @@ A written property whose value cannot be read — `css({ color: tone })` — is 
 raw template as JSX. Oxc rejected that JSX on the first `{#if}`, `{#each}` or `{{ items[0] }}` and failed the build with
 `EXTRACT_FAILED`. `plugin-svelte` now takes `svelte` as an optional peer dependency, and neither plugin depends on
 `magic-string` any more.
+
+A method of a local object literal is now called during evaluation — `helpers.size('sm')` where
+`const helpers = { size(v) { … } }` — where it used to be unknown to Rust and resolved by TypeScript.

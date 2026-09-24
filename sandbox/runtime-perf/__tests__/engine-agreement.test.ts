@@ -34,6 +34,10 @@ const CASES: Record<string, string> = {
   'satisfies object': `const sizes = { sm: '[1.6666px]' } satisfies Record<string, string>\nexport const c = css({ width: sizes.sm })`,
   'template literal': `const n = 1.7777\nexport const c = css({ width: \`[\${n}px]\` })`,
   'function returning object': `const make = () => ({ width: '[1.8888px]' })\nexport const c = css(make())`,
+  'default import': `import values from './__agreement/values'\nexport const c = css(values)`,
+  'namespace import': `import * as values from './__agreement/values'\nexport const c = css({ width: values.named })`,
+  'export * as ns': `import { ns } from './__agreement/barrel'\nexport const c = css({ width: ns.obj.w })`,
+  'local method call': `const o = { f: () => '[3.4444px]' }\nexport const c = css({ width: o.f() })`,
 }
 
 const buildCase = async (name: string, body: string) => {

@@ -1,6 +1,4 @@
-import MagicString from 'magic-string'
 import { createRequire } from 'node:module'
-import type { BaseElementNode } from '@vue/compiler-core'
 
 /**
  * Vue's SFC compiler, loaded the first time a `.vue` file is actually parsed.
@@ -21,69 +19,80 @@ const parse: typeof import('@vue/compiler-sfc').parse = (...args) => {
  *  Cannot read properties of undefined (reading 'ELEMENT')
  */
 const NodeTypes = {
-  ROOT: 0,
   ELEMENT: 1,
-  TEXT: 2,
-  COMMENT: 3,
   SIMPLE_EXPRESSION: 4,
   INTERPOLATION: 5,
-  ATTRIBUTE: 6,
   DIRECTIVE: 7,
-  COMPOUND_EXPRESSION: 8,
-  IF: 9,
-  IF_BRANCH: 10,
-  FOR: 11,
-  TEXT_CALL: 12,
-  VNODE_CALL: 13,
-  JS_CALL_EXPRESSION: 14,
-  JS_OBJECT_EXPRESSION: 15,
-  JS_PROPERTY: 16,
-  JS_ARRAY_EXPRESSION: 17,
-  JS_FUNCTION_EXPRESSION: 18,
-  JS_CONDITIONAL_EXPRESSION: 19,
-  JS_CACHE_EXPRESSION: 20,
-  JS_BLOCK_STATEMENT: 21,
-  JS_TEMPLATE_LITERAL: 22,
-  JS_IF_STATEMENT: 23,
-  JS_ASSIGNMENT_EXPRESSION: 24,
-  JS_SEQUENCE_EXPRESSION: 25,
-  JS_RETURN_STATEMENT: 26,
 } as const
 
+interface TemplateNode {
+  type: number
+  props?: Array<{ type: number; name?: string; exp?: { type: number; content: string } }>
+  children?: TemplateNode[]
+  content?: { type: number; content: string }
+  branches?: TemplateNode[]
+}
+
+/**
+ * Directives whose expression is not a value: `v-for="item in items"` is a loop header and
+ * `v-slot="{ item }"` a parameter list. Neither is a JavaScript expression on its own, and
+ * neither can hold a style call.
+ */
+const NOT_AN_EXPRESSION = new Set(['for', 'slot'])
+
+/**
+ * A `.vue` file as TypeScript the extractor can parse.
+ *
+ * This used to rewrite `:class="…"` into `class={…}` inside the raw `<template>` and hand the
+ * result over as JSX. A template is not JSX: `{{ items[0] }}` read as an object literal with a
+ * computed key, and a strict parser — Oxc, which does all stylesheet extraction — rejected the
+ * whole file, failing the build on any component with a common interpolation in it. The
+ * TypeScript parser happened to recover, which is why this went unseen.
+ *
+ * The output is now built from Vue's own parse tree instead, so it is valid by construction:
+ * the `<script>`/`<script setup>` contents verbatim, then every expression the template
+ * evaluates — bound attributes, event handlers, `v-if`, interpolations — as one parenthesized
+ * expression statement each. The markup structure is dropped; extraction only ever needed the
+ * calls and the bindings they reference.
+ */
 export const vueToTsx = (code: string) => {
+  let parsed: ReturnType<typeof import('@vue/compiler-sfc').parse>
   try {
-    const parsed = parse(code)
-    const fileStr = new MagicString(`<template>${parsed.descriptor.template?.content}</template>`)
-
-    const rewriteProp = (prop: BaseElementNode['props'][number]) => {
-      if (
-        prop.type === NodeTypes.DIRECTIVE &&
-        prop.exp?.type === NodeTypes.SIMPLE_EXPRESSION &&
-        prop.arg?.type === NodeTypes.SIMPLE_EXPRESSION
-      ) {
-        fileStr.replace(prop.loc.source, `${prop.arg.content}={${prop.exp.content}}`)
-      }
-    }
-
-    const stack = Array.from(parsed.descriptor.template?.ast?.children ?? [])
-
-    // recursion-free traversal
-    while (stack.length) {
-      const node = stack.pop()
-      if (!node) continue
-
-      if (node.type === NodeTypes.ELEMENT) {
-        node.props.forEach(rewriteProp)
-        node.children.forEach((child) => stack.push(child))
-      }
-    }
-
-    const scriptContent = (parsed.descriptor.scriptSetup ?? parsed.descriptor.script)?.content + '\n'
-
-    const transformed = new MagicString(`${scriptContent}\nconst render = ${fileStr.toString()}`)
-
-    return transformed.toString()
+    parsed = parse(code)
   } catch {
     return ''
   }
+  const { descriptor } = parsed
+
+  const scripts = [descriptor.script, descriptor.scriptSetup]
+    .filter((script): script is NonNullable<typeof script> => Boolean(script?.content))
+    .sort((a, b) => a.loc.start.offset - b.loc.start.offset)
+    .map((script) => script.content)
+
+  const expressions: string[] = []
+  const stack: TemplateNode[] = [...((descriptor.template?.ast?.children ?? []) as unknown as TemplateNode[])]
+
+  // recursion-free traversal
+  while (stack.length) {
+    const node = stack.pop()
+    if (!node) continue
+
+    if (node.type === NodeTypes.INTERPOLATION && node.content?.type === NodeTypes.SIMPLE_EXPRESSION) {
+      expressions.push(node.content.content)
+    }
+
+    for (const prop of node.props ?? []) {
+      if (prop.type !== NodeTypes.DIRECTIVE || !prop.exp || prop.exp.type !== NodeTypes.SIMPLE_EXPRESSION) continue
+      if (prop.name && NOT_AN_EXPRESSION.has(prop.name)) continue
+      expressions.push(prop.exp.content)
+    }
+
+    for (const child of node.children ?? []) stack.push(child)
+    for (const branch of node.branches ?? []) stack.push(branch)
+  }
+
+  // Source order, so the output reads in the order the template does; the stack reversed it.
+  expressions.reverse()
+
+  return [...scripts, ...expressions.map((expression) => `;(${expression})`)].join('\n')
 }

@@ -163,6 +163,58 @@ describe('native extraction analysis', () => {
     ])
   })
 
+  test('reports a written property it could not read, rather than dropping it silently', () => {
+    const source = `import { css } from 'styled-system/css'
+      export const f = (tone) => css({ color: tone, padding: '1' })`
+    const [call] = analyze('source.ts', source, entrypoints).calls
+
+    expect(call).toMatchObject({
+      arguments: [{ padding: '1' }],
+      complete: false,
+      losses: [{ prop: 'color', reason: 'missing-property' }],
+    })
+  })
+
+  describe('value shapes the TypeScript evaluator resolved', () => {
+    const argument = (body: string) => {
+      const [call] = analyze('source.ts', `import { css } from 'styled-system/css'\n${body}`, entrypoints).calls
+      return { value: call?.arguments[0], complete: call?.complete }
+    }
+
+    test('an enum, with auto-increment and a reference to an earlier member', () => {
+      expect(argument(`enum T { W = 'red', X = 2, Y, Z = X + 10 }\ncss({ color: T.W, a: T.Y, b: T.Z })`)).toEqual({
+        value: { color: 'red', a: 3, b: 12 },
+        complete: true,
+      })
+    })
+
+    test('a const enum', () => {
+      expect(argument(`const enum T { W = 'red' }\ncss({ color: T.W })`)).toEqual({
+        value: { color: 'red' },
+        complete: true,
+      })
+    })
+
+    test('a declare enum has no runtime object, so it is unknown', () => {
+      expect(argument(`declare enum T { W = 'red' }\ncss({ color: T.W })`).complete).toBe(false)
+    })
+
+    test('optional chaining reads through a known receiver', () => {
+      expect(argument(`const o = { a: 'blue' }\ncss({ color: o?.a })`)).toEqual({
+        value: { color: 'blue' },
+        complete: true,
+      })
+    })
+
+    test('optional chaining short-circuits a nullish receiver to undefined', () => {
+      expect(argument(`const o = null\ncss({ color: o?.a, bg: o?.a.b.c })`)).toEqual({ value: {}, complete: true })
+    })
+
+    test('a declare const is ambient, not undefined', () => {
+      expect(argument(`declare const d: string\ncss({ color: d })`).complete).toBe(false)
+    })
+  })
+
   test('reports parser diagnostics instead of accepting incomplete syntax', () => {
     const result = analyze('source.ts', `import { css } from 'styled-system/css'; css({`, entrypoints)
 

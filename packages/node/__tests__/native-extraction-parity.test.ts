@@ -196,3 +196,57 @@ test('an unknown generated entrypoint reports the native diagnostic without Type
   expect(result.message).toContain('src/invalid.ts')
   expect(result.typescriptFiles).toEqual([])
 })
+
+/**
+ * Vue and Svelte files reach Rust as the output of their auto-injected `parser:before`
+ * plugins. That output used to be the raw template wrapped as JSX, which Oxc rejected on the
+ * first `{#if}` or `{{ items[0] }}` — failing the whole build with `EXTRACT_FAILED`, while the
+ * TypeScript parser the plugins were tested against recovered silently.
+ */
+test('Vue and Svelte templates with block syntax extract through the native engine', async () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'bamboo-native-sfc-'))
+  temporaryDirectories.add(cwd)
+  mkdirSync(join(cwd, 'src'))
+  writeFileSync(
+    join(cwd, 'bamboo.config.ts'),
+    `export default { preflight: false, include: ['src/**/*.{vue,svelte}'], outdir: 'styled-system' }\n`,
+  )
+  writeFileSync(
+    join(cwd, 'src/List.svelte'),
+    `<script lang="ts">
+  import { css } from '../styled-system/css'
+  export let items: string[] = []
+</script>
+{#if items.length > 1}
+  <ul>
+    {#each items as item, i (item)}
+      <li class={css({ width: '[2.1111px]' })}>{i}: {item}</li>
+    {/each}
+  </ul>
+{:else}
+  <p class="empty {css({ width: '[2.2222px]' })}">none</p>
+{/if}
+`,
+  )
+  writeFileSync(
+    join(cwd, 'src/List.vue'),
+    `<script setup lang="ts">
+import { css } from '../styled-system/css'
+const items = ['a']
+</script>
+<template>
+  <ul v-if="items.length > 1">
+    <li v-for="item in items" :key="item" :class="css({ width: '[2.3333px]' })">{{ items[0] }}</li>
+  </ul>
+  <Slotted v-slot="{ row }"><span :class="[css({ width: '[2.4444px]' }), row]" /></Slotted>
+</template>
+`,
+  )
+
+  const result = await extract(cwd)
+
+  for (const width of ['2.1111px', '2.2222px', '2.3333px', '2.4444px']) {
+    expect(result.css).toContain(width)
+  }
+  expect(result.typescriptFiles).toEqual([])
+})

@@ -568,11 +568,40 @@ fn call_losses<'a>(
                 });
             }
             recipe_losses(expression, evaluator, "", &mut losses);
-        } else if binding.kind == "css"
-            && binding.imported_name == "css"
+        } else if ((binding.kind == "css" && binding.imported_name == "css")
+            || binding.kind == "pattern")
             && let Expression::ObjectExpression(object) = unwrap_expression(expression)
         {
             for property in &object.properties {
+                // A written key whose value the evaluator could not read disappears from the
+                // data without a trace — `css({ color: tone })` reached the stylesheet as
+                // `{}`, reported complete with no loss, so nothing warned and nothing failed.
+                // The same check the recipe path already makes, at the top level: nested
+                // values that are unknown already surface as a condition or an incomplete
+                // parent, which this catches through their key.
+                if let oxc_ast::ast::ObjectPropertyKind::ObjectProperty(property) = property
+                    && !property.method
+                    && let Some(key) = if property.computed {
+                        property
+                            .key
+                            .as_expression()
+                            .and_then(|key| evaluator.evaluate(key).value)
+                            .map(|value| match value {
+                                serde_json::Value::String(value) => value,
+                                value => value.to_string(),
+                            })
+                    } else {
+                        property.key.static_name().map(|name| name.into_owned())
+                    }
+                {
+                    let value = evaluator.evaluate(&property.value);
+                    if value.value.is_none() && value.conditions.is_empty() && !value.complete {
+                        losses.push(NativeLoss {
+                            prop: Some(key),
+                            reason: "missing-property".to_string(),
+                        });
+                    }
+                }
                 match property {
                     oxc_ast::ast::ObjectPropertyKind::SpreadProperty(spread)
                         if !matches!(

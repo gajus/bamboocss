@@ -53,18 +53,10 @@ describe('extract Vue templates', () => {
                   },
               };
             
-
-      const render = <template>
-                <h1 class={style}>using class binding</h1>
-                <p class={css({ color: 'red.500' })}>using inline styles</p>
-                <span class="style3">using actual class</span>
-                <div class={css({ color: 'red', fontWeight: 'bold' })}>
-                  <p>depth 1 children</p>
-                  <div class={css({ color: 'green' })}>
-                    <p>depth 2 children</p>
-                  </div>
-                </div>
-            </template>"
+      ;(style)
+      ;(css({ color: 'red.500' }))
+      ;(css({ color: 'green' }))
+      ;(css({ color: 'red', fontWeight: 'bold' }))"
     `)
 
     const result = parseAndExtract(transformed)
@@ -100,8 +92,7 @@ describe('extract Vue templates', () => {
         {
           "data": [
             {
-              "color": "red",
-              "fontWeight": "bold",
+              "color": "green",
             },
           ],
           "name": "css",
@@ -110,7 +101,8 @@ describe('extract Vue templates', () => {
         {
           "data": [
             {
-              "color": "green",
+              "color": "red",
+              "fontWeight": "bold",
             },
           ],
           "name": "css",
@@ -136,16 +128,16 @@ describe('extract Vue templates', () => {
             color: var(--colors-red-500);
       }
 
+          .c_green {
+            color: green;
+      }
+
           .c_red {
             color: red;
       }
 
           .fw_bold {
             font-weight: var(--font-weights-bold);
-      }
-
-          .c_green {
-            color: green;
       }
         }
       }"
@@ -189,31 +181,11 @@ describe('extract Vue templates', () => {
       "
           import { css } from "styled-system/css";
         
-
-      const render = <template>
-          <div>
-            <div>
-              <slot name="icon"></slot>
-              <div class={hstack()}>
-                <p class={css({ textStyle: 'overline' })}>
-                  <slot name="price"></slot>
-                </p>
-                <div>
-                  <template v-if="isSelected">
-                    <IconRadioSelected />
-                  </template>
-                  <template v-else>
-                    <IconRadio />
-                  </template>
-                </div>
-              </div>
-            </div>
-            <h7 class={css({ textStyle: 'h7' })}><slot name="heading"></slot></h7>
-            <p class={css({ textStyle: 'text', color: 'grey.70' })}>
-              <slot name="description"></slot>
-            </p>
-          </div>
-        </template>"
+      ;(css({ textStyle: 'overline' }))
+      ;(isSelected)
+      ;(hstack())
+      ;(css({ textStyle: 'h7' }))
+      ;(css({ textStyle: 'text', color: 'grey.70' }))"
     `)
 
     const result = parseAndExtract(transformed)
@@ -311,18 +283,10 @@ describe('extract Vue templates', () => {
               let style = css({ color: 'green.400' })
               let style2 = css({ color: 'purple.400' })
           
-
-      const render = <template>
-              <h1 class={style}>using class binding</h1>
-              <p class={css({ color: 'red.500' })}>using inline styles</p>
-              <span class="style3">using actual class</span>
-              <div class={css({ color: 'red', fontWeight: 'bold' })}>
-                  <p>depth 1 children</p>
-                  <div class={css({ color: 'green' })}>
-                    <p>depth 2 children</p>
-                  </div>
-                </div>
-              </template>"
+      ;(style)
+      ;(css({ color: 'red.500' }))
+      ;(css({ color: 'green' }))
+      ;(css({ color: 'red', fontWeight: 'bold' }))"
     `)
 
     const result = parseAndExtract(transformed)
@@ -358,8 +322,7 @@ describe('extract Vue templates', () => {
         {
           "data": [
             {
-              "color": "red",
-              "fontWeight": "bold",
+              "color": "green",
             },
           ],
           "name": "css",
@@ -368,7 +331,8 @@ describe('extract Vue templates', () => {
         {
           "data": [
             {
-              "color": "green",
+              "color": "red",
+              "fontWeight": "bold",
             },
           ],
           "name": "css",
@@ -394,16 +358,16 @@ describe('extract Vue templates', () => {
             color: var(--colors-red-500);
       }
 
+          .c_green {
+            color: green;
+      }
+
           .c_red {
             color: red;
       }
 
           .fw_bold {
             font-weight: var(--font-weights-bold);
-      }
-
-          .c_green {
-            color: green;
       }
         }
       }"
@@ -456,18 +420,10 @@ describe('extract Vue templates', () => {
                 },
             }
           
-
-      const render = <template>
-            <h1 class={style}>using class binding</h1>
-            <p class={css({ color: 'red.500' })}>using inline styles</p>
-            <span class="style3">using actual class</span>
-            <div class={css({ color: 'red', fontWeight: 'bold' })}>
-              <p>depth 1 children</p>
-              <div class={css({ color: 'green' })}>
-                <p>depth 2 children</p>
-              </div>
-            </div>
-          </template>"
+      ;(style)
+      ;(css({ color: 'red.500' }))
+      ;(css({ color: 'green' }))
+      ;(css({ color: 'red', fontWeight: 'bold' }))"
     `)
 
     const result = parseAndExtract(transformed)
@@ -503,8 +459,7 @@ describe('extract Vue templates', () => {
         {
           "data": [
             {
-              "color": "red",
-              "fontWeight": "bold",
+              "color": "green",
             },
           ],
           "name": "css",
@@ -513,7 +468,8 @@ describe('extract Vue templates', () => {
         {
           "data": [
             {
-              "color": "green",
+              "color": "red",
+              "fontWeight": "bold",
             },
           ],
           "name": "css",
@@ -539,16 +495,16 @@ describe('extract Vue templates', () => {
             color: var(--colors-red-500);
       }
 
+          .c_green {
+            color: green;
+      }
+
           .c_red {
             color: red;
       }
 
           .fw_bold {
             font-weight: var(--font-weights-bold);
-      }
-
-          .c_green {
-            color: green;
       }
         }
       }"

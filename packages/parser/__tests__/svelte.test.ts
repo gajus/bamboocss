@@ -94,7 +94,8 @@ describe('extract svelte templates', () => {
 
     const transformed = svelteToTsx(code)
     expect(transformed).toMatchInlineSnapshot(`
-      "let moduleStyle: string = css({ color: 'blue.400' })
+      "
+            let moduleStyle: string = css({ color: 'blue.400' })
 
             type Something = "a" | "b" | "c";
             type Another = Something | "d" | "e";
@@ -119,6 +120,7 @@ describe('extract svelte templates', () => {
             // this will update "name" when 'person' changes
             $: ({ name } = person);
           
+
               import { css } from "styled-system/css";
 
               export let variable: boolean;
@@ -128,48 +130,33 @@ describe('extract svelte templates', () => {
               let style = css({ color: 'green.400' })
               let style2 = css({ color: 'purple.400' })
           
-      const render = <div><h1 class={style}>using class binding</h1>
-          <p class={css({ color: 'red.500' })}>using inline styles</p>
-          <span class="style3">using actual class</span>
-
-          {@html post.content}
-          {@debug}
-
-          <h1>Hello world</h1>
-          
-          <input bind:value={name} autofocus />
-
-          {#if porridge.temperature > 100}
-            <p class={css({ color: 'teal.100' })}>too hot!</p>
-          {:else if 80 > porridge.temperature}
-            <p class={css({ color: 'teal.200' })}>too cold!</p>
-          {:else}
-            <p className={css({ color: 'teal.300' })}>just right!</p>
-          {/if}
-
-          <ul>
-            {#each items as item}
-              <li class={css({ color: 'teal.400' })}>{item.name} x {item.qty}</li>
-            {/each}
-          </ul>
-
-          {#each items as { id, name, qty }, i (id)}
-            <li class={css({ color: 'teal.500' })}>{i + 1}: {name} x {qty}</li>
-          {/each}
-
-          {#await promise}
-            
-            <p class={css({ color: 'teal.600' })}>waiting for the promise to resolve...</p>
-          {:then value}
-            
-            <p>The value is {value}</p>
-          {:catch error}
-            
-            <p class={css({ color: 'teal.700' })}>Something went wrong: {error.message}</p>
-          {/await}
-
-          
-          </div>"
+      ;(style)
+      ;(css({ color: 'red.500' }))
+      ;(post.content)
+      ;(name)
+      ;(porridge.temperature > 100)
+      ;(css({ color: 'teal.100' }))
+      ;(80 > porridge.temperature)
+      ;(css({ color: 'teal.200' }))
+      ;(css({ color: 'teal.300' }))
+      ;(items)
+      ;(css({ color: 'teal.400' }))
+      ;(item.name)
+      ;(item.qty)
+      ;(items)
+      ;(css({ color: 'teal.500' }))
+      ;(i + 1)
+      ;(name)
+      ;(qty)
+      ;(id)
+      ;(name)
+      ;(qty)
+      ;(id)
+      ;(promise)
+      ;(css({ color: 'teal.600' }))
+      ;(value)
+      ;(css({ color: 'teal.700' }))
+      ;(error.message)"
     `)
 
     const result = parseAndExtract(transformed)

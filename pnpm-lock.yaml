@@ -618,9 +618,10 @@ importers:
       '@bamboocss/types':
         specifier: workspace:*
         version: link:../types
-      magic-string:
-        specifier: 0.30.21
-        version: 0.30.21
+    devDependencies:
+      svelte:
+        specifier: 5.45.4
+        version: 5.45.4
 
   packages/plugin-vue:
     dependencies:
@@ -630,9 +631,6 @@ importers:
       '@vue/compiler-sfc':
         specifier: 3.5.41
         version: 3.5.41
-      magic-string:
-        specifier: 0.30.21
-        version: 0.30.21
     devDependencies:
       '@vue/compiler-core':
         specifier: 3.5.41
@@ -21512,7 +21510,7 @@ snapshots:
       aria-query: 5.3.2
       axobject-query: 4.1.0
       clsx: 2.1.1
-      devalue: 5.5.0
+      devalue: 5.7.1
       esm-env: 1.2.2
       esrap: 2.2.1
       is-reference: 3.0.3

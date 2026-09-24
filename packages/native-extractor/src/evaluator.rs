@@ -914,9 +914,92 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
                 .expressions
                 .last()
                 .map_or_else(EvalResult::undefined, |value| self.evaluate(value)),
-            Expression::ChainExpression(_) => EvalResult::unknown(),
+            Expression::ChainExpression(chain) => self.evaluate_chain(&chain.expression),
             _ => EvalResult::unknown(),
         }
+    }
+
+    /// `a?.b`, `a?.[k]` and `f?.()`.
+    ///
+    /// Evaluated as the plain access, except that a nullish receiver at an optional link
+    /// short-circuits the *rest of the chain* to `undefined`: `o?.a.b` with `o = null` is
+    /// `undefined`, not a read of `.b` off `undefined`. That is the only difference `?.` makes,
+    /// so everything else is delegated to the non-optional path.
+    fn evaluate_chain(&mut self, element: &'a oxc_ast::ast::ChainElement<'a>) -> EvalResult {
+        use oxc_ast::ast::ChainElement;
+        let link = match element {
+            ChainElement::StaticMemberExpression(member) => self.chain_member(
+                &member.object,
+                member.optional,
+                MemberKey::Static(member.property.name.as_str()),
+            ),
+            ChainElement::ComputedMemberExpression(member) => self.chain_member(
+                &member.object,
+                member.optional,
+                MemberKey::Computed(&member.expression),
+            ),
+            ChainElement::TSNonNullExpression(value) => self.chain_link(&value.expression),
+            // An optional call runs code; the non-optional call path decides whether that code
+            // is evaluable, and a nullish callee is the one case `?.` adds.
+            ChainElement::CallExpression(call) => {
+                let callee = self.chain_link(&call.callee);
+                if callee.short_circuited || (call.optional && is_nullish(&callee.result)) {
+                    ChainLink::short_circuit()
+                } else {
+                    ChainLink::value(self.evaluate_call(call))
+                }
+            }
+            ChainElement::PrivateFieldExpression(_) => ChainLink::value(EvalResult::unknown()),
+        };
+        link.result
+    }
+
+    /// One link of a chain, recursing through the links before it.
+    ///
+    /// A parenthesized sub-chain is not a link: `(o?.a).b` ends the inner chain at the
+    /// parenthesis, so its short-circuit does not skip `.b`. Oxc represents that as a nested
+    /// `ChainExpression`, which is evaluated as an ordinary value.
+    fn chain_link(&mut self, expression: &'a Expression<'a>) -> ChainLink {
+        match expression {
+            Expression::StaticMemberExpression(member) => self.chain_member(
+                &member.object,
+                member.optional,
+                MemberKey::Static(member.property.name.as_str()),
+            ),
+            Expression::ComputedMemberExpression(member) => self.chain_member(
+                &member.object,
+                member.optional,
+                MemberKey::Computed(&member.expression),
+            ),
+            Expression::TSNonNullExpression(value) => self.chain_link(&value.expression),
+            _ => ChainLink::value(self.evaluate(expression)),
+        }
+    }
+
+    fn chain_member(
+        &mut self,
+        object: &'a Expression<'a>,
+        optional: bool,
+        key: MemberKey<'a>,
+    ) -> ChainLink {
+        let receiver = self.chain_link(object);
+        if receiver.short_circuited || (optional && is_nullish(&receiver.result)) {
+            return ChainLink::short_circuit();
+        }
+        let property = match key {
+            MemberKey::Static(name) => name.to_string(),
+            MemberKey::Computed(expression) => {
+                match self
+                    .evaluate(expression)
+                    .value
+                    .map(|value| to_js_string(&value))
+                {
+                    Some(property) => property,
+                    None => return ChainLink::value(EvalResult::unknown()),
+                }
+            }
+        };
+        ChainLink::value(member_value(receiver.result, &property))
     }
 
     pub fn evaluate_jsx_expression(&mut self, expression: &'a JSXExpression<'a>) -> EvalResult {
@@ -937,12 +1020,20 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
         } else {
             match self.semantic.symbol_declaration(symbol).kind() {
                 AstKind::VariableDeclarator(declarator) => {
-                    let value = declarator
-                        .init
-                        .as_ref()
-                        .map_or_else(EvalResult::undefined, |expression| {
-                            self.evaluate(expression)
-                        });
+                    // `declare const d: string` has no initializer because its value lives
+                    // somewhere the build cannot see — a global, a bundler define, another
+                    // script. It is not `undefined`. Reading it as the known `undefined` a bare
+                    // `let u` is dropped the property *and* reported the call complete, so the
+                    // value vanished with no warning and no failure.
+                    let ambient = matches!(
+                        self.semantic.nodes().parent_kind(self.semantic.symbol_declaration(symbol).id()),
+                        AstKind::VariableDeclaration(declaration) if declaration.declare
+                    );
+                    let value = match declarator.init.as_ref() {
+                        Some(expression) => self.evaluate(expression),
+                        None if ambient => EvalResult::unknown(),
+                        None => EvalResult::undefined(),
+                    };
                     // A destructured symbol denotes its property, not the declarator's entire
                     // initializer. Binding every sibling at once also mirrors JavaScript's
                     // defaults and avoids re-evaluating the same static initializer.
@@ -952,11 +1043,116 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
                         .cloned()
                         .unwrap_or_else(EvalResult::unknown)
                 }
+                AstKind::TSEnumDeclaration(declaration) => self.evaluate_enum(declaration),
                 _ => EvalResult::unknown(),
             }
         };
         self.evaluating.remove(&symbol);
         result
+    }
+
+    /// An enum as the object its members compile to.
+    ///
+    /// TypeScript's rules: a member without an initializer is one more than the previous
+    /// numeric member (or `0` first), and an initializer may name an earlier member bare —
+    /// `B = A + 1` — which is why members are bound into scope as they are read. A string
+    /// member ends auto-increment, so a bare member after one is unknown, as it is to `tsc`.
+    ///
+    /// Only the forward direction exists. The reverse mapping a numeric enum also carries
+    /// (`Tone[0] === 'Warm'`) is left out: nothing reads a style value through it, and
+    /// including it would put numeric keys into every object this spreads into.
+    ///
+    /// A `declare enum` has no runtime object, so its members are not values.
+    fn evaluate_enum(
+        &mut self,
+        declaration: &'a oxc_ast::ast::TSEnumDeclaration<'a>,
+    ) -> EvalResult {
+        if declaration.declare {
+            return EvalResult::unknown();
+        }
+        let mut object = serde_json::Map::with_capacity(declaration.body.members.len());
+        let mut complete = true;
+        let mut next: Option<f64> = Some(0.0);
+        for member in &declaration.body.members {
+            let name = match &member.id {
+                oxc_ast::ast::TSEnumMemberName::Identifier(id) => id.name.to_string(),
+                oxc_ast::ast::TSEnumMemberName::String(value)
+                | oxc_ast::ast::TSEnumMemberName::ComputedString(value) => value.value.to_string(),
+                oxc_ast::ast::TSEnumMemberName::ComputedTemplateString(template) => {
+                    match template.single_quasi() {
+                        Some(value) => value.to_string(),
+                        None => {
+                            complete = false;
+                            continue;
+                        }
+                    }
+                }
+            };
+            let value = match &member.initializer {
+                Some(initializer) => {
+                    let value = self.evaluate_enum_initializer(initializer, &object);
+                    complete &= value.complete;
+                    value.value
+                }
+                None => next
+                    .and_then(serde_json::Number::from_f64)
+                    .map(serde_json::Value::Number),
+            };
+            next = value
+                .as_ref()
+                .and_then(serde_json::Value::as_f64)
+                .map(|number| number + 1.0);
+            match value {
+                Some(value) => {
+                    object.insert(name, value);
+                }
+                None => complete = false,
+            }
+        }
+        EvalResult {
+            value: Some(object.into()),
+            conditions: Vec::new(),
+            complete,
+        }
+    }
+
+    /// An enum initializer, where an earlier member may be named without its enum.
+    fn evaluate_enum_initializer(
+        &mut self,
+        initializer: &'a Expression<'a>,
+        members: &serde_json::Map<String, serde_json::Value>,
+    ) -> EvalResult {
+        // A bare identifier inside an enum body resolves to the member of that name before any
+        // outer binding. Semantic analysis does not bind it as a reference to the member, so
+        // answer it here; anything else evaluates as usual.
+        if let Expression::Identifier(identifier) = initializer.get_inner_expression()
+            && let Some(value) = members.get(identifier.name.as_str())
+        {
+            return EvalResult::known(value.clone());
+        }
+        if let Expression::BinaryExpression(binary) = initializer.get_inner_expression() {
+            let side = |this: &mut Self, expression: &'a Expression<'a>| {
+                this.evaluate_enum_initializer(expression, members)
+            };
+            let left = side(self, &binary.left);
+            let right = side(self, &binary.right);
+            // Numeric `+` adds here. The general evaluator deliberately concatenates (class
+            // names already depend on it), but an enum member is a number to `tsc`, and
+            // `B = A + 1` concatenating to `"01"` would be a wrong value, not a style choice.
+            if binary.operator == BinaryOperator::Addition
+                && let (Some(serde_json::Value::Number(a)), Some(serde_json::Value::Number(b))) =
+                    (&left.value, &right.value)
+                && let (Some(a), Some(b)) = (a.as_f64(), b.as_f64())
+            {
+                return serde_json::Number::from_f64(a + b).map_or_else(EvalResult::unknown, |n| {
+                    let mut result = EvalResult::known(serde_json::Value::Number(n));
+                    result.complete = left.complete && right.complete;
+                    result
+                });
+            }
+            return self.combine_binary(binary.operator, left, right);
+        }
+        self.evaluate(initializer)
     }
 
     fn evaluate_unary(
@@ -1006,6 +1202,15 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
     ) -> EvalResult {
         let left = self.evaluate(left);
         let right = self.evaluate(right);
+        self.combine_binary(operator, left, right)
+    }
+
+    fn combine_binary(
+        &mut self,
+        operator: BinaryOperator,
+        left: EvalResult,
+        right: EvalResult,
+    ) -> EvalResult {
         let complete = left.complete && right.complete;
         let (Some(left), Some(right)) = (left.value, right.value) else {
             return EvalResult::unknown();
@@ -1515,6 +1720,44 @@ fn global_callee_path(expression: &Expression<'_>) -> Option<Vec<String>> {
             Some(path)
         }
         _ => None,
+    }
+}
+
+/// The outcome of one link of an optional chain.
+struct ChainLink {
+    result: EvalResult,
+    /// An earlier optional link met a nullish receiver, so this link — and every one after it
+    /// up to the end of the chain — is skipped rather than evaluated.
+    short_circuited: bool,
+}
+
+impl ChainLink {
+    fn value(result: EvalResult) -> Self {
+        Self {
+            result,
+            short_circuited: false,
+        }
+    }
+
+    fn short_circuit() -> Self {
+        Self {
+            result: EvalResult::undefined(),
+            short_circuited: true,
+        }
+    }
+}
+
+enum MemberKey<'a> {
+    Static(&'a str),
+    Computed(&'a Expression<'a>),
+}
+
+/// A value `?.` short-circuits on: known `null`, or known `undefined` (no value, complete).
+fn is_nullish(result: &EvalResult) -> bool {
+    match &result.value {
+        Some(serde_json::Value::Null) => true,
+        None => result.complete && result.conditions.is_empty(),
+        _ => false,
     }
 }
 

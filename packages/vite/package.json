@@ -45,11 +45,9 @@
     "@ampproject/remapping": "2.3.0",
     "@bamboocss/config": "workspace:*",
     "@bamboocss/core": "workspace:*",
-    "@bamboocss/extractor": "workspace:*",
     "@bamboocss/logger": "workspace:*",
     "@bamboocss/node": "workspace:*",
     "@bamboocss/shared": "workspace:*",
-    "@bamboocss/ts-ast": "workspace:*",
     "@bamboocss/types": "workspace:*",
     "@jridgewell/gen-mapping": "0.3.13",
     "magic-string": "0.30.21",
@@ -58,8 +56,8 @@
   },
   "devDependencies": {
     "@bamboocss/fixture": "workspace:*",
+    "@bamboocss/native-extractor": "workspace:*",
     "@jridgewell/trace-mapping": "^0.3.31",
-    "@typescript/api": "npm:typescript@7.1.0-dev.20260826.1",
     "vite": "7.2.6"
   },
   "peerDependencies": {

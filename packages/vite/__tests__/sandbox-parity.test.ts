@@ -29,6 +29,24 @@ const SOURCES = ['App.tsx', 'Card.tsx', 'Badge.tsx', 'Button.tsx']
   })
   .filter((entry): entry is { file: string; code: string } => entry != null)
 
+/**
+ * The sandbox's modules, read under their own names so relative imports between them resolve —
+ * `App.tsx` imports its components, whose recipes and styles are what makes this real source.
+ * Only the bytes are supplied; nothing is written.
+ */
+const sourcePath = (ctx: ReturnType<typeof createContext>, directory: string, file: string) =>
+  join(ctx.config.cwd, directory, file)
+
+const compile = (
+  ctx: ReturnType<typeof createContext>,
+  styleCompiler: ReturnType<typeof createStaticStyleSetCompiler>,
+  filePath: string,
+  code: string,
+) => {
+  const [analysis] = ctx.compileModules([{ filename: filePath, source: code }], { references: false })
+  return foldSource({ ctx, code, analysis: analysis!, filePath, styleCompiler })
+}
+
 const parseAll = (fold: boolean) => {
   // `'warn'`: this folds `sandbox/vite-ts` source against the *fixture's* theme, so a semantic
   // token declared only in that sandbox — `color: 'text'` — is expected not to resolve here.
@@ -38,19 +56,12 @@ const parseAll = (fold: boolean) => {
   const styleCompiler = createStaticStyleSetCompiler(ctx, runtimeCss)
   const results = []
 
-  for (const { file, code } of SOURCES) {
-    const filePath = `sandbox/vite-ts/src/${file}`
-    ctx.project.addSourceFile(filePath, code)
-    const parserResult = ctx.project.parseSourceFile(filePath)
-    if (!parserResult) continue
+  for (const { file, code } of SOURCES) ctx.project.overlaySource(sourcePath(ctx, 'sandbox/vite-ts/src', file), code)
 
-    if (fold) {
-      results.push({
-        file,
-        code,
-        result: foldSource({ ctx, code, parserResult, filePath, runtimeCss, styleCompiler }),
-      })
-    }
+  for (const { file, code } of SOURCES) {
+    const filePath = sourcePath(ctx, 'sandbox/vite-ts/src', file)
+    ctx.parseFile(filePath)
+    if (fold) results.push({ file, code, result: compile(ctx, styleCompiler, filePath, code) })
   }
 
   if (fold) ctx.encoder.atomizeObservedRecipes()
@@ -141,33 +152,11 @@ describe('sandbox/vite-ts parity', () => {
     const runtimeCss = createRuntimeCss(ctx)
     const styleCompiler = createStaticStyleSetCompiler(ctx, runtimeCss)
 
-    for (const { file, code } of SOURCES) {
-      const first = `sandbox/first/${file}`
-      ctx.project.addSourceFile(first, code)
-      const firstResult = foldSource({
-        ctx,
-        code,
-        parserResult: ctx.project.parseSourceFile(first)!,
-        filePath: first,
-        runtimeCss,
-        styleCompiler,
-      })
+    for (const { file, code } of SOURCES) ctx.project.overlaySource(sourcePath(ctx, 'sandbox/first', file), code)
 
-      const second = `sandbox/second/${file}`
-      ctx.project.addSourceFile(second, firstResult.code)
-      const secondResult = foldSource({
-        ctx,
-        code: firstResult.code,
-        parserResult:
-          ctx.project.parseSourceFile(second) ??
-          ({
-            toArray: () => [],
-            isEmpty: () => true,
-          } as never),
-        filePath: second,
-        runtimeCss,
-        styleCompiler,
-      })
+    for (const { file, code } of SOURCES) {
+      const firstResult = compile(ctx, styleCompiler, sourcePath(ctx, 'sandbox/first', file), code)
+      const secondResult = compile(ctx, styleCompiler, sourcePath(ctx, 'sandbox/second', file), firstResult.code)
 
       expect(secondResult.code, file).toBe(firstResult.code)
     }

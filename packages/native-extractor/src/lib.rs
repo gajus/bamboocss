@@ -17,6 +17,7 @@ use oxc_span::{GetSpan, SourceType};
 use oxc_syntax::symbol::SymbolId;
 
 mod evaluator;
+mod fold;
 mod token_accounting;
 
 pub use token_accounting::{NativeTokenAccounting, NativeTokenDecline};
@@ -855,4 +856,116 @@ fn resolve_path_pattern(pattern: &str, templates: &[String], specifier: &str) ->
     templates
         .first()
         .map(|template| template.replace('*', captured))
+}
+
+/// Options for `compileModules`.
+#[napi(object)]
+pub struct NativeFoldOptions {
+    pub cwd: Option<String>,
+    pub base_url: Option<String>,
+    pub paths: Vec<NativePathMapping>,
+    pub tokens: Vec<NativeToken>,
+    pub css_modules: Vec<String>,
+    pub token_modules: Vec<String>,
+    pub recipe_modules: Vec<String>,
+    pub pattern_modules: Vec<String>,
+    pub recipe_names: Vec<String>,
+    pub pattern_names: Vec<String>,
+    /// Collect survivor-check references and runtime shapes. Off for a provisional re-fold.
+    pub references: bool,
+}
+
+/// Per-module facts for the Vite compiler, for each of `sources`. See `fold/model.rs`.
+///
+/// `sources` are the modules to analyze; `auxiliary` are modules whose bytes differ from disk
+/// (a `parser:before` output, an unsaved buffer) and which a cross-module read must see as-is.
+#[napi]
+pub fn compile_modules(
+    sources: Vec<NativeSource>,
+    auxiliary: Vec<NativeSource>,
+    options: NativeFoldOptions,
+) -> Result<Vec<fold::model::FoldAnalysis>> {
+    let entrypoints = vec![
+        NativeEntrypoint {
+            kind: "css".into(),
+            modules: options.css_modules.clone(),
+            names: vec![
+                "css".into(),
+                "cva".into(),
+                "sva".into(),
+                "cx".into(),
+                "fallback".into(),
+                "viewTransition".into(),
+            ],
+        },
+        NativeEntrypoint {
+            kind: "token".into(),
+            modules: options.token_modules.clone(),
+            names: vec!["token".into()],
+        },
+        NativeEntrypoint {
+            kind: "recipe".into(),
+            modules: options.recipe_modules.clone(),
+            names: options.recipe_names.clone(),
+        },
+        NativeEntrypoint {
+            kind: "pattern".into(),
+            modules: options.pattern_modules.clone(),
+            names: options.pattern_names.clone(),
+        },
+    ];
+    let project_options = NativeProjectOptions {
+        cwd: options.cwd.clone(),
+        base_url: options.base_url.clone(),
+        paths: options
+            .paths
+            .iter()
+            .map(|mapping| NativePathMapping {
+                pattern: mapping.pattern.clone(),
+                paths: mapping.paths.clone(),
+            })
+            .collect(),
+        tokens: options
+            .tokens
+            .iter()
+            .map(|token| NativeToken {
+                path: token.path.clone(),
+                value: token.value.clone(),
+                variable: token.variable.clone(),
+            })
+            .collect(),
+        jsx: false,
+    };
+    let project = ProjectEvaluator::new(
+        sources
+            .iter()
+            .chain(auxiliary.iter())
+            .map(|source| (source.filename.as_str(), source.source.as_str())),
+        &entrypoints,
+        Some(&project_options),
+    );
+    let recipe_names: std::collections::HashSet<String> =
+        options.recipe_names.iter().cloned().collect();
+    let pattern_names: std::collections::HashSet<String> =
+        options.pattern_names.iter().cloned().collect();
+    let fold_entrypoints = fold::FoldEntrypoints {
+        css: &options.css_modules,
+        tokens: &options.token_modules,
+        recipes: &options.recipe_modules,
+        patterns: &options.pattern_modules,
+        recipe_names: &recipe_names,
+        pattern_names: &pattern_names,
+    };
+    Ok(sources
+        .iter()
+        .map(|source| {
+            fold::analyze_module(
+                &project,
+                &source.filename,
+                &source.source,
+                &fold_entrypoints,
+                options.references,
+            )
+        })
+        .collect())
 }

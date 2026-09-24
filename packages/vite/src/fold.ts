@@ -1,55 +1,23 @@
-import { createHash } from 'node:crypto'
 import { resolveTsPathPattern } from '@bamboocss/config/ts-path'
 import type { Context } from '@bamboocss/core'
-import { type BoxNode, box } from '@bamboocss/extractor'
+import type { FoldAnalysis, FoldCall, FoldCxArgument } from '@bamboocss/native-extractor'
 import { viewTransitionClassName } from '@bamboocss/shared'
-import type { Dict, ParserResultInterface, ResultItem } from '@bamboocss/types'
+import type { Dict } from '@bamboocss/types'
 import MagicString from 'magic-string'
 import { dirname, relative, resolve as resolvePath } from 'node:path'
-import {
-  Node,
-  SyntaxKind,
-  childOf,
-  forEachDescendant,
-  getAliasNode,
-  getDefaultImport,
-  getDescendantsOfKind,
-  getExportDeclarations,
-  getFirstAncestor,
-  getFirstAncestorByKind,
-  getImportDeclarations,
-  getModuleSpecifierValue,
-  getName,
-  getNamedExports,
-  getNamedImports,
-  getNamespaceExport,
-  getNamespaceImport,
-  isStarExport,
-  isTypeOnly,
-  literalValueOf,
-  nameNodeOf,
-  stringLiteralValue,
-  pathOf,
-} from '@bamboocss/ts-ast'
-import type { CallExpression, ImportEqualsDeclaration, SourceFile } from '@bamboocss/ts-ast'
 import {
   AMBIGUOUS,
   collectRecipeConfigs,
   ensureRecipeHelperImport,
+  type HelperInsert,
   lowerRecipeCall,
   RECIPE_MAP_HELPER,
   SPLIT_PROPS_HELPER,
   type DynamicStyleMap,
+  type RecipeConfig,
   type RecipeEntry,
 } from './fold-recipe'
-import {
-  accountsForSource,
-  type IdentifierIndex,
-  identifierIndex,
-  isStaticBox,
-  localReferencesTo,
-} from './fold-analysis'
-import { createRuntimeCss, createRuntimeToken, createRuntimeTokenValue, type RuntimeCss } from './runtime-css'
+import { createRuntimeToken, createRuntimeTokenValue } from './runtime-css'
 import type { StaticStyleSetCompiler } from './style-set'
 
 /**
@@ -101,111 +69,6 @@ export interface SkippedCall {
   end: number
 }
 
-/** One cross-file read a fold performed, with the digest of what it read at the time. */
-export type ExportReadRecord = { kind: 'recipe' | 'value'; file: string; name: string; digest: string | undefined }
-
-/**
- * Decide whether an edit to `changedFile` moved anything a dependent's fold actually read.
- *
- * `'unchanged'` means every recorded read of the edited file re-digests to the same value —
- * the dependent's fold inputs did not move, so its output cannot have, and the re-fold can be
- * skipped outright. `'changed'` means a read definitely differs, which is the same verdict
- * the re-fold would reach after doing all the work. `'unknown'` is every other situation —
- * no read names the edited file (the relationship runs through a channel these records do
- * not witness, a barrel hop in a recipe binding walk, say), a digest could not be pinned
- * down on either side — and sends the caller to the full re-fold this replaced.
- *
- * `digestMemo` is the per-event cache: many dependents verify against the same edited file,
- * and each distinct `(kind, file, name)` needs digesting once, not once per dependent.
- */
-export const verifyExportReads = (
-  ctx: Context,
-  parseModule: (filePath: string) => ParserResultInterface | undefined,
-  reads: readonly ExportReadRecord[],
-  changedFile: string,
-  digestMemo: Map<string, { digest: string | undefined; crossings: readonly string[] }>,
-): { verdict: 'changed' | 'unchanged' | 'unknown'; crossings: readonly string[] } => {
-  const relevant = reads.filter((read) => read.file === changedFile)
-  if (!relevant.length) return { verdict: 'unknown', crossings: [] }
-
-  const crossings = new Set<string>()
-  for (const read of relevant) {
-    if (read.digest === undefined) return { verdict: 'unknown', crossings: [] }
-    const key = `${read.kind}\u0000${read.file}\u0000${read.name}`
-    if (!digestMemo.has(key)) {
-      if (read.kind === 'value') {
-        const crossed: string[] = []
-        const digest = (
-          ctx as unknown as {
-            project?: {
-              digestExportRead?: (file: string, name: string, onCrossing?: (path: string) => void) => string | undefined
-            }
-          }
-        ).project?.digestExportRead?.(read.file, read.name, (path) => crossed.push(path))
-        digestMemo.set(key, { digest, crossings: crossed })
-      } else {
-        // One parse answers every recipe name in the file — several dependents each reading
-        // several recipes would otherwise re-extract the same edited module once per name.
-        const batched = `recipe-file\u0000${read.file}`
-        if (!digestMemo.has(batched)) {
-          try {
-            const result = parseModule(read.file)
-            if (result) {
-              for (const [name, entry] of collectRecipeConfigs(result)) {
-                digestMemo.set(`recipe\u0000${read.file}\u0000${name}`, {
-                  digest: entry === AMBIGUOUS ? 'bamboo:export-missing' : digestRecipeConfig(entry),
-                  crossings: [],
-                })
-              }
-            }
-          } catch {
-            // Individual lookups below answer `bamboo:module-missing` or stay unknown.
-          }
-          digestMemo.set(batched, { digest: 'bamboo:batched', crossings: [] })
-        }
-        if (!digestMemo.has(key)) {
-          digestMemo.set(key, { digest: digestRecipeReadNow(parseModule, read.file, read.name), crossings: [] })
-        }
-      }
-    }
-    const entry = digestMemo.get(key)!
-    if (entry.digest === undefined) return { verdict: 'unknown', crossings: [] }
-    if (entry.digest !== read.digest) return { verdict: 'changed', crossings: [] }
-    for (const path of entry.crossings) crossings.add(path)
-  }
-  // The re-resolution just performed is the current route to every verified value. A value
-  // can keep its bytes while moving files — a declaration becoming a re-export — and the
-  // pass that declines to re-fold is the only one positioned to hand the new edges back.
-  return { verdict: 'unchanged', crossings: [...crossings] }
-}
-
-const digestRecipeReadNow = (
-  parseModule: (filePath: string) => ParserResultInterface | undefined,
-  file: string,
-  name: string,
-): string | undefined => {
-  try {
-    const result = parseModule(file)
-    if (!result) return 'bamboo:module-missing'
-    const entry = collectRecipeConfigs(result).get(name)
-    if (!entry || entry === AMBIGUOUS) return 'bamboo:export-missing'
-    return digestRecipeConfig(entry)
-  } catch {
-    return undefined
-  }
-}
-
-/** The verification witness for a foreign recipe read: the config bytes, order preserved. */
-export const digestRecipeConfig = (entry: { config: unknown }): string | undefined => {
-  try {
-    const json = JSON.stringify(entry.config, (_key, value) => (value === undefined ? 'bamboo:undefined' : value))
-    if (json === undefined) return undefined
-    return createHash('sha256').update(json).digest('base64')
-  } catch {
-    return undefined
-  }
-}
-
 export interface FoldResult {
   code: string
   /** Null when nothing was folded, so callers can return the original module untouched. */
@@ -215,92 +78,34 @@ export interface FoldResult {
   /**
    * Other modules a folded value came from.
    *
-   * The extractor resolves values across files, so `css(importedStyles, { … })` folds
-   * to a string that depends on a file this module only imports. Without registering
-   * that edge, editing the imported module leaves a stale literal behind in every
-   * consumer. Bundlers need these as watch files.
+   * Values resolve across files, so `css(importedStyles, { … })` folds to a string that
+   * depends on a file this module only imports. Without registering that edge, editing the
+   * imported module leaves a stale literal behind in every consumer. Bundlers need these as
+   * watch files.
    */
   dependencies: string[]
-  /**
-   * Foreign recipe configs this fold consumed, with the config digest read at fold time.
-   *
-   * A consumer whose only relationship to an edited module is through these reads can be
-   * verified by recomputing the digests instead of being re-folded; see the plugin's
-   * dependent verification. Value-level reads travel on the ParserResult instead — both
-   * channels must be checked together.
-   */
-  exportReads: Array<{ kind: 'recipe'; file: string; name: string; digest: string | undefined }>
 }
 
 export interface FoldOptions {
   ctx: Context
   code: string
-  parserResult: ParserResultInterface
+  /** What the native analysis established about `code`. */
+  analysis: FoldAnalysis
   filePath: string
-  /** Reuse one runtime `css` across files in a build. */
-  runtimeCss?: RuntimeCss
   /** Compile every style surface to the shared symbolic/atomic representation. */
   styleCompiler: StaticStyleSetCompiler
   /** Maximum finite recipe selections the static compiler may enumerate for one call. */
   maxRecipeStates?: number
   /**
-   * Parse another module, for a recipe whose `cva` config lives outside this one.
-   *
-   * Threaded in rather than read off `ctx`, because the project belongs to the node
-   * context and this signature takes the core one. Its absence is a supported state:
-   * without it a cross-module recipe call is still *reported*, which is the half that
-   * used to be missing entirely — it simply cannot be lowered.
-   *
-   * Pulling the module on demand is also what makes the fold order-independent. A
-   * bundler transforms a consumer before the module it imports, so a registry built
-   * from what has been transformed so far would fold or decline the same file
-   * depending on discovery order.
-   */
-  parseModule?: (filePath: string) => ParserResultInterface | undefined
-  /**
-   * Configs of modules other than this one, shared across a build.
-   *
-   * Owned by the caller because it has to outlive one call: the declaring module would
-   * otherwise be re-parsed once per module that imports it, which is `consumers x module
-   * size` on the transform path — measured at 909ms against 8.3ms for fifty consumers of a
-   * hundred-recipe module. The caller clears an entry when the file changes, which is the
-   * only place that knows.
-   */
-  recipeConfigCache?: Map<string, ForeignRecipes>
-  /**
    * Also report bamboo bindings the rewrite left behind, whatever the skip ledger says.
    *
    * The ledger holds only calls something recognised, so it answers "of the calls I looked
    * at, which survived" — and a guarantee built on it is worth exactly what the recogniser
-   * is. A cross-module recipe call used to appear in neither column, so a build could report
-   * a clean sweep while shipping hundreds of them.
-   *
-   * This asks what the guarantee actually claims: after the rewrite, is anything from a
-   * bamboo module still referenced? Off by default because it costs an identifier walk, and
-   * the strict compiler needs an answer it can fail a build on.
+   * is. This asks what the guarantee actually claims: after the rewrite, is anything from a
+   * bamboo module still referenced? Requires the analysis to have collected references.
    */
   reportSurvivors?: boolean
-  /**
-   * The module's own AST, when the caller already holds it.
-   *
-   * Only `reportSurvivors` needs it, and only for the case it exists to catch: a module whose
-   * bamboo usage produced no parser result at all has no call to reach the AST through.
-   */
-  sourceFile?: SourceFile
 }
-
-/**
- * `cva`/`sva` return a function, so their definitions are compile-time declarations rather
- * than class-producing calls; once their uses are lowered, the factory calls are erased.
- * `token` also resolves to no class, but it does resolve to a literal, so it compiles through
- * its own path rather than being declined outright. A static `viewTransition` bag resolves to
- * its extracted class and uses the ordinary class candidate path.
- *
- * Recipe invocations compile through `fold-recipe`. Inline calls
- * are recorded under the name the file bound; config calls arrive as `recipe`. Routing both
- * through one exact finite-state lowering keeps their selection contract identical.
- */
-const FOLDABLE_TYPES = new Set(['css', 'pattern', 'viewTransition'])
 
 /**
  * The skip reasons that leave a `css()`-family call in the output.
@@ -312,115 +117,19 @@ export const SURVIVES_TO_RUNTIME = new Set<SkipReason>([
   'dynamic',
   // The `cx()` half of `dynamic`, told apart only so it can be reported differently. It has to
   // be here for the same reason `dynamic` is: the range it covers suppresses a `runtime-binding`
-  // report for a watched binding standing among the call's arguments, which the declined call
-  // already accounts for. Not for `cx` itself — that name is permitted and never watched, so it
-  // is the argument that would otherwise be reported twice.
+  // report for a watched binding standing among the call's arguments.
   'opaque-composition',
   // Not a declined call at all: a binding the rewrite left referenced. It is the one entry
-  // here that does not depend on something having recognised a call, which is what makes the
-  // guarantee independent of the recogniser rather than a restatement of it.
+  // here that does not depend on something having recognised a call.
   'runtime-binding',
   'raw-call',
   'unsupported-kind',
   'no-call-expression',
   'unresolved-token',
-  // A module the fold threw on. Nothing was established about it either way — its calls were
-  // neither folded nor declined, so it counted towards neither column and the compiler saw a
-  // module that did not exist. Unknown has to read as survives: the guarantee is that
+  // A module the fold threw on. Unknown has to read as survives: the guarantee is that
   // *nothing* still calls `css()`, and a module nobody checked cannot support it.
   'compile-failed',
 ])
-
-/**
- * A call of a recipe the file bound itself: `const badge = cva(...)`, then `badge({ tone })`.
- *
- * Folded when the whole selection resolves, reported under this reason when it does not.
- * Deliberately all-or-nothing: an unresolved variant does not merely omit its own class, so a
- * partially-known selection is not foldable at all.
- *
- * Visible at all because it used to not be. The parser matched calls by imported name, so a
- * local binding was never recorded, and an unfoldable invocation looked identical to code
- * nothing had parsed.
- */
-const RECIPE_CALL_TYPE = 'cva-call'
-
-/**
- * An identifier that actually reads the binding.
- *
- * `getDescendantsOfKind(Identifier)` yields every name in the file, and most of them bind or
- * label rather than read: a JSX tag (`<button/>` against a recipe called `button`), an object
- * key, a property name, a declaration. Counting those failed builds on modules that had
- * folded completely — and `button`, `input`, `label`, `select`, `table`, `dialog` and `form`
- * are all ordinary recipe names as well as intrinsic elements.
- *
- * A type position is excluded for a different reason: it is erased, and with it the import.
- */
-const isValueReference = (identifier: Node): boolean => {
-  const parent = identifier.parent
-  if (!parent) return false
-
-  // The declaration naming it, not a use of it.
-  if (Node.isImportSpecifier(parent) || Node.isExportSpecifier(parent)) return false
-  if (Node.isImportClause(parent) || Node.isNamespaceImport(parent)) return false
-
-  // `o.css` and `a.b.css` name a member. The left of either is a read and reaches here as its
-  // own identifier.
-  if (Node.isPropertyAccessExpression(parent) && parent.name === identifier) return false
-  if (Node.isQualifiedName(parent) && parent.right === identifier) return false
-
-  // `{ css: 1 }` is a key. `{ css }` is a ShorthandPropertyAssignment and *is* a read, so it
-  // is deliberately not matched here.
-  if (Node.isPropertyAssignment(parent) && parent.name === identifier) return false
-  if (
-    Node.isMethodDeclaration(parent) ||
-    Node.isPropertyDeclaration(parent) ||
-    Node.isGetAccessorDeclaration(parent) ||
-    Node.isSetAccessorDeclaration(parent) ||
-    Node.isMethodSignatureDeclaration(parent) ||
-    Node.isPropertySignatureDeclaration(parent) ||
-    Node.isEnumMember(parent)
-  ) {
-    if (nameNodeOf(parent) === identifier) return false
-  }
-
-  // `label: for (…) break label` names a target, not a value.
-  if (Node.isLabeledStatement(parent) || Node.isBreakStatement(parent) || Node.isContinueStatement(parent)) {
-    return false
-  }
-
-  // `<button />` is an intrinsic element, named by a string as far as the runtime is
-  // concerned. `<Button />` is not: it reads the binding, so a recipe kept alive only as a
-  // component tag has to count. The case of the first character is the whole distinction JSX
-  // draws, and it is what TypeScript resolves on too.
-  if (Node.isJsxOpeningElement(parent) || Node.isJsxSelfClosingElement(parent) || Node.isJsxClosingElement(parent)) {
-    const tag = parent.tagName
-    if (tag === identifier) return identifier.getText()[0] === identifier.getText()[0]?.toUpperCase()
-  }
-  if (Node.isJsxAttribute(parent)) return false
-
-  // `({ css: local }) => …` — the key is the *property* read off the argument, not the
-  // imported binding. Only `getNameNode` is the local one, so both have to be asked.
-  if (Node.isBindingElement(parent) && parent.propertyName === identifier) return false
-
-  // A binding of the name shadows the import rather than reading it.
-  if (
-    (Node.isVariableDeclaration(parent) ||
-      Node.isParameterDeclaration(parent) ||
-      Node.isBindingElement(parent) ||
-      Node.isFunctionDeclaration(parent) ||
-      Node.isClassDeclaration(parent)) &&
-    parent.name === identifier
-  ) {
-    return false
-  }
-
-  // `typeof css`, `Foo<typeof css>`, an interface member — all erased with the type.
-  return !getFirstAncestor(
-    identifier,
-    (ancestor) =>
-      Node.isTypeNode(ancestor) || Node.isTypeAliasDeclaration(ancestor) || Node.isInterfaceDeclaration(ancestor),
-  )
-}
 
 /**
  * Imports a surviving reference to is not a failure.
@@ -430,406 +139,19 @@ const isValueReference = (identifier: Node): boolean => {
  */
 const PERMITTED_BINDINGS = new Set(['cx', RECIPE_MAP_HELPER, SPLIT_PROPS_HELPER])
 
-/**
- * Whether a module's text could hold a `splitVariantProps` property access.
- *
- * A necessary condition, deliberately not a sufficient one: the name inside a string or a
- * comment opens the walk, which costs what the walk always cost. What it must never do is
- * close on a module that has one, and an identifier may be spelled with unicode escapes —
- * `badge.splitVariantProps(p)` reads as the name to the compiler and contains none of it
- * as text. Both escape forms start `\u`, so one test covers every spelling.
- */
-const mayNameSplitVariantProps = (text: string) => text.includes('splitVariantProps') || text.includes('\\u')
-
-/** Where an imported recipe was declared, as the parser recorded it on the call. */
-type RecipeOrigin = NonNullable<ResultItem['origin']>
-
-/**
- * What one foreign module contributes, in a form that outlives it.
- *
- * Plain data only. Anything holding a ts-morph node would be read after the next
- * `addSourceFile` forgets that module's tree.
- */
-export interface ForeignRecipes {
-  configs: Map<string, RecipeEntry>
-  /** How that module spelled the css module, for a helper import written into a consumer. */
-  cssSpecifier?: string
-}
-
-/**
- * The pieces `trim` reduces a module specifier by, hoisted because a regex literal
- * constructs a new object every time it is evaluated and `trim` runs per specifier per
- * import declaration per module.
- */
 const LEADING_RELATIVE = /^(?:\.\.?\/)+/
 const TRAILING_SLASH = /\/$/
 const MODULE_EXTENSION = /\.[mc]?[jt]sx?$/
 const TRAILING_INDEX = /\/index$/
 
-/**
- * An argument that cannot run anything when it is evaluated.
- *
- * `token()` takes one argument, but javascript evaluates every argument a call site passes
- * before the call — so a fold that drops an extra one also drops whatever evaluating it would
- * have done. `token('x', compute())` is pathological and no longer type-checks, and the fold's
- * contract is behaviour preservation regardless: a literal is the cheap way to prove it, since
- * it means no call, no property read, no getter.
- */
-const isInertArgument = (node: Node): boolean =>
-  Node.isStringLiteral(node) ||
-  Node.isNumericLiteral(node) ||
-  Node.isNoSubstitutionTemplateLiteral(node) ||
-  node.kind === SyntaxKind.TrueKeyword ||
-  node.kind === SyntaxKind.FalseKeyword ||
-  node.kind === SyntaxKind.NullKeyword ||
-  (Node.isIdentifier(node) && node.getText() === 'undefined')
-
-/**
- * An expression whose evaluation cannot do anything observable, so deleting it preserves
- * behaviour.
- *
- * `isInertArgument` covers the leaves; this walks the object and array literals a recipe
- * call is actually written with. A spread runs the source's getters, a computed key runs an
- * expression, a getter or method definition is a function — none of those are safe to
- * delete, so they are declined rather than enumerated.
- */
-export const isInertExpression = (node: Node): boolean => {
-  if (isInertArgument(node)) return true
-
-  // A bare identifier is a binding read, which cannot run anything — and this check is
-  // about *inertness*, not about knowing the value. That is the whole point for a constant
-  // slot: `checkbox({ size: dyn }).control` resolves the same whatever `dyn` holds. A
-  // property access is excluded on purpose, since reading one can run a getter — Solid
-  // compiles props to accessors, so `props.size` is exactly that case.
-  //
-  // Not strictly true of a binding in its temporal dead zone, which throws on read. Folding
-  // past `checkbox({ size: later }).control` before `const later` turns a ReferenceError
-  // into a class — but the code is broken either way, and proving initialisation order
-  // costs far more than that is worth.
-  if (Node.isIdentifier(node)) return true
-
-  // Type-only wrappers are erased before anything runs, so they cannot add an effect. These
-  // are how a variant prop is normally written in TypeScript — `dyn as 'sm'`, `dyn!`,
-  // `dyn satisfies Size` — and rejecting them lost folds that used to land.
-  if (
-    Node.isAsExpression(node) ||
-    Node.isSatisfiesExpression(node) ||
-    Node.isNonNullExpression(node) ||
-    Node.isTypeAssertion(node) ||
-    Node.isParenthesizedExpression(node)
-  ) {
-    return isInertExpression(node.expression)
-  }
-
-  // A function is inert to *define*; only calling one runs anything, and nothing here does.
-  if (Node.isArrowFunction(node) || Node.isFunctionExpression(node)) return true
-  if (Node.isRegularExpressionLiteral(node) || Node.isBigIntLiteral(node)) return true
-
-  if (Node.isPrefixUnaryExpression(node)) {
-    const operator = node.operator
-    return (
-      (operator === SyntaxKind.MinusToken ||
-        operator === SyntaxKind.PlusToken ||
-        operator === SyntaxKind.ExclamationToken ||
-        operator === SyntaxKind.TildeToken) &&
-      isInertExpression(node.operand)
-    )
-  }
-
-  // `??`, `||` and `&&` only ever evaluate their operands. Arithmetic and comparison are
-  // excluded because they coerce, which can reach `valueOf`/`Symbol.toPrimitive`.
-  if (Node.isBinaryExpression(node)) {
-    const operator = node.operatorToken.kind
-    return (
-      (operator === SyntaxKind.QuestionQuestionToken ||
-        operator === SyntaxKind.BarBarToken ||
-        operator === SyntaxKind.AmpersandAmpersandToken) &&
-      isInertExpression(node.left) &&
-      isInertExpression(node.right)
-    )
-  }
-
-  if (Node.isObjectLiteralExpression(node)) {
-    return node.properties.every((property) => {
-      // A shorthand `{ size }` is a variable read, which is inert.
-      if (Node.isShorthandPropertyAssignment(property)) return true
-      if (!Node.isPropertyAssignment(property)) return false
-      if (Node.isComputedPropertyName(property.name)) return false
-
-      const initializer = property.initializer
-      return initializer !== undefined && isInertExpression(initializer)
-    })
-  }
-
-  if (Node.isArrayLiteralExpression(node)) return node.elements.every(isInertExpression)
-
-  return false
-}
-
-/**
- * Source files a box tree reaches, other than the one being folded.
- *
- * When the extractor resolves an imported identifier it boxes the *declaration's*
- * node, which lives in the defining module. Walking the tree and reading each node's
- * source file therefore recovers exactly the files a fold depended on — narrower and
- * more accurate than treating every import of the module as a dependency.
- */
-const collectSourceFiles = (node: BoxNode | undefined, ctx: DependencyScan, seen = new Set<BoxNode>()) => {
-  if (!node || seen.has(node)) return
-  seen.add(node)
-
-  ctx.record(node.getNode?.())
-
-  if (box.isMap(node)) {
-    for (const child of node.value.values()) collectSourceFiles(child, ctx, seen)
-    return
-  }
-
-  if (box.isArray(node)) {
-    for (const child of node.value) collectSourceFiles(child, ctx, seen)
-  }
-}
-
-/**
- * Resolving a node to its file path is the expensive part of the scan, so paths are
- * memoized per `SourceFile` and the module's own file is short-circuited — which is
- * the overwhelmingly common case, since most folds read nothing but their own source.
- */
-interface DependencyScan {
-  record: (node: Node | undefined) => void
-  results: Set<string>
-}
-
-const createDependencyScan = (ownFile: SourceFile): DependencyScan => {
-  const results = new Set<string>()
-  const paths = new Map<SourceFile, string | null>()
-
-  return {
-    results,
-    record(node) {
-      if (!node) return
-
-      const sourceFile = node.getSourceFile()
-      if (sourceFile === ownFile) return
-
-      let path = paths.get(sourceFile)
-      if (path === undefined) {
-        path = pathOf(sourceFile)
-        paths.set(sourceFile, path)
-      }
-      if (path) results.add(path)
-    },
-  }
-}
-
-/**
- * The call expression to replace.
- *
- * `extractCallExpressionArguments` boxes the argument list against the call node and
- * pushes `[callNode, argNode]` onto each argument's stack, so the call is reachable
- * from either shape the parser stores: the argument array (multi-arg) or the first
- * argument's map (single-arg).
- */
-const findCallExpression = (node: BoxNode): Node | undefined => {
-  const own = node.getNode?.()
-  if (own && Node.isCallExpression(own)) return own
-
-  const stack = node.getStack?.() ?? []
-  for (const entry of stack) {
-    if (Node.isCallExpression(entry)) return entry
-  }
-
-  // Single-argument calls box the object literal directly; its parent is the call.
-  let current: Node | undefined = own
-  for (let depth = 0; current && depth < 3; depth++) {
-    if (Node.isCallExpression(current)) return current
-    current = current.parent
-  }
-
-  return undefined
-}
-
-/**
- * `css.raw(...)` must keep returning a style object — folding it to a class string
- * breaks every caller composing those styles. The file matcher strips `.raw` when it
- * normalizes function names, so the parser result cannot tell us; the callee text can.
- */
-const isRawCall = (call: Node): boolean => {
-  if (!Node.isCallExpression(call)) return false
-  const callee = call.expression.getText()
-  return callee === 'raw' || callee.endsWith('.raw')
-}
-
-/** The identifier a callee is rooted at: `css` for `css(…)`, `panda` for `panda.css(…)`. */
-const calleeRootName = (call: Node): string | undefined => {
-  if (!Node.isCallExpression(call)) return undefined
-
-  let current: Node = call.expression
-  while (Node.isPropertyAccessExpression(current)) {
-    current = current.expression
-  }
-
-  return Node.isIdentifier(current) ? current.getText() : undefined
-}
-
-/**
- * Local names a module binds to an import of bamboo's own generated system.
- *
- * The parser matches by name and asks neither question this does — deliberately, since
- * for CSS extraction the worst case is a few unused rules. A transform cannot be that
- * relaxed, and it needs both halves:
- *
- * - imported at all, or a user's `const css = (s) => JSON.stringify(s)` gets rewritten
- * - imported *from bamboo*, or `import { css } from '@emotion/css'` does, which is the
- *   likelier accident of the two since a migrating project has both in the tree
- *
- * Answered together and once per file, because the scan is the expensive part and both
- * answers fall out of the same pass. Per call site instead of per file, this scan
- * measured +74% on the largest sandbox module.
- */
-const bambooImportedNames = (sourceFile: SourceFile, ctx: Context): Set<string> => {
-  const names = new Set<string>()
-
-  for (const declaration of getImportDeclarations(sourceFile)) {
-    const mod = getModuleSpecifierValue(declaration)
-
-    for (const named of getNamedImports(declaration)) {
-      const name = nameNodeOf(named)?.getText()
-      const alias = getAliasNode(named)?.getText() ?? name
-      if (ctx.imports.match({ mod: mod ?? '', name: name ?? '', alias: alias ?? '' })) names.add(alias ?? '')
-    }
-
-    const namespace = getNamespaceImport(declaration)
-    if (namespace) {
-      const alias = namespace.getText()
-      if (ctx.imports.match({ mod: mod ?? '', name: alias ?? '', alias: alias ?? '', kind: 'namespace' }))
-        names.add(alias ?? '')
-    }
-  }
-
-  return names
-}
-
-/**
- * Is the callee the imported binding, or a local one that shadows it?
- *
- * A block-scoped binding of the same name is legal alongside the import, and it is
- * the one the call actually reaches. Walking ancestors is the precise answer; the
- * cost is kept off the common path by only inspecting the two node kinds that can
- * introduce a binding. Ancestors of a call in JSX are overwhelmingly elements and
- * attributes, which match neither and cost nothing.
- */
-const isShadowed = (call: Node, name: string): boolean => {
-  for (let node: Node | undefined = call.parent; node; node = node.parent) {
-    if (Node.isSourceFile(node)) return false
-    if (bindsName(node, name)) return true
-  }
-  return false
-}
-
-/**
- * Does a binding name introduce `name`?
- *
- * A plain identifier check is not enough: destructuring is the likeliest way a
- * same-named local reaches a call, since `({ css }) => css(…)` is what a component
- * taking a `css` prop looks like. Nested and rest elements bind too, so the pattern
- * is walked rather than inspected at the top level.
- */
-const bindingIntroduces = (nameNode: Node | undefined, name: string): boolean => {
-  if (!nameNode) return false
-  if (Node.isIdentifier(nameNode)) return nameNode.getText() === name
-
-  if (Node.isObjectBindingPattern(nameNode) || Node.isArrayBindingPattern(nameNode)) {
-    return nameNode.elements.some((element) => Node.isBindingElement(element) && bindingIntroduces(element.name, name))
-  }
-
-  return false
-}
-
-const declarationsBind = (list: Node | undefined, name: string): boolean =>
-  list !== undefined &&
-  Node.isVariableDeclarationList(list) &&
-  list.declarations.some((declaration) => bindingIntroduces(declaration.name, name))
-
-const bindsName = (scope: Node, name: string): boolean => {
-  if (Node.isBlock(scope)) {
-    return scope.statements.some((statement) => statementBinds(statement, name))
-  }
-
-  if (
-    Node.isFunctionDeclaration(scope) ||
-    Node.isArrowFunction(scope) ||
-    Node.isFunctionExpression(scope) ||
-    Node.isMethodDeclaration(scope)
-  ) {
-    return scope.parameters.some((parameter) => bindingIntroduces(parameter.name, name))
-  }
-
-  // `catch` and the three `for` heads bind in their own scope rather than in the
-  // block they enclose, so walking blocks alone never sees them.
-  if (Node.isCatchClause(scope)) {
-    return bindingIntroduces(scope.variableDeclaration?.name, name)
-  }
-
-  if (Node.isForStatement(scope) || Node.isForOfStatement(scope) || Node.isForInStatement(scope)) {
-    return declarationsBind(scope.initializer, name)
-  }
-
-  return false
-}
-
-const statementBinds = (statement: Node, name: string): boolean => {
-  if (Node.isVariableStatement(statement)) {
-    return statement.declarationList.declarations.some((declaration) => bindingIntroduces(declaration.name, name))
-  }
-
-  if (Node.isFunctionDeclaration(statement) || Node.isClassDeclaration(statement)) {
-    return statement.name?.getText() === name
-  }
-
-  return false
-}
-
-const hasStyles = (data: ResultItem['data']): data is Dict[] =>
+const hasStyles = (data: unknown[]): data is Dict[] =>
   data.length > 0 && data.every((entry) => entry != null && typeof entry === 'object')
 
-/**
- * Pair each source argument with the box the parser stored for it, and require the
- * box to account for all of it. The parser keeps either the whole argument array
- * (multi-arg calls) or just the first argument's map (single-arg calls).
- */
-const argumentsAccountedFor = (call: Node, boxNode: BoxNode): boolean => {
-  if (!Node.isCallExpression(call)) return false
-
-  const args = call.arguments
-  // Nothing written is nothing to account for. `buttonStyle()` means every default, which is
-  // exactly what the extractor recorded — declining it left a call that folds when spelled
-  // `buttonStyle({})` and does not when spelled `buttonStyle()`.
-  if (args.length === 0) return true
-
-  if (box.isArray(boxNode) && boxNode.getNode() === call) {
-    if (boxNode.value.length !== args.length) return false
-    return args.every((arg, index) => accountsForSource(arg, boxNode.value[index]))
-  }
-
-  // Single-argument shape: the stored box is the argument itself.
-  if (args.length !== 1) return false
-  return accountsForSource(args[0], boxNode)
-}
+/** `recipe(props).slot` names a slot only when the recipe declares one by that name. */
+const slotsOf = (config: RecipeConfig | undefined) => (Array.isArray(config?.slots) ? (config.slots as string[]) : [])
 
 export const foldSource = (options: FoldOptions): FoldResult => {
-  const {
-    ctx,
-    code,
-    parserResult,
-    runtimeCss = createRuntimeCss(ctx),
-    styleCompiler,
-    maxRecipeStates,
-    parseModule,
-    recipeConfigCache,
-    reportSurvivors,
-    sourceFile: ownSourceFile,
-  } = options
+  const { ctx, code, analysis, styleCompiler, maxRecipeStates, reportSurvivors } = options
 
   const runtimeToken = createRuntimeToken(ctx)
   const runtimeTokenValue = createRuntimeTokenValue(ctx)
@@ -839,44 +161,18 @@ export const foldSource = (options: FoldOptions): FoldResult => {
    *
    * `ImportMap.match` is substring-based, which is right for deciding whether a call is
    * bamboo's and wrong for deciding whether a module can be imported *from*:
-   * `styled-system/css/css` matches while exporting no `cx`. So the comparison is
-   * equality, not containment.
-   *
-   * A tsconfig path alias is resolved first, the same way `ImportMap.match` does. Without
-   * that, `@site/styled-system/css` — the spelling this repo's own website uses — fails
-   * the check and silently loses helper lowering, which is indistinguishable in the
-   * diagnostics from a genuinely dynamic call.
+   * `styled-system/css/css` matches while exporting no `cx`. So the comparison is equality,
+   * after resolving a tsconfig path alias the way `ImportMap.match` does and stripping an
+   * extension or a trailing `/index`, which bamboo's own output makes a file spell.
    */
   const cssModules = ctx.imports.matchers.css?.mods ?? []
 
   /**
-   * The generated css module, the only one whose exports are known.
-   *
-   * A configured `importMap.css` points at the user's own wrapper, and a wrapper that
-   * re-exports `css` need not re-export `cx` — adding one there imports a binding that
-   * may not exist. Reusing a `cx` the user already imported from it stays fine, since
-   * that binding demonstrably resolves; only *adding* one is restricted.
+   * The generated css module, the only one whose exports are known. A configured
+   * `importMap.css` points at the user's own wrapper, which need not re-export `cx`.
    */
   const generatedCssModule = [ctx.imports.outdir, 'css'].join('/')
   const pathMappings = ctx.conf.tsOptions?.pathMappings
-  /**
-   * The spelling reduced to the module it names.
-   *
-   * The extension and `/index` are stripped because bamboo's own output makes a file
-   * import them: `outExtension: 'js'` under NodeNext resolution is written
-   * `styled-system/css/index.js`, which is neither equal to `styled-system/css` nor a
-   * tail of it. Extraction admitted such a file anyway — `ImportMap.match` is
-   * substring-based — so the call was folded while the *insert* was refused, and the
-   * result was reported as `dynamic`: the same silent downgrade the alias case above
-   * describes, reached through the extension instead.
-   *
-   * This does not weaken the equality the comment above insists on. `styled-system/css/css`
-   * still names neither, because only a trailing `/index` is a module's own directory.
-   *
-   * `.d.ts` is deliberately not stripped. A declaration file exports no runtime binding, so
-   * matching one would authorise inserting an import that resolves to nothing — and a value
-   * import cannot name one anyway, which is what makes leaving it out free.
-   */
   const trim = (value: string) =>
     value
       .replaceAll('\\', '/')
@@ -887,19 +183,14 @@ export const foldSource = (options: FoldOptions): FoldResult => {
 
   const matchesModule = (mod: string, entries: string[]) => {
     const candidates = [mod]
-
     if (pathMappings) {
       const resolved = resolveTsPathPattern(pathMappings, mod)
       if (resolved) candidates.push(resolved)
     }
-
     return candidates.some((candidate) => {
       const normalized = trim(candidate)
-
       return entries.some((entry) => {
         const target = trim(entry)
-        // An alias resolves to a path rather than the configured entry, so the entry is
-        // compared as its tail rather than as the whole string.
         return normalized === target || normalized.endsWith(`/${target}`)
       })
     })
@@ -910,16 +201,8 @@ export const foldSource = (options: FoldOptions): FoldResult => {
 
   /**
    * Where the compiler's helpers can be imported from, for a file that imports the generated
-   * css module by *subpath* rather than through its barrel.
-   *
-   * `styled-system/css/cva.js` is a real spelling, and it cannot host the helper: that module
-   * exports `cva`, not `cvaMap`. Matching only the barrel meant no host was found and every
-   * runtime recipe selection in the file declined — a failure whose reported reason said
-   * nothing about import spelling, and whose suggested remedies all pointed elsewhere.
-   *
-   * The sibling `cx` module is what actually exports them. The prefix is verified against the
-   * configured output before anything is derived, so an unrelated `foo/css/bar.js` is left
-   * alone, and the caller's extension is preserved rather than guessed at.
+   * css module by *subpath* — `styled-system/css/cva.js` exports `cva`, not `cvaMap`, so the
+   * sibling `cx` module is the host, spelled with the caller's own prefix and extension.
    */
   const helperModuleFromSubpath = (mod: string): string | undefined => {
     const normalized = mod.replaceAll('\\', '/')
@@ -935,178 +218,66 @@ export const foldSource = (options: FoldOptions): FoldResult => {
 
     const dot = rest.lastIndexOf('.')
     const extension = dot > 0 ? rest.slice(dot) : ''
-    // Already the helper module, so there is a host to extend and nothing to derive.
     if (rest === `cx${extension}`) return undefined
 
     return `${prefix}/cx${extension}`
   }
 
-  /**
-   * The generated css entry as spelled beside an imported config recipe.
-   *
-   * A decision table needs only `cvaMap`, but a module importing a config recipe often has
-   * no css import to extend. Preserve a relative/aliased styled-system spelling by replacing
-   * its `/recipes` suffix; falling back to the configured generated entry covers bare imports.
-   */
-  const configRecipeCssSpecifier = (call: Node, binding: string): string => {
-    for (const declaration of getImportDeclarations(call.getSourceFile())) {
-      if (isTypeOnly(declaration)) continue
-      const namesBinding = getNamedImports(declaration).some((named) => {
-        if (isTypeOnly(named)) return false
-        return (getAliasNode(named) ?? nameNodeOf(named))?.getText() === binding
-      })
+  /** The generated css entry as spelled beside an imported config recipe. */
+  const configRecipeCssSpecifier = (binding: string): string => {
+    for (const declaration of analysis.imports) {
+      if (declaration.typeOnly) continue
+      const namesBinding = declaration.specifiers.some((named) => !named.typeOnly && named.local === binding)
       if (!namesBinding) continue
 
-      const mod = (getModuleSpecifierValue(declaration) ?? '').replaceAll('\\', '/')
+      const mod = declaration.module.replaceAll('\\', '/')
       const marker = '/recipes'
       const at = mod.lastIndexOf(marker)
       if (at >= 0) return `${mod.slice(0, at)}/css`
     }
-
     return generatedCssModule
   }
 
-  /**
-   * How *this* module would have to spell the css module, learnt from one that already does.
-   *
-   * A file calling an imported recipe need not import the css module at all, so when the
-   * lowering needs a decision-table helper there is no spelling in the file to copy. The declaring module
-   * necessarily has one — `cva` came from it — and that is the spelling reused here.
-   *
-   * A bare or aliased specifier resolves identically from any file, so it is taken as
-   * written. A relative one is re-based: resolved against the module that wrote it, then
-   * expressed from the module being folded.
-   */
-  const cssModuleSpecifierFrom = (declaring: SourceFile): string | undefined => {
-    for (const declaration of getImportDeclarations(declaring)) {
-      if (isTypeOnly(declaration)) continue
-
-      const mod = getModuleSpecifierValue(declaration)
-      if (isGeneratedCssModule(mod ?? '')) return mod
-    }
-
-    return undefined
-  }
-
-  /**
-   * That spelling, said from the module being folded.
-   *
-   * A bare or aliased specifier resolves identically from any file, so it is taken as
-   * written. A relative one is re-based: resolved against the module that wrote it, then
-   * expressed from the module being folded. Pure path arithmetic, so it holds a string
-   * rather than a node — a cached node does not survive the next `addSourceFile`, which
-   * ts-morph implements by forgetting the file's whole tree.
-   */
+  /** A relative specifier learnt from another module, expressed from the module being folded. */
   const rebaseSpecifier = (specifier: string, declaringPath: string, consumingPath: string): string | undefined => {
     if (!specifier.startsWith('.')) return specifier
-
     const absolute = resolvePath(dirname(declaringPath), specifier)
     const rebased = relative(dirname(consumingPath), absolute).replaceAll('\\', '/')
     if (!rebased) return undefined
-
     return rebased.startsWith('.') ? rebased : `./${rebased}`
-  }
-
-  /**
-   * Configs of one foreign module, parsed once however many of its recipes are called.
-   *
-   * Falls back to a per-call map when the caller supplies none, so the fold stays correct
-   * standalone — only repeated, which is what the shared cache exists to avoid.
-   */
-  const configsByModule = recipeConfigCache ?? new Map<string, ForeignRecipes>()
-  /** The specifier each imported recipe's module used for the css module, when it needs one. */
-  const helperModules = new Map<string, string | undefined>()
-  /** Declaring modules a fold read, recorded as paths because their nodes do not persist. */
-  const foreignDependencies = new Set<string>()
-  /** Foreign recipe configs consumed, digested at read time for later verification. */
-  const exportReads: FoldResult['exportReads'] = []
-  /** Resolutions for this module's own call sites, keyed by the name the call site writes. */
-  const importedRecipes = new Map<string, RecipeEntry | undefined>()
-
-  /**
-   * The config of a recipe this module imports.
-   *
-   * The binding is followed with ts-morph's symbol aliasing rather than by re-reading import
-   * declarations, because that is what already understands the shapes these are reached
-   * through: `export { badge } from './styles'`, `export * from './styles'`, and an alias at
-   * either end. Each hop is an alias symbol, so following them to a non-alias lands on the
-   * declaration wherever it lives.
-   *
-   * The selected declarations do not depend on which module the call is in. A recipe lowered
-   * here therefore reaches the same globally shared atoms as a call in its declaring module.
-   */
-  const resolveImportedRecipe = (call: Node, name: string, origin: RecipeOrigin): RecipeEntry | undefined => {
-    if (importedRecipes.has(name)) return importedRecipes.get(name)
-
-    const resolve = (): RecipeEntry | undefined => {
-      if (!parseModule) return undefined
-
-      // Declared here after all — the local pass owns it, and parsing this module again
-      // from inside its own fold would recurse.
-      const consuming = call.getSourceFile()
-      if (origin.filePath === pathOf(consuming)) return undefined
-
-      let foreign = configsByModule.get(origin.filePath)
-
-      if (!foreign) {
-        const result = parseModule(origin.filePath)
-        if (!result) return undefined
-
-        const collected = collectRecipeConfigs(result)
-        const declaring = [...collected.values()]
-          .find((entry) => entry.box)
-          ?.box?.getNode?.()
-          ?.getSourceFile()
-
-        // Stripped of `box` on the way in. A `RecipeEntry` carries the definition's node so
-        // the fold can register a watch dependency, and a node does not survive the next
-        // `addSourceFile` — ts-morph implements overwriting by forgetting the file's whole
-        // tree, so a second consumer would read a forgotten node and throw. The dependency
-        // is registered from the path below, which is what it needed the node for.
-        const configs = new Map<string, RecipeEntry>()
-        for (const [key, entry] of collected) {
-          configs.set(key, entry === AMBIGUOUS ? entry : { config: entry.config, box: undefined })
-        }
-
-        foreign = { configs, cssSpecifier: declaring ? cssModuleSpecifierFrom(declaring) : undefined }
-        configsByModule.set(origin.filePath, foreign)
-      }
-
-      // Under the name the *declaring* module gave it, which an alias at any hop makes
-      // different from the name written here.
-      const entry = foreign.configs.get(origin.name)
-      if (!entry || entry === AMBIGUOUS) return undefined
-
-      // Editing the declaration can change the selected StyleSet and therefore the atoms this
-      // literal needs, so every compiled consumer must be invalidated with it.
-      foreignDependencies.add(origin.filePath)
-      exportReads.push({ kind: 'recipe', file: origin.filePath, name: origin.name, digest: digestRecipeConfig(entry) })
-
-      helperModules.set(
-        name,
-        foreign.cssSpecifier ? rebaseSpecifier(foreign.cssSpecifier, origin.filePath, pathOf(consuming)) : undefined,
-      )
-      return entry
-    }
-
-    const resolved = resolve()
-    importedRecipes.set(name, resolved)
-    return resolved
   }
 
   const folded: FoldedCall[] = []
   const skipped: SkippedCall[] = []
 
+  /** Modules other than this one whose declarations a folded recipe call selected. */
+  const foreignDependencies = new Set<string>()
+
+  // The module's own recipes, then the ones it imports — by the name the file bound.
+  const recipeConfigs = collectRecipeConfigs(analysis)
+  /** The specifier a call's helper import is written with when the file has none to extend. */
+  const helperModules = new Map<string, string | undefined>()
+  for (const imported of analysis.importedRecipes) {
+    if (recipeConfigs.has(imported.local)) continue
+    const config = imported.config as RecipeConfig | undefined
+    recipeConfigs.set(
+      imported.local,
+      config && typeof config === 'object'
+        ? { config, filePath: imported.filePath, dependencies: imported.dependencies }
+        : AMBIGUOUS,
+    )
+    const cssSpecifier = imported.declaringImports.find((specifier) => isGeneratedCssModule(specifier))
+    helperModules.set(
+      imported.local,
+      cssSpecifier ? rebaseSpecifier(cssSpecifier, imported.filePath, options.filePath) : undefined,
+    )
+  }
+
   interface Candidate {
-    item: ResultItem
+    call: FoldCall
+    name: string
     /** Symbolic declarations this candidate contributes, before class allocation. */
     styleSet?: Dict
-    /** Name reported for a compiler-created enclosing candidate such as semantic `cx`. */
-    displayName?: string
-    /** Source boxes subsumed by an enclosing candidate, retained for watch dependencies. */
-    sourceBoxes?: Array<ResultItem['box']>
-    /** The call to replace. */
-    call?: Node
     className?: string
     /** Every class literal emitted, when that is more than `className` — see FoldedCall. */
     classNames?: string[]
@@ -1120,782 +291,463 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     outputKind?: 'slots'
     /** Replacement text for a compiled call, in place of a bare class string. */
     replacement?: string
-    /**
-     * The node of the *definition* a recipe call was compiled against.
-     *
-     * Registered as a watch dependency alongside the call's own module: a config living in
-     * another file selects this call's declarations, so changing it has to recompile this one.
-     */
-    configBox?: ResultItem['box']
     /** The resolved value, for a `token()` call. Its presence is what marks one. */
     value?: string
     /** Bindings to add to an existing import, by name so duplicates can be dropped. */
-    insert?: { pos: number; names: string[]; module?: string }
-    node: Node
+    insert?: HelperInsert
+    /** Modules another module's recipe was read from, or through. */
+    foreign?: readonly string[]
     start: number
     end: number
-    /**
-     * The slot of a `recipe(props).slot` access, and the end of that whole member
-     * expression. A slot recipe call returns one class per slot, so what resolves to a
-     * string — and what gets replaced — is the property access rather than the call.
-     */
-    slot?: string
   }
 
   const candidates: Candidate[] = []
   const seenRanges = new Set<string>()
-  const recipeConfigs = collectRecipeConfigs(parserResult)
-  const recipeDefinitions: Array<{ name: string; call: Node }> = []
+  const recipeDefinitions: Array<{ name: string; start: number; end: number }> = []
 
-  // Recipe factories are a compile-time declaration form. Once the config has been
-  // extracted, the executable factory and its style object have no runtime meaning.
-  for (const [name, entry] of recipeConfigs) {
-    if (entry === AMBIGUOUS) continue
-    const definition = entry.box?.getNode?.()
-    if (!definition) continue
-    const call = Node.isCallExpression(definition)
-      ? definition
-      : getFirstAncestorByKind(definition, SyntaxKind.CallExpression)
-    if (!call || code.slice(call.getStart(), call.getEnd()) !== call.getText()) continue
-    recipeDefinitions.push({ name, call })
-  }
+  for (const call of analysis.calls) {
+    const { kind } = call
+    const name = kind === 'tokenValue' ? 'token' : call.name
+    const start = call.span.start
+    const end = call.span.end
 
-  /** Ranges already reported as declined, so one call is never counted twice. */
-  const reportedRanges = new Set<string>()
-
-  // One import scan per file, shared by every call site and element in it.
-  const importCache = new Map<SourceFile, Set<string>>()
-  const importsFor = (sourceFile: SourceFile) => {
-    let names = importCache.get(sourceFile)
-    if (!names) {
-      names = bambooImportedNames(sourceFile, ctx)
-      importCache.set(sourceFile, names)
+    // Recipe factories are a compile-time declaration form. Once the config has been
+    // extracted, the executable factory and its style object have no runtime meaning.
+    if (kind === 'cva' || kind === 'sva') {
+      const entry = call.binding ? recipeConfigs.get(call.binding) : undefined
+      if (call.binding && entry && entry !== AMBIGUOUS) {
+        recipeDefinitions.push({ name: call.binding, start, end })
+      }
+      continue
     }
-    return names
-  }
 
-  for (const item of parserResult.toArray()) {
-    const type = item.type ?? ''
-    const name = item.name ?? type
+    if (kind === 'cx') continue
 
-    if (!item.box) continue
+    if (call.notImported) {
+      skipped.push({ name, reason: 'not-imported', start, end })
+      continue
+    }
 
-    const call = findCallExpression(item.box)
-
-    // `token()` resolves to a CSS value rather than a class, so it takes its own path:
-    // none of the class-producing machinery below has anything to say about it. Folding it
-    // is worth the separate path because the alternative is shipping the whole token map —
-    // every token in the project — to resolve a handful of string lookups at runtime.
-    //
-    // `token.value()` shares the path because every guard below is the same question. It
-    // only resolves differently at the end, reading the literal where `token()` reads the
-    // variable reference.
-    if (type === 'token' || type === 'tokenValue') {
-      if (!call) {
-        skipped.push({ name, reason: 'no-call-expression', start: 0, end: 0 })
-        continue
-      }
-
-      const start = call.getStart()
-      const end = call.getEnd()
-
-      // The same foreign-module guard the call path applies, for the same reason: a box
-      // can carry nodes from any module the extractor resolved through, and offsets only
-      // mean something against the module being rewritten.
-      if (code.slice(start, end) !== call.getText()) {
-        skipped.push({ name, reason: 'no-call-expression', start: 0, end: 0 })
-        continue
-      }
-
+    // `token()` resolves to a CSS value rather than a class, so it takes its own path.
+    // `token.value()` shares it: every guard is the same question, and only the end differs.
+    if (kind === 'token' || kind === 'tokenValue') {
       const rangeKey = `${start}:${end}`
       if (seenRanges.has(rangeKey)) continue
       seenRanges.add(rangeKey)
 
-      const rootName = calleeRootName(call)
-      if (!rootName || !importsFor(call.getSourceFile()).has(rootName) || isShadowed(call, rootName)) {
-        skipped.push({ name, reason: 'not-imported', start, end })
-        continue
-      }
-
-      // The recorded kind and the callee have to name the same half of the entry.
-      // `token(path)` resolves to the variable reference and `token.value(path)` to the
-      // literal, so inlining one as the other swaps a themeable reference for a fixed
-      // colour — the one difference a fold can make that no class-name check would catch.
-      //
-      // Only a property access can name a half at all, so only one is asked. A bare callee
-      // is whatever the file bound the import to, which `token as t` makes some name the
-      // matcher has never heard of.
-      const callee = Node.isCallExpression(call) ? call.expression : undefined
-      const propertyName =
-        callee !== undefined && Node.isPropertyAccessExpression(callee)
-          ? (nameNodeOf(callee)?.getText() ?? '')
-          : undefined
-      const wantsValue = type === 'tokenValue'
-
-      if (wantsValue !== (propertyName === 'value')) {
+      const wantsValue = kind === 'tokenValue'
+      // The reference side accepts two spellings: a bare callee, and `ns.token(path)`. Any
+      // other member named there is a method of somebody's object, not ours.
+      if (!wantsValue && call.calleeProperty !== undefined) {
         skipped.push({ name, reason: 'unsupported-kind', start, end })
         continue
       }
 
-      // The reference side accepts two spellings: a bare callee, and `ns.token(path)`, which
-      // puts `token` in that position. Anything else named there is a method of somebody's
-      // object, not ours.
-      if (!wantsValue && propertyName !== undefined && !ctx.imports.matchers.tokens.match(propertyName)) {
-        skipped.push({ name, reason: 'unsupported-kind', start, end })
-        continue
-      }
-
-      // The path has to be one resolved literal, not merely a string somewhere in `data`.
-      //
-      // A conditional argument boxes *every* branch: `token(dark ? 'colors.a' : 'colors.b')`
-      // arrives as `['colors.a', 'colors.b', {}]`, and reading `data[0]` off it picks one
-      // branch and deletes the condition that chose between them. Same for `a || 'colors.b'`.
-      // This is the guard the class path applies below, and for the same reason — the
-      // fallback argument gets a whole inertness check for a value that is *discarded*,
-      // so the argument that decides the result cannot have less.
-      if (!isStaticBox(item.box) || item.data.length !== 1) {
+      // The path has to be one resolved literal: `exact` covers the first argument, which a
+      // conditional would have left undecided, and nothing else. Later entries in `data` are
+      // the trailing arguments, judged below by what they are rather than what they evaluate to.
+      if (!call.exact || typeof call.data[0] !== 'string') {
         skipped.push({ name, reason: 'dynamic', start, end })
         continue
       }
 
-      const path = item.data[0]
-      if (typeof path !== 'string') {
+      // Everything after the path is dead once the token resolves, but only inert literal
+      // arguments are provably free to delete.
+      if (!call.trailingArgumentsInert) {
         skipped.push({ name, reason: 'dynamic', start, end })
         continue
       }
 
-      // Everything after the path is dead once the token resolves, but only inert
-      // arguments are provably free to delete — see `isInertArgument`.
-      const extraArguments = Node.isCallExpression(call) ? call.arguments.slice(1) : []
-      if (!extraArguments.every(isInertArgument)) {
-        skipped.push({ name, reason: 'dynamic', start, end })
-        continue
-      }
-
+      const path = call.data[0] as string
       const value = wantsValue ? runtimeTokenValue(path) : runtimeToken(path)
-      // Three ways to land here, all of them the same decision: the path names no token,
-      // the token's value is not a string (a numeric `fontWeights` token stays a number
-      // through the dictionary, and the runtime returns that number), or the value is
-      // empty. The runtime returns `undefined` in the first and last; in the middle one no
-      // string literal can stand in for what it returns. Declining leaves all three where
-      // the user wrote them.
-      //
-      // Only the first and last can arise on the reference side, whose half of the entry is
-      // a `var()` for every token regardless of condition.
       if (!value) {
         skipped.push({ name, reason: 'unresolved-token', start, end })
         continue
       }
 
-      candidates.push({ item, call, node: call, start, end, value })
+      candidates.push({ call, name, start, end, value })
       continue
     }
 
-    if (!FOLDABLE_TYPES.has(type)) {
-      // Not when a nearer scope binds the name. The parser registers an inline recipe for
-      // the whole file, so `const badge = cva(...)` at module scope makes every `badge(...)`
-      // look like a recipe call — including one inside a function that declared its own. That
-      // is somebody else's function, and reporting it would overstate the declined count as
-      // surely as missing these understated it.
+    if (kind === 'cva-call' || kind === 'recipe') {
+      const rangeKey = `${start}:${end}`
+      if (seenRanges.has(rangeKey)) continue
+      seenRanges.add(rangeKey)
+
+      // `recipe.raw()` returns style data, not the selected class value. It is a live
+      // runtime API and cannot be mistaken for an invocation of the recipe itself.
       //
-      // Deduped on its own range, for the reason the fold path is: the parser can record one
-      // call more than once, and this branch reports above where that check happens.
-      if (call && (type === RECIPE_CALL_TYPE || type === 'recipe') && !isShadowed(call, name)) {
-        const start = call.getStart()
-        const end = call.getEnd()
-        const rangeKey = `${start}:${end}`
+      // Only a config recipe is reported here. An inline recipe's binding is erased once its
+      // calls compile, so a `.raw` read of one is a read of a value that no longer exists —
+      // the binding report below names it as that, and a `raw-call` range here would hide it.
+      if (call.raw) {
+        if (kind === 'recipe') skipped.push({ name, reason: 'raw-call', start, end })
+        continue
+      }
 
-        if (!reportedRanges.has(rangeKey)) {
-          reportedRanges.add(rangeKey)
-
-          // Offsets only mean something against the module being rewritten, and a box can
-          // carry nodes from any module the extractor resolved through — the same guard the
-          // fold path applies before touching `magic`.
-          if (code.slice(start, end) !== call.getText()) {
-            skipped.push({ name, reason: 'no-call-expression', start: 0, end: 0 })
-            continue
-          }
-
-          // `recipe.raw()` returns style data, not the selected class value. It is a live
-          // runtime API and cannot be mistaken for an invocation of the recipe itself.
-          if (isRawCall(call)) {
-            skipped.push({ name, reason: 'raw-call', start, end })
-            continue
-          }
-
-          if (!recipeConfigs.has(name)) {
-            if (type === 'recipe') {
-              // Config recipes expose the same finite variant map as inline declarations.
-              // Their configured class name is metadata only; selected authored styles are
-              // resolved through the shared StyleSet compiler below.
-              const config = ctx.recipes.getConfig(name) as RecipeEntry['config'] | undefined
-              if (config) {
-                recipeConfigs.set(name, { config, box: undefined })
-                helperModules.set(name, configRecipeCssSpecifier(call, name))
-              }
-            } else if (item.origin) {
-              // Inline declaration in another module. Resolved lazily and only for a name
-              // the local pass did not claim, so local-only files pay nothing.
-              const imported = resolveImportedRecipe(call, name, item.origin)
-              if (imported) recipeConfigs.set(name, imported)
-            }
-          }
-
-          // One resolution only: a ternary yields several candidate selections, and there is
-          // no single literal that stands for all of them.
-          const resolvedSelection = item.data?.length === 1 ? (item.data[0] as Dict) : undefined
-
-          // Folding deletes the argument, so whatever evaluating it would have done goes with
-          // it. `badge({ tone: trace() })` has a knowable class *and* a call in its selection —
-          // the same trade `token()`'s fallback and the constant-slot fold already decline.
-          const entry = recipeConfigs.get(name)
-          let inlineSlot: string | undefined
-          let inlineEnd = end
-          if (Array.isArray(entry?.config.slots)) {
-            const parent = call.parent
-            if (Node.isPropertyAccessExpression(parent) && parent.expression === call) {
-              const accessed = getName(parent)
-              if (entry.config.slots.includes(accessed)) {
-                inlineSlot = accessed
-                inlineEnd = parent.getEnd()
-              }
-            } else if (Node.isElementAccessExpression(parent) && parent.expression === call) {
-              const argument = parent.argumentExpression
-              const accessed =
-                argument && (Node.isStringLiteral(argument) || Node.isNoSubstitutionTemplateLiteral(argument))
-                  ? literalValueOf(argument)
-                  : undefined
-              if (typeof accessed === 'string' && entry.config.slots.includes(accessed)) {
-                inlineSlot = accessed
-                inlineEnd = parent.getEnd()
-              }
-            }
-          }
-          // Inertness is decided per property rather than for the whole argument: lowering
-          // keeps an expression by making it the helper's argument, so a call inside one still
-          // runs. Only a property being resolved to a literal, or dropped, would delete it —
-          // and `lowerRecipeCall` is what knows which of those is about to happen.
-          const lowered = lowerRecipeCall(
-            call,
-            entry,
-            styleCompiler,
-            isInertExpression,
-            resolvedSelection,
-            inlineSlot,
-            maxRecipeStates,
-          )
-
-          if (lowered.kind === 'dynamic-style') {
-            const helper = ensureRecipeHelperImport(
-              RECIPE_MAP_HELPER,
-              call,
-              isBambooCssModule,
-              isGeneratedCssModule,
-              isShadowed,
-              helperModules.get(name),
-              helperModuleFromSubpath,
-            )
-
-            if (helper) {
-              candidates.push({
-                item,
-                call,
-                node: call,
-                start,
-                end: inlineEnd,
-                className: '',
-                classNames: [],
-                styleMap: lowered.map,
-                mapHelperName: helper.name,
-                insert: helper.insert,
-                configBox: entry?.box,
-                outputKind: lowered.map.outputKind === 'slots' ? 'slots' : undefined,
-              })
-              continue
-            }
-
-            skipped.push({ name, reason: 'recipe-call', start, end })
-            continue
-          }
-
-          if (lowered.kind === 'slots') {
-            const helper = lowered.helper
-              ? ensureRecipeHelperImport(
-                  lowered.helper,
-                  call,
-                  isBambooCssModule,
-                  isGeneratedCssModule,
-                  isShadowed,
-                  helperModules.get(name),
-                  helperModuleFromSubpath,
-                )
-              : undefined
-
-            if (!lowered.helper || helper) {
-              const replacement =
-                lowered.helper && helper && helper.name !== lowered.helper
-                  ? lowered.expression.replaceAll(`${lowered.helper}(`, `${helper.name}(`)
-                  : lowered.expression
-              candidates.push({
-                item,
-                call,
-                node: call,
-                start,
-                end: inlineEnd,
-                replacement,
-                className: '',
-                classNames: lowered.classNames,
-                insert: helper?.insert,
-                configBox: entry?.box,
-                outputKind: 'slots',
-              })
-              continue
-            }
-
-            skipped.push({ name, reason: 'recipe-call', start, end })
-            continue
-          }
-
-          if (lowered.kind === 'class') {
-            // `replacement`, not `value`: this is a class string, and the `value` path is
-            // `token()`'s — it records an empty `className`, which is what a consumer checks
-            // for a backing rule.
-            candidates.push({
-              item,
-              call,
-              node: call,
-              start,
-              end: inlineEnd,
-              replacement: JSON.stringify(lowered.className),
-              className: lowered.className,
-              classNames: lowered.className.split(' ').filter(Boolean),
-              styleSet: lowered.styles,
-              // The *definition's* node, not just the call's. Editing an imported config can
-              // change this complete StyleSet, so the consumer must be recompiled with it.
-              configBox: entry?.box,
-            })
-            continue
-          }
-
-          skipped.push({ name, reason: 'recipe-call', start, end })
+      if (kind === 'recipe' && !recipeConfigs.has(name)) {
+        // Config recipes expose the same finite variant map as inline declarations. Their
+        // configured class name is metadata only; selected authored styles resolve through the
+        // shared StyleSet compiler below.
+        const config = ctx.recipes.getConfig(name) as RecipeConfig | undefined
+        if (config) {
+          recipeConfigs.set(name, { config })
+          helperModules.set(name, configRecipeCssSpecifier(name))
         }
       }
+
+      const entry = recipeConfigs.get(name)
+      const declaredSlots = slotsOf(entry?.config)
+      const slot = call.slot !== undefined && declaredSlots.includes(call.slot) ? call.slot : undefined
+      const replaceEnd = slot !== undefined ? (call.slotEnd ?? end) : end
+
+      const lowered = lowerRecipeCall(call, entry, styleCompiler, slot, maxRecipeStates)
+      const helperFor = (helper: string) =>
+        ensureRecipeHelperImport(
+          helper,
+          analysis,
+          call.shadowedHelpers,
+          isBambooCssModule,
+          isGeneratedCssModule,
+          helperModules.get(name),
+          helperModuleFromSubpath,
+        )
+      const foreign = entry && entry !== AMBIGUOUS ? entry.dependencies : undefined
+
+      if (lowered.kind === 'dynamic-style') {
+        const helper = helperFor(RECIPE_MAP_HELPER)
+        if (helper) {
+          candidates.push({
+            call,
+            name,
+            start,
+            end: replaceEnd,
+            className: '',
+            classNames: [],
+            styleMap: lowered.map,
+            mapHelperName: helper.name,
+            insert: helper.insert,
+            outputKind: lowered.map.outputKind === 'slots' ? 'slots' : undefined,
+            foreign,
+          })
+          continue
+        }
+        skipped.push({ name, reason: 'recipe-call', start, end })
+        continue
+      }
+
+      if (lowered.kind === 'slots') {
+        const helper = lowered.helper ? helperFor(lowered.helper) : undefined
+        if (!lowered.helper || helper) {
+          const replacement =
+            lowered.helper && helper && helper.name !== lowered.helper
+              ? lowered.expression.replaceAll(`${lowered.helper}(`, `${helper.name}(`)
+              : lowered.expression
+          candidates.push({
+            call,
+            name,
+            start,
+            end: replaceEnd,
+            replacement,
+            className: '',
+            classNames: lowered.classNames,
+            insert: helper?.insert,
+            outputKind: 'slots',
+            foreign,
+          })
+          continue
+        }
+        skipped.push({ name, reason: 'recipe-call', start, end })
+        continue
+      }
+
+      if (lowered.kind === 'class') {
+        candidates.push({
+          call,
+          name,
+          start,
+          end: replaceEnd,
+          replacement: JSON.stringify(lowered.className),
+          className: lowered.className,
+          classNames: lowered.className.split(' ').filter(Boolean),
+          styleSet: lowered.styles,
+          foreign,
+        })
+        continue
+      }
+
+      skipped.push({ name, reason: 'recipe-call', start, end })
       continue
     }
 
-    if (!call) {
-      skipped.push({ name, reason: 'no-call-expression', start: 0, end: 0 })
-      continue
-    }
-
-    const start = call.getStart()
-    const end = call.getEnd()
-
-    // `recipe(props).slot` — a slot recipe call returns one class per slot, so the
-    // expression that resolves to a string is the property access, not the call.
-    //
-    // Narrow on purpose. Widening the replaced range for anything else deletes the property
-    // read: `css({ color: 'red' }).trim()` became `"c_red"()`, a TypeError rather than a
-    // wrong class. So this fires only for a `recipe` whose accessed property names a slot
-    // the recipe declares — `.raw`, `.length` and a misspelled slot all leave the range at
-    // the call, where they fold exactly as they did before.
-    const memberParent = call.parent
-    const accessed =
-      type === 'recipe' && Node.isPropertyAccessExpression(memberParent) && memberParent.expression === call
-        ? memberParent
-        : undefined
-    const accessedName = accessed?.name.getText()
-    const declaredSlots = accessed
-      ? ((ctx.recipes.getConfig(name) as { slots?: string[] } | undefined)?.slots ?? [])
-      : []
-    const memberAccess = accessedName && declaredSlots.includes(accessedName) ? accessed : undefined
-    const slot = memberAccess ? accessedName : undefined
-    const foldEnd = memberAccess ? memberAccess.getEnd() : end
-
-    // Offsets are only meaningful against the module being rewritten, and a box can
-    // carry nodes from any module the extractor resolved through. Text equality is
-    // the check that this call really is this module's — cheap, and independent of
-    // how the caller spells `filePath`. Without it a foreign node's offsets would
-    // reach `magic.overwrite` and corrupt the output at a plausible-looking position.
-    if (code.slice(start, end) !== call.getText()) {
-      skipped.push({ name, reason: 'no-call-expression', start: 0, end: 0 })
-      continue
-    }
-
-    // The parser can record the same call more than once; fold it once.
-    const rangeKey = `${start}:${foldEnd}`
+    // `css`, `pattern`, `viewTransition`.
+    const rangeKey = `${start}:${end}`
     if (seenRanges.has(rangeKey)) continue
     seenRanges.add(rangeKey)
 
-    if (isRawCall(call)) {
+    if (call.raw) {
       skipped.push({ name, reason: 'raw-call', start, end })
       continue
     }
 
-    const rootName = calleeRootName(call)
-    if (!rootName || !importsFor(call.getSourceFile()).has(rootName) || isShadowed(call, rootName)) {
-      skipped.push({ name, reason: 'not-imported', start, end })
-      continue
-    }
-
-    // A call written with no arguments has no argument box to be static about: the parser
-    // stores a fallback, which `isStaticBox` rejects. The selection is still fully known —
-    // it is every default — so `buttonStyle()` folds like the `buttonStyle({})` it means.
-    const noArguments = Node.isCallExpression(call) && call.arguments.length === 0 && item.data.length === 1
-
-    if ((!noArguments && !isStaticBox(item.box)) || !hasStyles(item.data) || !argumentsAccountedFor(call, item.box)) {
+    if (!call.exact || !hasStyles(call.data)) {
       skipped.push({ name, reason: 'dynamic', start, end })
       continue
     }
 
-    candidates.push({ item, call, node: call, start, end: foldEnd, slot })
+    candidates.push({ call, name, start, end })
   }
 
   /**
    * Resolve every fully static candidate to symbolic declarations before allocating a class.
-   *
-   * The normal fold can wait until the rewrite loop to compute a class string. Semantic
-   * composition cannot: an enclosing `cx()` needs the declarations of its arguments so it can
-   * discard overridden values before any string exists.
+   * An enclosing `cx()` needs the declarations of its arguments so it can discard overridden
+   * values before any string exists.
    */
-  {
-    for (const candidate of candidates) {
-      if (candidate.styleSet || candidate.value !== undefined || candidate.replacement) continue
+  for (const candidate of candidates) {
+    if (candidate.styleSet || candidate.value !== undefined || candidate.replacement || candidate.styleMap) continue
 
-      const { item } = candidate
-      if (item.type === 'css') {
-        candidate.styleSet = styleCompiler.compose(...(item.data as Dict[]))
-        continue
-      }
-
-      if (item.type === 'pattern') {
-        candidate.styleSet = styleCompiler.compose(
-          ...item.data.map((entry) => ctx.patterns.transform(item.name ?? '', entry as Dict)),
-        )
-        continue
-      }
-
-      if (item.type === 'viewTransition') {
-        const semantic = viewTransitionClassName(item.data[0], ctx.utility.prefix)
-        candidate.className = styleCompiler.allocateClassString(semantic)
-        candidate.classNames = [candidate.className]
-        candidate.replacement = JSON.stringify(candidate.className)
-        continue
-      }
-
-      // Recipes already carry either a complete StyleSet or a finite decision map from the
-      // exact lowering above. Keeping them out of this generic static-box path prevents the
-      // parser's lossy dynamic data from being mistaken for an empty selection.
+    const { call } = candidate
+    const data = call.data as Dict[]
+    if (call.kind === 'css') {
+      candidate.styleSet = styleCompiler.compose(...data)
+      continue
     }
 
-    const sourceFile = ownSourceFile ?? candidates[0]?.node.getSourceFile()
-    if (sourceFile) {
-      const cxBindings = new Set<string>()
-      for (const declaration of getImportDeclarations(sourceFile)) {
-        if (isTypeOnly(declaration) || !isBambooCssModule(getModuleSpecifierValue(declaration) ?? '')) continue
-        for (const named of getNamedImports(declaration)) {
-          if (isTypeOnly(named) || nameNodeOf(named)?.getText() !== 'cx') continue
-          cxBindings.add((getAliasNode(named) ?? nameNodeOf(named))?.getText() ?? '')
-        }
-      }
-
-      const byRange = new Map(candidates.map((candidate) => [`${candidate.start}:${candidate.end}`, candidate]))
-
-      // Nothing below can match when the module imports no `cx`, and the walk is the expensive
-      // half: `getDescendantsOfKind` wraps every call in the file in a ts-morph node, for a
-      // `cxBindings.has(...)` that is false every time. The same reasoning defers the identifier
-      // index in `reportRuntimeBindings`; this walk simply never had the guard.
-      for (const call of cxBindings.size ? getDescendantsOfKind(sourceFile, SyntaxKind.CallExpression) : []) {
-        const callee = childOf(call, 'expression')
-        if (
-          callee === undefined ||
-          !Node.isIdentifier(callee) ||
-          !cxBindings.has(callee.getText()) ||
-          isShadowed(call, callee.getText())
-        ) {
-          continue
-        }
-
-        const matched: Candidate[] = []
-        const parts: Array<
-          | { kind: 'style'; candidate: Candidate }
-          | { kind: 'dynamic'; candidate: Candidate }
-          | { kind: 'class'; value: string; candidate?: Candidate }
-        > = []
-        const dynamic: Candidate[] = []
-        const constantCandidates: Candidate[] = []
-        let supported = true
-
-        const take = (arg: Node): boolean => {
-          const candidate = byRange.get(`${arg.getStart()}:${arg.getEnd()}`)
-          if (candidate?.styleMap?.outputKind === 'class') {
-            dynamic.push(candidate)
-            parts.push({ kind: 'dynamic', candidate })
-            return true
-          }
-          if (candidate?.styleSet) {
-            matched.push(candidate)
-            parts.push({ kind: 'style', candidate })
-            return true
-          }
-          if (candidate?.item.type === 'viewTransition' && candidate.replacement && candidate.className) {
-            constantCandidates.push(candidate)
-            parts.push({ kind: 'class', value: candidate.className, candidate })
-            return true
-          }
-
-          if (Node.isStringLiteral(arg) || Node.isNoSubstitutionTemplateLiteral(arg)) {
-            parts.push({ kind: 'class', value: stringLiteralValue(arg) })
-            return true
-          }
-
-          if (Node.isArrayLiteralExpression(arg)) {
-            for (const element of arg.elements) {
-              if (Node.isSpreadElement(element) || !take(element)) return false
-            }
-            return true
-          }
-
-          // Values the runtime `cx` ignores and whose evaluation is inert.
-          if (
-            arg.kind === SyntaxKind.FalseKeyword ||
-            arg.kind === SyntaxKind.TrueKeyword ||
-            Node.isNumericLiteral(arg) ||
-            arg.kind === SyntaxKind.NullKeyword ||
-            (Node.isIdentifier(arg) && arg.getText() === 'undefined')
-          ) {
-            return true
-          }
-
-          return false
-        }
-
-        for (const arg of childOf<Node[]>(call, 'arguments') ?? []) {
-          if (take(arg)) continue
-          supported = false
-          break
-        }
-
-        // One declined call, classified once. Two runtime maps cannot be reduced to a single
-        // lookup, so more than one declines the call whether or not the walk finished — and
-        // deciding that first used to decide the *reason* too, which made `cx(a(x), b(y), rest)`
-        // read as `dynamic` while the same three arguments in any other order read as a mix.
-        if (!supported || dynamic.length > 1) {
-          /**
-           * Does this argument carry declarations Bamboo compiled?
-           *
-           * Only the candidate half of `take`, because the other half is already known here:
-           * `take` returned false, which happens precisely when an argument is opaque. What is
-           * missing after that abort is whether a *later* argument was one of ours, which the
-           * partially populated `matched`/`dynamic` lists cannot answer — the walk stops at the
-           * first thing it cannot take, and everything after it is unvisited.
-           *
-           * Declared inside the branch so the common path — every `cx()` that compiles — does
-           * not allocate a closure it never calls. The fold runs on every module of every dev
-           * transform, so per-call-site work here is not free.
-           */
-          const composesStyleSet = (arg: Node): boolean => {
-            const candidate = byRange.get(`${arg.getStart()}:${arg.getEnd()}`)
-            if (candidate?.styleSet || candidate?.styleMap?.outputKind === 'class' || candidate?.replacement)
-              return true
-            return Node.isArrayLiteralExpression(arg) && arg.elements.some(composesStyleSet)
-          }
-
-          // Two opaque classes joined together promise nothing and mislead nobody. It is the
-          // *mix* that is worth a word: the atoms were merged semantically before any string
-          // existed, the opaque class was not, and a conflict between the two halves falls back
-          // to the cascade. `supported` is the whole test for whether there is an opaque half,
-          // because a walk that finished took every argument — several runtime maps and nothing
-          // foreign among them is the one shape that arrives here still deserving `dynamic`.
-          const mixed = !supported && (childOf<Node[]>(call, 'arguments') ?? []).some(composesStyleSet)
-          skipped.push({
-            name: 'cx',
-            reason: mixed ? 'opaque-composition' : 'dynamic',
-            start: call.getStart(),
-            end: call.getEnd(),
-          })
-          continue
-        }
-
-        if (dynamic.length === 1 && matched.length > 0) {
-          const dynamicCandidate = dynamic[0]!
-          const styleParts = parts.filter(
-            (part): part is { kind: 'style' | 'dynamic'; candidate: Candidate } => part.kind !== 'class',
-          )
-          const dynamicIndex = styleParts.findIndex((part) => part.kind === 'dynamic')
-          const before = styleParts
-            .slice(0, dynamicIndex)
-            .filter((part) => part.kind === 'style')
-            .map((part) => part.candidate.styleSet!)
-          const after = styleParts
-            .slice(dynamicIndex + 1)
-            .filter((part) => part.kind === 'style')
-            .map((part) => part.candidate.styleSet!)
-          const compiled = dynamicCandidate.styleMap!.compile(before, after)
-          const expression =
-            compiled.usesHelper &&
-            dynamicCandidate.mapHelperName &&
-            dynamicCandidate.mapHelperName !== RECIPE_MAP_HELPER
-              ? compiled.expression.replaceAll(`${RECIPE_MAP_HELPER}(`, `${dynamicCandidate.mapHelperName}(`)
-              : compiled.expression
-
-          const arguments_: string[] = []
-          let wroteCompiled = false
-          for (const part of parts) {
-            if (part.kind === 'class') {
-              if (part.value) arguments_.push(JSON.stringify(part.value))
-              continue
-            }
-            if (!wroteCompiled) {
-              arguments_.push(expression)
-              wroteCompiled = true
-            }
-          }
-
-          dynamicCandidate.subsumed = true
-          const first = styleParts[0]!.candidate
-          candidates.push({
-            ...first,
-            call,
-            node: call,
-            start: call.getStart(),
-            end: call.getEnd(),
-            displayName: 'cx',
-            replacement: arguments_.length === 1 ? arguments_[0] : `${callee.getText()}(${arguments_.join(', ')})`,
-            className: '',
-            classNames: [
-              ...compiled.classNames,
-              ...parts.filter((part) => part.kind === 'class').flatMap((part) => part.value.split(' ')),
-            ].filter(Boolean),
-            styleSet: undefined,
-            styleMap: undefined,
-            outputKind: undefined,
-            insert: compiled.usesHelper ? dynamicCandidate.insert : undefined,
-            sourceBoxes: styleParts
-              .flatMap((part) => [part.candidate.item.box, part.candidate.configBox])
-              .concat(constantCandidates.map((candidate) => candidate.item.box))
-              .filter(Boolean),
-          })
-          continue
-        }
-
-        if (matched.length === 0) {
-          if (constantCandidates.length === 0) continue
-
-          const className = parts
-            .filter((part): part is { kind: 'class'; value: string; candidate?: Candidate } => part.kind === 'class')
-            .map((part) => part.value)
-            .filter(Boolean)
-            .join(' ')
-          const first = constantCandidates[0]!
-          candidates.push({
-            ...first,
-            call,
-            node: call,
-            start: call.getStart(),
-            end: call.getEnd(),
-            displayName: 'cx',
-            replacement: JSON.stringify(className),
-            className,
-            classNames: className.split(' ').filter(Boolean),
-            sourceBoxes: constantCandidates.map((candidate) => candidate.item.box).filter(Boolean),
-          })
-          continue
-        }
-
-        const merged = styleCompiler.compose(...matched.map((candidate) => candidate.styleSet!))
-        const compiled = styleCompiler.className(merged)
-        const classParts: string[] = []
-        let wroteCompiled = false
-        for (const part of parts) {
-          if (part.kind === 'class') {
-            if (part.value) classParts.push(part.value)
-            continue
-          }
-          if (!wroteCompiled && compiled) {
-            classParts.push(compiled)
-            wroteCompiled = true
-          }
-        }
-
-        const first = matched[0]!
-        candidates.push({
-          ...first,
-          call,
-          node: call,
-          start: call.getStart(),
-          end: call.getEnd(),
-          displayName: 'cx',
-          replacement: JSON.stringify(classParts.join(' ')),
-          className: classParts.join(' '),
-          classNames: classParts.flatMap((part) => part.split(' ')).filter(Boolean),
-          styleSet: merged,
-          sourceBoxes: [
-            ...matched.flatMap((candidate) => [candidate.item.box, candidate.configBox]),
-            ...constantCandidates.map((candidate) => candidate.item.box),
-          ].filter(Boolean),
-        })
-      }
+    if (call.kind === 'pattern') {
+      candidate.styleSet = styleCompiler.compose(...data.map((entry) => ctx.patterns.transform(call.name, entry)))
+      continue
     }
 
-    // Runtime maps are allocated only after semantic `cx()` has had a chance to merge every
-    // leaf. This prevents the uncomposed intermediate atoms from entering the stylesheet.
-    for (const candidate of candidates) {
-      if (!candidate.styleMap || candidate.subsumed || candidate.replacement) continue
-      const compiled = candidate.styleMap.compile()
-      candidate.replacement =
-        compiled.usesHelper && candidate.mapHelperName && candidate.mapHelperName !== RECIPE_MAP_HELPER
-          ? compiled.expression.replaceAll(`${RECIPE_MAP_HELPER}(`, `${candidate.mapHelperName}(`)
-          : compiled.expression
-      if (!compiled.usesHelper) candidate.insert = undefined
-      candidate.className = compiled.staticClasses
-      candidate.classNames = compiled.classNames
-      candidate.outputKind = compiled.outputKind === 'slots' ? 'slots' : undefined
+    if (call.kind === 'viewTransition') {
+      const semantic = viewTransitionClassName(data[0], ctx.utility.prefix)
+      candidate.className = styleCompiler.allocateClassString(semantic)
+      candidate.classNames = [candidate.className]
+      candidate.replacement = JSON.stringify(candidate.className)
     }
   }
 
-  /**
-   * Ranges the rewrite actually replaced. Declared before the early return below, because
-   * that return is now also a reporting point: a module with nothing to fold is exactly the
-   * shape `reportSurvivors` exists to catch.
-   */
+  // Semantic `cx()`: compose every analyzable argument's declarations before allocating.
+  const byRange = new Map(candidates.map((candidate) => [`${candidate.start}:${candidate.end}`, candidate]))
+  for (const call of analysis.calls) {
+    if (call.kind !== 'cx' || call.notImported) continue
+
+    const matched: Candidate[] = []
+    const parts: Array<
+      | { kind: 'style'; candidate: Candidate }
+      | { kind: 'dynamic'; candidate: Candidate }
+      | { kind: 'class'; value: string; candidate?: Candidate }
+    > = []
+    const dynamic: Candidate[] = []
+    const constantCandidates: Candidate[] = []
+    let supported = true
+
+    const take = (arg: FoldCxArgument): boolean => {
+      const candidate = byRange.get(`${arg.span.start}:${arg.span.end}`)
+      if (candidate?.styleMap?.outputKind === 'class') {
+        dynamic.push(candidate)
+        parts.push({ kind: 'dynamic', candidate })
+        return true
+      }
+      if (candidate?.styleSet) {
+        matched.push(candidate)
+        parts.push({ kind: 'style', candidate })
+        return true
+      }
+      if (candidate?.call.kind === 'viewTransition' && candidate.replacement && candidate.className) {
+        constantCandidates.push(candidate)
+        parts.push({ kind: 'class', value: candidate.className, candidate })
+        return true
+      }
+      if (arg.kind === 'string') {
+        parts.push({ kind: 'class', value: arg.value ?? '' })
+        return true
+      }
+      if (arg.kind === 'array') {
+        if (!arg.elements) return false
+        for (const element of arg.elements) if (!take(element)) return false
+        return true
+      }
+      // Values the runtime `cx` ignores and whose evaluation is inert.
+      return arg.kind === 'ignored'
+    }
+
+    for (const arg of call.cxArguments) {
+      if (take(arg)) continue
+      supported = false
+      break
+    }
+
+    // Two runtime maps cannot be reduced to a single lookup, so more than one declines the
+    // call whether or not the walk finished. It is the *mix* of compiled atoms and an opaque
+    // class that is worth a separate word.
+    if (!supported || dynamic.length > 1) {
+      const composesStyleSet = (arg: FoldCxArgument): boolean => {
+        const candidate = byRange.get(`${arg.span.start}:${arg.span.end}`)
+        if (candidate?.styleSet || candidate?.styleMap?.outputKind === 'class' || candidate?.replacement) return true
+        return arg.kind === 'array' && (arg.elements ?? []).some(composesStyleSet)
+      }
+      const mixed = !supported && call.cxArguments.some(composesStyleSet)
+      skipped.push({
+        name: 'cx',
+        reason: mixed ? 'opaque-composition' : 'dynamic',
+        start: call.span.start,
+        end: call.span.end,
+      })
+      continue
+    }
+
+    const calleeName = localNameOf(analysis, 'cx', isBambooCssModule) ?? 'cx'
+
+    if (dynamic.length === 1 && matched.length > 0) {
+      const dynamicCandidate = dynamic[0]!
+      const styleParts = parts.filter(
+        (part): part is { kind: 'style' | 'dynamic'; candidate: Candidate } => part.kind !== 'class',
+      )
+      const dynamicIndex = styleParts.findIndex((part) => part.kind === 'dynamic')
+      const before = styleParts
+        .slice(0, dynamicIndex)
+        .filter((part) => part.kind === 'style')
+        .map((part) => part.candidate.styleSet!)
+      const after = styleParts
+        .slice(dynamicIndex + 1)
+        .filter((part) => part.kind === 'style')
+        .map((part) => part.candidate.styleSet!)
+      const compiled = dynamicCandidate.styleMap!.compile(before, after)
+      const expression =
+        compiled.usesHelper && dynamicCandidate.mapHelperName && dynamicCandidate.mapHelperName !== RECIPE_MAP_HELPER
+          ? compiled.expression.replaceAll(`${RECIPE_MAP_HELPER}(`, `${dynamicCandidate.mapHelperName}(`)
+          : compiled.expression
+
+      const arguments_: string[] = []
+      let wroteCompiled = false
+      for (const part of parts) {
+        if (part.kind === 'class') {
+          if (part.value) arguments_.push(JSON.stringify(part.value))
+          continue
+        }
+        if (!wroteCompiled) {
+          arguments_.push(expression)
+          wroteCompiled = true
+        }
+      }
+
+      dynamicCandidate.subsumed = true
+      candidates.push({
+        call,
+        name: 'cx',
+        start: call.span.start,
+        end: call.span.end,
+        replacement: arguments_.length === 1 ? arguments_[0] : `${calleeName}(${arguments_.join(', ')})`,
+        className: '',
+        classNames: [
+          ...compiled.classNames,
+          ...parts.filter((part) => part.kind === 'class').flatMap((part) => part.value.split(' ')),
+        ].filter(Boolean),
+        insert: compiled.usesHelper ? dynamicCandidate.insert : undefined,
+        foreign: styleParts.flatMap((part) => part.candidate.foreign ?? []),
+      })
+      continue
+    }
+
+    if (matched.length === 0) {
+      if (constantCandidates.length === 0) continue
+      const className = parts
+        .filter((part): part is { kind: 'class'; value: string; candidate?: Candidate } => part.kind === 'class')
+        .map((part) => part.value)
+        .filter(Boolean)
+        .join(' ')
+      candidates.push({
+        call,
+        name: 'cx',
+        start: call.span.start,
+        end: call.span.end,
+        replacement: JSON.stringify(className),
+        className,
+        classNames: className.split(' ').filter(Boolean),
+      })
+      continue
+    }
+
+    const merged = styleCompiler.compose(...matched.map((candidate) => candidate.styleSet!))
+    const compiled = styleCompiler.className(merged)
+    const classParts: string[] = []
+    let wroteCompiled = false
+    for (const part of parts) {
+      if (part.kind === 'class') {
+        if (part.value) classParts.push(part.value)
+        continue
+      }
+      if (!wroteCompiled && compiled) {
+        classParts.push(compiled)
+        wroteCompiled = true
+      }
+    }
+
+    candidates.push({
+      call,
+      name: 'cx',
+      start: call.span.start,
+      end: call.span.end,
+      replacement: JSON.stringify(classParts.join(' ')),
+      className: classParts.join(' '),
+      classNames: classParts.flatMap((part) => part.split(' ')).filter(Boolean),
+      styleSet: merged,
+      foreign: matched.flatMap((candidate) => candidate.foreign ?? []),
+    })
+  }
+
+  // Runtime maps are allocated only after semantic `cx()` has had a chance to merge every
+  // leaf. This prevents the uncomposed intermediate atoms from entering the stylesheet.
+  for (const candidate of candidates) {
+    if (!candidate.styleMap || candidate.subsumed || candidate.replacement) continue
+    const compiled = candidate.styleMap.compile()
+    candidate.replacement =
+      compiled.usesHelper && candidate.mapHelperName && candidate.mapHelperName !== RECIPE_MAP_HELPER
+        ? compiled.expression.replaceAll(`${RECIPE_MAP_HELPER}(`, `${candidate.mapHelperName}(`)
+        : compiled.expression
+    if (!compiled.usesHelper) candidate.insert = undefined
+    candidate.className = compiled.staticClasses
+    candidate.classNames = compiled.classNames
+    candidate.outputKind = compiled.outputKind === 'slots' ? 'slots' : undefined
+  }
+
+  /** Compile every style fragment a recipe config declares, for nothing but the throw. */
+  const assertCompiles = (config: RecipeConfig | undefined) => {
+    if (!config) return
+    const fragments: unknown[] = [config.base, ...Object.values(config.variants ?? {}).flatMap(Object.values)]
+    for (const compound of config.compoundVariants ?? []) {
+      if (compound && typeof compound === 'object') fragments.push((compound as Dict).css)
+    }
+    const slots = Array.isArray(config.slots) ? (config.slots as string[]) : undefined
+    for (const fragment of fragments) {
+      if (!fragment || typeof fragment !== 'object') continue
+      for (const styles of slots ? slots.map((slot) => (fragment as Dict)[slot]) : [fragment]) {
+        if (styles && typeof styles === 'object') styleCompiler.className(styles as Dict)
+      }
+    }
+  }
+
+  /** Ranges the rewrite actually replaced. */
   const applied: Array<[number, number]> = []
 
   if (candidates.length === 0 && recipeDefinitions.length === 0) {
-    // Nothing was rewritten, so every reference survives — and a module with no candidate at
-    // all is exactly the shape this exists to catch.
     if (reportSurvivors) reportRuntimeBindings()
-    return { code, map: null, folded, skipped, dependencies: [], exportReads: [] }
+    return { code, map: null, folded, skipped, dependencies: [] }
   }
 
-  // Compare by `SourceFile` identity rather than by path, since `options.filePath`
-  // may be spelled differently by the caller than ts-morph spells it.
-  const rewriteSourceFile =
-    ownSourceFile ?? candidates[0]?.node.getSourceFile() ?? recipeDefinitions[0]?.call.getSourceFile()
-  if (!rewriteSourceFile) return { code, map: null, folded, skipped, dependencies: [], exportReads: [] }
-  const dependencyScan = createDependencyScan(rewriteSourceFile)
-
-  // Outermost-first, so a nested candidate can be detected and dropped rather than
-  // producing an overlapping overwrite (which magic-string rejects).
+  // Outermost-first, so a nested candidate can be detected and dropped rather than producing
+  // an overlapping overwrite (which magic-string rejects).
   candidates.sort((a, b) => a.start - b.start || b.end - a.end)
 
   const magic = new MagicString(code)
 
   // Which bindings have already been added, for the whole module rather than per insertion
-  // point. A module-level binding is in scope everywhere in the file, so one is enough
-  // however many calls need it — and a file importing the css module twice has two
-  // insertion points, which keyed per position would each get their own `cx` and emit
-  // `Identifier 'cx' has already been declared`.
-  //
-  // Tracked by name rather than as a single flag, because calls in the same file need
-  // different sets: one needs `cx` alone, the next also needs the leaf helper.
+  // point — a module-level binding is in scope everywhere in the file.
   const insertedNames = new Set<string>()
-  const applyInsert = (insert: { pos: number; names: string[]; module?: string } | undefined) => {
+  const applyInsert = (insert: HelperInsert | undefined) => {
     if (!insert) return
-
     const missing = insert.names.filter((name) => !insertedNames.has(name))
     if (!missing.length) return
-
     magic.appendLeft(
       insert.pos,
       insert.module
@@ -1905,63 +757,45 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     for (const name of missing) insertedNames.add(name)
   }
 
-  // Applied edit ranges, not candidate ranges. A `styled.*` element only rewrites its two
-  // tags, so anything between them — a nested element, a `css()` call in the children —
-  // is still free to fold. Gating on the element's whole span would reject those for an
-  // overlap that never happens.
-  const collides = (edits: Array<[number, number]>) =>
-    edits.some(([start, end]) => applied.some(([from, to]) => start < to && from < end))
+  const collides = (start: number, end: number) => applied.some(([from, to]) => start < to && from < end)
 
   for (const candidate of candidates) {
-    const { item, start, end } = candidate
-    const name = candidate.displayName ?? item.name ?? item.type ?? ''
+    if (candidate.subsumed) continue
+    const { name, start, end } = candidate
 
-    const ranges: Array<[number, number]> = [[start, end]]
-
-    if (collides(ranges)) {
+    if (collides(start, end)) {
       skipped.push({ name, reason: 'overlapping', start, end })
       continue
     }
 
-    // A `token()` call, which becomes the value itself. No class is involved, so the
-    // class fields stay empty rather than carrying a `var(…)` reference that a consumer
-    // would go looking for a rule behind.
+    for (const dependency of candidate.foreign ?? []) foreignDependencies.add(dependency)
+
+    // A `token()` call, which becomes the value itself. No class is involved.
     if (candidate.value !== undefined) {
       magic.overwrite(start, end, JSON.stringify(candidate.value))
-      applied.push(...ranges)
+      applied.push([start, end])
       folded.push({ name, kind: 'value', className: '', classNames: [], value: candidate.value, start, end })
-      collectSourceFiles(item.box, dependencyScan)
       continue
     }
 
     if (candidate.replacement) {
       magic.overwrite(start, end, candidate.replacement)
       applyInsert(candidate.insert)
-      applied.push(...ranges)
+      applied.push([start, end])
       folded.push({
         name,
         kind: candidate.outputKind ?? 'class',
-        className: candidate.className!,
-        // Filtered, because an element or call whose classes are all built at runtime
-        // resolves no literal — `classNames` is what a consumer checks for CSS behind it,
-        // and an empty string is not a class to check.
-        classNames: (candidate.classNames ?? [candidate.className!]).filter(Boolean),
+        className: candidate.className ?? '',
+        classNames: (candidate.classNames ?? [candidate.className ?? '']).filter(Boolean),
         start,
         end,
       })
-      collectSourceFiles(item.box, dependencyScan)
-      if (candidate.configBox) collectSourceFiles(candidate.configBox, dependencyScan)
-      for (const box of candidate.sourceBoxes ?? []) collectSourceFiles(box, dependencyScan)
       continue
     }
 
     let className: string
     try {
-      if (item.type === 'pattern') {
-        className = runtimeCss(...item.data.map((entry) => ctx.patterns.transform(name, entry as Dict)))
-      } else {
-        className = runtimeCss(...(item.data as Dict[]))
-      }
+      className = styleCompiler.className(candidate.styleSet ?? {})
     } catch {
       skipped.push({ name, reason: 'dynamic', start, end })
       continue
@@ -1970,103 +804,49 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     // JSON.stringify escapes the backslashes bamboo puts in class names for escaped
     // characters, and any quote an arbitrary value introduced.
     magic.overwrite(start, end, JSON.stringify(className))
-    applied.push(...ranges)
+    applied.push([start, end])
     folded.push({ name, kind: 'class', className, classNames: className ? [className] : [], start, end })
-    collectSourceFiles(item.box, dependencyScan)
   }
 
-  // `input.splitVariantProps(props)` — the other way a wrapper reaches its recipe.
-  //
-  // Lowered because it is what keeps the binding alive once the calls have folded. The keys it
-  // splits on are `Object.keys(variants)`, known here, and the function it runs is `splitProps`
-  // — so the lowered form calls the same helper directly and reads nothing off the recipe. The
-  // bytes are already paid: `splitVariantProps` calls `splitProps` today.
-  //
-  // Not driven by `parserResult`: a property access on a local binding is not a style call, so
-  // nothing records it. The source file is the only place it exists.
-  //
-  // The module being *rewritten*, taken from a candidate rather than from a config's box.
-  // Those boxes used to share this module, and no longer do: a config resolved across modules
-  // carries the declaring file, so reading one here scanned somebody else's source — leaving
-  // this module's `splitVariantProps` unlowered, and computing offsets against a file the
-  // rewrite does not apply to.
-  const recipeSourceFile = candidates[0]?.node.getSourceFile()
+  // `input.splitVariantProps(props)` — the other way a wrapper reaches its recipe. Lowered to
+  // the `splitProps` it runs anyway, with the recipe's variant keys, so nothing reads the
+  // binding and the config it was declared with can be dropped.
+  // Only in a module that had something to fold, as before: a split alone keeps its binding.
+  for (const split of candidates.length > 0 ? analysis.splitCalls : []) {
+    const entry = split.imported
+      ? ({ config: ctx.recipes.getConfig(split.binding) as RecipeConfig } satisfies RecipeEntry)
+      : recipeConfigs.get(split.binding)
+    if (!entry || entry === AMBIGUOUS || !entry.config) continue
 
-  // Worth a text scan: `recipeSourceFile` is set whenever the module holds any candidate at all,
-  // so without this the walk ran for *every* styled module, wrapping every property access in the
-  // file to ask a question almost none of them answer.
-  //
-  // The escape half is not decoration. `getName(access)` reads the identifier as the compiler
-  // resolves it, not as it is spelled, so `badge.splitVariantProps(p)` matches the loop while
-  // the literal name appears nowhere in the source. Testing the text alone left that call
-  // unlowered against an erased binding. Both escape forms an identifier may use begin with a
-  // backslash and a `u`, so one test covers them, and a `\u` in an ordinary string costs only the
-  // walk it would have done anyway. `token-accounting.ts` guards the same way for the same reason.
-  if (recipeSourceFile && mayNameSplitVariantProps(recipeSourceFile.getFullText())) {
-    for (const access of getDescendantsOfKind(recipeSourceFile, SyntaxKind.PropertyAccessExpression)) {
-      if (getName(access) !== 'splitVariantProps') continue
+    const { start, end } = split.span
+    if (collides(start, end)) continue
 
-      const target = childOf(access, 'expression')
-      if (target === undefined || !Node.isIdentifier(target)) continue
-      if (isShadowed(access, target.getText())) continue
+    const helper = ensureRecipeHelperImport(
+      SPLIT_PROPS_HELPER,
+      analysis,
+      split.shadowedHelpers,
+      isBambooCssModule,
+      isGeneratedCssModule,
+      helperModules.get(split.binding),
+      helperModuleFromSubpath,
+    )
+    if (!helper) continue
 
-      // An inline recipe the module bound, or a config recipe it imported. The keys are
-      // `Object.keys(variants)` either way, and both reach `splitProps` underneath.
-      const local = recipeConfigs?.get(target.getText())
-      const importedConfig =
-        !local && importsFor(recipeSourceFile).has(target.getText())
-          ? (ctx.recipes.getConfig(target.getText()) as RecipeEntry['config'] | undefined)
-          : undefined
-
-      const entry =
-        local && local !== AMBIGUOUS
-          ? local
-          : importedConfig
-            ? ({ config: importedConfig, box: undefined } satisfies RecipeEntry)
-            : undefined
-
-      if (!entry) continue
-
-      const call = access.parent
-      if (!Node.isCallExpression(call) || call.expression !== access) continue
-
-      const args = call.arguments
-      if (args.length !== 1) continue
-
-      const start = call.getStart()
-      const end = call.getEnd()
-      if (code.slice(start, end) !== call.getText()) continue
-      if (collides([[start, end]])) continue
-
-      const helper = ensureRecipeHelperImport(
-        SPLIT_PROPS_HELPER,
-        call,
-        isBambooCssModule,
-        isGeneratedCssModule,
-        isShadowed,
-        // The same fallback the axis lowering uses. Without it this declined in exactly the
-        // files that lowering now serves — leaving the access, so the binding, so the config
-        // the whole exercise exists to let a bundler drop.
-        helperModules.get(target.getText()),
-        helperModuleFromSubpath,
-      )
-      if (!helper) continue
-
-      const keys = Object.keys(entry.config.variants ?? {})
-      magic.overwrite(start, end, `${helper.name}(${args[0]!.getText()}, ${JSON.stringify(keys)})`)
-      applyInsert(helper.insert)
-      applied.push([start, end])
-    }
+    const keys = Object.keys(entry.config.variants ?? {})
+    magic.overwrite(start, end, `${helper.name}(${split.argumentText}, ${JSON.stringify(keys)})`)
+    applyInsert(helper.insert)
+    applied.push([start, end])
   }
 
   // Erase every successfully extracted recipe declaration. Calls and supported metadata
-  // operations above no longer read the binding; any other read is reported below and makes
-  // the compilation fail. Replacing the whole factory call also deletes the style config,
-  // allowing the now-unused `cva`/`sva` import to disappear under tree-shaking.
-  for (const { name, call } of recipeDefinitions) {
-    const start = call.getStart()
-    const end = call.getEnd()
-    if (collides([[start, end]])) continue
+  // operations above no longer read the binding; any other read is reported below.
+  for (const { name, start, end } of recipeDefinitions) {
+    if (collides(start, end)) continue
+    // Only a config whose every fragment compiles. Erasing one the stylesheet cannot emit —
+    // a retired `{token}` reference, say — deletes the only place the error was visible, and
+    // the module the user sees is a recipe that silently became `undefined`. A throw here is
+    // what makes the plugin report the module as one it could not compile.
+    assertCompiles(recipeConfigs.get(name)?.config)
     magic.overwrite(start, end, 'undefined')
     applied.push([start, end])
     folded.push({ name, kind: 'definition', className: '', classNames: [], start, end })
@@ -2075,106 +855,11 @@ export const foldSource = (options: FoldOptions): FoldResult => {
   /**
    * Bindings from a bamboo module still referenced once every rewrite is applied.
    *
-   * Deliberately not driven by `parserResult`: that is the recogniser, and the point here is
-   * to catch what it did not see. A namespace import called as `s.cva(...)`, a default
-   * import, a specifier that resolved to nothing — each leaves a live reference and no ledger
-   * entry at all, which used to let a build silently ship the engine.
-   *
-   * The helpers the compiler writes are excluded because they pull no style engine. `cx` is
-   * also allowed to remain when it joins an arbitrary external class; only fully analyzable
-   * arguments receive Bamboo's semantic composition guarantee.
+   * Deliberately not driven by the call ledger: that is the recogniser, and the point here is
+   * to catch what it did not see. A namespace import, a default import, a re-export — each
+   * leaves a live reference and no ledger entry at all.
    */
-  /** The specifier this module imported `binding` through, if it did. */
-  function importSpecifierFor(sourceFile: SourceFile, binding: string) {
-    for (const declaration of getImportDeclarations(sourceFile)) {
-      if (isTypeOnly(declaration)) continue
-      for (const named of getNamedImports(declaration)) {
-        if (isTypeOnly(named)) continue
-        if ((getAliasNode(named) ?? nameNodeOf(named))?.getText() === binding) {
-          return getAliasNode(named) ?? nameNodeOf(named)
-        }
-      }
-    }
-    return undefined
-  }
-
   function reportRuntimeBindings() {
-    // Not `parserResult`'s boxes: one can carry a node from any module the extractor resolved
-    // through, and this reports offsets against *this* module's text.
-    const sourceFile =
-      ownSourceFile ?? candidates[0]?.node.getSourceFile() ?? recipeDefinitions[0]?.call.getSourceFile()
-    if (!sourceFile) return
-
-    // Inline recipe bindings are local variables, so the import scan below cannot see reads
-    // such as `badge.raw`, `badge.config`, `badge.merge(...)`, or a bare re-export. Follow the
-    // declaration's symbol references and require every value read to sit inside a range the
-    // compiler actually replaced. Otherwise a static build could remove the recipe layer
-    // while silently retaining an API whose result still depends on it.
-    // Bindings this module imported that are inline recipes, whether or not it calls one.
-    // `recipeConfigs` only learns about an imported recipe while lowering a *call*, so a
-    // module that merely reads one — `export const alias = badge`, `badge.raw(...)` — knew
-    // nothing about it. That read is exactly the unsafe shape this scan exists to catch.
-    const importedRecipeBindings = new Set<string>(
-      (parserResult as { importedRecipes?: Map<string, unknown> }).importedRecipes?.keys() ?? [],
-    )
-
-    /**
-     * Every identifier in the module, grouped by the name it spells — built at most once per
-     * pass, and only when something below has a name to look up.
-     *
-     * One index answers for every binding, rather than a walk per binding. Built here rather
-     * than cached across passes: it holds nodes, and a node does not outlive its source file
-     * being replaced.
-     *
-     * Deferred because most modules in an app neither declare nor import a recipe, and the
-     * walk is not cheap — `getDescendantsOfKind` wraps every identifier in the file in a
-     * ts-morph node to answer a question those modules never ask. It was 11% of a 6,307-file
-     * build, most of it spent producing an index nothing read.
-     */
-    let identifiers: IdentifierIndex | undefined
-    const identifiersByName = () => (identifiers ??= identifierIndex(sourceFile))
-
-    for (const binding of new Set([...recipeConfigs.keys(), ...importedRecipeBindings])) {
-      const entry = recipeConfigs.get(binding)
-      if (entry === AMBIGUOUS) continue
-      if (!entry && !importedRecipeBindings.has(binding)) continue
-
-      // Where this module binds the name: the variable it declares, or the import specifier it
-      // arrived through. A recipe declared elsewhere used to be skipped entirely, which left
-      // the *declaring* module answering for reads it cannot see and reporting a position in
-      // another file's text. Each module now answers only about its own, so a consumer that
-      // reads the binding unsafely reports itself, and one whose calls all compiled reports
-      // nothing.
-      const definition = entry?.box?.getNode?.()
-      const declaredHere = definition?.getSourceFile() === sourceFile
-      const nameNode = declaredHere
-        ? nameNodeOf(getFirstAncestorByKind(definition, SyntaxKind.VariableDeclaration) as Node)
-        : importSpecifierFor(sourceFile, binding)
-
-      if (!nameNode || !Node.isIdentifier(nameNode)) continue
-
-      // Syntactic, so no language service is involved. See `localReferencesTo` for why that
-      // matters: one query binds the project's whole `.d.ts` closure into the bundler's heap.
-      const references = localReferencesTo(identifiersByName(), binding, nameNode).filter(
-        // `RecipeVariantProps<typeof button>` is erased by TypeScript and does not keep the
-        // recipe binding alive at runtime. Treating that type query as a value read rejects
-        // the generated API's documented way to derive component props.
-        (reference) => !getFirstAncestorByKind(reference, SyntaxKind.TypeQuery),
-      )
-
-      const declined = skipped
-        .filter((item) => SURVIVES_TO_RUNTIME.has(item.reason) && item.end > item.start)
-        .some((item) => references.some((ref) => ref.getStart() >= item.start && ref.getStart() < item.end))
-
-      if (declined) continue
-      const survivor = references.find(
-        (ref) => !applied.some(([from, to]) => ref.getStart() >= from && ref.getStart() < to),
-      )
-      if (!survivor) continue
-
-      skipped.push({ name: binding, reason: 'runtime-binding', start: survivor.getStart(), end: survivor.getEnd() })
-    }
-
     const bambooModules = [
       ...cssModules,
       ...(ctx.imports.matchers.recipe?.mods ?? []),
@@ -2182,189 +867,122 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       ...(ctx.imports.matchers.tokens?.mods ?? []),
     ]
 
-    // Imports that do not create a static ES binding bypass the binding walk below while
-    // still retaining the generated runtime module. There is no useful fallback contract for
-    // them: the compiler cannot rewrite an API selected from an opaque namespace at runtime.
-    // Both shapes below are read from one traversal rather than two. `getDescendantsOfKind`
-    // walks the whole tree per call and wraps every node it yields, so asking it twice over the
-    // same file pays for the tree twice to answer two questions about it.
-    //
-    // Collected into separate buckets rather than handled inline, so `skipped` keeps the order
-    // two passes produced — every call in the module, then every import-equals — which is what
-    // the diagnostics print and what the fixtures pin.
-    const runtimeCalls: CallExpression[] = []
-    const importEquals: ImportEqualsDeclaration[] = []
+    const declinedRanges = () =>
+      skipped
+        .filter((entry) => SURVIVES_TO_RUNTIME.has(entry.reason) && entry.end > entry.start)
+        .map((entry) => [entry.start, entry.end] as const)
+    const inside = (ranges: ReadonlyArray<readonly [number, number]>, start: number) =>
+      ranges.some(([from, to]) => start >= from && start < to)
 
-    forEachDescendant(sourceFile, (node) => {
-      if (Node.isCallExpression(node)) runtimeCalls.push(node)
-      else if (Node.isImportEqualsDeclaration(node)) importEquals.push(node)
-    })
+    // Inline recipe bindings are local variables, so the import scan below cannot see reads
+    // such as `badge.raw`, `badge.config`, `badge.merge(...)`, or a bare re-export. Every value
+    // read has to sit inside a range the compiler actually replaced; otherwise a static build
+    // could remove the recipe layer while silently retaining an API whose result depends on it.
+    // Each module answers only for its own reads — a recipe declared elsewhere is reported by
+    // the consumer that reads it unsafely, at a position in the consumer's own text.
+    const recipeBindings = new Set<string>()
+    for (const [name, entry] of recipeConfigs) if (entry !== AMBIGUOUS) recipeBindings.add(name)
+    for (const imported of analysis.importedRecipes) recipeBindings.add(imported.local)
 
-    for (const call of runtimeCalls) {
-      const callee = call.expression
-      const argument = call.arguments[0]
-      if (!argument || (!Node.isStringLiteral(argument) && !Node.isNoSubstitutionTemplateLiteral(argument))) {
-        continue
-      }
-      if (!matchesModule(stringLiteralValue(argument), bambooModules)) continue
-
-      const isDynamicImport = callee.kind === SyntaxKind.ImportKeyword
-      const isRequire = Node.isIdentifier(callee) && callee.getText() === 'require' && !isShadowed(call, 'require')
-      if (!isDynamicImport && !isRequire) continue
-
-      skipped.push({
-        name: isDynamicImport ? 'import' : 'require',
-        reason: 'runtime-binding',
-        start: call.getStart(),
-        end: call.getEnd(),
-      })
+    for (const binding of recipeBindings) {
+      const references = analysis.references.filter((reference) => reference.name === binding)
+      if (references.length === 0) continue
+      const declined = declinedRanges()
+      if (references.some((reference) => inside(declined, reference.span.start))) continue
+      const survivor = references.find((reference) => !inside(applied, reference.span.start))
+      if (!survivor) continue
+      skipped.push({ name: binding, reason: 'runtime-binding', start: survivor.span.start, end: survivor.span.end })
     }
 
-    for (const declaration of importEquals) {
-      if (isTypeOnly(declaration)) continue
-      const reference = declaration.moduleReference
-      if (!Node.isExternalModuleReference(reference)) continue
-      const expression = reference.expression
-      if (
-        !expression ||
-        !Node.isStringLiteral(expression) ||
-        !matchesModule(stringLiteralValue(expression), bambooModules)
-      ) {
-        continue
-      }
-      skipped.push({
-        name: getName(declaration) ?? '',
-        reason: 'runtime-binding',
-        start: declaration.getStart(),
-        end: declaration.getEnd(),
-      })
+    // Imports that do not create a static ES binding still retain the generated runtime
+    // module. The compiler cannot rewrite an API selected from an opaque namespace at runtime.
+    // Calls first, then import-equals, each in document order — the order diagnostics print.
+    const shapes = analysis.runtimeShapes.filter((shape) => matchesModule(shape.module, bambooModules))
+    const byStart = (a: { span: { start: number } }, b: { span: { start: number } }) => a.span.start - b.span.start
+    for (const shape of shapes.filter((entry) => entry.kind === 'import' || entry.kind === 'require').sort(byStart)) {
+      skipped.push({ name: shape.name, reason: 'runtime-binding', start: shape.span.start, end: shape.span.end })
+    }
+    for (const shape of shapes.filter((entry) => entry.kind === 'import-equals').sort(byStart)) {
+      skipped.push({ name: shape.name, reason: 'runtime-binding', start: shape.span.start, end: shape.span.end })
     }
 
     /** Local name -> what to call it in the report. */
     const watched = new Map<string, string>()
-
-    for (const declaration of getImportDeclarations(sourceFile)) {
-      if (isTypeOnly(declaration)) continue
-      if (!matchesModule(getModuleSpecifierValue(declaration) ?? '', bambooModules)) continue
-
-      for (const named of getNamedImports(declaration)) {
-        if (isTypeOnly(named)) continue
-        const imported = nameNodeOf(named)?.getText()
-        if (PERMITTED_BINDINGS.has(imported ?? '')) continue
-        watched.set((getAliasNode(named) ?? nameNodeOf(named))?.getText() ?? '', imported ?? '')
+    for (const declaration of analysis.imports) {
+      if (declaration.typeOnly || !matchesModule(declaration.module, bambooModules)) continue
+      for (const named of declaration.specifiers) {
+        if (named.typeOnly || PERMITTED_BINDINGS.has(named.imported)) continue
+        watched.set(named.local, named.imported)
       }
-
-      const namespace = getNamespaceImport(declaration)
-      if (namespace) watched.set(namespace.getText(), `${namespace.getText()}.*`)
-
-      const defaultImport = getDefaultImport(declaration)
-      if (defaultImport) watched.set(defaultImport.getText(), defaultImport.getText())
+      if (declaration.namespaceLocal) watched.set(declaration.namespaceLocal, `${declaration.namespaceLocal}.*`)
+      if (declaration.defaultLocal) watched.set(declaration.defaultLocal, declaration.defaultLocal)
     }
 
-    // `export { css } from 'styled-system/css'` re-exports the binding without importing it,
-    // which is exactly how a wrapper module keeps the engine alive.
-    for (const declaration of getExportDeclarations(sourceFile)) {
-      if (isTypeOnly(declaration)) continue
-      if (!matchesModule(getModuleSpecifierValue(declaration) ?? '', bambooModules)) continue
-
-      // `export * from` and `export * as ns from` alike: both keep the module alive, whatever
-      // they bind. (The parser's barrel walk distinguishes them because it asks a different
-      // question — which individual names come through.)
-      if (isStarExport(declaration)) {
-        // `export * as ns from` names the namespace; a bare `export * from` names nothing, and
-        // asking a missing node for its name is how that reached `getName` as `undefined`.
-        const namespace = getNamespaceExport(declaration)
-        skipped.push({
-          name: (namespace && getName(namespace)) ?? '*',
-          reason: 'runtime-binding',
-          start: declaration.getStart(),
-          end: declaration.getEnd(),
-        })
-        continue
-      }
-
-      for (const named of getNamedExports(declaration)) {
-        if (isTypeOnly(named)) continue
-        const imported = nameNodeOf(named)?.getText()
-        if (PERMITTED_BINDINGS.has(imported ?? '')) continue
-
-        skipped.push({ name: imported ?? '', reason: 'runtime-binding', start: named.getStart(), end: named.getEnd() })
-      }
+    // `export { css } from 'styled-system/css'`, `export * from`, `export * as ns from` — each
+    // keeps the module alive, which is exactly how a wrapper module keeps the engine.
+    for (const shape of shapes) {
+      if (shape.kind !== 'export-star' && shape.kind !== 'export-from') continue
+      if (shape.kind === 'export-from' && PERMITTED_BINDINGS.has(shape.name)) continue
+      skipped.push({ name: shape.name, reason: 'runtime-binding', start: shape.span.start, end: shape.span.end })
     }
 
-    // `import { css } … export { css as style }` — the same wrapper shape in two statements,
-    // and the more common one, since a barrel that also *uses* the binding has to import it.
-    // The identifier walk cannot see it: an export specifier is excluded there to keep the
-    // single-statement form above from being counted twice.
-    for (const declaration of getExportDeclarations(sourceFile)) {
-      if (isTypeOnly(declaration) || childOf(declaration, 'moduleSpecifier')) continue
-
-      for (const named of getNamedExports(declaration)) {
-        if (isTypeOnly(named)) continue
-
-        const imported = watched.get(nameNodeOf(named)?.getText() ?? '')
-        if (imported === undefined) continue
-
-        skipped.push({ name: imported ?? '', reason: 'runtime-binding', start: named.getStart(), end: named.getEnd() })
-      }
+    // `import { css } … export { css as style }` — the same wrapper in two statements.
+    for (const exported of analysis.localExports) {
+      const imported = watched.get(exported.local)
+      if (imported === undefined) continue
+      skipped.push({ name: imported, reason: 'runtime-binding', start: exported.span.start, end: exported.span.end })
     }
 
     if (watched.size === 0) return
 
-    // Suppressed by *range* rather than by name. The ledger records the name a binding was
-    // imported under and this walk sees the name the file bound, which `css as c` makes
-    // different — matching on the name reported one call site twice, under two reasons. Only
-    // reasons that fail the build suppress; `not-imported` passes, so
-    // treating them as covered would hide the survivor this exists to find.
-    const declined = skipped
-      .filter((entry) => SURVIVES_TO_RUNTIME.has(entry.reason) && entry.end > entry.start)
-      .map((entry) => [entry.start, entry.end] as const)
-
-    // Driven from the watched names rather than from a second pass over every identifier in
-    // the file. The index above already groups identifiers by the name they spell, and only a
-    // watched name can produce a survivor here — so this reads a handful of buckets where it
-    // used to wrap every identifier in the module a second time.
+    // Suppressed by *range* rather than by name: the ledger records the imported name and
+    // this sees the local one, which `css as c` makes different.
+    const declined = declinedRanges()
+    const exportRanges = analysis.localExports.map((exported) => [exported.span.start, exported.span.end] as const)
     const survivors: SkippedCall[] = []
-
     for (const [local, imported] of watched) {
-      // Each bucket is in document order, so the first identifier that survives every check is
-      // the same one the full pass reported — and one report per name, as before.
-      for (const identifier of identifiersByName().get(local)) {
-        const start = identifier.getStart()
-        // The import declaration naming it is not a use of it, and neither is anything the
-        // rewrite already replaced.
-        if (getFirstAncestorByKind(identifier, SyntaxKind.ImportDeclaration)) continue
-        if (applied.some(([from, to]) => start >= from && start < to)) continue
-        if (declined.some(([from, to]) => start >= from && start < to)) continue
-        if (!isValueReference(identifier)) continue
-        if (isShadowed(identifier, local)) continue
-
-        survivors.push({ name: imported, reason: 'runtime-binding', start, end: identifier.getEnd() })
+      // References arrive in document order; one report per name, the first that survives.
+      for (const reference of analysis.references) {
+        if (reference.name !== local) continue
+        const { start, end } = reference.span
+        if (inside(applied, start) || inside(declined, start) || inside(exportRanges, start)) continue
+        survivors.push({ name: imported, reason: 'runtime-binding', start, end })
         break
       }
     }
-
-    // Restored to document order. Grouping by name is an artefact of how they were found, and
-    // these are read by a human as a list of positions in their file.
     survivors.sort((a, b) => a.start - b.start)
     skipped.push(...survivors)
   }
 
-  // The other reporting point. Mutually exclusive with the one above — that return exits —
-  // and this one runs only once every rewrite is in `applied`, so a reference the fold
-  // replaced is not counted as one it left behind.
   if (reportSurvivors) reportRuntimeBindings()
 
   if (folded.length === 0) {
-    return { code, map: null, folded, skipped, dependencies: [], exportReads: [] }
+    return { code, map: null, folded, skipped, dependencies: [] }
   }
+
+  const dependencies = new Set<string>([...analysis.dependencies, ...foreignDependencies])
+  dependencies.delete(options.filePath)
 
   return {
     code: magic.toString(),
     map: magic.generateMap({ source: options.filePath, hires: true, includeContent: true }),
     folded,
     skipped,
-    dependencies: [...dependencyScan.results, ...foreignDependencies],
-    exportReads,
+    dependencies: [...dependencies],
   }
+}
+
+/** The local name a module gives an import of `imported` from a Bamboo css module. */
+const localNameOf = (
+  analysis: FoldAnalysis,
+  imported: string,
+  isBambooCssModule: (mod: string) => boolean,
+): string | undefined => {
+  for (const declaration of analysis.imports) {
+    if (declaration.typeOnly || !isBambooCssModule(declaration.module)) continue
+    for (const named of declaration.specifiers) {
+      if (!named.typeOnly && named.imported === imported) return named.local
+    }
+  }
+  return undefined
 }

@@ -1,5 +1,5 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 
 import { logger } from '@bamboocss/logger'
@@ -10,9 +10,8 @@ import type { Plugin } from 'vite'
 import { asError, bamboocssCss, bamboocssCssEarly, VIRTUAL_CSS_ID } from './css'
 import { bare } from './class-name'
 import { createCompilationHost, type CompilationGeneration } from './compilation-host'
-import type { ExportReadRecord, FoldResult, ForeignRecipes, SkipReason, SkippedCall, verifyExportReads } from './fold'
+import type { FoldResult, SkipReason, SkippedCall } from './fold'
 import { loadCssOutputModule, loadFoldModule } from './lazy-modules'
-import type { RuntimeCss } from './runtime-css'
 import type { StaticStyleSetCompiler } from './style-set'
 import {
   createStaticCompilationSession,
@@ -204,31 +203,31 @@ const SPECIFIER_SUFFIXES = [
 ]
 
 /**
- * Whether a module imports a module the shared project holds.
+ * Whether a module imports a module the extraction inventory covers.
  *
- * Answered from project membership alone — no parse, no disk, no round trip to the compiler —
- * which is what makes it affordable to ask of every module outside the extraction inventory.
- * A relative specifier is tried against the file names a bundler would; a bare one against
- * where the parser last resolved that package to, since a package the project holds a source
- * of is one an included file imports a recipe from.
+ * Answered from `include`, the filesystem and the compiler's overlays — no parse — which is
+ * what makes it affordable to ask of every module outside the inventory. A relative specifier
+ * is tried against the file names a bundler would, and an aliased one through `resolveAlias`,
+ * which the caller supplies from the fold chunk so the tsconfig-path resolver stays out of the
+ * public entry. A package name is not followed: a published package ships its own output.
  */
-export const importsProjectModule = (
-  ctx: {
-    project: { hasSourceFile(path: string): boolean; bareSpecifierTarget(specifier: string): string | undefined }
-  },
+export const importsSourceModule = (
+  /** Whether a path is a module the inventory covers — or one the compiler holds an overlay of. */
+  isSourceModule: (filePath: string) => boolean,
+  resolveAlias: (specifier: string) => string | undefined,
   filePath: string,
   code: string,
 ) => {
   const directory = dirname(filePath)
+  const covered = (base: string) => SPECIFIER_SUFFIXES.some((suffix) => isSourceModule(base + suffix))
   for (const match of code.matchAll(MODULE_SPECIFIER)) {
     const specifier = match[1]!
     if (specifier.startsWith('.') || specifier.startsWith('/')) {
-      const base = specifier.startsWith('/') ? specifier : resolve(directory, specifier)
-      for (const suffix of SPECIFIER_SUFFIXES) if (ctx.project.hasSourceFile(base + suffix)) return true
+      if (covered(specifier.startsWith('/') ? specifier : resolve(directory, specifier))) return true
       continue
     }
-    const target = ctx.project.bareSpecifierTarget(specifier)
-    if (target && ctx.project.hasSourceFile(target)) return true
+    const aliased = resolveAlias(specifier)
+    if (aliased && covered(resolve(aliased))) return true
   }
   return false
 }
@@ -247,24 +246,6 @@ export const compilerParsePath = (id: string, code: string): string | null => {
   if (trimmed.startsWith('<')) return null
   return `${filePath}.__bamboo__.ts`
 }
-
-/**
- * Where to park a transform's text when it is not what the shared Project holds for the file.
- *
- * The compiler folds the bundler's view of a module — after every `enforce: 'pre'` plugin
- * before it, and after Vite's own load. The stylesheet pass reads the same file off disk
- * through the same ts-morph Project. When the two texts differ and the compiler writes its
- * own under the file's path, that transform silently becomes the canonical source for the
- * next extraction pass: the CSS would then be generated from a bundler artifact rather than
- * from the checkout. Under a sibling path both readings exist and neither overwrites the
- * other, which is the same reason `compilerParsePath` already does this for SFC submodules.
- *
- * The extension carries JSX-ness across, since it is what ts-morph keys its script kind on:
- * anything but an unambiguously non-JSX `.ts`/`.mts`/`.cts` is parsed as `.tsx`, so a `<div>`
- * in a `.js` file still parses and a `<T>value` assertion in a `.ts` file still means a cast.
- */
-export const auxiliaryParsePath = (filePath: string) =>
-  `${filePath}.__bamboo__.${/\.[cm]?ts$/i.test(filePath) ? 'ts' : 'tsx'}`
 
 /**
  * Is this file part of the generated `styled-system` rather than the user's source?
@@ -554,13 +535,10 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
      * re-fold the same module without reading and parsing the raw template.
      */
     foldInputsByModule: Map<string, { code: string; input: string; parsePath: string }>
-    recipeConfigCache: Map<string, ForeignRecipes>
     transformedModulesThisRun: Set<string>
     unchangedFolds: Map<string, boolean>
     changedRun: number
     cssLoaded: boolean
-    /** Cross-file reads each module's fold performed, for verification without re-folding. */
-    exportReadsByModule: Map<string, readonly ExportReadRecord[]>
   }
 
   type EnvironmentContext = {
@@ -577,9 +555,6 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
 
   interface FoldMemoEntry {
     result: FoldResult
-    parserDependencies: readonly string[]
-    /** The extractor's cross-file value reads, from the parse that fed this fold. */
-    valueReads: ReadonlyArray<{ file: string; name: string; digest: string | undefined }>
     /** Whether the fold ran the survivor scan, which `transform`'s artifact requires. */
     reportedSurvivors: boolean
   }
@@ -596,9 +571,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
    *
    * `watchChange` clears it, which is the exact validity window: entries are correct until a
    * file event changes what a fold could resolve, and `watchChange` is the one hook Vite calls
-   * for every such event before any update work begins. The per-environment resolution closure
-   * is deliberately not memoized — `withResolutionClosure` is recomputed per consumer against
-   * that environment's own recorded dependencies.
+   * for every such event before any update work begins.
    *
    * Keyed by path *and* content digest, not path alone, because one physical file is served
    * as more than one module shape in the same event — react-router clips a route module down
@@ -610,18 +583,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
    * build is memory a one-shot pass has no reason to spend.
    */
   const foldMemoByContent = new Map<string, FoldMemoEntry>()
-  /** Per-event digests of the edited file's read values, shared across every dependent. */
-  const verifyDigestMemo = new Map<string, { digest: string | undefined; crossings: readonly string[] }>()
   const foldMemoKey = (filePath: string, inputDigest: string) => `${filePath}\0${inputDigest}`
-  /**
-   * The Project resolution walk `withResolutionClosure` runs, memoized per change event.
-   *
-   * The walk is the dominant per-dependent cost once the fold itself is memoized — it runs
-   * once per dependent per environment with identical inputs, since both environments record
-   * the same fold dependencies for byte-identical source. Same bracketing as the fold memo:
-   * `watchChange` clears it, so no entry outlives the project state it was computed against.
-   */
-  const resolutionClosureMemo = new Map<string, readonly string[]>()
   interface TransformEpoch {
     id: number
     state: EnvironmentTransformState
@@ -689,12 +651,10 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     filesByModule: new Map(),
     foldSignatures: new Map(),
     foldInputsByModule: new Map(),
-    recipeConfigCache: new Map(),
     transformedModulesThisRun: new Set(),
     unchangedFolds: new Map(),
     changedRun: 0,
     cssLoaded: false,
-    exportReadsByModule: new Map(),
   })
   const cloneEnvironmentState = (state: EnvironmentTransformState): EnvironmentTransformState => ({
     transformArtifactsByModule: new Map(state.transformArtifactsByModule),
@@ -709,12 +669,10 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     filesByModule: new Map(state.filesByModule),
     foldSignatures: new Map(state.foldSignatures),
     foldInputsByModule: new Map(state.foldInputsByModule),
-    recipeConfigCache: new Map(state.recipeConfigCache),
     transformedModulesThisRun: new Set(state.transformedModulesThisRun),
     unchangedFolds: new Map(state.unchangedFolds),
     changedRun: state.changedRun,
     cssLoaded: state.cssLoaded,
-    exportReadsByModule: new Map(state.exportReadsByModule),
   })
   const environmentState = (context: unknown) => {
     const identity = environmentName(context)
@@ -1525,7 +1483,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
    * that returns nothing, a fold that throws — because "changed" is what this path did before,
    * and a wrong "unchanged" is a stale class string in the browser.
    */
-  const foldOutputUnchanged = (state: EnvironmentTransformState, dependent: string, changedFile: string) => {
+  const foldOutputUnchanged = (state: EnvironmentTransformState, dependent: string) => {
     const memoized = state.unchangedFolds.get(dependent)
     if (memoized !== undefined) return memoized
 
@@ -1539,116 +1497,31 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
 
     // Memoized like any other verdict, not merely returned. Each environment owns its own
     // signature and counter because an upstream plugin may have handed them different source.
-    const unchanged = state.changedRun < CHANGED_RUN_LIMIT && refoldMatchesSignature(state, dependent, changedFile)
+    const unchanged = state.changedRun < CHANGED_RUN_LIMIT && refoldMatchesSignature(state, dependent)
     state.changedRun = unchanged ? 0 : state.changedRun + 1
     state.unchangedFolds.set(dependent, unchanged)
     return unchanged
   }
 
-  const refoldMatchesSignature = (state: EnvironmentTransformState, dependent: string, changedFile: string) => {
+  const refoldMatchesSignature = (state: EnvironmentTransformState, dependent: string) => {
     const signature = state.foldSignatures.get(dependent)
-    if (!signature || !ctx || !foldSourceImpl || !runtimeCss || !styleCompiler) return false
+    if (!signature || !ctx || !foldSourceImpl || !styleCompiler) return false
 
     try {
       const retained = state.foldInputsByModule.get(dependent)
       const code = retained?.input === signature.input ? retained.code : readFileSync(signature.path, 'utf8')
-      // Re-decided rather than replayed from the retained entry: the shared Project may have
-      // reloaded this file since, and the lane the last transform took is only valid while
-      // the two texts still agree.
-      const requestedParsePath = retained?.input === signature.input ? retained.parsePath : signature.path
-      const parsePath = compilerSourcePath(signature.path, requestedParsePath, code)
+      const parsePath = retained?.input === signature.input ? retained.parsePath : signature.path
       const inputDigest = digest(code)
       if (inputDigest !== signature.input) return false
 
-      /**
-       * Try to answer from what the fold *read* before re-running it.
-       *
-       * The recorded reads carry the digest of every cross-file value and recipe config this
-       * dependent's fold consumed. When each read of the edited file re-digests identically,
-       * the fold's inputs did not move and its output cannot have — the whole re-fold below
-       * is skipped, which is most of what an edit to a shared module used to cost. Any gap —
-       * no read naming the edited file, an unverifiable digest, the verifier chunk not loaded
-       * — falls through to the full re-fold, which is exactly the previous behavior. A
-       * definite mismatch is equally final in the other direction: the re-fold would only
-       * rediscover the change.
-       */
-      const reads = state.exportReadsByModule.get(dependent)
-      if (reads?.length && verifyExportReadsImpl) {
-        const { verdict, crossings } = verifyExportReadsImpl(
-          ctx,
-          parseForCompiler,
-          reads,
-          normalizeFsPath(changedFile),
-          verifyDigestMemo,
-        )
-        if (verdict === 'unchanged') {
-          // Additively, exactly as the suppressed re-fold recorded its provisional edges: the
-          // verification's re-resolution is the current route, and a value that moved files
-          // without moving bytes must leave its new file among this consumer's edges or the
-          // next edit there reaches nobody.
-          recordFoldDependencies(state, dependent, signature.path, [
-            ...(state.dependenciesByModule.get(dependent) ?? []),
-            ...crossings,
-          ])
-          return true
-        }
-        if (verdict === 'changed') return false
-      }
-
-      let raw: FoldResult
-      let parserDependencies: readonly string[]
       const memoKey = foldMemoKey(parsePath, inputDigest)
-      const memoized = foldMemoByContent.get(memoKey)
-      if (memoized) {
-        // Another environment's pass over this same event already folded these bytes. The
-        // digest comparison below stays per-environment; the fold itself never was.
-        raw = memoized.result
-        parserDependencies = memoized.parserDependencies
-      } else {
-        // `addSourceFile` returns the tree it already holds when the text matches, which it does
-        // here by the line above — so this is a parse and a fold, not a re-parse of the module.
-        const sourceFile = addCompilerSource(signature.path, parsePath, code)
-        if (!sourceFile) return false
-        const parserResult = parseForCompiler(
-          parsePath,
-          requestedParsePath === signature.path ? signature.path : parsePath,
-        )
-        if (!parserResult) return false
-
-        raw = foldSourceImpl({
-          ctx,
-          code,
-          parserResult,
-          filePath: parsePath,
-          runtimeCss,
-          styleCompiler,
-          maxRecipeStates,
-          parseModule: parseForCompiler,
-          recipeConfigCache: state.recipeConfigCache,
-          // Reaches only `skipped`, and `code` is what is being compared. Left off because the
-          // scan it enables wraps every identifier in the module to build a report nothing here
-          // reads.
-          reportSurvivors: false,
-          sourceFile,
-        })
-        parserDependencies = parserResult.getDependencies()
-        // `reportedSurvivors: false` keeps `transform` from consuming this entry — its
-        // artifact needs the survivor scan this provisional fold skips. A later transform of
-        // the same bytes overwrites it with the reporting variant; `code` is identical in both.
-        foldMemoByContent.set(memoKey, {
-          result: raw,
-          parserDependencies,
-          valueReads: (parserResult as { getExportReads?: () => FoldMemoEntry['valueReads'] }).getExportReads?.() ?? [],
-          reportedSurvivors: false,
-        })
+      let result = foldMemoByContent.get(memoKey)?.result
+      if (!result) {
+        // `reportSurvivors: false` — it reaches only `skipped`, and `code` is what is compared.
+        // The entry is marked so `transform`, whose artifact needs the survivor scan, re-folds.
+        result = compileWith(code, parsePath, false)
+        foldMemoByContent.set(memoKey, { result, reportedSurvivors: false })
       }
-
-      const result = withResolutionClosure(
-        parsePath,
-        raw,
-        parserDependencies,
-        state.dependenciesByModule.get(dependent),
-      )
 
       const unchanged = digest(result.code) === signature.output
 
@@ -1661,12 +1534,9 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
        * the announcement means no transform will run to notice. Leaving the old edges would make
        * the next edit to the new dependency reach nobody.
        *
-       * A changed result is only a provisional check on the way to a real transform. Its reads
-       * can warm the extractor cache, so the authoritative parse may not cross every nested
-       * module again; retaining the union gives that transform semantic targets to validate
-       * against the current Project ledger. It then records the exact answer. If that pass
-       * throws, the additive update has kept every old edge while also making a fix in a newly
-       * observed dependency able to retry it.
+       * A changed result is only a provisional check on the way to a real transform, which
+       * records the exact answer. If that pass throws, the additive update has kept every old
+       * edge while also making a fix in a newly observed dependency able to retry it.
        */
       if (unchanged) {
         recordFoldDependencies(state, dependent, signature.path, result.dependencies)
@@ -1767,7 +1637,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
        * the edited module for a runtime value is still reached by `propagateUpdate` exactly as
        * it would be with no plugin here at all — that direction was never this list's to decide.
        */
-      if (verify && foldOutputUnchanged(state, dependent, file)) continue
+      if (verify && foldOutputUnchanged(state, dependent)) continue
       const exact = graph.getModuleById?.(dependent)
       const dependentFile = state.filesByModule.get(dependent) ?? dependent
       const candidates = exact ? [exact] : (graph.getModulesByFile(normalizeFsPath(dependentFile)) ?? [])
@@ -1801,73 +1671,15 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
   }
 
   let ctx: CompilationGeneration['context'] | undefined
-  /** The compiler's private parse sink for `ctx`. @see `CompilationGeneration.encoder` */
-  let parseEncoder: CompilationGeneration['encoder'] | undefined
   let foldSourceImpl: (typeof import('./fold'))['foldSource'] | undefined
-  let verifyExportReadsImpl: typeof verifyExportReads | undefined
-  let runtimeCss: RuntimeCss | undefined
+  let resolveTsPathImpl: (typeof import('./fold-module'))['resolveTsPathPattern'] | undefined
   let styleCompiler: StaticStyleSetCompiler | undefined
   let command: 'build' | 'serve' = 'build'
   let defaultEmitAssets = true
   let exitWarningInstalled = false
 
-  /**
-   * Expand semantic leaf reads through the Project's exact resolution paths.
-   *
-   * Most boxed values point at their final declaration, which the fold reports directly. An
-   * evaluated imported helper is different: its returned box belongs to the local call node,
-   * while ParserResult records the modules crossed during that evaluation. Seed from both so
-   * neither form can leave compiled JavaScript stale. A re-export or barrel on either path can
-   * change which declaration the same import selects and must be watched too. Supplying only
-   * these semantic leaves back to Project keeps unrelated runtime-import branches out and walks
-   * only the indexed closure rather than scanning the global ledger.
-   */
-  const withResolutionClosure = (
-    filePath: string,
-    result: FoldResult,
-    parserDependencies: readonly string[] = [],
-    previousDependencies: ReadonlySet<string> | undefined = undefined,
-  ): FoldResult => {
-    if (!ctx || !result.folded.length) return result
-
-    const dependencies = new Set(result.dependencies)
-    for (const dependency of parserDependencies) {
-      if (!isGeneratedOutput(dependency, ctx)) dependencies.add(dependency)
-    }
-
-    const targets = new Set(dependencies)
-    // A refold can populate the extractor's value cache immediately before Vite runs the real
-    // transform. That parse still reports the directly crossed helper, but it may not revisit a
-    // nested leaf. Only previously semantic targets from byte-identical importer source are
-    // candidates (the caller enforces that digest guard); Project then retains solely those
-    // which remain reachable in the current resolution graph.
-    for (const dependency of previousDependencies ?? []) targets.add(dependency)
-    if (!targets.size) return result
-
-    const targetList = [...targets]
-    const closureKey = command === 'serve' ? `${filePath}\0${targetList.slice().sort().join('|')}` : undefined
-    let reachable = closureKey ? resolutionClosureMemo.get(closureKey) : undefined
-    if (!reachable) {
-      reachable = ctx.project.getDependencies(filePath, targetList)
-      if (closureKey) resolutionClosureMemo.set(closureKey, reachable)
-    }
-    for (const dependency of reachable) {
-      if (!isGeneratedOutput(dependency, ctx)) dependencies.add(dependency)
-    }
-    const expanded = [...dependencies]
-    if (
-      expanded.length === result.dependencies.length &&
-      expanded.every((dependency, index) => dependency === result.dependencies[index])
-    ) {
-      return result
-    }
-    return { ...result, dependencies: expanded }
-  }
-
   /** Which context the published derivations below were built from. */
   let derivedGeneration = -1
-  /** Compiler-only sibling ASTs retained for each physical module. */
-  const auxiliarySourcesByFile = new Map<string, Set<string>>()
 
   /**
    * Whether the compiler state below still describes the context the host is on.
@@ -1875,7 +1687,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
    * Only `ensureCompilerState` re-derives, and only an awaited hook may call it — so the two
    * synchronous entry points, the speculative prefold and the unchanged-dependent check, can
    * be reached after a stylesheet pass has published a config reload they have not seen. Both
-   * decline rather than fold against a runtime `css` from the previous config.
+   * decline rather than fold against a style compiler from the previous config.
    */
   const compilerStateIsCurrent = () => {
     const current = host.current()
@@ -1890,10 +1702,9 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
    * Load the fold chunk and derive everything that depends on the resolved context.
    *
    * Keyed on context *identity* rather than derived once. `Builder.setup` replaces its context
-   * on a config reload, and the runtime `css`, the style-set compiler and the parse sink are
-   * all closures over the previous one — a stale `runtimeCss` names classes from the old
-   * config while the stylesheet is emitted from the new one, and nothing downstream can see
-   * the difference. Re-derivation is cheap; both factories are a handful of bound methods.
+   * on a config reload, and the style-set compiler is a closure over the previous one — a stale
+   * one names classes from the old config while the stylesheet is emitted from the new one,
+   * and nothing downstream can see the difference.
    *
    * Published as a set, and only once every part of the attempt has succeeded, so a failed
    * chunk load leaves no half-compiler visible to HMR.
@@ -1910,64 +1721,49 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       return
     }
 
-    const derivedRuntimeCss = fold.createRuntimeCss(generation.context)
-    const derivedStyleCompiler = fold.createStaticStyleSetCompiler(generation.context, derivedRuntimeCss)
+    const derivedStyleCompiler = fold.createStaticStyleSetCompiler(
+      generation.context,
+      fold.createRuntimeCss(generation.context),
+    )
 
     ctx = generation.context
-    parseEncoder = generation.encoder
     foldSourceImpl = fold.foldSource
-    verifyExportReadsImpl = fold.verifyExportReads
-    runtimeCss = derivedRuntimeCss
+    resolveTsPathImpl = fold.resolveTsPathPattern
     styleCompiler = derivedStyleCompiler
     derivedGeneration = generation.id
-    auxiliarySourcesByFile.clear()
   }
 
   /**
-   * Parse a module for the compiler, never for the stylesheet.
+   * Compile one module's text.
    *
-   * Every compiler parse goes through here so the private encoder cannot be forgotten at one
-   * call site. Forgetting it at any of them puts that module's reading into the encoder the
-   * sheet is emitted from, under a `parse` owner nothing retracts.
+   * The text is the bundler's: after every `enforce: 'pre'` plugin and Vite's own load. Every
+   * *other* module a value is resolved through is read the way extraction reads it, so the
+   * compiler and the stylesheet never disagree about a dependency. Nothing is installed
+   * anywhere — the analysis is a pure function of these bytes and the project's files, which
+   * is what lets a transform of a rewritten module run without displacing the checkout.
    */
-  const parseForCompiler = (filePath: string, hookFilePath = filePath) =>
-    ctx?.project.parseSourceFile(filePath, parseEncoder, { hookFilePath })
-
-  /**
-   * Where the compiler may hold `code` for `filePath` without displacing the checkout.
-   *
-   * The file's own path exactly when the shared Project already holds these bytes — then
-   * `addSourceFile` is a lookup and there is nothing to displace. @see `auxiliaryParsePath`
-   */
-  const compilerSourcePath = (filePath: string, requested: string, code: string) => {
-    if (requested !== filePath) return requested
-    return ctx?.project.getSourceFile(filePath)?.getFullText() === code ? filePath : auxiliaryParsePath(filePath)
-  }
-
-  /** Add one compiler-owned source without letting it displace or outlive its physical file. */
-  const addCompilerSource = (filePath: string, parsePath: string, code: string) => {
-    if (!ctx) return
-    const auxiliary = parsePath !== filePath
-    const sourceFile = ctx.project.addSourceFile(parsePath, code, { auxiliary })
-    if (auxiliary) {
-      const physical = normalizeFsPath(filePath)
-      const paths = auxiliarySourcesByFile.get(physical) ?? new Set<string>()
-      paths.add(parsePath)
-      auxiliarySourcesByFile.set(physical, paths)
+  const compileWith = (code: string, parsePath: string, reportSurvivors: boolean): FoldResult => {
+    if (!ctx || !foldSourceImpl || !styleCompiler) throw new Error('bamboo: the compiler is not initialized')
+    // A single-file component's script exists nowhere on disk: the framework plugin hands it
+    // over compiled. Held as an overlay under its synthetic path so a module importing a recipe
+    // from the component resolves the same text this pass folds.
+    if (parsePath.includes('.__bamboo__.')) ctx.project.overlaySource(parsePath, code)
+    const [analysis] = ctx.compileModules([{ filename: parsePath, source: code }], { references: reportSurvivors })
+    if (!analysis) throw new Error(`bamboo: no analysis for ${parsePath}`)
+    if (analysis.errors.length && analysis.calls.length === 0 && analysis.imports.length === 0) {
+      throw new Error(`bamboo: could not parse ${parsePath}:\n${analysis.errors.join('\n')}`)
     }
-    return sourceFile
-  }
-
-  /** Release compiler encoder owners and sibling ASTs when their physical module disappears. */
-  const releaseCompilerSources = (filePath: string) => {
-    if (!ctx) return
-    parseEncoder?.releaseFile(filePath)
-    const physical = normalizeFsPath(filePath)
-    for (const auxiliary of auxiliarySourcesByFile.get(physical) ?? []) {
-      parseEncoder?.releaseFile(auxiliary)
-      ctx.project.removeSourceFile(auxiliary)
-    }
-    auxiliarySourcesByFile.delete(physical)
+    const result = foldSourceImpl({
+      ctx,
+      code,
+      analysis,
+      filePath: parsePath,
+      styleCompiler,
+      maxRecipeStates,
+      reportSurvivors,
+    })
+    const dependencies = result.dependencies.filter((dependency) => !isGeneratedOutput(dependency, ctx!))
+    return dependencies.length === result.dependencies.length ? result : { ...result, dependencies }
   }
 
   type OutputOptionsWithPlugins = { plugins?: unknown }
@@ -2218,8 +2014,6 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       // Vite dev calls this once by default, then `hotUpdate` once per environment. Bracket the
       // physical edit for every environment so none reuses a verdict from the previous event.
       foldMemoByContent.clear()
-      resolutionClosureMemo.clear()
-      verifyDigestMemo.clear()
       for (const state of transformStateByEnvironment.values()) {
         state.unchangedFolds.clear()
         state.changedRun = 0
@@ -2240,18 +2034,13 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       if (!ctx) return
       if (!shouldTransform(id)) return
 
-      // Whole-map rather than this file's entry: a config is cached under the module that
-      // *declares* it, and an edit here can change what any other module re-exports. This
-      // must run for SFCs too: their compiled script lives under a synthetic parser path,
-      // but consumers cache recipes exported from that path just like any other module.
-      for (const state of transformStateByEnvironment.values()) state.recipeConfigCache.clear()
-
       if (change.event === 'delete') {
         // Through the Builder rather than the Project. It snapshots the resolution ledger
         // before the first mutation of an event, which is the graph the next extraction pass
         // needs to find this file's dependents — removing the target retracts it.
         host.removeSource(filePath)
-        releaseCompilerSources(filePath)
+        // A component's compiled script, held under its synthetic path. @see `compileWith`
+        for (const extension of ['ts', 'tsx']) ctx.project.removeOverlay(`${filePath}.__bamboo__.${extension}`)
         // Only as consumers. Their edges as a *dependency* are the other modules' to retract,
         // on the re-transform this deletion is about to cause. Every query variant owns its
         // own contribution even though all of them share this physical path.
@@ -2269,8 +2058,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
         return
       }
 
-      // Raw SFC bytes are not what the fold parses. Prefetching them under the real path
-      // would run `parser:before` and poison the module the script transform reads.
+      // Raw SFC bytes are not what the fold parses; the script transform hands it the script.
       if (SFC_EXTENSIONS.test(filePath)) return
 
       host.reloadSource(filePath)
@@ -2293,40 +2081,16 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
        */
       if (command === 'serve') {
         setImmediate(() => {
-          if (!ctx || !foldSourceImpl || !runtimeCss || !styleCompiler) return
+          if (!ctx || !foldSourceImpl || !styleCompiler) return
           // Speculative work only, so it declines rather than waits or re-derives. A stylesheet
-          // pass owns the shared AST between extraction and `toCss`, and may have published a
-          // config reload these derivations predate; the transform that follows runs the same
-          // fold from an awaited hook, and pays for it there.
+          // pass may have published a config reload these derivations predate; the transform
+          // that follows runs the same fold from an awaited hook, and pays for it there.
           if (host.isCssPassActive() || !compilerStateIsCurrent()) return
           try {
             const code = readFileSync(filePath, 'utf8')
             const memoKey = foldMemoKey(filePath, digest(code))
             if (foldMemoByContent.has(memoKey)) return
-            const sourceFile = addCompilerSource(filePath, filePath, code)
-            if (!sourceFile) return
-            const parserResult = parseForCompiler(filePath)
-            if (!parserResult) return
-            const folded = foldSourceImpl({
-              ctx,
-              code,
-              parserResult,
-              filePath,
-              runtimeCss,
-              styleCompiler,
-              maxRecipeStates,
-              parseModule: parseForCompiler,
-              recipeConfigCache: transformStateByEnvironment.get('client')?.recipeConfigCache ?? new Map(),
-              reportSurvivors: true,
-              sourceFile,
-            })
-            foldMemoByContent.set(memoKey, {
-              result: folded,
-              parserDependencies: parserResult.getDependencies(),
-              valueReads:
-                (parserResult as { getExportReads?: () => FoldMemoEntry['valueReads'] }).getExportReads?.() ?? [],
-              reportedSurvivors: true,
-            })
+            foldMemoByContent.set(memoKey, { result: compileWith(code, filePath, true), reportedSurvivors: true })
           } catch {
             // The transform that follows runs the same fold and reports with full context.
           }
@@ -2571,36 +2335,38 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     } catch (error) {
       throw asError(error, 'failed to initialize the bamboo compiler')
     }
-    if (!ctx || !foldSourceImpl || !runtimeCss || !styleCompiler) return null
+    if (!ctx || !foldSourceImpl || !styleCompiler) return null
 
     const [filePath] = id.split('?')
 
     // The generated styled-system is bamboo's own runtime, not user code. It is not in
-    // the project's `include`, so parsing it fails, and folding it would be meaningless
-    // even if it did not.
+    // the project's `include`, and folding it would be meaningless.
     if (isGeneratedOutput(filePath, ctx)) return null
 
     // Only a module the extraction inventory covers can have a rule behind what this compiles,
     // so a module `include` does not reach — or `exclude` drops, as a project's generated
-    // GraphQL artifacts are — is left alone. Three exceptions keep what such a module can
-    // still legitimately do: one the project already holds was installed because an included
-    // file imports a recipe from it; one naming a bamboo entrypoint has calls the build-end
-    // check for classes without rules exists to report; and one importing, by relative path, a
-    // module the project holds may be calling a recipe that module declares, whose rules exist
-    // whatever calls them.
+    // GraphQL artifacts are — is left alone. Two exceptions keep what such a module can still
+    // legitimately do: one naming a bamboo entrypoint has calls the build-end check for classes
+    // without rules exists to report; and one importing a module the inventory covers may be
+    // calling a recipe that module declares, whose rules exist whatever calls them.
     //
-    // Not a courtesy. Each such module used to be parked in the shared project under an
-    // auxiliary path, and with the TypeScript 7 backend every file joining the project rewrites
-    // its config and reloads the whole program in the Go compiler. A 7,000-file app with 3,000
-    // excluded generated modules paid that reload 3,000 times per environment — about a second
-    // each — and its production build stopped finishing inside its CI timeout.
-    //
-    // The same test decides for a module the project holds under different text — a framework
+    // The same test decides for a module the inventory holds under different text — a framework
     // plugin's rewrite of an included file, such as the export-name stubs a router derives from
-    // its page modules. That text would be parked under an auxiliary path too, at the same
-    // cost, and a stub that names nothing bamboo compiles to nothing.
-    const heldAsIs = ctx.project.hasSourceFile(filePath) && ctx.project.getSourceFile(filePath)?.getFullText() === code
-    if (!heldAsIs && !namesEntrypoint(ctx, code) && !importsProjectModule(ctx, filePath, code)) {
+    // its page modules. A stub that names nothing bamboo compiles to nothing.
+    const heldAsIs = host.isSourceFile(filePath) && ctx.project.getSourceText(filePath) === code
+    if (
+      !heldAsIs &&
+      !namesEntrypoint(ctx, code) &&
+      !importsSourceModule(
+        (path) => ctx!.project.sourceIsOverridden(path) || (host.isSourceFile(path) && existsSync(path)),
+        (specifier) => {
+          const mappings = ctx!.conf.tsOptions?.pathMappings
+          return mappings ? resolveTsPathImpl?.(mappings, specifier) : undefined
+        },
+        filePath,
+        code,
+      )
+    ) {
       logger.debug(
         'vite:transform',
         `Skipped ${filePath}: ${host.isSourceFile(filePath) ? 'rewritten before bamboo' : 'outside `include`'}, and it reaches nothing bamboo`,
@@ -2608,97 +2374,35 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       return null
     }
 
-    const requestedParsePath = compilerParsePath(id, code)
-    if (requestedParsePath === null) return null
+    const parsePath = compilerParsePath(id, code)
+    if (parsePath === null) return null
 
     const state = environmentState(this)
     state.transformedModulesThisRun.add(id)
     let inputDigest: string | undefined
-    const previousSignature = state.foldSignatures.get(id)
-    const previousDependencies =
-      previousSignature && previousSignature.input === (inputDigest ??= digest(code))
-        ? state.dependenciesByModule.get(id)
-        : undefined
 
     let result: FoldResult
     try {
       /**
-       * One serialized region, holding every read and every mutation of the shared AST.
-       *
-       * Synchronous throughout, which is what makes waiting for the stylesheet pass once at
-       * the top sufficient: nothing can open a pass between the wait and the work, because
-       * nothing else runs. The fold is CPU-bound anyway, so there is no await to give up.
+       * Serialized against the stylesheet pass, which may be replacing the context this folds
+       * against. Synchronous throughout, so waiting once at the top is sufficient.
        */
       const compiled = await host.runCompilerWork(() => {
-        if (!ctx || !foldSourceImpl || !runtimeCss || !styleCompiler) return null
+        if (!ctx || !foldSourceImpl || !styleCompiler) return null
 
-        // Under the file's own path only when ts-morph already holds exactly these bytes,
-        // in which case `addSourceFile` is a lookup and nothing is overwritten. Otherwise
-        // the bundler's text goes to a sibling, so the checkout stays canonical for the
-        // stylesheet pass. @see `auxiliaryParsePath`
-        const path = compilerSourcePath(filePath, requestedParsePath, code)
-
-        const memoKey = command === 'serve' ? foldMemoKey(path, (inputDigest ??= digest(code))) : undefined
+        const memoKey = command === 'serve' ? foldMemoKey(parsePath, (inputDigest ??= digest(code))) : undefined
         const memoized = memoKey ? foldMemoByContent.get(memoKey) : undefined
-        if (memoized?.reportedSurvivors) {
-          // These exact bytes were already folded this change event — for the other
-          // environment, or by a framework re-driving the same update. Only the resolution
-          // closure is per-environment, so only it is recomputed.
-          return {
-            valueReads: memoized.valueReads,
-            result: withResolutionClosure(path, memoized.result, memoized.parserDependencies, previousDependencies),
-          }
-        }
+        // These exact bytes were already folded this change event — for the other environment,
+        // or by a framework re-driving the same update.
+        if (memoized?.reportedSurvivors) return memoized.result
 
-        const sourceFile = addCompilerSource(filePath, path, code)
-        if (!sourceFile) return null
-        const parserResult = parseForCompiler(path, requestedParsePath === filePath ? filePath : path)
-        // An empty extraction result is not proof that the module has no Bamboo runtime
-        // binding. The strict compiler also scans the source AST after planning rewrites.
-        if (!parserResult) return { unparsed: true as const }
-
-        const folded = foldSourceImpl({
-          ctx,
-          code,
-          parserResult,
-          filePath: path,
-          runtimeCss,
-          styleCompiler,
-          maxRecipeStates,
-          // On demand rather than from a registry built at `buildStart`: a consumer is
-          // transformed before the module it imports, so anything accumulated during the
-          // build would make the fold depend on discovery order.
-          parseModule: parseForCompiler,
-          recipeConfigCache: state.recipeConfigCache,
-          reportSurvivors: true,
-          sourceFile,
-        })
-        const parserDependencies = parserResult.getDependencies()
-        const valueReads =
-          (parserResult as { getExportReads?: () => FoldMemoEntry['valueReads'] }).getExportReads?.() ?? []
-        if (memoKey) {
-          foldMemoByContent.set(memoKey, { result: folded, parserDependencies, valueReads, reportedSurvivors: true })
-        }
-        return {
-          valueReads,
-          result: withResolutionClosure(path, folded, parserDependencies, previousDependencies),
-        }
+        const folded = compileWith(code, parsePath, true)
+        if (memoKey) foldMemoByContent.set(memoKey, { result: folded, reportedSurvivors: true })
+        return folded
       })
 
       if (!compiled) return null
-      if ('unparsed' in compiled) {
-        deleteTransformArtifact(state, id)
-        recordFoldDependencies(state, id, filePath, [])
-        state.foldSignatures.delete(id)
-        state.foldInputsByModule.delete(id)
-        return null
-      }
-
-      result = compiled.result
-      state.exportReadsByModule.set(id, [
-        ...compiled.valueReads.map((read) => ({ kind: 'value' as const, ...read })),
-        ...result.exportReads,
-      ])
+      result = compiled
     } catch (error) {
       logger.caughtError('vite:transform', `Failed to compile ${filePath}`, error)
 
@@ -2780,11 +2484,9 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     commitTransformArtifact(state, artifact)
     // Retained when disk cannot answer what this module was compiled from: a dev server, or an
     // SFC submodule whose file holds template source. Deliberately keyed on what
-    // `compilerParsePath` asked for and not on the lane `compilerSourcePath` chose — the lane
-    // is a fact about ts-morph's current text and is re-decided per re-fold, while this is a
-    // fact about the module. The requested path is stored for the same reason.
-    if (artifact.signature && (command === 'serve' || requestedParsePath !== filePath)) {
-      state.foldInputsByModule.set(id, { code, input: artifact.signature.input, parsePath: requestedParsePath })
+    // `compilerParsePath` asked for.
+    if (artifact.signature && (command === 'serve' || parsePath !== filePath)) {
+      state.foldInputsByModule.set(id, { code, input: artifact.signature.input, parsePath })
     } else {
       state.foldInputsByModule.delete(id)
     }

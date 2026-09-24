@@ -82,8 +82,9 @@ describe('built Vite entry boundaries', () => {
     expect(source).not.toMatch(/(?:from|require\()\s*["']@bamboocss\/extractor["']/)
     expect(source).not.toMatch(/(?:from|require\()\s*["']@bamboocss\/config\/ts-path["']/)
     expect(chunk).toContain('//#region src/fold.ts')
-    expect(chunk).toMatch(/(?:from|require\()\s*["']@bamboocss\/ts-ast["']/)
-    expect(chunk).toMatch(/(?:from|require\()\s*["']@bamboocss\/extractor["']/)
+    // The fold reads the native analysis `@bamboocss/node` returns; it holds no AST of its own.
+    expect(chunk).not.toMatch(/(?:from|require\()\s*["']@bamboocss\/ts-ast["']/)
+    expect(chunk).not.toMatch(/(?:from|require\()\s*["']@bamboocss\/extractor["']/)
     expect(chunk).toMatch(/(?:from|require\()\s*["']@bamboocss\/config\/ts-path["']/)
 
     const { factoryFiles, transformFiles } = loadedFiles(entry)
@@ -91,14 +92,10 @@ describe('built Vite entry boundaries', () => {
     const transformGraph = transformFiles.map((file) => fileURLToPath(file))
     const foldExclusive = (file: string) =>
       file.endsWith(`/packages/vite/dist/${foldChunk}`) ||
-      /\/packages\/ts-ast\/dist\/index\.(?:cjs|mjs)$/.test(file) ||
-      /\/packages\/extractor\/dist\/index\.(?:cjs|mjs)$/.test(file) ||
       /\/packages\/config\/dist\/resolve-ts-path-pattern\.(?:cjs|mjs)$/.test(file)
 
     expect(factoryGraph.filter(foldExclusive)).toEqual([])
     expect(transformGraph.some((file) => file.endsWith(`/packages/vite/dist/${foldChunk}`))).toBe(true)
-    expect(transformGraph.some((file) => /\/packages\/ts-ast\/dist\/index\.(?:cjs|mjs)$/.test(file))).toBe(true)
-    expect(transformGraph.some((file) => /\/packages\/extractor\/dist\/index\.(?:cjs|mjs)$/.test(file))).toBe(true)
     expect(
       transformGraph.some((file) => /\/packages\/config\/dist\/resolve-ts-path-pattern\.(?:cjs|mjs)$/.test(file)),
     ).toBe(true)

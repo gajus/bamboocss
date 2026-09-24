@@ -10,11 +10,12 @@ import { createStaticStyleSetCompiler } from '../src/style-set'
 /**
  * What a build pays per module to fold it.
  *
- * This is the number that decides whether the transform can run in dev. In a CLI pass
- * the ts-morph parse amortizes across a whole build; in a bundler `transform` hook it
- * lands on every module, and again on every HMR update. `Project.addSourceFile` also
- * clears the box-node cache, because a changed file invalidates resolutions memoized
- * against it — so the per-module cost is a cold parse, not a warm one.
+ * This is the number that decides whether the transform can run in dev. In a bundler
+ * `transform` hook it lands on every module, and again on every HMR update.
+ *
+ * `analyze only` is the control: the one native pass that parses the module and answers every
+ * question the fold asks. `analyze + fold` adds the JavaScript half — class allocation, recipe
+ * tables, `cx` composition and the rewrite — so the gap between the two is what the fold costs.
  *
  * Reported, not asserted, like the rest of the benches here: wall-clock is
  * machine-dependent, and a threshold would fail on a busy runner rather than on a
@@ -138,28 +139,24 @@ const styleCompiler = createStaticStyleSetCompiler(ctx, runtimeCss)
 
 let counter = 0
 /** A fresh path per iteration, so nothing is served from a per-file cache. */
-const nextPath = () => `app/src/bench-${counter++}.tsx`
+const nextPath = () => join(ctx.config.cwd, `app/src/bench-${counter++}.tsx`)
 
-const parseOnly = (code: string) => {
-  const filePath = nextPath()
-  ctx.project.addSourceFile(filePath, code)
-  return ctx.project.parseSourceFile(filePath)
-}
+const analyze = (code: string, filePath = nextPath()) =>
+  ctx.compileModules([{ filename: filePath, source: code }], { references: true })[0]!
+
+const parseOnly = (code: string) => analyze(code)
 
 const parseAndFold = (code: string) => {
   const filePath = nextPath()
-  ctx.project.addSourceFile(filePath, code)
-  const parserResult = ctx.project.parseSourceFile(filePath)
-  if (!parserResult) return null
-  return foldSource({ ctx, code, parserResult, filePath, runtimeCss, styleCompiler })
+  return foldSource({ ctx, code, analysis: analyze(code, filePath), filePath, styleCompiler, reportSurvivors: true })
 }
 
 describe('per-module transform cost', () => {
-  bench('parse only (synthetic module)', () => {
+  bench('analyze only (synthetic module)', () => {
     parseOnly(SYNTHETIC)
   })
 
-  bench('parse + fold (synthetic module)', () => {
+  bench('analyze + fold (synthetic module)', () => {
     parseAndFold(SYNTHETIC)
   })
 
@@ -167,33 +164,33 @@ describe('per-module transform cost', () => {
   // and a dozen samples cannot resolve the effect sizes it exists to catch — two runs of
   // an unchanged tree disagreed by 7%.
   bench(
-    'parse + fold (conditional module)',
+    'analyze + fold (conditional module)',
     () => {
       parseAndFold(CONDITIONAL_MODULE)
     },
     { warmupIterations: 3, time: 3000 },
   )
 
-  bench('parse only (jsx module)', () => {
+  bench('analyze only (jsx module)', () => {
     parseOnly(JSX_MODULE)
   })
 
-  bench('parse + fold (jsx module)', () => {
+  bench('analyze + fold (jsx module)', () => {
     parseAndFold(JSX_MODULE)
   })
 
-  // The control for the pair below: parsing dominates, so a change to the recipe path shows
+  // The control for the pair below: analysis dominates, so a change to the recipe path shows
   // up as the gap between these two rather than in either alone.
-  bench('parse only (recipe module)', () => {
+  bench('analyze only (recipe module)', () => {
     parseOnly(RECIPE_MODULE)
   })
 
-  bench('parse + fold (recipe module)', () => {
+  bench('analyze + fold (recipe module)', () => {
     parseAndFold(RECIPE_MODULE)
   })
 
   for (const { file, code } of SANDBOX_FILES) {
-    bench(`parse + fold (sandbox/vite-ts ${file})`, () => {
+    bench(`analyze + fold (sandbox/vite-ts ${file})`, () => {
       parseAndFold(code)
     })
   }

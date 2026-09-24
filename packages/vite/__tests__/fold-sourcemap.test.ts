@@ -41,14 +41,15 @@ describe('source maps', () => {
   })
 
   test('the map names the file it transformed and carries its content', () => {
-    const { fold } = createFoldFixture()
+    const { fold, pathOf } = createFoldFixture()
 
     const result = fold(`
       import { css } from 'styled-system/css'
       export const cls = css({ color: 'red.300' })
     `)
 
-    expect(result.map!.sources).toEqual([FILE_PATH])
+    // The path the fold was handed, which the fixture resolves against the project's cwd.
+    expect(result.map!.sources).toEqual([pathOf(FILE_PATH)])
     expect(result.map!.sourcesContent?.[0]).toContain(`css({ color: 'red.300' })`)
   })
 

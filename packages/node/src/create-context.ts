@@ -1,10 +1,13 @@
 import type { DeadImport, StyleEncoder, Stylesheet } from '@bamboocss/core'
 import type {
+  FoldAnalysis,
   NativeEntrypoint,
   NativeFileAnalysis,
+  NativeFoldOptions,
   NativePathMapping,
   NativeProjectOptions,
   NativeSource,
+  NativeToken,
   NativeTokenAccounting,
 } from '@bamboocss/native-extractor'
 import { checkNamingAgreement, formatNamingDisagreement } from '@bamboocss/core'
@@ -46,6 +49,7 @@ type NativeExtractor = {
     tokenModules: string[],
     pathMappings?: NativePathMapping[],
   ): NativeTokenAccounting
+  compileModules(sources: NativeSource[], auxiliary: NativeSource[], options: NativeFoldOptions): FoldAnalysis[]
 }
 
 const nativeBinaryName = () => {
@@ -454,6 +458,62 @@ export class BambooContext extends Generator {
     )
   }
 
+  /**
+   * What the Vite compiler needs to know about modules, in one native call. See
+   * `native-extractor/src/fold/model.rs`.
+   *
+   * `sources` are the modules to analyze, as the bundler hands them over. Every other module a
+   * value is resolved through is read the way extraction reads it: its `parser:before` output
+   * when a hook rewrites it, disk otherwise, and an overlay the project holds wins over both.
+   */
+  compileModules = (sources: NativeSource[], options: { references: boolean }): FoldAnalysis[] => {
+    const { baseUrl, paths = {} } = this.project.resolutionOptions
+    const own = new Set(sources.map((source) => source.filename.replaceAll('\\', '/')))
+    const auxiliary: NativeSource[] = []
+    for (const filePath of new Set([...this.nativeAuxiliaryFiles, ...this.project.getOverriddenSources()])) {
+      const filename = this.runtime.path.abs(this.config.cwd, filePath)
+      if (own.has(filename.replaceAll('\\', '/'))) continue
+      const overridden = this.project.sourceIsOverridden(filename)
+      if (!overridden && !this.parserHooks['parser:before'] && this.runtime === nodeRuntime) continue
+      const original = this.project.getSourceText(filename)
+      if (original === undefined) continue
+      const prepared = this.prepareNativeSource(filename, original)
+      if (prepared.source !== original || overridden || this.runtime !== nodeRuntime) {
+        auxiliary.push({ filename, source: prepared.source })
+      }
+    }
+    return this.loadNativeExtractor().compileModules(sources, auxiliary, {
+      cwd: this.config.cwd,
+      baseUrl,
+      paths: Object.entries(paths).map(([pattern, values]) => ({ pattern, paths: values })),
+      tokens: this.nativeTokens,
+      cssModules: this.imports.value.css,
+      tokenModules: this.imports.value.tokens,
+      recipeModules: this.imports.value.recipe,
+      patternModules: this.imports.value.pattern,
+      recipeNames: this.recipes.keys,
+      patternNames: this.patterns.keys,
+      references: options.references,
+    })
+  }
+
+  /**
+   * The token table as the native evaluator reads it.
+   *
+   * Built once per context rather than per call: `compileModules` runs once per transformed
+   * module, and the table is every token in the project — rebuilding it priced the whole
+   * dictionary into every file, most of which never call `token()`.
+   */
+  private get nativeTokens(): NativeToken[] {
+    this.nativeTokenTable ??= this.tokens.allTokens.map((token) => ({
+      path: token.name,
+      value: this.tokens.view.get(token.name),
+      variable: this.tokens.view.getVar(token.name),
+    }))
+    return this.nativeTokenTable
+  }
+  private nativeTokenTable: NativeToken[] | undefined
+
   /** Load the required Rust extractor from the workspace or the published prebuild directory. */
   private loadNativeExtractor = (): NativeExtractor => {
     const nativeRequire = createRequire(import.meta.url)
@@ -504,10 +564,13 @@ export class BambooContext extends Generator {
       this.nativeConfigurationFiles.delete(owner)
     }
     const sources: NativeSource[] = []
-    const auxiliary =
-      this.parserHooks['parser:before'] || this.runtime !== nodeRuntime
+    const auxiliary = [
+      ...(this.parserHooks['parser:before'] || this.runtime !== nodeRuntime
         ? this.nativeAuxiliaryFiles
-        : this.nativeAuxiliaryFiles.filter(this.project.sourceIsOverridden)
+        : this.nativeAuxiliaryFiles.filter(this.project.sourceIsOverridden)),
+      // Bytes a caller supplied, which the Rust resolver cannot find on disk.
+      ...this.project.getOverriddenSources(),
+    ]
     const inventory = uniq([...filePaths, ...auxiliary])
     for (const filePath of inventory) {
       if (filePath.endsWith('.json')) continue
@@ -561,11 +624,7 @@ export class BambooContext extends Generator {
       cwd: this.config.cwd,
       baseUrl,
       paths: Object.entries(paths).map(([pattern, values]) => ({ pattern, paths: values })),
-      tokens: this.tokens.allTokens.map((token) => ({
-        path: token.name,
-        value: this.tokens.view.get(token.name),
-        variable: this.tokens.view.getVar(token.name),
-      })),
+      tokens: this.nativeTokens,
       jsx: this.jsx.isEnabled,
     }
     let analyses: NativeFileAnalysis[]

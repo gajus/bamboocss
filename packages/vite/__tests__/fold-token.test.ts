@@ -1,4 +1,5 @@
 import { createContext } from '@bamboocss/fixture'
+import { join } from 'node:path'
 import { describe, expect, test } from 'vitest'
 import { foldSource } from '../src/fold'
 import { createRuntimeCss } from '../src/runtime-css'
@@ -441,36 +442,40 @@ describe('fold: token() table construction', () => {
   }
 
   const foldWith = (ctx: ReturnType<typeof createContext>, code: string, path: string) => {
-    ctx.project.addSourceFile(path, code)
-    const parserResult = ctx.project.parseSourceFile(path)
-    if (!parserResult) return
+    const filePath = join(ctx.config.cwd, path)
+    const [analysis] = ctx.compileModules([{ filename: filePath, source: code }], { references: false })
     const runtimeCss = createRuntimeCss(ctx)
     foldSource({
       ctx,
       code,
-      parserResult,
-      filePath: path,
-      runtimeCss,
+      analysis: analysis!,
+      filePath,
       styleCompiler: createStaticStyleSetCompiler(ctx, runtimeCss),
     })
   }
 
-  test('a module with no token() call never builds the table', () => {
+  /**
+   * Two tables read `allTokens`: the one the native evaluator resolves `token()` against, and
+   * the one the fold writes a token's value from. Each is built once per context. The native
+   * one is built on the first analysis whether or not that module calls `token()`, because a
+   * value it imports may — so what is pinned is that neither grows with the module count.
+   */
+  test('modules with no token() call add nothing to the first build', () => {
     const { ctx, reads } = countingContext()
-
-    foldWith(
-      ctx,
-      `
+    const plain = (index: number) => `
         import { css } from 'styled-system/css'
-        export const cls = css({ color: 'red.300', padding: '4' })
-      `,
-      FILE_PATH,
-    )
+        export const cls${index} = css({ color: 'red.300', padding: '4' })
+      `
 
-    expect(reads()).toBe(0)
+    foldWith(ctx, plain(0), FILE_PATH)
+    const first = reads()
+    expect(first).toBeLessThanOrEqual(1)
+
+    for (const index of [1, 2, 3]) foldWith(ctx, plain(index), `app/src/plain-${index}.tsx`)
+    expect(reads()).toBe(first)
   })
 
-  test('the table is built once and shared across modules', () => {
+  test('the tables are built once and shared across modules', () => {
     const { ctx, reads } = countingContext()
 
     for (const index of [0, 1, 2]) {
@@ -484,7 +489,8 @@ describe('fold: token() table construction', () => {
       )
     }
 
-    expect(reads()).toBe(1)
+    // One native table, one runtime table — for three modules, as for three hundred.
+    expect(reads()).toBe(2)
   })
 })
 

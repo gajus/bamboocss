@@ -59,7 +59,12 @@ export const cls = css(base, { background: 'blue.500' })
     expect(result.folded[0]!.className).toContain('d_inline-flex')
   })
 
-  test('an imported value spread inside a nested selector is extracted but not folded', () => {
+  /**
+   * The spread rule judges a named spread by what it resolved to, not by where it sits. This
+   * used to decline because the TypeScript evaluator could not tell a resolved nested spread
+   * from a skipped one; the native evaluator reports the imported `css.raw` object complete.
+   */
+  test('an imported value spread inside a nested selector folds, with a rule behind each class', () => {
     const { fold, addFiles, getCss } = createFoldFixture()
 
     addFiles({
@@ -68,21 +73,20 @@ export const icon = css.raw({ flexShrink: '0' })
 `,
     })
 
-    const code = `import { css } from 'styled-system/css'
+    const result = fold(
+      `import { css } from 'styled-system/css'
 import { icon } from './icon'
 export const cls = css({ '& svg': { ...icon, color: 'red.300' } })
-`
+`,
+      'app/comp.tsx',
+    )
 
-    const result = fold(code, 'app/comp.tsx')
-
-    // Extraction handles this — the CSS is emitted either way.
-    expect(getCss()).toContain('flex-shrink')
-
-    // The fold declines it, because the spread rule cannot tell a resolved spread
-    // from a skipped one. Safe, and the call keeps its runtime path.
-    expect(result.folded).toHaveLength(0)
-    expect(result.code).toBe(code)
-    expect(result.skipped.map((s) => s.reason)).toContain('dynamic')
+    expect(result.folded).toHaveLength(1)
+    const className = result.folded[0]!.className
+    expect(className).toBe('[&_svg]:flex-sh_0 [&_svg]:c_red.300')
+    const css = getCss()
+    for (const selector of selectorsFor(className)) expect(css).toContain(selector)
+    expect(result.dependencies.some((file) => file.endsWith('/app/icon.ts'))).toBe(true)
   })
 })
 

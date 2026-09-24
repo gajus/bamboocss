@@ -657,6 +657,22 @@ export class Project {
   /** Whether a caller supplied bytes that can differ from the path on disk. */
   sourceIsOverridden = (filePath: string): boolean => this.overriddenSources.has(this.normalizePath(filePath))
 
+  /** Every path a caller supplied bytes for, in the spelling they were supplied under. */
+  getOverriddenSources = (): string[] => [...this.overriddenSources.keys()]
+
+  /**
+   * Supply the bytes for a path without handing them to the TypeScript compiler.
+   *
+   * What native analysis reads through `getSourceText`. A file only the Rust engines read has
+   * no reason to start a Go process.
+   */
+  overlaySource = (filePath: string, content: string): void => {
+    this.overriddenSources.set(this.normalizePath(filePath), content)
+  }
+
+  /** Forget bytes supplied through `overlaySource`. Returns whether there were any. */
+  removeOverlay = (filePath: string): boolean => this.overriddenSources.delete(this.normalizePath(filePath))
+
   getSourceFile = (filePath: string): SourceFile | undefined => {
     this.#assertNotLoading()
     // Only what this project was given. The compiler's program reaches every file its config

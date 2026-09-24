@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -28,6 +29,41 @@ let consumerFixture: string
 const packs = new Map<string, PackResult>()
 const packageDirectories = new Map<string, string>()
 const declarationEntries = new Map<string, string | undefined>()
+
+/** The prebuild directory's name for this host, as `create-context.ts` spells it. */
+const NATIVE_BINARIES: Record<string, string> = {
+  'darwin-arm64': 'darwin-arm64.node',
+  'darwin-x64': 'darwin-x64.node',
+  'linux-arm64': 'linux-arm64-gnu.node',
+  'linux-x64': 'linux-x64-gnu.node',
+  'win32-x64': 'win32-x64-msvc.node',
+}
+const nativeBinaryName = () => NATIVE_BINARIES[`${process.platform}-${process.arch}`]
+
+/**
+ * Put this host's native binary where the published `@bamboocss/node` carries it.
+ *
+ * The release workflow downloads every platform's build into `packages/node/dist/native`
+ * before publishing, so an installed package loads its own copy and never the workspace
+ * `@bamboocss/native-extractor`, which is private. Packed without it, the consumer cannot
+ * compile anything — and under vitest it quietly would anyway, because the runner's
+ * `NODE_PATH` reaches the monorepo's hoisted modules. Staged for the pack and removed after,
+ * so the checkout's `dist` is left as the build made it.
+ */
+const withNativeBinary = <T>(run: () => T): T => {
+  const binary = nativeBinaryName()
+  if (!binary) return run()
+  const directory = join(repositoryRoot, 'packages/node/dist/native')
+  const target = join(directory, binary)
+  if (existsSync(target)) return run()
+  mkdirSync(directory, { recursive: true })
+  copyFileSync(join(repositoryRoot, 'packages/native-extractor/bamboo-native-extractor.node'), target)
+  try {
+    return run()
+  } finally {
+    rmSync(directory, { force: true, recursive: true })
+  }
+}
 
 const pack = (name: string) => {
   const result = JSON.parse(
@@ -96,7 +132,7 @@ beforeAll(() => {
     })
   }
 
-  const packedClosure = new Map([...runtimeClosure].sort().map((name) => [name, pack(name)]))
+  const packedClosure = withNativeBinary(() => new Map([...runtimeClosure].sort().map((name) => [name, pack(name)])))
   const vitePack = packedClosure.get('@bamboocss/vite')!
   const nodePack = packedClosure.get('@bamboocss/node')!
   const overrides = Object.fromEntries(
@@ -264,8 +300,11 @@ void (async () => {
 const runRuntimeConsumer = (format: 'cjs' | 'mjs', action: RuntimeAction) => {
   const consumer = join(consumerRoot, `runtime-${action}.${format}`)
   writeFileSync(consumer, runtimeConsumer(format, action))
+  // Without the runner's `NODE_PATH`, which points into the monorepo's hoisted modules: an
+  // installed consumer has no such path, and one that resolves through it is not isolated.
+  const { NODE_PATH: _, ...env } = process.env
   return JSON.parse(
-    execFileSync(process.execPath, [consumer], { cwd: consumerRoot, encoding: 'utf8', timeout: 120_000 }),
+    execFileSync(process.execPath, [consumer], { cwd: consumerRoot, encoding: 'utf8', env, timeout: 120_000 }),
   ) as string[]
 }
 
@@ -351,9 +390,8 @@ describe('packed and installed NodeNext consumers', () => {
       )
       expect(bambooFiles.some((file) => file.endsWith(`/@bamboocss/node/dist/index${expectedExtension}`))).toBe(true)
       expect(bambooFiles.some((file) => file.endsWith(`/@bamboocss/config/dist/index${expectedExtension}`))).toBe(true)
-      expect(bambooFiles.some((file) => file.endsWith(`/@bamboocss/extractor/dist/index${expectedExtension}`))).toBe(
-        true,
-      )
+      // The published binary, not the private workspace package.
+      expect(bambooFiles.some((file) => /\/@bamboocss\/node\/dist\/native\/[^/]+\.node$/.test(file))).toBe(true)
       expect(
         bambooFiles.some((file) =>
           file.endsWith(`/@bamboocss/config/dist/resolve-ts-path-pattern${expectedExtension}`),

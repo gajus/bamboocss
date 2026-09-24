@@ -5,6 +5,7 @@
  * implementation into a chunk imported by the public entry. Nothing in this module is needed
  * until a transform actually attempts to compile source.
  */
-export { foldSource, verifyExportReads } from './fold'
+export { resolveTsPathPattern } from '@bamboocss/config/ts-path'
+export { foldSource } from './fold'
 export { createRuntimeCss } from './runtime-css'
 export { createStaticStyleSetCompiler } from './style-set'

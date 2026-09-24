@@ -267,17 +267,20 @@ describe('destructuring defaults', () => {
   })
 
   /**
-   * A destructure with no default is declined, and was before this guard existed — the
-   * extractor's object-pattern branch resolves nothing, so there is no value to fold.
+   * A destructure with no default folds to the value it destructures.
    *
-   * Pinned because it is the boundary the guard must not move: adding a default to this same
-   * line used to make it *start* folding, to the default, which is the wrong direction for more
-   * information to push a compiler. Both spellings decline now, for different reasons.
+   * This used to be declined only because the TypeScript extractor's object-pattern branch
+   * resolved nothing. The native evaluator reads the property off the initializer, and with no
+   * default on the path there is exactly one value the binding can hold.
+   *
+   * Pinned beside the defaulted case because together they are the boundary the guard must
+   * hold: the default is what makes the value a fallback, not the destructuring.
    */
-  test('a destructure with no default is declined, as it always was', () => {
-    expectUnchanged(
+  test('a destructure with no default folds to the destructured value', () => {
+    const result = expectFolded(
       withImport(`const source = { tone: 'blue.500' }\nconst { tone } = source\nexport const F = css({ color: tone })`),
     )
+    expect(result.folded[0]!.className).toBe('c_blue.500')
   })
 
   // Nothing about a defaulted destructure elsewhere in the module may reach an unrelated call.

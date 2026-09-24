@@ -106,3 +106,113 @@ export function accountTokens(
   tokenModules: string[],
   pathMappings?: NativePathMapping[],
 ): NativeTokenAccounting
+
+/** A UTF-16 source range. */
+export interface FoldSpan {
+  start: number
+  end: number
+}
+
+export interface FoldSelectionProperty {
+  key: string
+  shorthand: boolean
+  literal?: unknown
+  text: string
+  inert: boolean
+  resolved?: unknown
+}
+
+export interface FoldSelection {
+  identifier?: string
+  properties?: FoldSelectionProperty[]
+  unenumerable: boolean
+}
+
+export interface FoldCxArgument {
+  span: FoldSpan
+  kind: 'string' | 'ignored' | 'array' | 'expression' | 'spread'
+  value?: string
+  elements?: FoldCxArgument[]
+}
+
+export interface FoldCall {
+  name: string
+  kind: 'css' | 'pattern' | 'recipe' | 'token' | 'tokenValue' | 'viewTransition' | 'cva-call' | 'cva' | 'sva' | 'cx'
+  span: FoldSpan
+  slot?: string
+  slotEnd?: number
+  shadowedHelpers: string[]
+  raw: boolean
+  notImported: boolean
+  calleeProperty?: string
+  data: unknown[]
+  exact: boolean
+  argumentCount: number
+  trailingArgumentsInert: boolean
+  selection?: FoldSelection
+  origin?: { filePath: string; name: string }
+  binding?: string
+  cxArguments: FoldCxArgument[]
+}
+
+export interface FoldSplitCall {
+  span: FoldSpan
+  binding: string
+  shadowedHelpers: string[]
+  imported: boolean
+  argumentText: string
+}
+
+export interface FoldImport {
+  span: FoldSpan
+  module: string
+  typeOnly: boolean
+  specifiers: Array<{ imported: string; local: string; typeOnly: boolean; end: number; shadowedAnywhere: boolean }>
+  defaultLocal?: string
+  namespaceLocal?: string
+}
+
+export interface FoldAnalysis {
+  calls: FoldCall[]
+  splitCalls: FoldSplitCall[]
+  imports: FoldImport[]
+  moduleScopeNames: string[]
+  references: Array<{ name: string; span: FoldSpan }>
+  runtimeShapes: Array<{
+    kind: 'import' | 'require' | 'import-equals' | 'export-star' | 'export-from'
+    name: string
+    module: string
+    span: FoldSpan
+  }>
+  localExports: Array<{ local: string; span: FoldSpan }>
+  importedRecipes: Array<{
+    local: string
+    filePath: string
+    name: string
+    config?: unknown
+    declaringImports: string[]
+    dependencies: string[]
+  }>
+  dependencies: string[]
+  errors: string[]
+}
+
+export interface NativeFoldOptions {
+  cwd?: string
+  baseUrl?: string
+  paths: NativePathMapping[]
+  tokens: NativeToken[]
+  cssModules: string[]
+  tokenModules: string[]
+  recipeModules: string[]
+  patternModules: string[]
+  recipeNames: string[]
+  patternNames: string[]
+  references: boolean
+}
+
+export function compileModules(
+  sources: NativeSource[],
+  auxiliary: NativeSource[],
+  options: NativeFoldOptions,
+): FoldAnalysis[]

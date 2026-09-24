@@ -1,19 +1,4 @@
-import {
-  Node,
-  SyntaxKind,
-  getAliasNode,
-  getFirstAncestorByKind,
-  getImportDeclarations,
-  getModuleSpecifierValue,
-  getName,
-  getNamedImports,
-  isTypeOnly,
-  literalValueOf,
-  nameNodeOf,
-  stringLiteralValue,
-} from '@bamboocss/ts-ast'
-import type { ParserResultInterface, ResultItem } from '@bamboocss/types'
-import { declaredAtModuleScope } from './fold-analysis'
+import type { FoldAnalysis, FoldCall, FoldSelection } from '@bamboocss/native-extractor'
 import type { StaticStyleSetCompiler, StyleSetRecipeConfig } from './style-set'
 
 /**
@@ -45,55 +30,39 @@ export interface RecipeConfig {
 /**
  * A recipe the fold can lower against.
  *
- * `box` is the *definition's* node, carried so the fold can register the module the config
- * came from as a watch dependency. Without it, editing a config in another module leaves
- * every compiled consumer stale.
+ * `filePath` is the module that declared it when that is not the module being folded, so the
+ * fold can register it as a watch dependency. Without it, editing a config in another module
+ * leaves every compiled consumer stale.
  */
 export interface RecipeEntry {
   config: RecipeConfig
-  box: ResultItem['box']
+  filePath?: string
+  /** Every module a call lowered against this entry depends on, besides the one being folded. */
+  dependencies?: readonly string[]
 }
 
 /**
- * Binding name → the config it was declared with.
+ * Binding name → the config it was declared with, for the module's own module-scope recipes.
  *
- * Built from the definitions the parser already recorded, walking each one to the declaration
- * that names it. The parser records a definition under the name it was *imported* as (`cva`),
- * and a call under the name the file *bound* (`badge`); this is what joins the two.
- *
- * Slot and ordinary recipes share one representation.
+ * A name declared twice, or a config that resolved to more than one value, cannot be lowered
+ * against one config, and guessing would fold half the call sites against the wrong recipe.
  */
-export const collectRecipeConfigs = (parserResult: ParserResultInterface): Map<string, RecipeEntry> => {
+export const collectRecipeConfigs = (analysis: Pick<FoldAnalysis, 'calls'>): Map<string, RecipeEntry> => {
   const configs = new Map<string, RecipeEntry>()
 
-  const definitions = [...parserResult.cva, ...parserResult.sva]
-  for (const definition of definitions) {
-    const node = definition.box?.getNode?.()
-    if (!node) continue
+  for (const definition of analysis.calls) {
+    if ((definition.kind !== 'cva' && definition.kind !== 'sva') || !definition.binding) continue
+    const name = definition.binding
 
-    const call = Node.isCallExpression(node) ? node : getFirstAncestorByKind(node, SyntaxKind.CallExpression)
-    const declaration = call && getFirstAncestorByKind(call, SyntaxKind.VariableDeclaration)
-    const nameNode = declaration && nameNodeOf(declaration)
-    if (!nameNode || !Node.isIdentifier(nameNode)) continue
-
-    // One resolution only. `cva(dark ? A : B)` yields a candidate per branch, and folding
-    // against the first silently picks a config the call site may never see.
-    if (definition.data?.length !== 1) {
-      configs.set(nameNode.getText(), AMBIGUOUS)
+    if (definition.data.length !== 1 || configs.has(name)) {
+      configs.set(name, AMBIGUOUS)
       continue
     }
 
     const config = definition.data[0] as RecipeConfig | undefined
     if (!config || typeof config !== 'object') continue
 
-    // A name declared twice in one file cannot be resolved to one config, and guessing would
-    // fold half the call sites against the wrong recipe.
-    if (configs.has(nameNode.getText())) {
-      configs.set(nameNode.getText(), AMBIGUOUS)
-      continue
-    }
-
-    configs.set(nameNode.getText(), { config, box: definition.box })
+    configs.set(name, { config })
   }
 
   return configs
@@ -109,111 +78,66 @@ export const DEFAULT_MAX_RECIPE_STATES = 65_536
 export const SPLIT_PROPS_HELPER = 'splitProps'
 
 /** Marker for a binding the fold must never resolve — declared twice, or unresolvable. */
-export const AMBIGUOUS: RecipeEntry = Object.freeze({ config: {}, box: undefined })
+export const AMBIGUOUS: RecipeEntry = Object.freeze({ config: {} })
 
 /** `.size`, or `["x-large"]` when the variant is not a valid identifier. */
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/
 const propertyAccess = (key: string) => (IDENTIFIER.test(key) ? `.${key}` : `[${JSON.stringify(key)}]`)
 
-const LITERAL_KINDS = new Set([
-  SyntaxKind.StringLiteral,
-  SyntaxKind.NoSubstitutionTemplateLiteral,
-  SyntaxKind.NumericLiteral,
-  SyntaxKind.TrueKeyword,
-  SyntaxKind.FalseKeyword,
-])
-
-/**
- * The value a literal node denotes, or `undefined` for anything else.
- *
- * Read off the node rather than from the extractor's resolved data, because that data is lossy
- * in the direction that matters: a property it could not resolve is *dropped*, so `badge({ tone })`
- * and `badge({})` are identical there. Folding the first as if it were the second emits a class
- * string missing the variant — the element renders, wrongly, with no report.
- */
-const literalValue = (node: Node | undefined): string | number | boolean | undefined => {
-  if (!node || !LITERAL_KINDS.has(node.kind)) return undefined
-  if (Node.isStringLiteral(node) || Node.isNoSubstitutionTemplateLiteral(node)) return literalValueOf(node)
-  if (Node.isNumericLiteral(node)) return literalValueOf(node)
-  if (node.kind === SyntaxKind.TrueKeyword) return true
-  if (node.kind === SyntaxKind.FalseKeyword) return false
-  return undefined
-}
-
-/**
- * The property name a key node denotes.
- *
- * Read off the node rather than unquoted from its text. `{ '\\u0074one': 'a' }` names the
- * variant `tone`, and stripping the surrounding quotes leaves the escape uninterpreted — so
- * the variant did not match, its class was dropped, and the element rendered without it. A
- * numeric key normalises the same way: `{ 0x10: 'a' }` is the key `16`.
- */
-const propertyKey = (nameNode: Node): string | undefined => {
-  if (Node.isIdentifier(nameNode)) return nameNode.getText()
-  if (Node.isStringLiteral(nameNode) || Node.isNoSubstitutionTemplateLiteral(nameNode)) {
-    return stringLiteralValue(nameNode)
-  }
-  if (Node.isNumericLiteral(nameNode)) return String(literalValueOf(nameNode))
-  return undefined
+/** Where a helper import can be written, and under what name the call site can reach it. */
+export interface HelperInsert {
+  pos: number
+  names: string[]
+  module?: string
 }
 
 /**
  * Make a generated compile helper callable at this call site, by whatever name the file gives it.
  *
- * Unlike `cx`, an inline recipe's callee is a local binding, so
- * there is nothing to match — the host here is any import of the generated css module, which
- * a file defining a recipe necessarily has, since `cva` came from it.
+ * Unlike `cx`, an inline recipe's callee is a local binding, so there is nothing to match —
+ * the host here is any import of the generated css module, which a file defining a recipe
+ * necessarily has, since `cva` came from it.
  */
 export const ensureRecipeHelperImport = (
   imported: string,
-  call: Node,
+  analysis: Pick<FoldAnalysis, 'imports' | 'moduleScopeNames'>,
+  /** Helper names a nested scope around the call site rebinds. */
+  shadowedHere: readonly string[],
   isBambooCssModule: (mod: string) => boolean,
   isGeneratedCssModule: (mod: string) => boolean,
-  isShadowed: (call: Node, name: string) => boolean,
   /**
    * The specifier to write a *new* import declaration with, when the file has none to extend.
    *
-   * Only supplied for a recipe declared in another module, which is the case where the
-   * premise above stops holding: such a file imports the binding, not the factory, so it
-   * need not import the css module at all — and before this it declined for that reason
-   * alone, having resolved everything else.
+   * Only supplied for a recipe declared in another module, which is the case where the premise
+   * above stops holding: such a file imports the binding, not the factory, so it need not
+   * import the css module at all.
    */
   newImportModule?: string,
   /**
-   * Given an import specifier in this file, where the helper could be imported from instead.
-   *
-   * A project that imports the generated helpers as individual modules — `styled-system/css/cva.js`
-   * rather than the barrel — has no declaration this can extend, because `cva.js` does not export
-   * the helper. Before this, no host was found and every runtime recipe selection in such a file
-   * declined: one client saw 736 failing calls across 193 files that dropped to 23 by changing the
-   * import spelling alone, with no other edit.
-   *
-   * Returns a sibling module that does export it, spelled the way the file already spells the
-   * generated output, so an alias, a relative path and an explicit extension all survive.
+   * Given an import specifier in this file, where the helper could be imported from instead —
+   * a project importing `styled-system/css/cva.js` rather than the barrel has no declaration
+   * this can extend, because `cva.js` does not export the helper.
    */
   helperModuleFromSubpath?: (mod: string) => string | undefined,
-): { name: string; insert?: { pos: number; names: string[]; module?: string } } | undefined => {
-  const sourceFile = call.getSourceFile()
-  let host: Node | undefined
+): { name: string; insert?: HelperInsert } | undefined => {
+  let host: FoldAnalysis['imports'][number] | undefined
   let subpathModule: string | undefined
 
-  for (const declaration of getImportDeclarations(sourceFile)) {
-    const mod = getModuleSpecifierValue(declaration)
-    if (isTypeOnly(declaration)) continue
+  for (const declaration of analysis.imports) {
+    if (declaration.typeOnly) continue
 
-    for (const named of getNamedImports(declaration)) {
-      if (isTypeOnly(named)) continue
+    for (const named of declaration.specifiers) {
+      if (named.typeOnly) continue
 
-      if (nameNodeOf(named)?.getText() === imported) {
+      if (named.imported === imported) {
         // Somebody else's helper, or one shadowed here, is not the one this calls.
-        if (!isBambooCssModule(mod ?? '')) return undefined
-        const local = (getAliasNode(named) ?? nameNodeOf(named))?.getText() ?? ''
-        return isShadowed(call, local) ? undefined : { name: local }
+        if (!isBambooCssModule(declaration.module)) return undefined
+        return shadowedHere.includes(named.local) ? undefined : { name: named.local }
       }
     }
 
-    if (!host && isGeneratedCssModule(mod ?? '') && getNamedImports(declaration).length > 0) host = declaration
-    if (!subpathModule) subpathModule = helperModuleFromSubpath?.(mod ?? '')
+    if (!host && isGeneratedCssModule(declaration.module) && declaration.specifiers.length > 0) host = declaration
+    if (!subpathModule) subpathModule = helperModuleFromSubpath?.(declaration.module)
   }
 
   // A subpath spelling is only reached for when there is no barrel to extend, so a file that
@@ -224,24 +148,23 @@ export const ensureRecipeHelperImport = (
 
   // A module-scope binding of this name would collide with the one being added, and one in
   // scope at the call site would be reached instead of it.
-  if (declaredAtModuleScope(sourceFile).has(imported)) return undefined
-  if (isShadowed(call, imported)) return undefined
+  if (analysis.moduleScopeNames.includes(imported)) return undefined
+  if (shadowedHere.includes(imported)) return undefined
 
   if (!host) {
     // After the last import rather than at the top of the file. A directive prologue —
-    // `'use client'`, which is exactly what a component file calling a recipe tends to
-    // open with — stops being a directive the moment a statement precedes it.
-    const declarations = getImportDeclarations(sourceFile)
-    const anchor = declarations.at(-1)
+    // `'use client'`, which is exactly what a component file calling a recipe tends to open
+    // with — stops being a directive the moment a statement precedes it.
+    const anchor = analysis.imports.at(-1)
     if (!anchor) return undefined
 
-    return { name: imported, insert: { pos: anchor.getEnd(), names: [imported], module: fallbackModule } }
+    return { name: imported, insert: { pos: anchor.span.end, names: [imported], module: fallbackModule } }
   }
 
-  const last = getNamedImports(host).at(-1)
+  const last = host.specifiers.at(-1)
   if (!last) return undefined
 
-  return { name: imported, insert: { pos: last.getEnd(), names: [imported] } }
+  return { name: imported, insert: { pos: last.end, names: [imported] } }
 }
 
 export type LowerResult =
@@ -279,26 +202,10 @@ export interface DynamicStyleMap {
  * recipe applies — so a partially-known selection is not foldable at all.
  */
 export const lowerRecipeCall = (
-  call: Node,
+  /** The call as the native analysis describes it: its argument count and written selection. */
+  call: Pick<FoldCall, 'argumentCount' | 'selection'>,
   entry: RecipeEntry | undefined,
   styleCompiler: StaticStyleSetCompiler,
-  /**
-   * Whether an expression can be evaluated without doing anything observable.
-   *
-   * Passed in rather than imported, because `fold` already imports this module. Required, not
-   * defaulted: it decides which properties may be resolved to a literal or dropped, and a
-   * default in either direction is a decision a caller should have to make.
-   */
-  isInert: (node: Node) => boolean,
-  /**
-   * The selection as the extractor resolved it, when there is exactly one resolution.
-   *
-   * Used only to *supply* values, never to decide which properties exist — a property the
-   * extractor could not resolve is dropped from this object rather than flagged, so the
-   * property names always come from the source. A name written at the call site but missing
-   * here was dropped, and the call declines.
-   */
-  resolvedSelection?: Dict,
   /** A directly-accessed slot of an inline `sva()` invocation. */
   slot?: string,
   /** Maximum complete selections an exact runtime decision table may inspect. */
@@ -323,11 +230,9 @@ export const lowerRecipeCall = (
   if (!config.base && !config.variants && !config.className) {
     return { kind: 'decline', reason: 'unknown-recipe' }
   }
-  if (!Node.isCallExpression(call)) return { kind: 'decline', reason: 'unsupported-shape' }
 
-  const args = call.arguments
   // `cvaFn` takes one selection. A second argument is a shape this does not model.
-  if (args.length > 1) return { kind: 'decline', reason: 'unsupported-shape' }
+  if (call.argumentCount > 1) return { kind: 'decline', reason: 'unsupported-shape' }
 
   const selection: Dict = {}
   /** Variant → the source expression selecting it, for axes that stay runtime decisions. */
@@ -340,16 +245,12 @@ export const lowerRecipeCall = (
    */
   const effectful: Array<{ key: string; text: string }> = []
 
-  if (args.length === 1) {
-    const arg = args[0]
-    if (!arg) return { kind: 'decline', reason: 'dynamic' }
+  if (call.argumentCount === 1) {
+    const written: FoldSelection | undefined = call.selection
+    if (!written) return { kind: 'decline', reason: 'dynamic' }
 
     /**
      * `input(variantProps)` — a selection the build cannot see inside.
-     *
-     * The compiled recipe contract accepts scalar declared variant values. A conditional
-     * object is not a finite selection value; responsiveness belongs inside a variant's style
-     * declaration, where the compiler can materialize its conditions ahead of time.
      *
      * The complete StyleSets are knowable: the config declares every scalar value each axis
      * accepts. This is the shape a wrapper component takes, where variants are its public API
@@ -358,81 +259,57 @@ export const lowerRecipeCall = (
      * An identifier only. Each variant reads the binding again, and re-reading anything else —
      * a call, a property access — would evaluate it once per axis instead of once.
      */
-    if (Node.isIdentifier(arg)) {
-      const binding = arg.getText()
-
+    if (written.identifier !== undefined) {
       for (const key of Object.keys(config.variants ?? {})) {
-        dynamicAxes.set(key, `${binding}${propertyAccess(key)}`)
+        dynamicAxes.set(key, `${written.identifier}${propertyAccess(key)}`)
       }
-    } else if (!Node.isObjectLiteralExpression(arg)) {
-      return { kind: 'decline', reason: 'dynamic' }
     } else {
-      for (const property of arg.properties) {
-        // A spread contributes keys the build cannot enumerate, and a computed key is one it
-        // cannot name — neither leaves a knowable set of classes.
-        if (Node.isSpreadAssignment(property)) return { kind: 'decline', reason: 'dynamic' }
+      // A spread contributes keys the build cannot enumerate, and a computed key is one it
+      // cannot name — neither leaves a knowable set of classes.
+      if (written.unenumerable || !written.properties) return { kind: 'decline', reason: 'dynamic' }
 
-        // `{ tone }`, the idiomatic spelling. The name is the expression.
-        if (Node.isShorthandPropertyAssignment(property)) {
-          // Last write wins, as the object literal itself would evaluate.
-          dynamicAxes.set(getName(property) ?? '', getName(property) ?? '')
-          delete selection[getName(property) ?? '']
+      for (const property of written.properties) {
+        const { key } = property
+
+        // `{ tone }`, the idiomatic spelling. The name is the expression. Last write wins, as
+        // the object literal itself would evaluate.
+        if (property.shorthand) {
+          dynamicAxes.set(key, property.text)
+          delete selection[key]
           continue
         }
-
-        if (!Node.isPropertyAssignment(property)) return { kind: 'decline', reason: 'dynamic' }
-
-        const nameNode = property.name
-        if (Node.isComputedPropertyName(nameNode)) return { kind: 'decline', reason: 'dynamic' }
-
-        const key = propertyKey(nameNode)
-        if (key === undefined) return { kind: 'decline', reason: 'dynamic' }
-
-        const initializer = property.initializer
 
         // An expression that could run something has to survive into the output, so it takes
         // the runtime path whatever its value resolves to. Folding it to a literal would delete
         // the call as surely as declining to fold would have kept the whole recipe.
-        if (initializer && !isInert(initializer)) {
+        if (!property.inert) {
           // `hasOwn`, for the same reason the value side of these tables uses it: a key of
-          // `toString` or `__proto__` reaches `Object.prototype`, so a plain lookup says the
-          // variant exists, the emission loop over `Object.keys` then never emits it, and the
-          // expression is deleted along with whatever it would have run.
-          if (!Object.hasOwn(config.variants ?? {}, key)) {
-            // Nowhere to re-emit it: this variant has no table, and dropping the property would
-            // drop the call with it.
-            return { kind: 'decline', reason: 'dynamic' }
-          }
+          // `toString` or `__proto__` reaches `Object.prototype`.
+          if (!Object.hasOwn(config.variants ?? {}, key)) return { kind: 'decline', reason: 'dynamic' }
 
-          effectful.push({ key, text: initializer.getText() })
-          dynamicAxes.set(key, initializer.getText())
+          effectful.push({ key, text: property.text })
+          dynamicAxes.set(key, property.text)
           delete selection[key]
           continue
         }
 
-        const literal = literalValue(initializer)
-
-        if (literal !== undefined) {
-          selection[key] = literal
+        if (property.literal !== undefined) {
+          selection[key] = property.literal
           dynamicAxes.delete(key)
           continue
         }
 
-        // Not a literal, but the extractor may still have resolved it — a module constant, an
-        // imported one, a helper's return value. Trusted only when this exact key survived,
-        // which is what separates `badge({ tone: t })` with `const t = 'a'` above it from
-        // `badge({ tone: t })` with a parameter. (Shorthand never reaches here: `{ tone }` is
-        // not a PropertyAssignment and declines above.)
-        if (!resolvedSelection || !Object.hasOwn(resolvedSelection, key)) {
+        // Not a literal, but the analysis may still have resolved it exactly — a module
+        // constant, an imported one, a helper's return value. A parameter resolves to nothing.
+        if (property.resolved === undefined) {
           // Not resolvable, but still knowable: the config declares every value this variant
           // can take, so the choice among them is what ships.
-          if (!initializer) return { kind: 'decline', reason: 'dynamic' }
-          dynamicAxes.set(key, initializer.getText())
+          dynamicAxes.set(key, property.text)
           delete selection[key]
           continue
         }
 
-        const value = resolvedSelection[key]
+        const value = property.resolved
         // A nested object is not a variant selection, and `undefined` is `compact`'s job.
         if (value !== null && typeof value === 'object') return { kind: 'decline', reason: 'dynamic' }
 

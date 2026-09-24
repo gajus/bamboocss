@@ -84,15 +84,15 @@ whose flag is malformed — `--keep-index=false` is not a valid form, and the st
 a "before" measurement that is really the "after" tree. Commit or copy to a scratch directory first, then confirm the
 state actually changed (`grep` for something the change added) before trusting anything measured against it.
 
-**With the TypeScript 7 backend, a file joining the shared project is a full program reload.** Membership is the
-synthesized tsconfig's `files` list, so every `addSourceFile` of a path the project does not hold rewrites that list and
-has the Go compiler re-derive a program the size of the whole inventory — about a second on 7,000 files — and it bumps
-the tree revision every importer's cached import resolutions are checked against. The Vite compiler therefore must not
-add a source per module it is handed: it skips modules outside `include`/`exclude` and framework rewrites that reach
-nothing bamboo (`packages/vite/src/plugin.ts`, `compileModule`), and an auxiliary `X.__bamboo__.tsx` is a content event,
-not a tree change (`packages/parser/src/project.ts`, `addSourceFile`). Contra's production build went from timing out at
-30 minutes to finishing because of exactly this; profile with `--inspect` and a 20-second CPU profile of the transform
-phase before assuming the fold itself is slow.
+**The Vite compiler holds no AST of its own.** Each transform is one `ctx.compileModules` call
+(`packages/node/src/create-context.ts`) into the Rust fold analysis (`packages/native-extractor/src/fold/`), which
+returns plain facts — calls, their evaluated data and exactness, imports, references, imported recipes, dependencies —
+with UTF-16 offsets. `packages/vite/src/fold.ts` keeps what is policy: class allocation, recipe decision tables, `cx`
+composition and the MagicString edits. Rules deciding whether an evaluated value may _replace_ source live in
+`fold/exact.rs`; extraction is deliberately optimistic and the fold is not, so a change to the evaluator has to be read
+against both. Modules outside `include`/`exclude`, and framework rewrites that reach nothing bamboo, are still skipped
+before analysis (`packages/vite/src/plugin.ts`, `compileModule`). A single-file component's compiled script is held as a
+project overlay under `X.__bamboo__.ts[x]` so an importer resolves the same text; nothing is written to disk.
 
 **Killing a test run can leave half-built packages behind.** `packages/vite/__tests__/built-package-consumer.test.ts`
 runs `pnpm build` for any package whose `dist` lacks declarations, and a run stopped in the middle of that leaves a
@@ -194,7 +194,7 @@ Perf-sensitive code has Vitest benchmarks in `{packages,sandbox}/*/__tests__/**/
 | `generator/css-fn-miss`                         | the uncached path; kept in its own file so ordering can't lie |
 | `native-extractor/analyze`                      | batched Rust parsing, analysis and compact result transfer    |
 | `shared/split-props`, `shared/leaf-class`       | runtime helpers on the per-render path                        |
-| `vite/fold`                                     | the fold's per-module cost                                    |
+| `vite/fold`                                     | native analysis per module, and the JS fold on top of it      |
 
 Nothing measures what the compiled output costs to _render_. `sandbox/runtime-perf/render.bench.ts` did, and went with
 `13ce729fc` — it drove the old `foldSource` signature over fixtures that commit deleted. Compilation now runs on every
@@ -209,8 +209,8 @@ that.
 
 **Profile the current extraction pipeline.** Stylesheet extraction runs in Rust/Oxc through `packages/native-extractor`,
 with hooks and result encoding at the JavaScript boundary in `packages/node/src/create-context.ts`. The Vite source
-compiler still uses the TypeScript 7 project. A V8 CPU profile can show time crossing the native boundary but cannot
-attribute Rust internals; pair it with a native profiler when investigating the evaluator. Use
+compiler runs on the same engine (`compileModules`). A V8 CPU profile can show time crossing the native boundary but
+cannot attribute Rust internals; pair it with a native profiler when investigating the evaluator. Use
 `packages/native-extractor/__tests__/analyze.bench.ts` for the native batch boundary and an end-to-end build for total
 cost. The former ts-morph profile describes a retired backend and must not guide current optimization decisions.
 

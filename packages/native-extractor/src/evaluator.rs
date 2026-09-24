@@ -193,6 +193,46 @@ impl<'a> ProjectEvaluator<'a> {
         }
     }
 
+    /// Resolve a specifier from an importer, recording the read against the active owner.
+    pub fn resolve_specifier(&self, importer: &str, specifier: &str) -> Option<String> {
+        self.resolve(importer, specifier)
+    }
+
+    /// Run `work` with its reads recorded apart from the active owner's, and return them.
+    ///
+    /// For a walk that has to look at many modules to find the few that matter: the caller
+    /// decides which of the returned reads to keep, instead of every probe becoming an edge.
+    pub fn capture<T>(&self, work: impl FnOnce() -> T) -> (T, Vec<String>) {
+        thread_local! {
+            static NEXT: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+        }
+        let sentinel = NEXT.with(|next| {
+            let id = next.get();
+            next.set(id + 1);
+            format!("\0capture#{id}")
+        });
+        let previous = self.active_owner.replace(Some(sentinel.clone()));
+        let value = work();
+        *self.active_owner.borrow_mut() = previous;
+        let mut reads = self
+            .dependencies
+            .borrow_mut()
+            .remove(&sentinel)
+            .unwrap_or_default()
+            .into_iter()
+            .collect::<Vec<_>>();
+        self.pending_candidates.borrow_mut().remove(&sentinel);
+        self.configuration_files.borrow_mut().remove(&sentinel);
+        reads.sort();
+        (value, reads)
+    }
+
+    /// The text of a module as the project holds it (a supplied source, or disk).
+    pub fn module_text(&self, filename: &str) -> Option<String> {
+        self.source(filename)
+            .map(|source| source.as_str().to_string())
+    }
+
     pub fn entrypoint(&self, specifier: &str) -> Option<&NativeEntrypoint> {
         self.entrypoints.iter().find(|entrypoint| {
             entrypoint
@@ -1002,6 +1042,14 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
         ChainLink::value(member_value(receiver.result, &property))
     }
 
+    pub fn semantic(&self) -> &'a Semantic<'a> {
+        self.semantic
+    }
+
+    pub fn is_import(&self, symbol: SymbolId) -> bool {
+        self.imports.contains_key(&symbol)
+    }
+
     pub fn evaluate_jsx_expression(&mut self, expression: &'a JSXExpression<'a>) -> EvalResult {
         expression
             .as_expression()
@@ -1395,6 +1443,14 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
             {
                 return self.call_expression_value(callee, arguments);
             }
+        }
+
+        // `(() => ({ … }))()` — a function written in place and called there.
+        if matches!(
+            crate::fold::exact::unwrap(&call.callee),
+            Expression::ArrowFunctionExpression(_) | Expression::FunctionExpression(_)
+        ) {
+            return self.call_expression_value(crate::fold::exact::unwrap(&call.callee), arguments);
         }
 
         // Object.assign({}, a, b) is common in helper modules and remains deterministic.
@@ -1845,7 +1901,7 @@ fn module_name<'a>(name: &'a ModuleExportName<'a>) -> &'a str {
     name.name().as_str()
 }
 
-fn normalize_path(path: &str) -> String {
+pub(crate) fn normalize_path(path: &str) -> String {
     let path = PathBuf::from(path);
     let mut output = PathBuf::new();
     for component in path.components() {

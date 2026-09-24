@@ -1917,8 +1917,18 @@ pub(crate) fn normalize_path(path: &str) -> String {
     output.to_string_lossy().replace('\\', "/")
 }
 
-fn source_type_for(filename: &str) -> SourceType {
-    SourceType::from_path(filename).unwrap_or_else(|_| SourceType::tsx())
+/// How a module's text is parsed.
+///
+/// JavaScript modules accept JSX, as a bundler's `.js` component files do. A `parser:before`
+/// hook can turn a framework single-file component into TSX while keeping its logical filename,
+/// so an unknown extension reads as TSX. `.ts`/`.mts`/`.cts` keep TypeScript's own rule: no JSX,
+/// so `<T>value` is a cast.
+pub(crate) fn source_type_for(filename: &str) -> SourceType {
+    match SourceType::from_path(filename) {
+        Ok(source_type) if source_type.is_javascript() => source_type.with_jsx(true),
+        Ok(source_type) => source_type,
+        Err(_) => SourceType::tsx(),
+    }
 }
 
 fn collect_package_targets(value: &serde_json::Value, output: &mut Vec<String>) {

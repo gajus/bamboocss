@@ -29,6 +29,8 @@ export interface NativeCall {
   /** False when dynamic input was intentionally omitted from the static fragments. */
   complete: boolean
   losses: NativeLoss[]
+  /** Top-level keys (or JSX attributes) of a recipe call whose value the build could not read. */
+  unresolvedKeys: string[]
 }
 
 export interface NativeAnalysis {

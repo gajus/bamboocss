@@ -8,10 +8,5 @@
   },
   "include": ["packages/**/*.ts"],
   "types": ["vitest/globals"],
-  "exclude": [
-    "node_modules",
-    "./packages/extractor/__tests__/npm-bench",
-    "./packages/extractor/__tests__/samples",
-    "./packages/config/__tests__/samples"
-  ]
+  "exclude": ["node_modules", "./packages/config/__tests__/samples"]
 }

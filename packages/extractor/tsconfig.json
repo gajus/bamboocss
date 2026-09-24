@@ -1,9 +1,0 @@
-{
-  "extends": "../../tsconfig.build.json",
-  "include": ["src", "__tests__"],
-  "compilerOptions": {
-    "paths": {
-      "@bamboocss/fixture": ["../fixture/src/index.ts"]
-    }
-  }
-}

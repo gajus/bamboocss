@@ -13,10 +13,8 @@ import type {
 import { checkNamingAgreement, formatNamingDisagreement } from '@bamboocss/core'
 import { Generator } from '@bamboocss/generator'
 import { logger } from '@bamboocss/logger'
-import { ParserResult, Project } from '@bamboocss/parser'
 import { BambooError, groupBy, truncateList, uniq } from '@bamboocss/shared'
 import { selectExtractable } from './extractable-files'
-import { isCompilerGone } from '@bamboocss/ts-ast'
 import type {
   LoadConfigResult,
   ParserResultConfigureOptions,
@@ -30,7 +28,8 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createBox } from './cli-box'
 import { DiffEngine } from './diff-engine'
-import { getTsConfigResolutionFiles } from './load-tsconfig'
+import { ParserResult } from './parser-result'
+import { SourceProject } from './source-project'
 import { nodeRuntime } from './node-runtime'
 import { OutputEngine } from './output-engine'
 
@@ -89,7 +88,7 @@ const unresolvedReasons: Record<ParserResult['unresolved'][number]['reason'], (p
 
 export class BambooContext extends Generator {
   runtime: Runtime
-  project: Project
+  project: SourceProject
   output: OutputEngine
   diff: DiffEngine
   explicitDeps: string[] = []
@@ -150,33 +149,22 @@ export class BambooContext extends Generator {
     this.runtime = nodeRuntime
     this.parserHooks = conf.hooks
 
-    config.cwd ||= this.runtime.cwd()
+    // Absolute, always. Every path the native engine reports and every overlay is keyed off it,
+    // and a relative one made `parseFile` look for a result under a key nothing was stored at —
+    // returning `undefined` with no failure recorded.
+    config.cwd = this.runtime.path.resolve(this.runtime.cwd(), config.cwd || '.')
 
     if (config.logLevel) {
       logger.level = config.logLevel
     }
 
-    // Keep the exact legacy public property: an ordinary own, writable, enumerable and
-    // configurable data property. Only this wrapper's initial source loading is opt-in lazy;
-    // standalone parser Projects retain their eager constructor.
-    this.project = new Project({
-      // The compiler is rooted at a project rather than assembled here: TypeScript 7 builds its
-      // program from the `tsconfig.json` it is opened with, and reads every file through the
-      // delegate below — which is the same `runtime.fs` bamboo has always read through.
-      cwd: config.cwd ?? this.runtime.cwd(),
-      tsConfigFilePath: conf.tsconfigFile ?? `${config.cwd ?? this.runtime.cwd()}/tsconfig.json`,
-      fs: { readFile: (filePath: string) => this.runtime.fs.readFileSync(filePath) },
-      ...conf.tsconfig,
-      deferInitialSourceFiles: true,
-      resolutionConfigFiles: getTsConfigResolutionFiles(conf),
-      getFiles: () => this.getFiles(),
+    // Disk, with caller-supplied bytes layered over it — what every native analysis reads.
+    this.project = new SourceProject({
+      cwd: config.cwd,
       readFile: (filePath) => this.runtime.fs.readFileSync(filePath),
       fileExists: (filePath) => this.runtime.fs.existsSync(filePath),
-      hooks: conf.hooks,
-      parserOptions: {
-        ...this.parserOptions,
-        join: this.runtime.path.join || this.parserOptions.join,
-      },
+      compilerOptions: conf.tsconfig?.compilerOptions as SourceProject['resolutionOptions'] | undefined,
+      parserOptions: this.parserOptions,
     })
 
     this.output = new OutputEngine(this)
@@ -690,17 +678,9 @@ export class BambooContext extends Generator {
       )
     }
     const result = new ParserResult(this.parserOptions, encoder).setFilePath(filePath)
-    ;(
-      result as ParserResult & {
-        native?: boolean
-        nativePendingCandidates?: readonly string[]
-        nativeConfigurationFiles?: readonly string[]
-      }
-    ).native = true
-    ;(result as ParserResult & { nativePendingCandidates?: readonly string[] }).nativePendingCandidates =
-      native.pendingCandidates
-    ;(result as ParserResult & { nativeConfigurationFiles?: readonly string[] }).nativeConfigurationFiles =
-      native.configurationFiles
+    result.native = true
+    result.nativePendingCandidates = native.pendingCandidates
+    result.nativeConfigurationFiles = native.configurationFiles
     for (const dependency of native.dependencies) result.addDependency(dependency)
     const metadata = this.nativeSourceMetadata.get(filePath.replaceAll('\\', '/'))
     result.origins = metadata?.origins ?? true
@@ -729,12 +709,11 @@ export class BambooContext extends Generator {
           ),
         )
         for (const recipe of this.recipes.filter(recipeTag)) {
-          result.setRecipe(recipe.baseName, {
-            type: 'jsx-recipe',
-            name: call.name,
-            data,
-            atomOrigin,
-          })
+          result.setRecipe(
+            recipe.baseName,
+            { type: 'jsx-recipe', name: call.name, data, atomOrigin },
+            new Set(call.unresolvedKeys),
+          )
         }
         continue
       }
@@ -767,7 +746,7 @@ export class BambooContext extends Generator {
       } else if (call.kind === 'css' && call.importedName === 'viewTransition') {
         result.setViewTransition(item)
       } else if (call.kind === 'pattern') result.setPattern(call.importedName, item)
-      else if (call.kind === 'recipe') result.setRecipe(call.importedName, item)
+      else if (call.kind === 'recipe') result.setRecipe(call.importedName, item, new Set(call.unresolvedKeys))
       else if (call.kind === 'token' || call.kind === 'tokenValue') {
         result.setToken(item, call.kind)
       } else if (call.kind === 'dead') {
@@ -821,12 +800,6 @@ export class BambooContext extends Generator {
       // every later incremental pass on the original error.
       this.nativeExtractions.delete(nativeFile)
       this.nativeSourceMetadata.delete(nativeFile)
-      // A compiler that has died is not a parse failure, and must not be recorded as one.
-      // Bamboo parses every file through one Go process, so once it is gone every remaining
-      // file fails identically — reporting each of them names a project's worth of perfectly
-      // good files as unparseable and buries the panic or the OOM kill above that explains
-      // them all. The pass stops here instead, on the first file to notice.
-      if (isCompilerGone(error)) throw error
       logger.caughtError('file:extract', `Failed to parse ${file}`, error)
       this.parseFailures.set(file, error)
     }

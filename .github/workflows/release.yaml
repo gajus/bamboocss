@@ -19,8 +19,7 @@ on:
       - 'packages/node/src/create-context.ts'
       - 'packages/node/src/debug.ts'
       - 'packages/node/src/generate.ts'
-      - 'packages/parser/src/parser-result.ts'
-      - 'packages/ts-ast/src/project.ts'
+      - 'packages/node/src/parser-result.ts'
       - 'packages/types/src/parser.ts'
       - 'pnpm-lock.yaml'
   workflow_dispatch:

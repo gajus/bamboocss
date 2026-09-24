@@ -51,7 +51,6 @@ const createContext = (config: Config) => {
     pruneTokens: (_sheet: unknown, keep?: unknown) => calls.push(keep ? 'tokens' : 'properties'),
     pruneKeyframes: () => calls.push('keyframes'),
     getFiles: () => [],
-    project: { getSourceFile: () => undefined },
     runtime: {
       fs: { readFileSync: () => '', writeFile: async () => {} },
       path: { abs: (c: string, f: string) => `${c}/${f}`, resolve: (f: string) => f },

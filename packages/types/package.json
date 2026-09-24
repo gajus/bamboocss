@@ -32,7 +32,6 @@
     "build": "cross-env BAMBOO_BUILD=1 tsx scripts/postbuild.ts && tsx scripts/build.ts"
   },
   "devDependencies": {
-    "@bamboocss/extractor": "workspace:*",
     "csstype": "3.2.3",
     "microdiff": "1.5.0",
     "ncp": "2.0.0",

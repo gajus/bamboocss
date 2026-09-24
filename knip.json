@@ -17,9 +17,6 @@
       "project": ["src/**/*.ts"],
       "ignoreDependencies": ["browserslist"]
     },
-    "packages/extractor": {
-      "project": ["src/**/*.ts"]
-    },
     "packages/fixture": {
       "project": ["src/**/*.ts"],
       "ignoreDependencies": ["@bamboocss/token-dictionary", "postcss"]
@@ -40,9 +37,6 @@
     "packages/node": {
       "project": ["src/**/*.ts"],
       "ignoreDependencies": ["@bamboocss/token-dictionary", "lodash.merge", "pkg-types", "pluralize", "ts-pattern"]
-    },
-    "packages/parser": {
-      "project": ["src/**/*.ts"]
     },
     "packages/preset-atlaskit": {
       "project": ["src/**/*.ts"]

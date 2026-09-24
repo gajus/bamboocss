@@ -19,7 +19,8 @@ interface FileChanges {
   hasFilesChanged: boolean
 }
 
-type ResolutionLedger = ReturnType<BambooContext['project']['getResolutionLedger']>
+/** Dependency → importer edges, as the native evaluator recorded them. */
+type ResolutionLedger = ReadonlyArray<readonly [string, string]>
 
 /** Binary minimum heap; callers provide the stable semantic rank used for ties/order. */
 class MinPriorityQueue<T> {
@@ -119,8 +120,12 @@ export class Builder {
   private configGraphMtimes: Map<string, number> | undefined
   /** Per-file source-scan results for `toCss`, valid while each file's mtime stands still. */
   private sourceScanCache = createSourceScanCache()
-  /** Resolution ledger as it stood before this pass's first physical source mutation. */
+  /**
+   * Dependency edges as they stood before this pass's first source mutation, and the owners
+   * each changed file reached then — before re-extraction replaces the edges that found them.
+   */
   private capturedLedger: ResolutionLedger | undefined
+  private capturedDependents = new Map<string, string[]>()
 
   /**
    * Reload one edited source, keeping the closure the next extraction pass has to select.
@@ -137,20 +142,22 @@ export class Builder {
    */
   reloadSource = (filePath: string) => {
     const ctx = this.getContextOrThrow()
-    this.captureResolutionLedger(ctx)
-    return ctx.project.reloadSourceFile(filePath)
+    this.captureResolutionLedger(ctx, filePath)
+    ctx.project.reloadSourceFile(filePath)
   }
 
   /** The deletion half of `reloadSource`, with the same snapshot obligation. */
   removeSource = (filePath: string) => {
     const ctx = this.getContextOrThrow()
-    this.captureResolutionLedger(ctx)
+    this.captureResolutionLedger(ctx, filePath)
+    ctx.project.removeSourceFile(filePath)
     ctx.forgetNativeFile(filePath)
-    return ctx.project.removeSourceFile(filePath)
   }
 
-  private captureResolutionLedger = (ctx: BambooContext) => {
-    this.capturedLedger ??= ctx.project.getResolutionLedger()
+  private captureResolutionLedger = (ctx: BambooContext, filePath: string) => {
+    this.capturedLedger ??= ctx.getNativeDependencyLedger()
+    const file = this.absOwner(ctx, filePath)
+    if (!this.capturedDependents.has(file)) this.capturedDependents.set(file, ctx.getNativeDependents(file))
   }
 
   /** @internal Current and missing resolver paths which can change the stylesheet. */
@@ -332,6 +339,7 @@ export class Builder {
       // Nothing selective survives a config change, and a snapshot from before it describes a
       // graph this pass is about to re-read in full.
       this.capturedLedger = undefined
+      this.capturedDependents.clear()
       await ctx.hooks['config:change']?.({ config: ctx.config, changes: this.affecteds })
       this.snapshotConfigGraphMtimes(configPath)
       return
@@ -388,8 +396,10 @@ export class Builder {
     // The snapshot wins where there is one: it predates whatever an integration reloaded, and
     // the live ledger no longer holds those importers' forward edges.
     const resolutionLedger =
-      this.capturedLedger ?? (changedResolutionConfigurations.length ? ctx.project.getResolutionLedger() : undefined)
+      this.capturedLedger ?? (changedResolutionConfigurations.length ? ctx.getNativeDependencyLedger() : undefined)
+    const capturedDependents = this.capturedDependents
     this.capturedLedger = undefined
+    this.capturedDependents = new Map()
     for (const [owner, configurations] of this.resolutionConfigurationSets) {
       if (configurations.some((file) => changedResolutionSet.has(file))) resolutionAffected.add(owner)
     }
@@ -397,11 +407,13 @@ export class Builder {
     if (changedResolutionConfigurations.length) {
       const tsconfigCandidates = new Set([...previousTsconfigFiles, ...this.tsconfigResolutionFiles])
       const replaceCompilerOptions = changedResolutionConfigurations.some((file) => tsconfigCandidates.has(file))
-      ctx.project.refreshResolutionConfiguration(
-        ctx.conf.tsconfig?.compilerOptions,
-        this.tsconfigResolutionFiles,
-        replaceCompilerOptions,
-      )
+      if (replaceCompilerOptions) {
+        ctx.project.refreshResolutionConfiguration(
+          ctx.conf.tsconfig?.compilerOptions as Parameters<
+            BambooContext['project']['refreshResolutionConfiguration']
+          >[0],
+        )
+      }
     }
 
     // Source edits are invalidated from the Project's exact resolution read-set. `include`
@@ -424,10 +436,10 @@ export class Builder {
     }
     if (this.filesMeta?.hasFilesChanged) {
       logger.debug('builder', 'Files changed, invalidating them')
-      this.invalidateChangedSources(ctx, inventory, resolutionAffected, resolutionLedger)
+      this.invalidateChangedSources(ctx, inventory, resolutionAffected, resolutionLedger, capturedDependents)
     } else if (changedResolutionConfigurations.length) {
       ctx.encoder?.reconcileFileOwnerOrder('extract', inventory)
-      this.extractionOrder = this.orderAffectedFiles(inventory, resolutionAffected, resolutionLedger ?? [], [])
+      this.extractionOrder = this.orderAffectedFiles(inventory, resolutionAffected, resolutionLedger ?? [])
       this.affectedFiles = new Set(this.extractionOrder.map(this.sourcePath))
     } else {
       this.affectedFiles = new Set()
@@ -440,54 +452,41 @@ export class Builder {
   private sourcePath = (file: string) => file.replaceAll('\\', '/')
 
   /**
-   * Reload only changed ledger members, then select their transitive included consumers.
+   * Refresh changed sources, then select them and their transitive included consumers.
    *
-   * The dependency graph is snapshotted before mutation: reloading an importer retracts its
-   * old forward edges, while deletion removes the target. Waiting until afterwards loses the
-   * very closure the rebuild needs. New targets also select every pending importer and each
-   * pending importer's dependent closure, because no edge to the new path existed yet.
+   * Consumers come from the native evaluator's read graph, which includes paths a consumer
+   * probed and did not find — so a file appearing reaches the importers that were waiting for
+   * it. The graph is read before anything is re-extracted: re-extraction replaces an owner's
+   * edges, and waiting would lose the very closure the rebuild needs. An integration that
+   * mutated sources earlier in the pass captured it then (`reloadSource`, `removeSource`).
    */
   private invalidateChangedSources = (
     ctx: BambooContext,
     inventory: string[],
     seededAffected: ReadonlySet<string> = new Set(),
-    previousLedger?: ReturnType<BambooContext['project']['getResolutionLedger']>,
+    previousLedger?: ResolutionLedger,
+    capturedDependents: ReadonlyMap<string, readonly string[]> = new Map(),
   ) => {
-    const project = ctx.project
     const current = new Set(inventory.map(this.sourcePath))
     const changed = [...(this.filesMeta?.changes ?? [])]
       .filter(([, meta]) => !meta.isUnchanged)
       .map(([file]) => this.sourcePath(file))
-    const ledger = previousLedger ?? project.getResolutionLedger()
-    const pending = project.getUnresolvedImporters().map(this.sourcePath)
+    const ledger = previousLedger ?? ctx.getNativeDependencyLedger()
     const affected = new Set<string>(seededAffected)
-    const added: string[] = []
 
     for (const file of changed) {
       if (current.has(file)) affected.add(file)
-      for (const dependent of project.getDependents(file)) affected.add(this.sourcePath(dependent))
+      for (const dependent of capturedDependents.get(file) ?? []) affected.add(this.sourcePath(dependent))
       for (const dependent of ctx.getNativeDependents(file)) affected.add(this.sourcePath(dependent))
-
-      if (existsSync(file) && !project.getSourceFile(file)) added.push(file)
-    }
-
-    // Snapshot this before createSourceFile reparses resolution candidates and clears the
-    // pending bit. Every pending importer can have consumers of its own.
-    if (added.length) {
-      for (const importer of pending) {
-        affected.add(importer)
-        for (const dependent of project.getDependents(importer)) affected.add(this.sourcePath(dependent))
-      }
     }
 
     for (const file of changed) {
       if (!existsSync(file)) {
-        project.removeSourceFile(file)
+        ctx.project.removeSourceFile(file)
+        ctx.forgetNativeFile(file)
         fileModifiedMap.set(file, -Infinity)
-      } else if (project.getSourceFile(file)) {
-        project.reloadSourceFile(file)
       } else {
-        project.createSourceFile(file)
+        ctx.project.reloadSourceFile(file)
       }
     }
 
@@ -495,18 +494,12 @@ export class Builder {
     // semantic output order from discovery/parse completion order.
     ctx.encoder?.reconcileFileOwnerOrder('extract', inventory)
 
-    const syntheticEdges = added.flatMap((target) => pending.map((importer) => [target, importer] as const))
-    this.extractionOrder = this.orderAffectedFiles(inventory, affected, ledger, syntheticEdges)
+    this.extractionOrder = this.orderAffectedFiles(inventory, affected, ledger)
     this.affectedFiles = new Set(this.extractionOrder.map(this.sourcePath))
   }
 
   /** Deterministic topological order, with current inventory order as the stable tie-break. */
-  private orderAffectedFiles = (
-    inventory: string[],
-    affected: ReadonlySet<string>,
-    ledger: ReturnType<BambooContext['project']['getResolutionLedger']>,
-    syntheticEdges: readonly (readonly [string, string])[],
-  ) => {
+  private orderAffectedFiles = (inventory: string[], affected: ReadonlySet<string>, ledger: ResolutionLedger) => {
     const files = inventory.filter((file) => affected.has(this.sourcePath(file)))
     const byPath = new Map(files.map((file) => [this.sourcePath(file), file]))
     const inventoryRank = new Map(files.map((file, index) => [this.sourcePath(file), index]))
@@ -525,9 +518,8 @@ export class Builder {
       indegree.set(importer, (indegree.get(importer) ?? 0) + 1)
     }
 
-    for (const fact of ledger) addEdge(fact.target, fact.importer)
+    for (const [target, importer] of ledger) addEdge(target, importer)
     for (const [target, importer] of this.getContextOrThrow().getNativeDependencyLedger()) addEdge(target, importer)
-    for (const [target, importer] of syntheticEdges) addEdge(target, importer)
 
     const compare = (left: string, right: string) => (inventoryRank.get(left) ?? 0) - (inventoryRank.get(right) ?? 0)
     const ready = new MinPriorityQueue(compare)
@@ -644,36 +636,16 @@ export class Builder {
     fileModifiedMap.set(file, meta.mtime)
 
     if (parserResult) {
-      const previousReadSet = meta.isUnchanged
-        ? {
-            dependencies: uniq([...previousReads, ...previousPending]).sort(),
-            pendingCandidates: previousCandidates,
-          }
-        : undefined
-      const nativeResult = parserResult as {
-        native?: boolean
-        nativePendingCandidates?: readonly string[]
-        nativeConfigurationFiles?: readonly string[]
-      }
-      const native = Boolean(nativeResult.native)
       const dependencies = parserResult.getDependencies()
-      const readSet = native
-        ? {
-            dependencies: uniq(dependencies).sort(),
-            pendingCandidates: uniq([...(nativeResult.nativePendingCandidates ?? [])]).sort(),
-          }
-        : ctx.project.getResolutionReadSet(file, dependencies, previousReadSet)
+      const readSet = {
+        dependencies: uniq(dependencies).sort(),
+        pendingCandidates: uniq([...parserResult.nativePendingCandidates]).sort(),
+      }
       const currentReads = readSet.dependencies
-      const currentConfigurations = native
-        ? uniq([
-            ...(currentReads.length || readSet.pendingCandidates.length ? this.tsconfigResolutionFiles : []),
-            ...(nativeResult.nativeConfigurationFiles ?? []),
-          ]).sort()
-        : ctx.project.getResolutionConfigurationFiles(
-            file,
-            dependencies,
-            meta.isUnchanged ? previousConfigurations : [],
-          )
+      const currentConfigurations = uniq([
+        ...(currentReads.length || readSet.pendingCandidates.length ? this.tsconfigResolutionFiles : []),
+        ...parserResult.nativeConfigurationFiles,
+      ]).sort()
       this.resolutionReadSets.set(owner, currentReads)
       if (readSet.pendingCandidates.length) {
         this.resolutionCandidateSets.set(owner, readSet.pendingCandidates)

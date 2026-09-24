@@ -1,5 +1,5 @@
 import { logger } from '@bamboocss/logger'
-import type { ParserResult } from '@bamboocss/parser'
+import type { ParserResult } from './parser-result'
 import { BambooError, cssVarRefs } from '@bamboocss/shared'
 import { isMatch } from 'matcher'
 import { existsSync, statSync } from 'fs'

@@ -442,18 +442,17 @@ pub(crate) fn analyze_module(
     capture_references: bool,
 ) -> FoldAnalysis {
     let allocator = Allocator::default();
-    let source_type =
-        oxc_span::SourceType::from_path(filename).unwrap_or_else(|_| oxc_span::SourceType::tsx());
+    let source_type = crate::evaluator::source_type_for(filename);
     let parsed = Parser::new(&allocator, source, source_type).parse();
-    let mut errors: Vec<String> = parsed.diagnostics.iter().map(ToString::to_string).collect();
+    let errors: Vec<String> = parsed.diagnostics.iter().map(ToString::to_string).collect();
     if parsed.panicked {
         return empty_analysis(errors);
     }
-    let built = SemanticBuilder::new_compiler()
+    // Scope diagnostics are the type checker's business; see `analyze_source`.
+    let semantic = SemanticBuilder::new_compiler()
         .with_build_nodes(true)
-        .build(&parsed.program);
-    errors.extend(built.diagnostics.iter().map(ToString::to_string));
-    let semantic = built.semantic;
+        .build(&parsed.program)
+        .semantic;
     let facts = ModuleFacts {
         source,
         semantic: &semantic,
@@ -1472,8 +1471,7 @@ fn module_recipes(
     let result = (|| {
         let text = project.module_text(filename)?;
         let allocator = Allocator::default();
-        let source_type = oxc_span::SourceType::from_path(filename)
-            .unwrap_or_else(|_| oxc_span::SourceType::tsx());
+        let source_type = crate::evaluator::source_type_for(filename);
         let parsed = Parser::new(&allocator, &text, source_type).parse();
         if parsed.panicked || !parsed.diagnostics.is_empty() {
             return None;
@@ -1555,8 +1553,7 @@ fn exported_recipes(
     let recipes = module_recipes(project, filename, entrypoints, cache);
     let text = project.module_text(filename)?;
     let allocator = Allocator::default();
-    let source_type =
-        oxc_span::SourceType::from_path(filename).unwrap_or_else(|_| oxc_span::SourceType::tsx());
+    let source_type = crate::evaluator::source_type_for(filename);
     let parsed = Parser::new(&allocator, &text, source_type).parse();
     if parsed.panicked {
         return None;

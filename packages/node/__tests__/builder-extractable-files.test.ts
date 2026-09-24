@@ -34,12 +34,10 @@ test('a cold Builder pass parses only files that can reach bamboo', async () => 
   await builder.setup({ cwd: createProject(), atomOrigins: true })
   const context = builder.getContextOrThrow()
   const parseFile = vi.spyOn(context, 'parseFile')
-  const parseTypeScript = vi.spyOn(context.project, 'parseSourceFile')
 
   builder.extract()
 
   expect(parseFile.mock.calls.map(([file]) => basename(file))).toEqual(['consumer.ts', 'styles.ts'])
-  expect(parseTypeScript).not.toHaveBeenCalled()
   const nativeCss = builder.toCss()
   expect(nativeCss).toContain('color: red')
   expect(nativeCss).toContain('background-color: blue')

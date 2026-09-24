@@ -56,6 +56,10 @@ pub struct NativeCall {
     pub arguments: Vec<serde_json::Value>,
     pub complete: bool,
     pub losses: Vec<NativeLoss>,
+    /// Keys written at the top level of the first argument (or as JSX attributes) whose value
+    /// the build could not read. A config recipe needs them: `button({ size })` with a dynamic
+    /// `size` and `button()` both arrive as `{}`, and only the first must emit every size.
+    pub unresolved_keys: Vec<String>,
 }
 
 #[napi(object)]
@@ -114,11 +118,7 @@ struct CallBinding {
 }
 
 fn source_type(filename: &str) -> Result<SourceType> {
-    SourceType::from_path(filename)
-        // A parser hook can turn a framework single-file component into TSX while preserving
-        // its logical filename. The transformed content, not that extension, decides syntax.
-        .or_else(|_| Ok::<_, String>(SourceType::tsx()))
-        .map_err(|error| Error::new(Status::InvalidArg, error.to_string()))
+    Ok(evaluator::source_type_for(filename))
 }
 
 pub(crate) fn utf16_offset(source: &str, byte: u32) -> u32 {
@@ -359,7 +359,33 @@ fn argument_data<'a>(
     if arguments.is_empty() {
         output.push(serde_json::Value::Object(serde_json::Map::new()));
     }
+    for value in &mut output {
+        drop_nullish_properties(value);
+    }
     (output, complete)
+}
+
+/// Style data carries no nullish declarations.
+///
+/// `{ color: null }` and `{ color: undefined }` declare nothing, and `undefined` already has no
+/// JSON form, so keeping `null` made the two spellings of one declaration differ — two inline
+/// recipes that name the same class then conflict. Evaluation keeps `null` (`??` needs it);
+/// only the data handed to the encoder drops it.
+fn drop_nullish_properties(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(object) => {
+            object.retain(|_, value| !value.is_null());
+            for value in object.values_mut() {
+                drop_nullish_properties(value);
+            }
+        }
+        serde_json::Value::Array(values) => {
+            for value in values {
+                drop_nullish_properties(value);
+            }
+        }
+        _ => {}
+    }
 }
 
 fn jsx_tag(
@@ -382,8 +408,23 @@ fn jsx_tag(
                 .unwrap_or_else(|| local.clone());
             Some((local, canonical))
         }
+        // `<Tabs.Root>`: a recipe's `jsx` patterns match the dotted name as written.
+        JSXElementName::MemberExpression(member) => {
+            let name = jsx_member_name(member)?;
+            Some((name.clone(), name))
+        }
         _ => None,
     }
+}
+
+fn jsx_member_name(member: &oxc_ast::ast::JSXMemberExpression<'_>) -> Option<String> {
+    use oxc_ast::ast::JSXMemberExpressionObject;
+    let object = match &member.object {
+        JSXMemberExpressionObject::IdentifierReference(identifier) => identifier.name.to_string(),
+        JSXMemberExpressionObject::MemberExpression(inner) => jsx_member_name(inner)?,
+        JSXMemberExpressionObject::ThisExpression(_) => return None,
+    };
+    Some(format!("{object}.{}", member.property.name))
 }
 
 fn jsx_data<'a>(
@@ -524,6 +565,95 @@ fn recipe_losses<'a>(
     }
 }
 
+/// Top-level keys of an object literal whose value evaluated to nothing at all.
+fn unresolved_object_keys<'a>(
+    expression: &'a Expression<'a>,
+    evaluator: &mut FileEvaluator<'a, '_, '_>,
+) -> Vec<String> {
+    let Expression::ObjectExpression(object) = unwrap_expression(expression) else {
+        return Vec::new();
+    };
+    let mut keys = Vec::new();
+    for property in &object.properties {
+        let oxc_ast::ast::ObjectPropertyKind::ObjectProperty(property) = property else {
+            continue;
+        };
+        if property.computed || property.method {
+            continue;
+        }
+        let Some(key) = property.key.static_name() else {
+            continue;
+        };
+        let value = evaluator.evaluate(&property.value);
+        if value.value.is_none() && value.conditions.is_empty() {
+            keys.push(key.into_owned());
+        }
+    }
+    keys
+}
+
+/// JSX attributes whose value evaluated to nothing at all.
+fn unresolved_jsx_keys<'a>(
+    attributes: &'a oxc_allocator::Vec<'a, JSXAttributeItem<'a>>,
+    evaluator: &mut FileEvaluator<'a, '_, '_>,
+) -> Vec<String> {
+    let mut keys = Vec::new();
+    for attribute in attributes {
+        let JSXAttributeItem::Attribute(attribute) = attribute else {
+            continue;
+        };
+        let JSXAttributeName::Identifier(name) = &attribute.name else {
+            continue;
+        };
+        if let Some(JSXAttributeValue::ExpressionContainer(container)) = &attribute.value {
+            let value = evaluator.evaluate_jsx_expression(&container.expression);
+            if value.value.is_none() && value.conditions.is_empty() {
+                keys.push(name.name.to_string());
+            }
+        }
+    }
+    keys
+}
+
+/// `name.raw` where `name` is a binding initialized by a `cva`/`sva` call.
+fn inline_recipe_raw<'a>(
+    callee: &Expression<'a>,
+    evaluator: &FileEvaluator<'a, '_, '_>,
+    named: &NamedBindings,
+    namespaces: &NamespaceBindings,
+    entrypoints: &[NativeEntrypoint],
+) -> Option<String> {
+    let Expression::StaticMemberExpression(member) = unwrap_expression(callee) else {
+        return None;
+    };
+    if member.property.name != "raw" {
+        return None;
+    }
+    let Expression::Identifier(object) = unwrap_expression(&member.object) else {
+        return None;
+    };
+    let semantic = evaluator.semantic();
+    let symbol = semantic
+        .scoping()
+        .get_reference(object.reference_id.get()?)
+        .symbol_id()?;
+    let AstKind::VariableDeclarator(declarator) = semantic.symbol_declaration(symbol).kind() else {
+        return None;
+    };
+    let Expression::CallExpression(init) = unwrap_expression(declarator.init.as_ref()?) else {
+        return None;
+    };
+    let (binding, _) = classify_call(
+        &init.callee,
+        semantic.scoping(),
+        named,
+        namespaces,
+        entrypoints,
+    )?;
+    (binding.kind == "css" && matches!(binding.imported_name.as_str(), "cva" | "sva"))
+        .then(|| object.name.to_string())
+}
+
 fn call_losses<'a>(
     call: &'a oxc_ast::ast::CallExpression<'a>,
     binding: &CallBinding,
@@ -557,6 +687,17 @@ fn call_losses<'a>(
         {
             losses.push(NativeLoss {
                 prop: Some(display.trim_end_matches(".raw").to_string()),
+                reason: "unresolved-raw".to_string(),
+            });
+        } else if binding.kind == "css"
+            && binding.imported_name == "css"
+            && let Expression::CallExpression(inner) = unwrap_expression(expression)
+            && let Some(name) =
+                inline_recipe_raw(&inner.callee, evaluator, named, namespaces, entrypoints)
+        {
+            // `textInput.raw()` on a recipe this module declared with `cva`/`sva`.
+            losses.push(NativeLoss {
+                prop: Some(name),
                 reason: "unresolved-raw".to_string(),
             });
         }
@@ -647,12 +788,14 @@ fn analyze_source<'sources>(
 ) -> Result<NativeAnalysis> {
     let allocator = Allocator::default();
     let parsed = Parser::new(&allocator, source, source_type(filename)?).parse();
-    let mut errors: Vec<_> = parsed.diagnostics.iter().map(ToString::to_string).collect();
+    let errors: Vec<_> = parsed.diagnostics.iter().map(ToString::to_string).collect();
+    // Scope diagnostics — a name declared twice, say — are the type checker's business, not
+    // extraction's. A Svelte component's module and instance scripts can both declare one type,
+    // which Svelte compiles; failing the file here dropped every style in it.
     let semantic = SemanticBuilder::new_compiler()
         .with_build_nodes(true)
-        .build(&parsed.program);
-    errors.extend(semantic.diagnostics.iter().map(ToString::to_string));
-    let semantic = semantic.semantic;
+        .build(&parsed.program)
+        .semantic;
     let scoping = semantic.scoping();
     let (named, namespaces, jsx_aliases) = collect_bindings(&parsed.program, entrypoints);
     project.begin_file(filename);
@@ -683,6 +826,16 @@ fn analyze_source<'sources>(
         }
 
         let (arguments, complete) = argument_data(&expression.arguments, &mut evaluator);
+        let unresolved_keys = if binding.kind == "recipe" {
+            expression
+                .arguments
+                .first()
+                .and_then(Argument::as_expression)
+                .map(|argument| unresolved_object_keys(argument, &mut evaluator))
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
         let losses = call_losses(
             expression,
             &binding,
@@ -713,6 +866,7 @@ fn analyze_source<'sources>(
             arguments,
             complete,
             losses,
+            unresolved_keys,
         });
     }
     if capture_jsx {
@@ -723,6 +877,7 @@ fn analyze_source<'sources>(
             let Some((local, canonical)) = jsx_tag(&element.name, scoping, &jsx_aliases) else {
                 continue;
             };
+            let unresolved_keys = unresolved_jsx_keys(&element.attributes, &mut evaluator);
             let (arguments, complete) = jsx_data(&element.attributes, &mut evaluator);
             let span = element.span();
             let (line, column) = line_and_column(source, span.start);
@@ -740,6 +895,7 @@ fn analyze_source<'sources>(
                 arguments,
                 complete,
                 losses: Vec::new(),
+                unresolved_keys,
             });
         }
     }

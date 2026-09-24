@@ -28,10 +28,10 @@ const stylesheet = (ctx: Context) => {
   return sheet.toCss()
 }
 
-/** Read a file, as a bundler transform does — see `Project.parseSourceFile`. */
+/** Read a file's new text, as a watch rebuild does. */
 const read = (ctx: Context, file: string, code: string) => {
   ctx.project.addSourceFile(file, code)
-  return ctx.project.parseSourceFile(file)
+  return ctx.parseFile(file)
 }
 
 const IMPORTS = `

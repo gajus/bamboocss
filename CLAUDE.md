@@ -17,13 +17,10 @@ with workspace support.
   /shared/         # Runtime helpers shipped into styled-system (css, cva, splitProps, memo)
   /node/           # Node.js APIs, config resolution, file watching
   /cli/            # CLI tool (@bamboocss/dev package)
-  /parser/         # Static analysis and extraction
-  /extractor/      # Expression evaluation behind the parser
-  /ts-ast/         # AST backend on TypeScript 7's Go compiler, used by parser, extractor, node and vite
   /generator/      # Code generation for styled-system
   /config/         # Config loading and resolution
   /types/          # Type definitions (config options live here)
-  /native-extractor/ # Rust/Oxc stylesheet extraction and static evaluation engine
+  /native-extractor/ # Rust/Oxc extraction, static evaluation and the Vite fold analysis — the only engine
   /vite/           # Vite plugin, including the build-time fold
   /plugin-*/       # vue and svelte are auto-injected; lightningcss is opt-in
   /preset-*/       # Design system presets (base, bamboo, atlaskit, open-props)
@@ -152,17 +149,22 @@ else and broke Solid's `createStyleContext`, because Solid compiles props to acc
 component's children before its provider exists. A change to `packages/shared/src` that touches how props are read
 belongs in that test, since nothing downstream will catch it.
 
-**Generated test projects must live outside the checkout.** The TypeScript compiler is process-global, so a test that
-writes a `styled-system` package under `packages/**` can be discovered by unrelated resolution tests running in
-parallel. This made `resolution-ledger.test.ts` resolve its virtual `/app` imports into the CLI test's temporary output.
-Use `mkdtempSync(tmpdir())`, and remove the whole directory in teardown.
+**Generated test projects must live outside the checkout.** The native resolver reads the real filesystem, so a test
+that writes a `styled-system` package under `packages/**` can be resolved by unrelated tests running in parallel. Use
+`mkdtempSync(tmpdir())`, and remove the whole directory in teardown — or, for a module that only needs bytes, an overlay
+(`ctx.project.addSourceFile`), which writes nothing.
+
+**Extraction semantics are pinned in `packages/node/__tests__/extraction/`.** Those tests drive `ctx.parseFile` against
+overlaid sources and assert the result items and the CSS they encode. They were ported from the retired TypeScript
+engine's suite; where the two engines disagreed the test says which way and why (a bare `css` nobody imported is not
+bamboo's, for instance).
 
 **Always run tests from the project root:**
 
 ```bash
 # ✅ Correct
 pnpm test packages/core
-pnpm test packages/parser
+pnpm test packages/node/__tests__/extraction
 
 # ❌ Incorrect
 cd packages/core && pnpm test
@@ -187,9 +189,6 @@ Perf-sensitive code has Vitest benchmarks in `{packages,sandbox}/*/__tests__/**/
 | `core/optimize-css`                             | the postcss pipeline after the sheet is built                 |
 | `core/prune`                                    | keyframe and token pruning                                    |
 | `core/sort-style-rules`                         | rule ordering                                                 |
-| `extractor/extract-speed`                       | expression evaluation, one file                               |
-| `extractor/cross-file-cost`                     | extraction cost as a function of _project_ size               |
-| `parser/ts-eval`, `parser/extract-modes`        | extraction                                                    |
 | `generator/css-fn`                              | the generated runtime, cached path                            |
 | `generator/css-fn-miss`                         | the uncached path; kept in its own file so ordering can't lie |
 | `native-extractor/analyze`                      | batched Rust parsing, analysis and compact result transfer    |
@@ -212,7 +211,7 @@ with hooks and result encoding at the JavaScript boundary in `packages/node/src/
 compiler runs on the same engine (`compileModules`). A V8 CPU profile can show time crossing the native boundary but
 cannot attribute Rust internals; pair it with a native profiler when investigating the evaluator. Use
 `packages/native-extractor/__tests__/analyze.bench.ts` for the native batch boundary and an end-to-end build for total
-cost. The former ts-morph profile describes a retired backend and must not guide current optimization decisions.
+cost. There is no TypeScript engine any more; a profile showing ts-morph or `@typescript/api` is from a retired tree.
 
 🚨 **Nothing in CI catches a performance regression.** The Quality workflow runs format, tests, lint, knip and typecheck
 — benchmarks are excluded on purpose, for the reason below. That makes measuring a _manual obligation before
@@ -433,9 +432,10 @@ Brief description of the change and its impact.
 4. **Workspace protocol**: Internal packages use `workspace:*` in dependencies
 5. **Multiple package.json**: Each package has its own, plus root package.json
 6. **Sandbox warnings**: Even if main packages are fine, check sandbox projects for warnings
-7. **Compiler dependencies**: The TypeScript 7 backend is accessed through `@bamboocss/ts-ast`; stylesheet extraction
-   uses Rust/Oxc. Validate the affected parser, compiler, and native-extraction tests when updating either backend. The
-   ordinary TypeScript type checker is a separate dependency; there is no ts-morph version to synchronize.
+7. **Extraction engine**: Stylesheet extraction and the Vite compiler both run on Rust/Oxc
+   (`packages/native-extractor`). When updating Oxc, run the extraction suite (`packages/node/__tests__/extraction`),
+   the fold suites (`packages/vite/__tests__/fold-*`) and `sandbox/codegen`. The ordinary TypeScript type checker is a
+   separate dependency.
 
 ## Package Relationships
 
@@ -443,8 +443,7 @@ Brief description of the change and its impact.
 @bamboocss/dev (CLI)
   ├─ @bamboocss/node (core runtime)
   │   ├─ @bamboocss/core (CSS processing)
-  │   ├─ @bamboocss/parser (parser result model and TypeScript APIs used by Vite compilation)
-  │   ├─ @bamboocss/native-extractor (private Rust/Oxc stylesheet extraction build package)
+  │   ├─ @bamboocss/native-extractor (private Rust/Oxc extraction and fold analysis, shipped in node's dist/native)
   │   ├─ @bamboocss/generator (codegen)
   │   └─ @bamboocss/config (config resolution)
 

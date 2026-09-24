@@ -41,7 +41,7 @@ import { dirname, isAbsolute, resolve } from 'node:path'
  */
 const SPECIFIER = /(?:\bfrom\s*|^\s*(?:import|export)\s*|\bimport\s*\(\s*|\brequire\s*\(\s*)['"]([^'"\n]+)['"]/gm
 
-/** The extensions a specifier may omit, in the order `@bamboocss/ts-ast` tries them. */
+/** The extensions a specifier may omit, in the order the native resolver tries them. */
 const EXTENSIONS = ['.ts', '.tsx', '.d.ts', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs']
 
 /** What a `.js`-family specifier may actually name, source first. */

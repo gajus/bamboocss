@@ -1,6 +1,6 @@
 import { prunesPreflight } from '@bamboocss/core'
 import type { Stylesheet } from '@bamboocss/core'
-import type { ParserResult } from '@bamboocss/parser'
+import type { ParserResult } from './parser-result'
 import type { BambooContext } from './create-context'
 import { collectSourceScans, keyframeNames, pruneTokensForBuild, type SourceScanCache } from './token-references'
 

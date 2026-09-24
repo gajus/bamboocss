@@ -1,8 +1,7 @@
-import type { BoxNodeArray, BoxNodeLiteral, BoxNodeMap, Unboxed } from '@bamboocss/extractor'
-
 export interface ResultItem {
   name?: string
-  data: Array<Unboxed['raw']>
+  /** Each argument's evaluated value, as the encoder reads it. */
+  data: Array<{ [key: string]: any }>
   /**
    * `token` is `token(path)`, the variable reference. `tokenValue` is `token.value(path)`, the
    * literal — distinct because
@@ -11,37 +10,17 @@ export interface ResultItem {
    * Both live in `ParserResult.token`, since every consumer that reads a token *path* out of
    * a result wants both.
    */
-  type?:
-    | 'css'
-    | 'cva'
-    | 'sva'
-    | 'token'
-    | 'tokenValue'
-    | 'viewTransition'
-    | 'pattern'
-    | 'recipe'
-    | 'jsx-recipe'
-    | 'cva-call'
-  box?: BoxNodeMap | BoxNodeLiteral | BoxNodeArray
-  /** Source location supplied by an AST-free extraction backend. */
+  type?: 'css' | 'cva' | 'sva' | 'token' | 'tokenValue' | 'viewTransition' | 'pattern' | 'recipe' | 'jsx-recipe'
+  /** The call site, for a stylesheet source map. */
   atomOrigin?: { filePath: string; line: number; column: number }
-  /** Root binding range for a token call, retained when argument boxes resolve into another file. */
+  /** Root binding range for a token call, as UTF-16 offsets into its file. */
   tokenCalleeRange?: { start: number; end: number }
-  /**
-   * For a `cva-call`, the module the recipe was declared in when that is not this one.
-   *
-   * Absent for a recipe the file declares itself, which is the case the name alone already
-   * identifies.
-   */
-  origin?: { filePath: string; name: string }
 }
 
 export interface ParserResultInterface {
   all: Array<ResultItem>
   css: Set<ResultItem>
   cva: Set<ResultItem>
-  /** Calls of a locally-bound inline recipe: `const b = cva(...)`, then `b({ ... })`. */
-  cvaCall: Set<ResultItem>
   sva: Set<ResultItem>
   token: Set<ResultItem>
   viewTransition: Set<ResultItem>
@@ -57,7 +36,7 @@ export interface ParserResultInterface {
   setToken: (result: ResultItem, kind?: 'token' | 'tokenValue') => void
   setViewTransition: (result: ResultItem) => void
   setPattern: (name: string, result: ResultItem) => void
-  setRecipe: (name: string, result: ResultItem) => void
+  setRecipe: (name: string, result: ResultItem, unresolved?: ReadonlySet<string>) => void
 }
 
 export interface EncoderJson {

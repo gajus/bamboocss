@@ -106,7 +106,6 @@ export async function generate(config: Config, configPath?: string) {
         // Missing higher-priority candidates are part of the native read graph, so ask before
         // replacing those pending edges with the newly resolved ones.
         const dependents = ctx.getNativeDependents(filePath)
-        ctx.project.createSourceFile(filePath)
         await bundleStyles(ctx, [...new Set([filePath, ...dependents])])
       }
     })

@@ -1,7 +1,6 @@
 ---
 '@bamboocss/reporter': minor
 '@bamboocss/node': patch
-'@bamboocss/parser': minor
 ---
 
 `bamboo analyze` and the MCP usage report now read the build's own extraction.

@@ -1,6 +1,5 @@
 ---
 '@bamboocss/node': patch
-'@bamboocss/parser': patch
 ---
 
 Run token accounting in Rust, so a stylesheet build no longer starts the TypeScript compiler.

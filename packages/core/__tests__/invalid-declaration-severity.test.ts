@@ -20,9 +20,7 @@ const build = (severity: 'off' | 'warn' | 'error' | undefined, source: string, c
 
   const write = (src: string) => {
     const file = ctx.runtime.path.abs(ctx.config.cwd, 'src/app.tsx')
-    const existing = ctx.project.getSourceFile(file)
-    if (existing) existing.replaceWithText(src)
-    else ctx.project.addSourceFile(file, src)
+    ctx.project.addSourceFile(file, src)
     if (!files.includes(file)) files.push(file)
   }
 

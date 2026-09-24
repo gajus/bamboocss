@@ -19,7 +19,6 @@ export default defineConfig({
   test: {
     globals: true,
     testTimeout: 15_000,
-    setupFiles: ['tests-setup.ts'],
     // Tells @bamboocss/eslint-plugin's synckit worker to build its context from
     // the test fixtures instead of discovering a real bamboo config on disk.
     env: {

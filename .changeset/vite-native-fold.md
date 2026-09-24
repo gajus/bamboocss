@@ -1,7 +1,6 @@
 ---
 '@bamboocss/vite': minor
 '@bamboocss/node': patch
-'@bamboocss/parser': patch
 ---
 
 The Vite compiler now runs on the Rust extraction engine, so a transform never starts the TypeScript compiler.

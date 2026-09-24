@@ -1,4 +1,4 @@
-import { fixtureDefaults } from '@bamboocss/fixture'
+import { createContext, fixtureDefaults } from '@bamboocss/fixture'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -93,29 +93,26 @@ const createDeadCallProject = () => {
 const extract = async (cwd: string) => {
   const builder = new Builder()
   await builder.setup({ cwd, atomOrigins: true })
-  const parseTypeScript = vi.spyOn(builder.getContextOrThrow().project, 'parseSourceFile')
   builder.extract()
   return {
     css: builder.toCss(),
     origins: builder.getAtomOrigins(),
-    typescriptFiles: parseTypeScript.mock.calls.map(([file]) => file),
   }
 }
 
 const extractFailure = async (cwd: string) => {
   const builder = new Builder()
   await builder.setup({ cwd })
-  const parseTypeScript = vi.spyOn(builder.getContextOrThrow().project, 'parseSourceFile')
   let message = ''
   try {
     builder.extract()
   } catch (error) {
     message = (error as Error).message
   }
-  return { message, typescriptFiles: parseTypeScript.mock.calls.map(([file]) => file) }
+  return { message }
 }
 
-test('the native-only corpus preserves styles and source origins without TypeScript extraction', async () => {
+test('the corpus preserves styles and source origins', async () => {
   const result = await extract(createCorpus())
 
   expect(result.css).toMatch(/background-color:\s*purple/)
@@ -123,7 +120,6 @@ test('the native-only corpus preserves styles and source origins without TypeScr
   expect(result.css).toMatch(/flex-direction:\s*column/)
   expect(result.origins.size).toBeGreaterThan(0)
   expect([...result.origins.values()].some((origin) => origin.filePath.endsWith('cross-file.ts'))).toBe(true)
-  expect(result.typescriptFiles).toEqual([])
 })
 
 test('parser hooks can introduce Bamboo calls and receive native results', () => {
@@ -150,10 +146,9 @@ test('parser hooks can introduce Bamboo calls and receive native results', () =>
   expect([...parsed.results[0].css]).toMatchObject([{ data: [{ color: 'red' }] }])
   expect(parsed.results[0].origins).toBe(false)
   expect(after).toHaveBeenCalledWith({ filePath: sourceFile, result: parsed.results[0] })
-  expect(ctx.project.hasMaterializedCompiler()).toBe(false)
 })
 
-test('excluded dependencies use virtual runtime bytes without materializing TypeScript', async () => {
+test('excluded dependencies use virtual runtime bytes', async () => {
   const cwd = mkdtempSync(join(tmpdir(), 'bamboo-native-virtual-dependency-'))
   temporaryDirectories.add(cwd)
   mkdirSync(join(cwd, 'src'))
@@ -172,7 +167,6 @@ test('excluded dependencies use virtual runtime bytes without materializing Type
   const builder = new Builder()
   await builder.setup({ cwd })
   const ctx = builder.getContextOrThrow()
-  expect(ctx.project.hasMaterializedCompiler()).toBe(false)
   const readFileSync = ctx.runtime.fs.readFileSync
   ctx.runtime = {
     ...ctx.runtime,
@@ -184,17 +178,15 @@ test('excluded dependencies use virtual runtime bytes without materializing Type
   }
 
   builder.extract()
-  expect(ctx.project.hasMaterializedCompiler()).toBe(false)
   expect(builder.toCss()).toMatch(/background:\s*#f00/)
   expect(builder.toCss()).not.toMatch(/background:\s*#00f/)
 })
 
-test('an unknown generated entrypoint reports the native diagnostic without TypeScript extraction', async () => {
+test('an unknown generated entrypoint reports the native diagnostic', async () => {
   const result = await extractFailure(createDeadCallProject())
 
   expect(result.message).toContain('`absent` is not a pattern')
   expect(result.message).toContain('src/invalid.ts')
-  expect(result.typescriptFiles).toEqual([])
 })
 
 /**
@@ -248,18 +240,10 @@ const items = ['a']
   for (const width of ['2.1111px', '2.2222px', '2.3333px', '2.4444px']) {
     expect(result.css).toContain(width)
   }
-  expect(result.typescriptFiles).toEqual([])
 })
 
-/**
- * A whole stylesheet build — extraction and token pruning, which runs by default — without the
- * TypeScript compiler starting.
- *
- * Token accounting walked the TypeScript tree, so `toCss()` read `project.getSourceFile` for
- * every file mentioning a token, and that started the Go compiler over the whole inventory on
- * every build even though Rust had already done the extraction. The accounting is Rust's now.
- */
-test('token pruning runs without materializing the TypeScript compiler', async () => {
+/** A whole stylesheet build: extraction and token pruning, which runs by default. */
+test('token pruning keeps what is referenced and drops the rest', async () => {
   const cwd = mkdtempSync(join(tmpdir(), 'bamboo-native-token-accounting-'))
   temporaryDirectories.add(cwd)
   mkdirSync(join(cwd, 'src'))
@@ -283,12 +267,33 @@ export const b = token('colors.kept')
 
   const builder = new Builder()
   await builder.setup({ cwd })
-  const ctx = builder.getContextOrThrow()
   builder.extract()
   const css = builder.toCss()
 
-  expect(ctx.project.hasMaterializedCompiler()).toBe(false)
   // And the accounting answered: the token asked for is kept, the other one is pruned.
   expect(css).toContain('--colors-kept')
   expect(css).not.toContain('--colors-dropped')
+})
+
+/**
+ * A `.json` file in `include` is an encoder dump — `bamboo ship`'s output, or a library's —
+ * restored whole, with no source to parse.
+ */
+test('a JSON encoder dump in the inventory is restored', () => {
+  const donor = createContext({ cwd: '/dump' } as never)
+  donor.encoder.processAtomic({ color: 'rebeccapurple' })
+
+  const cwd = mkdtempSync(join(tmpdir(), 'bamboo-native-json-'))
+  temporaryDirectories.add(cwd)
+  mkdirSync(join(cwd, 'src'))
+  const dump = join(cwd, 'src/styles.json')
+  writeFileSync(dump, JSON.stringify(donor.encoder.toJSON()))
+
+  const ctx = createContext({ cwd, include: ['src/**/*.json'] } as never)
+  const result = ctx.parseFile(dump)
+  expect(result?.filePath).toBe(dump)
+
+  const sheet = ctx.createSheet()
+  ctx.appendParserCss(sheet)
+  expect(ctx.getCss(sheet)).toContain('rebeccapurple')
 })

@@ -276,14 +276,13 @@ export async function main() {
         )
 
         ctx.watchFiles(async (event, file) => {
+          const filePath = ctx.runtime.path.abs(cwd, file)
           if (event === 'unlink') {
-            ctx.project.removeSourceFile(ctx.runtime.path.abs(cwd, file))
+            ctx.project.removeSourceFile(filePath)
+            ctx.forgetNativeFile(filePath)
             await cssgen(ctx, options)
-          } else if (event === 'change') {
-            ctx.project.reloadSourceFile(ctx.runtime.path.abs(cwd, file))
-            await cssgen(ctx, options)
-          } else if (event === 'add') {
-            ctx.project.createSourceFile(ctx.runtime.path.abs(cwd, file))
+          } else if (event === 'change' || event === 'add') {
+            ctx.project.reloadSourceFile(filePath)
             await cssgen(ctx, options)
           }
         })
@@ -498,13 +497,12 @@ export async function main() {
         )
 
         ctx.watchFiles(async (event, file) => {
+          const filePath = ctx.runtime.path.abs(cwd, file)
           if (event === 'unlink') {
-            ctx.project.removeSourceFile(ctx.runtime.path.abs(cwd, file))
-          } else if (event === 'change') {
-            ctx.project.reloadSourceFile(ctx.runtime.path.abs(cwd, file))
-            await buildInfo(ctx, outfile)
-          } else if (event === 'add') {
-            ctx.project.createSourceFile(ctx.runtime.path.abs(cwd, file))
+            ctx.project.removeSourceFile(filePath)
+            ctx.forgetNativeFile(filePath)
+          } else if (event === 'change' || event === 'add') {
+            ctx.project.reloadSourceFile(filePath)
             await buildInfo(ctx, outfile)
           }
         })

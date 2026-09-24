@@ -21,12 +21,9 @@ const createContext = (files: Record<string, string>, tracked: Record<string, st
   ({
     config: { cwd: '/app' },
     getFiles: () => Object.keys({ ...files, ...tracked }),
-    project: {
-      getSourceFile: (file: string) => {
-        const content = tracked[file.replace('/app/', '')]
-        return content == null ? undefined : { getFullText: () => content }
-      },
-    },
+    // The copy extraction reads — a `parser:before` transform's output when the project holds
+    // one, and nothing otherwise, which is what the old `getSourceFile` stub modelled.
+    parsedSourceText: (file: string) => tracked[file.replace('/app/', '')],
     runtime: {
       fs: {
         readFileSync: (file: string) => {

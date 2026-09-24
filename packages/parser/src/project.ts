@@ -1733,6 +1733,11 @@ export class Project {
       this.overriddenSources.delete(this.normalizePath(pathOf(sourceFile)))
       return this.project.removeSourceFile(pathOf(sourceFile))
     }
+    // A file the compiler never loaded still had its styles extracted — extraction is Rust's and
+    // does not load it — so they are released all the same. This used to happen only because
+    // token accounting read `getSourceFile` for every file on each build and so loaded them all;
+    // once it stopped, a deleted file's rules outlived it for as long as the context did.
+    this.options.parserOptions.encoder.releaseFile(filePath)
     this.overriddenSources.delete(this.normalizePath(filePath))
     return false
   }

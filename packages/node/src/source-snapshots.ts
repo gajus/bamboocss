@@ -1,4 +1,3 @@
-import type { SourceFile } from '@bamboocss/ts-ast'
 import type { BambooContext } from './create-context'
 
 /** One file, as it sits on disk and as the parser holds it. */
@@ -6,9 +5,8 @@ export interface SourceSnapshot {
   filePath: string
   /** The bytes the bundler will compile. Absent when the file could not be read. */
   onDisk: string | undefined
-  /** The text the parser holds, which a `parser:before` transform may have rewritten. */
+  /** The text extraction reads, which a `parser:before` transform may have rewritten. */
   parsed: string | undefined
-  sourceFile: SourceFile | undefined
 }
 
 /**
@@ -48,9 +46,11 @@ export function readSnapshot(ctx: BambooContext, filePath: string): SourceSnapsh
     onDisk = undefined
   }
 
-  const sourceFile = ctx.project.getSourceFile(filePath)
-
-  return { filePath, onDisk, parsed: sourceFile?.getFullText(), sourceFile }
+  // The text extraction reads: the `parser:before` output when a hook rewrites the file,
+  // otherwise the bytes on disk. Read through the project's text overlay rather than its
+  // TypeScript source file — asking for the source file started the Go compiler over the whole
+  // inventory on every stylesheet build, to answer a question only the text was needed for.
+  return { filePath, onDisk, parsed: ctx.parsedSourceText(filePath, onDisk) }
 }
 
 /**

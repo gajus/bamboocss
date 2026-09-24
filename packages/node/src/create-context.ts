@@ -2,8 +2,10 @@ import type { DeadImport, StyleEncoder, Stylesheet } from '@bamboocss/core'
 import type {
   NativeEntrypoint,
   NativeFileAnalysis,
+  NativePathMapping,
   NativeProjectOptions,
   NativeSource,
+  NativeTokenAccounting,
 } from '@bamboocss/native-extractor'
 import { checkNamingAgreement, formatNamingDisagreement } from '@bamboocss/core'
 import { Generator } from '@bamboocss/generator'
@@ -38,6 +40,12 @@ type NativeExtractor = {
     entrypoints: NativeEntrypoint[],
     options?: NativeProjectOptions,
   ): NativeFileAnalysis[]
+  accountTokens(
+    filename: string,
+    source: string,
+    tokenModules: string[],
+    pathMappings?: NativePathMapping[],
+  ): NativeTokenAccounting
 }
 
 const nativeBinaryName = () => {
@@ -414,6 +422,36 @@ export class BambooContext extends Generator {
   private isGenerated = (file: string) => {
     const outdir = this.runtime.path.join(...this.paths.root)
     return file === outdir || file.startsWith(outdir + this.runtime.path.sep)
+  }
+
+  /**
+   * The text extraction reads for a file: its `parser:before` output, or its bytes when no hook
+   * rewrites it. `undefined` when the file cannot be read at all.
+   *
+   * The same preparation `analyzeMany` is handed, so every scan that compares "what the parser
+   * holds" against "what is on disk" compares against what extraction actually saw.
+   */
+  parsedSourceText = (filePath: string, onDisk?: string): string | undefined => {
+    const original = this.project.getSourceText(filePath) ?? onDisk
+    if (original === undefined) return undefined
+    return this.prepareNativeSource(filePath, original).source
+  }
+
+  /**
+   * Token accounting for one file's text, in Rust — see `token-accounting.ts` for the rules.
+   *
+   * This used to walk the TypeScript tree, which meant reading `project.getSourceFile` for
+   * every file mentioning a token, and that started the Go compiler over the whole inventory
+   * on every stylesheet build, since `prune.tokens` defaults on.
+   */
+  accountTokens = (filePath: string, source: string): NativeTokenAccounting => {
+    const { paths = {} } = this.project.resolutionOptions
+    return this.loadNativeExtractor().accountTokens(
+      filePath,
+      source,
+      this.imports.value.tokens,
+      Object.entries(paths).map(([pattern, values]) => ({ pattern, paths: values })),
+    )
   }
 
   /** Load the required Rust extractor from the workspace or the published prebuild directory. */

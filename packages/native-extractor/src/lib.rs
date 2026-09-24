@@ -17,6 +17,9 @@ use oxc_span::{GetSpan, SourceType};
 use oxc_syntax::symbol::SymbolId;
 
 mod evaluator;
+mod token_accounting;
+
+pub use token_accounting::{NativeTokenAccounting, NativeTokenDecline};
 
 #[napi(object)]
 pub struct NativeEntrypoint {
@@ -117,11 +120,11 @@ fn source_type(filename: &str) -> Result<SourceType> {
         .map_err(|error| Error::new(Status::InvalidArg, error.to_string()))
 }
 
-fn utf16_offset(source: &str, byte: u32) -> u32 {
+pub(crate) fn utf16_offset(source: &str, byte: u32) -> u32 {
     source[..byte as usize].encode_utf16().count() as u32
 }
 
-fn line_and_column(source: &str, start: u32) -> (u32, u32) {
+pub(crate) fn line_and_column(source: &str, start: u32) -> (u32, u32) {
     let mut line_starts = vec![0];
     let mut characters = source.char_indices().peekable();
     while let Some((index, character)) = characters.next() {
@@ -800,4 +803,56 @@ pub fn analyze_many(
             })
         })
         .collect()
+}
+
+/// Token accounting for one file: the token paths it asks for, the prefixes a template literal
+/// bounds, and every reference the build cannot follow. See `token_accounting.rs`.
+///
+/// `tokenModules` are the configured tokens entrypoints; `pathMappings` are the tsconfig
+/// `paths`, resolved so a specifier mapped onto the artifact counts as the artifact.
+#[napi]
+pub fn account_tokens(
+    filename: String,
+    source: String,
+    token_modules: Vec<String>,
+    path_mappings: Option<Vec<NativePathMapping>>,
+) -> Result<NativeTokenAccounting> {
+    let mappings = path_mappings.unwrap_or_default();
+    let is_entrypoint = |specifier: &str| {
+        if token_modules
+            .iter()
+            .any(|module| specifier.contains(module.as_str()))
+        {
+            return true;
+        }
+        mappings.iter().any(|mapping| {
+            resolve_path_pattern(&mapping.pattern, &mapping.paths, specifier).is_some_and(
+                |resolved| {
+                    token_modules
+                        .iter()
+                        .any(|module| resolved.contains(module.as_str()) || resolved == *module)
+                },
+            )
+        })
+    };
+    Ok(token_accounting::account(
+        &source,
+        source_type(&filename)?,
+        &is_entrypoint,
+    ))
+}
+
+/// A tsconfig `paths` pattern applied to a specifier, the way `resolveTsPathPattern` does it:
+/// `@/*` → `./src/*` maps `@/tokens` to `./src/tokens`. The first template wins.
+fn resolve_path_pattern(pattern: &str, templates: &[String], specifier: &str) -> Option<String> {
+    let captured = match pattern.split_once('*') {
+        Some((prefix, suffix)) => specifier
+            .strip_prefix(prefix)
+            .and_then(|rest| rest.strip_suffix(suffix))?,
+        None if pattern == specifier => "",
+        None => return None,
+    };
+    templates
+        .first()
+        .map(|template| template.replace('*', captured))
 }

@@ -250,3 +250,45 @@ const items = ['a']
   }
   expect(result.typescriptFiles).toEqual([])
 })
+
+/**
+ * A whole stylesheet build — extraction and token pruning, which runs by default — without the
+ * TypeScript compiler starting.
+ *
+ * Token accounting walked the TypeScript tree, so `toCss()` read `project.getSourceFile` for
+ * every file mentioning a token, and that started the Go compiler over the whole inventory on
+ * every build even though Rust had already done the extraction. The accounting is Rust's now.
+ */
+test('token pruning runs without materializing the TypeScript compiler', async () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'bamboo-native-token-accounting-'))
+  temporaryDirectories.add(cwd)
+  mkdirSync(join(cwd, 'src'))
+  writeFileSync(
+    join(cwd, 'bamboo.config.ts'),
+    `export default {
+      include: ['src/**/*.ts'],
+      outdir: 'styled-system',
+      preflight: false,
+      theme: { tokens: { colors: { kept: { value: '#0a0' }, dropped: { value: '#a00' } } } },
+    }\n`,
+  )
+  writeFileSync(
+    join(cwd, 'src/style.ts'),
+    `import { css } from '../styled-system/css'
+import { token } from '../styled-system/tokens'
+export const a = css({ color: 'red' })
+export const b = token('colors.kept')
+`,
+  )
+
+  const builder = new Builder()
+  await builder.setup({ cwd })
+  const ctx = builder.getContextOrThrow()
+  builder.extract()
+  const css = builder.toCss()
+
+  expect(ctx.project.hasMaterializedCompiler()).toBe(false)
+  // And the accounting answered: the token asked for is kept, the other one is pruned.
+  expect(css).toContain('--colors-kept')
+  expect(css).not.toContain('--colors-dropped')
+})

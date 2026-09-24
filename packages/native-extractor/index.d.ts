@@ -76,3 +76,33 @@ export function analyzeMany(
   entrypoints: NativeEntrypoint[],
   options?: NativeProjectOptions,
 ): NativeFileAnalysis[]
+
+export interface NativeTokenDecline {
+  reason:
+    | 're-exported'
+    | 'import-equals'
+    | 'require'
+    | 'dynamic-import'
+    | 'unclassified-import'
+    | 'unsupported-import'
+    | 'unresolved-reference'
+  line: number
+  /** UTF-16 source range of the declined syntax. */
+  start: number
+  end: number
+}
+
+export interface NativeTokenAccounting {
+  paths: string[]
+  prefixes: string[]
+  declined: NativeTokenDecline[]
+  /** The file did not parse, so nothing in it can be trusted. */
+  unparsed: boolean
+}
+
+export function accountTokens(
+  filename: string,
+  source: string,
+  tokenModules: string[],
+  pathMappings?: NativePathMapping[],
+): NativeTokenAccounting

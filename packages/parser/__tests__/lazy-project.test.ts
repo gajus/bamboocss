@@ -140,7 +140,6 @@ describe('Project deferred initial sources', () => {
     expect(project.files).toEqual(['app/a.ts', 'app/b.ts'])
     expect(project.getUnresolvedImporters()).toEqual([])
     expect(project.transformFile('app/a.ts', 'source')).toBe('source')
-    expect(project.classify(new Map())).toBeDefined()
     expect(readFile).not.toHaveBeenCalled()
     expect(createSourceFile.count).toBe(0)
 
@@ -424,7 +423,6 @@ describe('Project deferred initial sources', () => {
     ['JSON parseSourceFile', (project) => project.parseSourceFile('ghost/cache.json')],
     ['source parseSourceFile', (project, { importer }) => project.parseSourceFile(importer.fileName)],
     ['transformFile', (project) => project.transformFile('ghost/source.ts', 'source')],
-    ['classify', (project) => project.classify(new Map())],
   ])('a caught %s access invalidates loading before exposing wrapper state', (_name, invoke) => {
     const parserOptions = createContext().parserOptions
     const encoderBefore = JSON.stringify(parserOptions.encoder.toJSON())

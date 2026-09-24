@@ -1,11 +1,5 @@
 import type { ParserOptions } from '@bamboocss/core'
-import type {
-  BambooHooks,
-  ConfigTsOptions,
-  ParserResultConfigureOptions,
-  ParserResultInterface,
-  Runtime,
-} from '@bamboocss/types'
+import type { BambooHooks, ConfigTsOptions, ParserResultConfigureOptions, Runtime } from '@bamboocss/types'
 import {
   Project as TsProject,
   ScriptKind,
@@ -18,7 +12,6 @@ import {
 } from '@bamboocss/ts-ast'
 import type { CompilerOptions, ResolvedModule, ProjectOptions as TsProjectOptions, SourceFile } from '@bamboocss/ts-ast'
 import { clearBoxNodeCache, invalidateDependencyPath } from '@bamboocss/extractor'
-import { classifyProject } from './classify'
 import { clearImportedRecipeCache } from './imported-recipes'
 import { digestExportValue } from './export-read-digest'
 import { createParser } from './parser'
@@ -268,7 +261,7 @@ export class Project {
    *   API, and non-JSON `parseSourceFile`;
    * - graph-independent: `files`, `parser`, `parserOptions`, `readFile`, `getFiles`, the
    *   resolution-ledger/work getters, `getUnresolvedImporters`, `parseJson`/JSON
-   *   `parseSourceFile`, `transformFile`, `classify`.
+   *   `parseSourceFile`, `transformFile`.
    *
    * Graph-independent means outside the atomic preload. While it is `loading`, every public
    * wrapper entry rejects reentrancy before returning live state or invoking a callback.
@@ -1891,11 +1884,5 @@ export class Project {
   transformFile = (_filePath: string, content: string): string => {
     this.#assertNotLoading()
     return content
-  }
-
-  classify = (fileMap: Map<string, ParserResultInterface>) => {
-    this.#assertNotLoading()
-    const { parserOptions } = this.options
-    return classifyProject(parserOptions, fileMap)
   }
 }

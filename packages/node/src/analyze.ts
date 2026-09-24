@@ -11,8 +11,13 @@ import type { BambooContext } from './create-context'
 export async function analyze(ctx: BambooContext, options: AnalysisOptions = {}) {
   const { Reporter, formatRecipeReport, formatTokenReport } = await import('@bamboocss/reporter')
 
+  // The build's extraction — Rust — rather than a second, TypeScript one. The report used to
+  // extract every file again through the TypeScript engine, which could disagree with what the
+  // build actually emitted, and started the Go compiler to do it.
   const reporter = new Reporter(ctx, {
-    project: ctx.project,
+    parserOptions: ctx.parserOptions,
+    parseFile: (file) => ctx.parseFile(file),
+    prepare: (files) => ctx.prepareNativeExtraction(files),
     getRelativePath: ctx.runtime.path.relative,
     getFiles: ctx.getFiles,
     ...options,

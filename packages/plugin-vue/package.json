@@ -40,8 +40,5 @@
   "dependencies": {
     "@bamboocss/types": "workspace:*",
     "@vue/compiler-sfc": "3.5.41"
-  },
-  "devDependencies": {
-    "@vue/compiler-core": "3.5.41"
   }
 }

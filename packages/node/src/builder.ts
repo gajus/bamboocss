@@ -1,9 +1,7 @@
-import { getExportDeclarations } from '@bamboocss/ts-ast'
 import { findConfig } from '@bamboocss/config'
 import { logger } from '@bamboocss/logger'
 import { BambooError, uniq } from '@bamboocss/shared'
 import type { DiffConfigResult } from '@bamboocss/types'
-import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, statSync } from 'fs'
 import { normalize, resolve } from 'path'
 import picomatch from 'picomatch'
@@ -121,21 +119,6 @@ export class Builder {
   private configGraphMtimes: Map<string, number> | undefined
   /** Per-file source-scan results for `toCss`, valid while each file's mtime stands still. */
   private sourceScanCache = createSourceScanCache()
-  /** Cross-file value reads each owner's last extraction performed, with parse-time digests. */
-  private extractionReadsByOwner = new Map<
-    string,
-    ReadonlyArray<{ file: string; name: string; digest: string | undefined }>
-  >()
-  /** Each owner's recipe surface — declared cva/sva configs plus export-statement texts. */
-  private recipeSurfaceByOwner = new Map<string, string | undefined>()
-  /** Whether each file changed this pass kept its recipe surface; consulted by dependents. */
-  private recipeSurfaceStable = new Map<string, boolean>()
-  /** Files this pass re-extracts because their bytes moved, as `sourcePath` spellings. */
-  private changedThisPass = new Set<string>()
-  /** Whether this pass selected any owner through resolution-configuration changes. */
-  private resolutionAffectedThisPass = false
-  /** Per-pass digests of re-read values, so N dependents of one edit digest each value once. */
-  private readDigestMemo = new Map<string, string | undefined>()
   /** Resolution ledger as it stood before this pass's first physical source mutation. */
   private capturedLedger: ResolutionLedger | undefined
 
@@ -346,8 +329,6 @@ export class Builder {
       this.resolutionConfigurationBytes.clear()
       this.sourceScanCache.entries.clear()
       this.sourceScanCache.resolvedTokenReferences.clear()
-      this.extractionReadsByOwner.clear()
-      this.recipeSurfaceByOwner.clear()
       // Nothing selective survives a config change, and a snapshot from before it describes a
       // graph this pass is about to re-read in full.
       this.capturedLedger = undefined
@@ -412,7 +393,6 @@ export class Builder {
     for (const [owner, configurations] of this.resolutionConfigurationSets) {
       if (configurations.some((file) => changedResolutionSet.has(file))) resolutionAffected.add(owner)
     }
-    this.resolutionAffectedThisPass = resolutionAffected.size > 0
 
     if (changedResolutionConfigurations.length) {
       const tsconfigCandidates = new Set([...previousTsconfigFiles, ...this.tsconfigResolutionFiles])
@@ -621,67 +601,9 @@ export class Builder {
     return this.context
   }
 
-  /**
-   * The changed file's recipe surface: every declared `cva`/`sva` config, in declaration
-   * order, plus the text of every export statement. A value edit inside a `css()` call moves
-   * neither; a recipe config edit moves the first; an export alias or re-export edit — which
-   * can re-route what a consumer's call resolves to without any declaration changing — moves
-   * the second. `undefined` when any part cannot be pinned down, which disables skipping.
-   */
-  private digestRecipeSurface = (
-    ctx: BambooContext,
-    file: string,
-    parserResult: ReturnType<BambooContext['parseFile']>,
-  ): string | undefined => {
-    try {
-      const recipes: Array<[string, unknown]> = []
-      for (const set of [parserResult?.cva, parserResult?.sva]) {
-        for (const item of set ?? []) recipes.push([item.name ?? '', item.data])
-      }
-      const sourceFile = ctx.project?.getSourceFile?.(file)
-      const exports = sourceFile ? getExportDeclarations(sourceFile).map((declaration) => declaration.getText()) : []
-      const json = JSON.stringify([recipes, exports], (_key, value) =>
-        value === undefined ? 'bamboo:undefined' : value,
-      )
-      if (json === undefined) return undefined
-      return createHash('sha256').update(json).digest('base64')
-    } catch {
-      return undefined
-    }
-  }
-
   /** One canonical spelling for verification keys: absolute, forward slashes. */
   private absOwner = (ctx: BambooContext, file: string) =>
     this.sourcePath(ctx.runtime?.path?.abs ? ctx.runtime.path.abs(ctx.config.cwd, file) : file)
-
-  /** Whether every changed file this dependent reads kept both its values and its surface. */
-  private dependentUnchangedByReads = (ctx: BambooContext, owner: string): boolean => {
-    // A dependent can be selected without any tracked source changing at all — an import-map
-    // or tsconfig edit retargets what its specifiers resolve to — and nothing these records
-    // witness can vouch for resolution. Any such selection this pass disables skipping, as
-    // does an empty changed set, which means the selection came from that machinery.
-    if (this.resolutionAffectedThisPass || this.changedThisPass.size === 0) return false
-
-    const reads = this.extractionReadsByOwner.get(owner)
-    if (reads === undefined) return false
-
-    for (const changed of this.changedThisPass) {
-      if (this.recipeSurfaceStable.get(changed) !== true) return false
-    }
-
-    for (const read of reads) {
-      const readOwner = this.sourcePath(ctx.runtime.path.abs(ctx.config.cwd, read.file))
-      if (!this.changedThisPass.has(readOwner)) continue
-      if (read.digest === undefined) return false
-      const key = `${read.file}\u0000${read.name}`
-      if (!this.readDigestMemo.has(key)) {
-        this.readDigestMemo.set(key, ctx.project.digestExportRead(read.file, read.name))
-      }
-      const current = this.readDigestMemo.get(key)
-      if (current === undefined || current !== read.digest) return false
-    }
-    return true
-  }
 
   getFileMeta = (file: string) => {
     const mtime = existsSync(file) ? statSync(file).mtimeMs : -Infinity
@@ -712,29 +634,6 @@ export class Builder {
     const hasConfigChanged = this.affecteds ? this.affecteds.hasConfigChanged : true
     if (meta.isUnchanged && !hasConfigChanged && !this.affectedFiles?.has(this.sourcePath(file))) return
 
-    /**
-     * A dependent selected only because a file it reads changed can be verified instead of
-     * re-extracted: its own bytes did not move, so its extraction output moves only if a
-     * value it read moved, or if the changed file's recipe surface — which decides how its
-     * calls classify — moved. Both are checked against digests recorded when this owner was
-     * last extracted; the changed file itself was re-extracted earlier in this same ordered
-     * pass, which is what makes the surface comparison current. Any gap — a read that could
-     * not be digested, a surface this pass has no verdict for, a JSX-component config whose
-     * classification these records do not witness — falls through to the re-extraction this
-     * replaces.
-     */
-    if (
-      meta.isUnchanged &&
-      !hasConfigChanged &&
-      !this.changedThisPass.has(this.absOwner(ctx, file)) &&
-      // Conservative when the answer is unknowable: JSX component classification can hinge on
-      // cross-file resolution these records do not witness, so its presence disables skipping.
-      !((ctx as unknown as { jsx?: { isEnabled?: boolean } }).jsx?.isEnabled ?? true) &&
-      this.dependentUnchangedByReads(ctx, this.absOwner(ctx, file))
-    ) {
-      return
-    }
-
     const owner = this.sourcePath(file)
     const previousReads = this.resolutionReadSets.get(owner) ?? []
     const previousPending = this.pendingResolutionReadSets.get(owner) ?? []
@@ -743,37 +642,6 @@ export class Builder {
     const parserResult = ctx.parseFile(file)
     recordResolvedTokenReferences(this.sourceScanCache, this.absOwner(ctx, file), parserResult)
     fileModifiedMap.set(file, meta.mtime)
-
-    {
-      // What this owner read, and what its recipe surface is now — the two records dependent
-      // verification compares against on the next pass. The surface verdict for a *changed*
-      // file is decided here, against the digest its previous extraction recorded. Every key
-      // is the absolute spelling, which is the one the parser's read records carry.
-      const owner = this.absOwner(ctx, file)
-      const reads =
-        (
-          parserResult as
-            | { getExportReads?: () => ReadonlyArray<{ file: string; name: string; digest: string | undefined }> }
-            | undefined
-        )?.getExportReads?.() ?? []
-      const parsedNatively = Boolean((parserResult as { native?: boolean } | undefined)?.native)
-      if (parsedNatively) {
-        // The Rust evaluator records dependency paths rather than TypeScript export-node
-        // digests. An unchanged native owner selected by one of those paths must therefore be
-        // re-extracted; an empty digest set would incorrectly certify stale output as stable.
-        this.extractionReadsByOwner.delete(owner)
-      } else {
-        this.extractionReadsByOwner.set(owner, reads)
-      }
-      // Asking for export declarations materializes a TypeScript tree. Native extraction
-      // deliberately trades this skip optimization for staying compiler-free.
-      const surface = !parsedNatively && ctx.project ? this.digestRecipeSurface(ctx, file, parserResult) : undefined
-      if (this.changedThisPass.has(owner)) {
-        const previous = this.recipeSurfaceByOwner.get(owner)
-        this.recipeSurfaceStable.set(owner, previous !== undefined && surface !== undefined && previous === surface)
-      }
-      this.recipeSurfaceByOwner.set(owner, surface)
-    }
 
     if (parserResult) {
       const previousReadSet = meta.isUnchanged
@@ -890,18 +758,6 @@ export class Builder {
     // A cold Builder pass is Vite's path into extraction. Use the same cheap source scan as
     // `parseFiles`; otherwise Vite parses every included file while the CLI skips non-authors.
     const filesToExtract = hasConfigChanged ? ctx.extractableFiles(files) : (this.extractionOrder ?? files)
-
-    // The set this pass genuinely re-reads, and a fresh digest memo for it. Dependents whose
-    // bytes did not move consult both: `extractionOrder` puts every changed file before its
-    // dependents, so by the time a dependent is visited, each changed file's fresh recipe
-    // surface has been recorded and its values are one memoized digest away.
-    this.changedThisPass = new Set(
-      [...(this.filesMeta?.changes ?? [])]
-        .filter(([, fileMeta]) => !fileMeta.isUnchanged)
-        .map(([changed]) => this.sourcePath(ctx.runtime.path.abs(ctx.config.cwd, changed))),
-    )
-    this.recipeSurfaceStable.clear()
-    this.readDigestMemo.clear()
 
     const done = logger.time.info('Extracted in')
 

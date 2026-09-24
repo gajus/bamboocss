@@ -1,6 +1,5 @@
 import type { ParserOptions } from '@bamboocss/core'
-import { BoxNodeMap, box, type BoxNode } from '@bamboocss/extractor'
-import { compact, createPatternFns } from '@bamboocss/shared'
+import { compact, createPatternFns, isObject } from '@bamboocss/shared'
 import type {
   ClassifyReport,
   ComponentReportItem,
@@ -24,7 +23,7 @@ interface ProcessPatternOpts {
   item: ComponentReportItem
   localMaps: ReportDerivedMaps
   filepath: string
-  boxNode: BoxNode
+  atomOrigin: ResultItem['atomOrigin']
   data: Record<string, any> | undefined
 }
 
@@ -35,8 +34,27 @@ interface ProcessResultItemOpts {
   kind: ComponentReportItem['kind']
 }
 
+/**
+ * Where a call was found. Extraction reports one location per call — the Rust engine has no
+ * per-property spans — so every property of a call shares its call's position.
+ */
+type Range = NonNullable<PropertyReportItem['range']>
+
+const rangeOf = (origin: ResultItem['atomOrigin']): Range | null =>
+  origin
+    ? {
+        startPosition: 0,
+        startLineNumber: origin.line,
+        startColumn: origin.column,
+        endPosition: 0,
+        endLineNumber: origin.line,
+        endColumn: origin.column,
+      }
+    : null
+
 interface ProcessMapOpts {
-  map: BoxNodeMap
+  map: Record<string, unknown>
+  range: Range | null
   current: string[]
   componentReportItem: ComponentReportItem
   filepath: string
@@ -102,7 +120,7 @@ export function classifyProject(ctx: ParserOptions, resultMap: ParserResultMap):
   }
 
   const processPattern = (opts: ProcessPatternOpts): ComponentReportItem | undefined => {
-    const { boxNode, data, item, filepath, localMaps } = opts
+    const { atomOrigin, data, item, filepath, localMaps } = opts
     const name = item.componentName
     const pattern = ctx.patterns.details.find((p) => p.baseName === name)
     if (!pattern) return
@@ -110,8 +128,8 @@ export function classifyProject(ctx: ParserOptions, resultMap: ParserResultMap):
     const newItem: ResultItem = {
       name: 'css',
       type: 'css',
-      box: box.objectToMap(compact(cssObj), boxNode.getNode(), boxNode.getStack()),
-      data: [cssObj],
+      atomOrigin,
+      data: [compact(cssObj)],
     }
     Object.assign(newItem, { debug: true })
     return processResultItem({ item: newItem, kind: 'function', localMaps, filepath })
@@ -120,13 +138,9 @@ export function classifyProject(ctx: ParserOptions, resultMap: ParserResultMap):
   const processResultItem = (opts: ProcessResultItemOpts) => {
     const { item, kind, filepath, localMaps } = opts
 
-    if (!item.box || box.isUnresolvable(item.box)) {
-      // TODO store that in the report (unresolved values)
-      // console.log('no box', filepath, item.name, item.type, item.box?.getRange())
-      return
-    }
-
-    if (!item.data) {
+    // A call whose argument could not be read at all reached here with no data; there is
+    // nothing to classify. Unresolved values are reported by extraction itself.
+    if (!item.data?.length) {
       return
     }
 
@@ -150,30 +164,43 @@ export function classifyProject(ctx: ParserOptions, resultMap: ParserResultMap):
       kind,
       filepath,
       value: item.data,
-      range: item.box.getRange(),
+      range: rangeOf(item.atomOrigin),
       contains: [],
       debug: Reflect.has(item, 'debug'),
     } satisfies ComponentReportItem
 
     if (item.type === 'pattern') {
-      return processPattern({ boxNode: item.box, data: item.data[0], item: componentReportItem, filepath, localMaps })
+      return processPattern({
+        atomOrigin: item.atomOrigin,
+        data: item.data[0] as Record<string, any>,
+        item: componentReportItem,
+        filepath,
+        localMaps,
+      })
     }
 
-    if (box.isArray(item.box)) {
+    // A recipe invocation is a variant selection, not style properties: it counts as a
+    // component use and is not walked.
+    if (item.type === 'recipe' || item.type === 'jsx-recipe') {
       addTo(byComponentInFilepath, filepath, componentReportItem.componentIndex)
       return componentReportItem
     }
 
-    if (box.isMap(item.box)) {
-      addTo(byComponentInFilepath, filepath, componentReportItem.componentIndex)
-      processMap({ map: item.box, current: [], componentReportItem, filepath, localMaps })
-      return componentReportItem
+    // Every argument object is walked. Extraction emits a fragment per statically enumerable
+    // branch — `cond ? a : b` gives both — and each is a real use of its properties.
+    addTo(byComponentInFilepath, filepath, componentReportItem.componentIndex)
+    for (const data of item.data) {
+      if (!isObject(data)) continue
+      processMap({
+        map: data,
+        range: componentReportItem.range,
+        current: [],
+        componentReportItem,
+        filepath,
+        localMaps,
+      })
     }
-
-    if (item.type === 'recipe') {
-      addTo(byComponentInFilepath, filepath, componentReportItem.componentIndex)
-      return componentReportItem
-    }
+    return componentReportItem
   }
 
   const processResultItemFn = (opts: {
@@ -193,12 +220,13 @@ export function classifyProject(ctx: ParserOptions, resultMap: ParserResultMap):
   }
 
   const processMap = (opts: ProcessMapOpts) => {
-    const { map, current, componentReportItem, filepath, localMaps, skipRange } = opts
+    const { map, range, current, componentReportItem, filepath, localMaps, skipRange } = opts
     const { reportItemType: type, kind, componentName: name } = componentReportItem
 
-    map.value.forEach((attrNode, attrName) => {
-      if (box.isLiteral(attrNode) || box.isEmptyInitializer(attrNode)) {
-        const value = box.isLiteral(attrNode) ? (attrNode.value as string) : true
+    Object.entries(map).forEach(([attrName, attrValue]) => {
+      if (attrValue == null) return
+      if (typeof attrValue === 'string' || typeof attrValue === 'number' || typeof attrValue === 'boolean') {
+        const value = attrValue
 
         const propReportItem = {
           index: String(id++),
@@ -213,7 +241,7 @@ export function classifyProject(ctx: ParserOptions, resultMap: ParserResultMap):
           path: current.concat(attrName),
           value,
           isKnownValue: false,
-          range: skipRange ? null : map.getRange(),
+          range: skipRange ? null : range,
         } as PropertyReportItem
 
         componentReportItem.contains.push(propReportItem.index)
@@ -297,9 +325,10 @@ export function classifyProject(ctx: ParserOptions, resultMap: ParserResultMap):
         return
       }
 
-      if (box.isMap(attrNode) && attrNode.value.size) {
+      if (isObject(attrValue) && Object.keys(attrValue).length) {
         return processMap({
-          map: attrNode,
+          map: attrValue,
+          range,
           current: current.concat(attrName),
           componentReportItem,
           filepath,
@@ -357,8 +386,8 @@ export function classifyProject(ctx: ParserOptions, resultMap: ParserResultMap):
       }
 
       processMap({
-        // @ts-expect-error
-        map: box.objectToMap(styleObject, null, []),
+        map: styleObject,
+        range: null,
         current: [],
         filepath: `@config/theme/recipes/${key}`,
         skipRange: true,
@@ -392,8 +421,8 @@ export function classifyProject(ctx: ParserOptions, resultMap: ParserResultMap):
   Object.values(ctx.config.global?.css ?? {}).forEach((styleObject) => {
     if (!styleObject) return
     processMap({
-      // @ts-expect-error
-      map: box.objectToMap(styleObject, null, []),
+      map: styleObject,
+      range: null,
       current: [],
       filepath: '@config/global.css',
       skipRange: true,

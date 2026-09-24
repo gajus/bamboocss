@@ -631,10 +631,6 @@ importers:
       '@vue/compiler-sfc':
         specifier: 3.5.41
         version: 3.5.41
-    devDependencies:
-      '@vue/compiler-core':
-        specifier: 3.5.41
-        version: 3.5.41
 
   packages/preset-atlaskit:
     dependencies:

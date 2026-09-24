@@ -21,7 +21,9 @@ const ctx = createContext({
 const tokenReport = (code: string) => {
   ctx.project.addSourceFile('code.tsx', code)
   const reporter = new Reporter(ctx, {
-    project: ctx.project,
+    parserOptions: ctx.parserOptions,
+    parseFile: (file) => ctx.parseFile(file),
+    prepare: (files) => ctx.prepareNativeExtraction(files),
     getRelativePath: ctx.runtime.path.relative,
     getFiles: () => ['code.tsx'],
   })
@@ -48,7 +50,7 @@ describe('reporter', () => {
         {
           "category": "fontSizes",
           "count": 1,
-          "hardcoded": 5,
+          "hardcoded": 7,
           "mostUsedNames": [
             "lg",
           ],
@@ -70,7 +72,7 @@ describe('reporter', () => {
         {
           "category": "colors",
           "count": 19,
-          "hardcoded": 6,
+          "hardcoded": 9,
           "mostUsedNames": [
             "red.200",
           ],
@@ -89,5 +91,44 @@ describe('reporter', () => {
         },
       ]
     `)
+  })
+
+  /**
+   * A value nested under a condition in a config recipe is a use like any other.
+   *
+   * The report used to walk config recipes and global css through boxes that stopped one
+   * level down, so `_hover: { color: 'darkblue' }` in a recipe was never counted, while the
+   * same shape at a call site was. The walk is over plain objects now, at every depth.
+   */
+  it('counts values nested under conditions in config recipes', () => {
+    const nested = createContext({
+      theme: {
+        tokens: { colors: { brand: { value: 'blue' } } },
+        extend: {
+          recipes: {
+            probe: {
+              className: 'probe',
+              base: { _hover: { color: 'brand' }, '&[data-x]': { background: 'hotpink' } },
+            },
+          },
+        },
+      },
+    })
+    const reporter = new Reporter(nested, {
+      parserOptions: nested.parserOptions,
+      parseFile: (file) => nested.parseFile(file),
+      prepare: (files) => nested.prepareNativeExtraction(files),
+      getRelativePath: nested.runtime.path.relative,
+      getFiles: () => [],
+    })
+    reporter.init()
+
+    const colors = reporter.getTokenReport().usageMap.get('colors') ?? []
+    const probe = colors.filter((usage) => usage.filePath === '@config/theme/recipes/probe')
+
+    expect(probe.map((usage) => [usage.value, usage.type])).toEqual([
+      ['brand', 'token'],
+      ['hotpink', 'nonToken'],
+    ])
   })
 })

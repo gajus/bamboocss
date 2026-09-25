@@ -1764,6 +1764,20 @@ const runRejectedOutputWatchRebuild = async (
     generateBundle: {
       order: 'post',
       handler(_, bundle) {
+        // What Qwik's optimizer does in the same hook: a manifest that quotes each stylesheet's
+        // text. A new asset carrying the marker is not the sheet changing, and must pass.
+        const quoted = Object.values(bundle)
+          .map((output) =>
+            output.type === 'asset' && output.fileName.endsWith('.css')
+              ? typeof output.source === 'string'
+                ? output.source
+                : Buffer.from(output.source).toString()
+              : '',
+          )
+          .join('')
+        if (quoted) {
+          this.emitFile({ type: 'asset', fileName: `q-manifest-${label}.json`, source: JSON.stringify({ quoted }) })
+        }
         if (mutateClientCss) {
           for (const output of Object.values(bundle)) {
             if (output.type !== 'asset' || !output.fileName.endsWith('.css')) continue

@@ -1010,6 +1010,26 @@ describe('the emitted stylesheet', () => {
     await expect((await finish({ ssr: 'entry.tsx' }))()).resolves.toBeUndefined()
   }, 60_000)
 
+  /**
+   * Astro's prerender build: `ssrEmitAssets` on, no CSS asset, and the stylesheet module bundled
+   * into a chunk its own CSS plugin inlines into the page HTML.
+   */
+  test('says nothing to an SSR bundle that kept the stylesheet module in a chunk', async () => {
+    const session = createStaticCompilationSession()
+    const plugin = bamboocssCss({ cwd, session })
+    const build = { ssr: true, ssrEmitAssets: true }
+    await hookOf(plugin.configResolved)?.call({} as never, { command: 'build', build } as never)
+    const environment = { name: 'prerender', config: { build } }
+    const resolved = hookOf(plugin.resolveId)!.call({} as never, VIRTUAL_CSS_ID, undefined, {} as never)
+    await hookOf(plugin.load)!.call({ addWatchFile() {}, environment } as never, resolved as string, undefined as never)
+    session.transformedFiles.add(join(cwd, 'src/anything.tsx'))
+
+    const bundle = { 'page.mjs': { type: 'chunk', fileName: 'page.mjs', modules: { [resolved as string]: {} } } }
+    await expect(
+      hookOf(plugin.generateBundle)!.call({ environment } as never, {} as never, bundle as never, false),
+    ).resolves.toBeUndefined()
+  }, 60_000)
+
   test('still answers for an SSR bundle that does emit assets', async () => {
     await expect((await finish({ ssr: 'entry.tsx', ssrEmitAssets: true }))()).rejects.toThrow(
       'no emitted asset carries the generated stylesheet',

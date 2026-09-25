@@ -804,7 +804,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
    * a consumer from disk, and disk is the right text only if that is what the last transform was
    * handed: a module built by another plugin's `load`, or one edited in the same save, fails
    * that comparison and is treated as changed. `path` is the spelling `transform` used, because
-   * ts-morph and the fold both key on it and Windows spells it more than one way.
+   * the fold keys on it and Windows spells it more than one way.
    */
   const digest = (text: string) => createHash('sha256').update(text).digest('base64')
 
@@ -812,7 +812,11 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
   const bambooCssDigest = (bundle: object) => {
     const assets: string[] = []
     for (const output of Object.values(bundle)) {
+      // Stylesheets only, as the pruning pass that took the first digest reads them. A manifest
+      // that embeds the stylesheet's text — Qwik's `q-manifest.json`, written in a later
+      // `generateBundle` — is a new asset quoting the sheet, not a rewrite of it.
       if (!isRecord(output) || output.type !== 'asset') continue
+      if (typeof output.fileName !== 'string' || !output.fileName.endsWith('.css')) continue
       const { source } = output
       if (typeof source !== 'string' && !(source instanceof Uint8Array)) continue
       const text = typeof source === 'string' ? source : Buffer.from(source).toString()

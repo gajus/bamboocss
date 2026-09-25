@@ -55,6 +55,7 @@
     "@bamboocss/core": "workspace:*",
     "@bamboocss/generator": "workspace:*",
     "@bamboocss/logger": "workspace:*",
+    "@bamboocss/plugin-astro": "workspace:*",
     "@bamboocss/plugin-svelte": "workspace:*",
     "@bamboocss/plugin-vue": "workspace:*",
     "@bamboocss/reporter": "workspace:*",

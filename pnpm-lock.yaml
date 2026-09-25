@@ -456,6 +456,9 @@ importers:
       '@bamboocss/logger':
         specifier: workspace:*
         version: link:../logger
+      '@bamboocss/plugin-astro':
+        specifier: workspace:*
+        version: link:../plugin-astro
       '@bamboocss/plugin-svelte':
         specifier: workspace:*
         version: link:../plugin-svelte
@@ -532,6 +535,16 @@ importers:
       boxen:
         specifier: 8.0.1
         version: 8.0.1
+
+  packages/plugin-astro:
+    dependencies:
+      '@bamboocss/types':
+        specifier: workspace:*
+        version: link:../types
+    devDependencies:
+      '@astrojs/compiler':
+        specifier: 3.0.1
+        version: 3.0.1
 
   packages/plugin-lightningcss:
     dependencies:

@@ -45,6 +45,13 @@ const queryOf = (id: string) => {
 /** `?url`, tested the way Vite's asset plugin tests it — the plugin a dev server leaves it to. */
 const URL_QUERY = /(?:\?|&)url(?:&|$)/
 
+/** Whether some chunk of the bundle bundled the stylesheet module itself. */
+const bundleHoldsStylesheetModule = (bundle: object) =>
+  Object.values(bundle).some(
+    (output: { type?: string; modules?: Record<string, unknown> }) =>
+      output.type === 'chunk' && Object.keys(output.modules ?? {}).some((id) => id === RESOLVED_ID),
+  )
+
 /**
  * Where a dev server serves the stylesheet, spelled the way Vite writes the URL of any module with
  * no file behind it: `/@id/`, then the resolved id with its NUL as `__x00__`, behind the server's
@@ -988,6 +995,17 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
            */
           const buildOptions = environment?.config?.build ?? ssrBuildOptions
           if (buildOptions?.ssr && !buildOptions.ssrEmitAssets) return
+
+          /**
+           * A server bundle that kept the stylesheet *module* is not missing it.
+           *
+           * Astro's prerender build turns `ssrEmitAssets` on and still emits no CSS asset: its
+           * own CSS plugin reads the stylesheet off the chunk that bundled it and inlines it into
+           * each page's HTML. The chunk still lists the module, which is the one thing a plugin
+           * that dropped the sheet could not leave behind. A client bundle gets no such pass —
+           * a browser is only styled by an asset.
+           */
+          if (buildOptions?.ssr && bundleHoldsStylesheetModule(bundle)) return
 
           if (!replacesGeneratedStylesheet) {
             throw new Error(

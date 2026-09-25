@@ -1,5 +1,158 @@
 # @bamboocss/node
 
+## 1.56.0
+
+### Minor Changes
+
+- dc21744: Fix Astro and Qwik builds.
+  - **Astro:** `.astro` components failed extraction with `Unexpected token`, which failed every Astro build. They are
+    now converted to TSX with Astro's own compiler before extraction. This is built into `@bamboocss/node`, so there is
+    no plugin to install. `@astrojs/compiler` is an optional peer dependency, and `astro` already installs it.
+  - **Astro:** the prerender build keeps the stylesheet module in a chunk and inlines it into each page, so it emits no
+    CSS asset. This no longer fails as a missing stylesheet. A client bundle must still emit the stylesheet as an asset.
+  - **Qwik:** the client build failed with "an output plugin changed or removed the generated stylesheet" because Qwik
+    writes a `q-manifest.json` that quotes each stylesheet's text. Only CSS assets are compared now, so a new asset
+    quoting the sheet is not mistaken for a rewrite of it.
+
+- 298b0ea: The TypeScript extraction engine is removed. Extraction and the Vite compiler both run on the Rust engine, so
+  nothing in a build starts the TypeScript compiler.
+
+  `@bamboocss/parser`, `@bamboocss/extractor` and `@bamboocss/ts-ast` are no longer published or depended on. The
+  stylesheet is byte-identical on every sandbox that extracted before.
+  - `BambooContext.project` is now a `SourceProject`: disk with caller-supplied bytes layered over it (`addSourceFile`,
+    `overlaySource`, `removeSourceFile`, `reloadSourceFile`, `getSourceText`). It holds no AST.
+  - `ParserResult` moves into `@bamboocss/node` and is exported from it. Result items no longer carry a `box`, and the
+    unused `cvaCall` bucket, `merge` and export-read digests are removed. `ResultItem.data` is typed as plain objects.
+  - Watch rebuilds select dependents from the Rust evaluator's read graph, which also covers a module appearing where an
+    import was waiting for it.
+  - A relative `cwd` passed straight to a `BambooContext` is resolved to an absolute path. It used to make every
+    `parseFile` return nothing, with no error.
+
+  The Rust engine also covers shapes only the TypeScript engine handled:
+  - A member-expression JSX tag, such as `<Tabs.Root>`, is matched against a recipe's `jsx` patterns.
+  - A `.js` or `.jsx` file may contain JSX.
+  - A config recipe called with a variant it cannot read (`button({ size })`) emits every value that variant can take.
+  - `css(recipe.raw(), …)` on an inline `cva` recipe reports `unresolved-raw`.
+  - A nullish declaration is dropped from style data whether it is written `null` or `undefined`, so the two spellings
+    name the same inline recipe.
+  - A name declared twice, which TypeScript reports and a bundler still compiles (two Svelte `<script>` blocks declaring
+    one type, say), no longer fails the whole file.
+
+  Two behaviours differ from the TypeScript engine:
+  - A bare `css(…)` that nothing imported from a bamboo entrypoint is not extracted, including one imported from a
+    module that does not export it (`import { css } from 'styled-system/jsx'`). The TypeScript engine matched the name
+    alone, which emitted rules the Vite compiler never used.
+  - `.raw` spreads of different patterns are recorded in source order. Where two of their atoms land in the same
+    sublayer, their relative order within it can change.
+
+### Patch Changes
+
+- 48ae5d6: `bamboo analyze` and the MCP usage report now read the build's own extraction.
+
+  The report used to extract every file a second time through the TypeScript engine. That engine could disagree with the
+  Rust extraction the build uses, so the report could describe styles the build never emitted, and running it started
+  the TypeScript compiler. `Reporter` now takes the build's `parseFile` and `parserOptions` instead of a `project`, and
+  classification moves from `@bamboocss/parser` into `@bamboocss/reporter`. `Project.classify` is removed.
+  - Every property of a call now reports its call's source location. Extraction reports one location per call, not per
+    property.
+  - Values nested under conditions in config recipes and global CSS are now counted: `_hover: { color: 'brand' }` in a
+    recipe was skipped before. On the fixture preset this raises the reported "hardcoded" counts for `fontSizes` (5 → 7)
+    and `colors` (6 → 9).
+  - Both branches of a statically enumerable ternary at a call site are counted.
+
+  The TypeScript-only dependent verification in `Builder` is also removed (the recipe-surface and export-read digests).
+  Native extraction never produced the records it consulted, so it could not run.
+
+- 4884586: Cache cross-file values between Vite transforms.
+
+  Each transform used to re-read and re-parse every module a value or recipe was resolved through. A module importing
+  from a 50-module barrel took 11.7 ms per transform, and it paid that again on every re-transform after an edit.
+  Resolved exports and imported recipes are now remembered across transforms. An entry is used only while every file it
+  read still has the same content, including files that did not exist yet. On that barrel a transform now takes 0.5 ms.
+
+- 5cd72d9: Stop shipping class names with no rule behind them, and stop failing Vue and Svelte builds on template
+  syntax.
+
+  The stylesheet is extracted in Rust, while the class names written into compiled JavaScript came from the TypeScript
+  evaluator behind the Vite compiler. Wherever the two disagreed about a value, the JavaScript named a class the
+  stylesheet never emitted, and the build passed with the element rendering unstyled. The Rust evaluator now resolves
+  the shapes it was missing:
+  - Enum members, including `const enum`, auto-increment and members that reference earlier members. `declare enum` has
+    no runtime object and stays unknown.
+  - Optional chaining. A nullish receiver short-circuits the rest of the chain to `undefined`, and `(o?.a).b` does not.
+  - `declare const`, which is now treated as an unknown ambient value rather than a known `undefined`. It was dropped
+    from the style object while the call reported as complete.
+
+  A written property whose value cannot be read — `css({ color: tone })` — is now reported as `missing-property` for
+  `css()` and patterns, as it already was for recipes. It used to disappear with no warning.
+
+  `plugin-vue` and `plugin-svelte` now build their output from Vue's and Svelte's own parse trees instead of wrapping
+  the raw template as JSX. Oxc rejected that JSX on the first `{#if}`, `{#each}` or `{{ items[0] }}` and failed the
+  build with `EXTRACT_FAILED`. `plugin-svelte` now takes `svelte` as an optional peer dependency, and neither plugin
+  depends on `magic-string` any more.
+
+  A method of a local object literal is now called during evaluation — `helpers.size('sm')` where
+  `const helpers = { size(v) { … } }` — where it used to be unknown to Rust and resolved by TypeScript.
+
+- 88e5481: Run token accounting in Rust, so a stylesheet build no longer starts the TypeScript compiler.
+
+  Token pruning is on by default, and deciding what to keep walked each file's TypeScript tree. Asking for that tree
+  started the Go compiler over the whole inventory on every build, even though extraction had already happened in Rust
+  and needed nothing from it. Accounting now runs in the native extractor, and `readSnapshot` reads the text extraction
+  saw — the `parser:before` output — instead of a TypeScript source file.
+
+  The rules are unchanged and every case in the existing accounting suite passes against the new implementation. Scope
+  is now decided by Oxc's symbol resolution rather than by range containment over scopes that bind the name, so `token`
+  is the artifact exactly when it resolves to an import of it.
+
+  On `sandbox/vite-ts`, `cssgen` goes from 29.3 ms to 17.6 ms (median of five warm runs, same machine), and the compiler
+  is never materialized.
+
+  Deleting a file under `cssgen --watch` also releases its styles when the compiler never loaded the file. That release
+  used to happen only because accounting had loaded every file.
+
+- e2b4a27: The Vite compiler now runs on the Rust extraction engine, so a transform never starts the TypeScript
+  compiler.
+
+  Each module is analyzed in one native call that returns its calls, their values, and what may safely replace them.
+  JavaScript still decides class names, recipe tables, `cx` composition and the rewrite. On the benchmark modules a
+  transform takes 0.3–0.7 ms instead of 5–14 ms, and the stylesheet and the compiler now read cross-file values through
+  the same evaluator, so they cannot disagree.
+  - Some shapes now compile that the TypeScript engine declined: a destructured value with no default
+    (`const { tone } = source`), an imported `css.raw` object spread inside a nested selector, and an argument computed
+    by a function written and called in place (`css((() => ({ … }))())`).
+  - A recipe imported through a barrel now records only the modules on its re-export route as dependencies, rather than
+    every module the lookup opened. Editing an unrelated component in the same barrel no longer re-transforms its
+    consumers.
+  - `token(path, fallback)` now judges only the path by its value. The fallback is still required to be inert, and a
+    path naming no token is reported as `unresolved-token` rather than `dynamic`.
+  - A recipe whose config cannot be compiled, such as one using a retired `{token}` reference, now fails the module
+    rather than being erased silently.
+  - Export-read verification is removed. Deciding whether an edit changed a dependent's output now always re-folds it,
+    which native analysis makes cheap.
+
+- Updated dependencies [48ae5d6]
+- Updated dependencies [c359c59]
+- Updated dependencies [534ef89]
+- Updated dependencies [3040ccf]
+- Updated dependencies [9a2a35e]
+- Updated dependencies [5624173]
+- Updated dependencies [5cd72d9]
+- Updated dependencies [c1b2e5b]
+- Updated dependencies [603d580]
+- Updated dependencies [6f122c5]
+- Updated dependencies [298b0ea]
+  - @bamboocss/reporter@1.56.0
+  - @bamboocss/core@1.56.0
+  - @bamboocss/generator@1.56.0
+  - @bamboocss/config@1.56.0
+  - @bamboocss/plugin-vue@1.56.0
+  - @bamboocss/plugin-svelte@1.56.0
+  - @bamboocss/token-dictionary@1.56.0
+  - @bamboocss/shared@1.56.0
+  - @bamboocss/types@1.56.0
+  - @bamboocss/logger@1.56.0
+
 ## 1.55.8
 
 ### Patch Changes

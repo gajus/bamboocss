@@ -1,5 +1,23 @@
 # @bamboocss/token-dictionary
 
+## 1.56.0
+
+### Patch Changes
+
+- c1b2e5b: Emit an opacity token as an exact percentage in `color-mix()`.
+
+  The percentage was computed as `value * 100` in floating point, so an opacity token of `0.07` reached the stylesheet
+  as `7.000000000000001%` and `0.29` as `28.999999999999996%`. It is now rounded to twelve significant digits — far
+  beyond what a color can resolve — giving `7%` and `29%`. Values that were already exact, such as `0.5` or `0.125`, are
+  unchanged.
+
+- Updated dependencies [603d580]
+- Updated dependencies [6f122c5]
+- Updated dependencies [298b0ea]
+  - @bamboocss/shared@1.56.0
+  - @bamboocss/types@1.56.0
+  - @bamboocss/logger@1.56.0
+
 ## 1.55.8
 
 ### Patch Changes

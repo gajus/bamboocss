@@ -1,5 +1,14 @@
 # @bamboocss/preset-base
 
+## 1.56.0
+
+### Patch Changes
+
+- Updated dependencies [603d580]
+- Updated dependencies [6f122c5]
+- Updated dependencies [298b0ea]
+  - @bamboocss/types@1.56.0
+
 ## 1.55.8
 
 ### Patch Changes

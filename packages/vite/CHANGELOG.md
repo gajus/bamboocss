@@ -1,5 +1,100 @@
 # @bamboocss/vite
 
+## 1.56.0
+
+### Minor Changes
+
+- e2b4a27: The Vite compiler now runs on the Rust extraction engine, so a transform never starts the TypeScript
+  compiler.
+
+  Each module is analyzed in one native call that returns its calls, their values, and what may safely replace them.
+  JavaScript still decides class names, recipe tables, `cx` composition and the rewrite. On the benchmark modules a
+  transform takes 0.3–0.7 ms instead of 5–14 ms, and the stylesheet and the compiler now read cross-file values through
+  the same evaluator, so they cannot disagree.
+  - Some shapes now compile that the TypeScript engine declined: a destructured value with no default
+    (`const { tone } = source`), an imported `css.raw` object spread inside a nested selector, and an argument computed
+    by a function written and called in place (`css((() => ({ … }))())`).
+  - A recipe imported through a barrel now records only the modules on its re-export route as dependencies, rather than
+    every module the lookup opened. Editing an unrelated component in the same barrel no longer re-transforms its
+    consumers.
+  - `token(path, fallback)` now judges only the path by its value. The fallback is still required to be inert, and a
+    path naming no token is reported as `unresolved-token` rather than `dynamic`.
+  - A recipe whose config cannot be compiled, such as one using a retired `{token}` reference, now fails the module
+    rather than being erased silently.
+  - Export-read verification is removed. Deciding whether an edit changed a dependent's output now always re-folds it,
+    which native analysis makes cheap.
+
+### Patch Changes
+
+- dc21744: Fix Astro and Qwik builds.
+  - **Astro:** `.astro` components failed extraction with `Unexpected token`, which failed every Astro build. They are
+    now converted to TSX with Astro's own compiler before extraction. This is built into `@bamboocss/node`, so there is
+    no plugin to install. `@astrojs/compiler` is an optional peer dependency, and `astro` already installs it.
+  - **Astro:** the prerender build keeps the stylesheet module in a chunk and inlines it into each page, so it emits no
+    CSS asset. This no longer fails as a missing stylesheet. A client bundle must still emit the stylesheet as an asset.
+  - **Qwik:** the client build failed with "an output plugin changed or removed the generated stylesheet" because Qwik
+    writes a `q-manifest.json` that quotes each stylesheet's text. Only CSS assets are compared now, so a new asset
+    quoting the sheet is not mistaken for a rewrite of it.
+
+- 4884586: Cache cross-file values between Vite transforms.
+
+  Each transform used to re-read and re-parse every module a value or recipe was resolved through. A module importing
+  from a 50-module barrel took 11.7 ms per transform, and it paid that again on every re-transform after an edit.
+  Resolved exports and imported recipes are now remembered across transforms. An entry is used only while every file it
+  read still has the same content, including files that did not exist yet. On that barrel a transform now takes 0.5 ms.
+
+- 298b0ea: The TypeScript extraction engine is removed. Extraction and the Vite compiler both run on the Rust engine, so
+  nothing in a build starts the TypeScript compiler.
+
+  `@bamboocss/parser`, `@bamboocss/extractor` and `@bamboocss/ts-ast` are no longer published or depended on. The
+  stylesheet is byte-identical on every sandbox that extracted before.
+  - `BambooContext.project` is now a `SourceProject`: disk with caller-supplied bytes layered over it (`addSourceFile`,
+    `overlaySource`, `removeSourceFile`, `reloadSourceFile`, `getSourceText`). It holds no AST.
+  - `ParserResult` moves into `@bamboocss/node` and is exported from it. Result items no longer carry a `box`, and the
+    unused `cvaCall` bucket, `merge` and export-read digests are removed. `ResultItem.data` is typed as plain objects.
+  - Watch rebuilds select dependents from the Rust evaluator's read graph, which also covers a module appearing where an
+    import was waiting for it.
+  - A relative `cwd` passed straight to a `BambooContext` is resolved to an absolute path. It used to make every
+    `parseFile` return nothing, with no error.
+
+  The Rust engine also covers shapes only the TypeScript engine handled:
+  - A member-expression JSX tag, such as `<Tabs.Root>`, is matched against a recipe's `jsx` patterns.
+  - A `.js` or `.jsx` file may contain JSX.
+  - A config recipe called with a variant it cannot read (`button({ size })`) emits every value that variant can take.
+  - `css(recipe.raw(), …)` on an inline `cva` recipe reports `unresolved-raw`.
+  - A nullish declaration is dropped from style data whether it is written `null` or `undefined`, so the two spellings
+    name the same inline recipe.
+  - A name declared twice, which TypeScript reports and a bundler still compiles (two Svelte `<script>` blocks declaring
+    one type, say), no longer fails the whole file.
+
+  Two behaviours differ from the TypeScript engine:
+  - A bare `css(…)` that nothing imported from a bamboo entrypoint is not extracted, including one imported from a
+    module that does not export it (`import { css } from 'styled-system/jsx'`). The TypeScript engine matched the name
+    alone, which emitted rules the Vite compiler never used.
+  - `.raw` spreads of different patterns are recorded in source order. Where two of their atoms land in the same
+    sublayer, their relative order within it can change.
+
+- Updated dependencies [48ae5d6]
+- Updated dependencies [dc21744]
+- Updated dependencies [c359c59]
+- Updated dependencies [3040ccf]
+- Updated dependencies [9a2a35e]
+- Updated dependencies [5624173]
+- Updated dependencies [4884586]
+- Updated dependencies [5cd72d9]
+- Updated dependencies [c1b2e5b]
+- Updated dependencies [603d580]
+- Updated dependencies [6f122c5]
+- Updated dependencies [298b0ea]
+- Updated dependencies [88e5481]
+- Updated dependencies [e2b4a27]
+  - @bamboocss/node@1.56.0
+  - @bamboocss/core@1.56.0
+  - @bamboocss/config@1.56.0
+  - @bamboocss/shared@1.56.0
+  - @bamboocss/types@1.56.0
+  - @bamboocss/logger@1.56.0
+
 ## 1.55.8
 
 ### Patch Changes

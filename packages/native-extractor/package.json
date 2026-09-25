@@ -1,6 +1,6 @@
 {
   "name": "@bamboocss/native-extractor",
-  "version": "1.55.8",
+  "version": "1.56.0",
   "private": true,
   "description": "Internal native Rust extraction kernel for Bamboo CSS",
   "license": "MIT",

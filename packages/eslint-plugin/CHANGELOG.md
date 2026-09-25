@@ -1,5 +1,29 @@
 # @bamboocss/eslint-plugin
 
+## 1.56.0
+
+### Minor Changes
+
+- 534ef89: Stop typing arrays as style values, and have `no-dynamic-styling` report them.
+
+  Array values are no longer read as one value per breakpoint: the runtime throws `INVALID_STYLE_VALUE` and the compiler
+  fails the build. `ConditionalValue` still admitted `Array<V | null>`, so `css({ fontWeight: ['bold', 'normal'] })`
+  type-checked and then broke the build. The generated type is now the value or a condition object, so the mistake shows
+  up in the editor instead.
+
+  `no-dynamic-styling` used to accept an array of literals as static. It now reports any array value with the new
+  `array` message, which points to the condition-object form: `{ base: 'medium', lg: 'bold' }`.
+
+### Patch Changes
+
+- Updated dependencies [534ef89]
+- Updated dependencies [5624173]
+- Updated dependencies [603d580]
+- Updated dependencies [6f122c5]
+  - @bamboocss/generator@1.56.0
+  - @bamboocss/config@1.56.0
+  - @bamboocss/shared@1.56.0
+
 ## 1.55.8
 
 ### Patch Changes

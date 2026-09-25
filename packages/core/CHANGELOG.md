@@ -1,5 +1,58 @@
 # @bamboocss/core
 
+## 1.56.0
+
+### Patch Changes
+
+- c359c59: Fix two cases where a longhand could lose to the shorthand it was written to override.
+  - **`@starting-style`:** the rule sort treated two at-rules without parameters as each ordered before the other. Which
+    of `margin` and `margin-top` came first under `_starting` then depended on which one the build met first.
+  - **Merging identical declarations:** a declaration could be moved across a shorthand that sets it. Merging
+    `.a { top: 0 }` with `.b { inset: 5px; top: 0 }` hoisted `top` above `inset`, so `.b` rendered with `inset`. The
+    merge only treated properties as conflicting when their names shared a prefix. It now knows the shorthands whose
+    longhands are named differently: `inset`, `gap`, `font`, `grid-area`, `place-*`, `flex`, `background`, and others.
+
+  The stylesheets of every sandbox that extracts are byte-identical. Only projects that hit one of these orders change.
+
+- 3040ccf: Type the `containerName` utility against `theme.containerNames`, as the docs already said it was.
+
+  The utility declares `values: 'containerNames'`, but container names are a plain list in the theme rather than a token
+  category, so looking them up in the token dictionary found nothing and `containerName` was typed as the bare CSS
+  property. They are now resolved the way `keyframes` are for `animationName`, so a project with
+  `containerNames: ['sidebar', 'content']` gets `'sidebar' | 'content'` suggested. Any other CSS value is still
+  accepted, and the emitted CSS is unchanged.
+
+- 9a2a35e: Stop container setup from writing into `theme.containerNames`.
+
+  Building the container conditions prepended `''` — the anonymous name behind `@/sm`, `@/md`, … — to the configured
+  array itself, so the user's config came back as `['', 'sidebar', …]`. Every later reader of the config saw the extra
+  entry, and a second context over the same config object added another. The name is now prepended to a copy.
+
+- 5624173: Fall through to the PostCSS optimizer when every `css:optimize` hook declines, as the hook's contract
+  documents.
+
+  The merged hook returned the CSS it was handed rather than `undefined` when no plugin answered — or when the only one
+  threw — so a project with any plugin defining `css:optimize` skipped PostCSS even when that plugin returned nothing.
+  The stylesheet shipped unmerged and unminified. A declined hook now falls through; a hook that answers still replaces
+  PostCSS, so `@bamboocss/plugin-lightningcss` is unaffected.
+
+- c1b2e5b: Emit an opacity token as an exact percentage in `color-mix()`.
+
+  The percentage was computed as `value * 100` in floating point, so an opacity token of `0.07` reached the stylesheet
+  as `7.000000000000001%` and `0.29` as `28.999999999999996%`. It is now rounded to twelve significant digits — far
+  beyond what a color can resolve — giving `7%` and `29%`. Values that were already exact, such as `0.5` or `0.125`, are
+  unchanged.
+
+- Updated dependencies [c1b2e5b]
+- Updated dependencies [603d580]
+- Updated dependencies [6f122c5]
+- Updated dependencies [298b0ea]
+  - @bamboocss/token-dictionary@1.56.0
+  - @bamboocss/shared@1.56.0
+  - @bamboocss/types@1.56.0
+  - @bamboocss/logger@1.56.0
+  - @bamboocss/is-valid-prop@1.56.0
+
 ## 1.55.8
 
 ### Patch Changes

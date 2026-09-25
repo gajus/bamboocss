@@ -1,5 +1,76 @@
 # @bamboocss/types
 
+## 1.56.0
+
+### Minor Changes
+
+- 603d580: Remove the recipe runtime engine that no compiled build could reach, along with `auditSlotScopes`.
+
+  The Vite compiler rewrites every recipe call into the classes it selects and erases the recipe, so any other read of a
+  recipe fails the build. The generated `cva`, `sva` and config recipes still shipped the engine behind those reads:
+  `resolve`, `raw`, `merge`/`composeRecipes`, `mergeRecipes`, `getCompoundVariantCss`, `variantMap`, `config`,
+  `getVariantProps`, `classNameMap` and `slotsAffectedBy`. Each generated recipe is now a callable that throws until
+  compiled, plus `splitVariantProps`, the one member the compiler lowers.
+  - `recipes/create-recipe.mjs` is no longer generated, and the next `bamboo codegen` removes it from an existing output
+    directory.
+  - `helpers.mjs` exports only what the generated modules import: 30.1 kB down to 23.7 kB.
+  - `css/cva.mjs` and `css/sva.mjs` drop from about 7.6 kB each to 0.3 kB, and `cva` no longer imports `mergeCss`.
+  - Config slot recipes no longer expose slot accessors (`recipe.root(props)`, `recipe.icon`). Those were reads of the
+    binding and failed the build; `recipe(props).root` is the spelling that compiles.
+  - `auditSlotScopes` is removed from `styled-system/css`. It took recipe objects as arguments, which is itself a
+    `runtime-binding`, so it could not be called from a build that compiled. The compiler emits no `@scope` rules, so it
+    had nothing left to report.
+  - `scopeRoots` is still accepted in a slot recipe config and is marked deprecated, since it has no effect on compiled
+    output.
+
+  CSS output is unchanged. The compiled bundle is unchanged too: the bundle-size fixture measures 2,151 B before and
+  after, because the compiler already removed these calls.
+
+- 6f122c5: Declare only the recipe members a compiled build accepts.
+
+  The compiler rewrites a recipe call into the classes it selects and erases the recipe, so any other read of the
+  binding fails the build: `.raw()` with `raw-call`, and `variantMap`, `config`, `merge`, `getVariantProps`,
+  `classNameMap` and `slotsAffectedBy` with `runtime-binding`. The types still declared all of them, so that code
+  type-checked and failed only when built.
+
+  `cva`, `sva` and generated config recipes are now typed as a callable with `splitVariantProps`, the one member the
+  compiler lowers, plus slot accessors on scoped slot recipes. Code that reads a removed member gets a type error in the
+  editor instead of a build failure. The generated runtime is unchanged.
+
+  The docs that recommended `.raw()` to merge a recipe with styles now show `cx(recipe(...), css(...))`, which compiles
+  and lets the later argument win. The `variantMap` Storybook example now lists the options directly.
+
+- 298b0ea: The TypeScript extraction engine is removed. Extraction and the Vite compiler both run on the Rust engine, so
+  nothing in a build starts the TypeScript compiler.
+
+  `@bamboocss/parser`, `@bamboocss/extractor` and `@bamboocss/ts-ast` are no longer published or depended on. The
+  stylesheet is byte-identical on every sandbox that extracted before.
+  - `BambooContext.project` is now a `SourceProject`: disk with caller-supplied bytes layered over it (`addSourceFile`,
+    `overlaySource`, `removeSourceFile`, `reloadSourceFile`, `getSourceText`). It holds no AST.
+  - `ParserResult` moves into `@bamboocss/node` and is exported from it. Result items no longer carry a `box`, and the
+    unused `cvaCall` bucket, `merge` and export-read digests are removed. `ResultItem.data` is typed as plain objects.
+  - Watch rebuilds select dependents from the Rust evaluator's read graph, which also covers a module appearing where an
+    import was waiting for it.
+  - A relative `cwd` passed straight to a `BambooContext` is resolved to an absolute path. It used to make every
+    `parseFile` return nothing, with no error.
+
+  The Rust engine also covers shapes only the TypeScript engine handled:
+  - A member-expression JSX tag, such as `<Tabs.Root>`, is matched against a recipe's `jsx` patterns.
+  - A `.js` or `.jsx` file may contain JSX.
+  - A config recipe called with a variant it cannot read (`button({ size })`) emits every value that variant can take.
+  - `css(recipe.raw(), …)` on an inline `cva` recipe reports `unresolved-raw`.
+  - A nullish declaration is dropped from style data whether it is written `null` or `undefined`, so the two spellings
+    name the same inline recipe.
+  - A name declared twice, which TypeScript reports and a bundler still compiles (two Svelte `<script>` blocks declaring
+    one type, say), no longer fails the whole file.
+
+  Two behaviours differ from the TypeScript engine:
+  - A bare `css(…)` that nothing imported from a bamboo entrypoint is not extracted, including one imported from a
+    module that does not export it (`import { css } from 'styled-system/jsx'`). The TypeScript engine matched the name
+    alone, which emitted rules the Vite compiler never used.
+  - `.raw` spreads of different patterns are recorded in source order. Where two of their atoms land in the same
+    sublayer, their relative order within it can change.
+
 ## 1.55.8
 
 ## 1.55.7

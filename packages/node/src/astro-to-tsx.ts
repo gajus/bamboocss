@@ -1,3 +1,4 @@
+import type { BambooPlugin } from '@bamboocss/types'
 import { createRequire } from 'node:module'
 
 type ConvertToTsx = (source: string, options: { filename?: string }) => { code: string }
@@ -5,7 +6,7 @@ type ConvertToTsx = (source: string, options: { filename?: string }) => { code: 
 /**
  * Astro's compiler, loaded the first time a `.astro` file is actually parsed.
  *
- * Auto-injected into every project, so a static import would make every build pay to load a
+ * Every build carries this hook, so a static import would make every build pay to load a
  * compiler most projects never call — the reason the Vue and Svelte plugins load theirs lazily
  * too. The `sync` entry because `parser:before` is synchronous. `@astrojs/compiler` is an
  * optional peer: `astro` depends on it, so a project with `.astro` files already has it.
@@ -40,3 +41,13 @@ export const astroToTsx = (code: string, filename?: string) => {
   }
   return result.code.replace(SOURCE_MAP_COMMENT, '\n')
 }
+
+/** Built in, rather than a plugin package: Astro support is part of the Vite integration. */
+export const pluginAstro = (): BambooPlugin => ({
+  name: '@bamboocss/node:astro',
+  hooks: {
+    'parser:before': ({ filePath, content }) => {
+      if (filePath.endsWith('.astro')) return astroToTsx(content, filePath)
+    },
+  },
+})

@@ -1,8 +1,8 @@
 import { loadConfig, mergeHooks } from '@bamboocss/config'
 import type { Config, BambooPlugin } from '@bamboocss/types'
-import { pluginAstro } from '@bamboocss/plugin-astro'
 import { pluginSvelte } from '@bamboocss/plugin-svelte'
 import { pluginVue } from '@bamboocss/plugin-vue'
+import { pluginAstro } from './astro-to-tsx'
 import { BambooContext } from './create-context'
 import { loadTsConfig, rememberTsConfigResolutionFiles } from './load-tsconfig'
 

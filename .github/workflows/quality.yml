@@ -155,6 +155,33 @@ jobs:
             exit 1
           fi
 
+  # A framework whose only proof of working is its own build. `.astro` files have no test
+  # suite of their own, and this sandbox failed to extract for several releases with nothing
+  # noticing — the docs described a setup no build ran.
+  astro:
+    name: Astro Sandbox
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install
+        uses: ./.github/composite-actions/install
+
+      - name: Build the Astro sandbox
+        working-directory: sandbox/astro
+        run: |
+          pnpm run prepare
+          pnpm run build
+
+      # A green build is not enough: the page has to carry both the class and its rule.
+      - name: Check the page is styled
+        working-directory: sandbox/astro
+        run: |
+          grep -q 'bg_green\.600' dist/index.html
+          grep -q 'p_40px{padding:40px}' dist/index.html
+
   lint:
     name: Lint
     runs-on: ubuntu-latest

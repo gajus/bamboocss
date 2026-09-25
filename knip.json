@@ -36,7 +36,14 @@
     },
     "packages/node": {
       "project": ["src/**/*.ts"],
-      "ignoreDependencies": ["@bamboocss/token-dictionary", "lodash.merge", "pkg-types", "pluralize", "ts-pattern"]
+      "ignoreDependencies": [
+        "@astrojs/compiler",
+        "@bamboocss/token-dictionary",
+        "lodash.merge",
+        "pkg-types",
+        "pluralize",
+        "ts-pattern"
+      ]
     },
     "packages/preset-atlaskit": {
       "project": ["src/**/*.ts"]
@@ -69,9 +76,6 @@
     },
     "packages/plugin-lightningcss": {
       "project": ["src/**/*.ts"]
-    },
-    "packages/plugin-astro": {
-      "ignoreDependencies": ["@astrojs/compiler"]
     },
     "packages/plugin-svelte": {
       "ignoreDependencies": ["svelte"]

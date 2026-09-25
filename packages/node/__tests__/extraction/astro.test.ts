@@ -5,8 +5,8 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { astroToTsx } from '@bamboocss/plugin-astro'
 import { describe, expect, test } from 'vitest'
+import { astroToTsx } from '../../src/astro-to-tsx'
 import { loadConfigAndCreateContext } from '../../src/config'
 import { parseAndExtract, parseFile } from './fixture'
 
@@ -15,7 +15,7 @@ import { parseAndExtract, parseFile } from './fixture'
  *
  * The TypeScript parser read the raw file and recovered from the `---` fences and the template
  * well enough to find calls in it. Oxc rejects that text, so every Astro component failed its
- * build with `EXTRACT_FAILED` until `plugin-astro` handed it Astro's own TSX.
+ * build with `EXTRACT_FAILED` until the built-in hook handed it Astro's own TSX.
  */
 const COMPONENT = `---
 import { css } from '../styled-system/css'
@@ -41,7 +41,7 @@ describe('extract astro components', () => {
     ])
   })
 
-  /** Auto-injected, as the Vue and Svelte plugins are: a `.astro` file in `include` just works. */
+  /** Built in: a `.astro` file in `include` just works. */
   test('a .astro file extracts through the auto-injected plugin', async () => {
     const cwd = mkdtempSync(join(tmpdir(), 'bamboo-astro-'))
     try {

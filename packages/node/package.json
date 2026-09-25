@@ -55,7 +55,6 @@
     "@bamboocss/core": "workspace:*",
     "@bamboocss/generator": "workspace:*",
     "@bamboocss/logger": "workspace:*",
-    "@bamboocss/plugin-astro": "workspace:*",
     "@bamboocss/plugin-svelte": "workspace:*",
     "@bamboocss/plugin-vue": "workspace:*",
     "@bamboocss/reporter": "workspace:*",
@@ -79,9 +78,18 @@
     "ts-pattern": "5.9.0"
   },
   "devDependencies": {
+    "@astrojs/compiler": "3.0.1",
     "@bamboocss/native-extractor": "workspace:*",
     "@types/fs-extra": "11.0.4",
     "@types/picomatch": "4.0.2",
     "boxen": "8.0.1"
+  },
+  "peerDependencies": {
+    "@astrojs/compiler": ">=2"
+  },
+  "peerDependenciesMeta": {
+    "@astrojs/compiler": {
+      "optional": true
+    }
   }
 }

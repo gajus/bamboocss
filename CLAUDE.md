@@ -91,6 +91,14 @@ against both. Modules outside `include`/`exclude`, and framework rewrites that r
 before analysis (`packages/vite/src/plugin.ts`, `compileModule`). A single-file component's compiled script is held as a
 project overlay under `X.__bamboo__.ts[x]` so an importer resolves the same text; nothing is written to disk.
 
+**Cross-file answers are cached across native calls.** Each transform builds a fresh `ProjectEvaluator`, so without it a
+module importing from a large barrel re-parsed the barrel's members every time. `evaluate_export`, the imported-recipe
+walk and `module_recipes` keep process-wide entries holding the result, the reads to replay into the caller's dependency
+ledgers, and a content hash of every file the evaluation looked at — including candidates that did not exist. An entry
+is used only while every one of those still hashes the same (`witness`, memoized by mtime and size). Anything new an
+evaluation depends on has to go through `source()` or `record_read`, or the cache will not see it change.
+`packages/native-extractor/__tests__/cross-call-cache.test.ts` fails if validation or replay is removed.
+
 **Killing a test run can leave half-built packages behind.** `packages/vite/__tests__/built-package-consumer.test.ts`
 runs `pnpm build` for any package whose `dist` lacks declarations, and a run stopped in the middle of that leaves a
 `dist` holding `index.cjs` and nothing else. Every later test that imports the package's ESM entry then fails with

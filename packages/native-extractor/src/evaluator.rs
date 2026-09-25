@@ -2,7 +2,9 @@ use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
     fs,
+    hash::{Hash, Hasher},
     path::{Path, PathBuf},
+    sync::{Mutex, OnceLock},
 };
 
 use oxc_allocator::Allocator;
@@ -94,6 +96,55 @@ pub(crate) struct ProjectReads {
     pub configuration_files: Vec<String>,
 }
 
+/// How a recorded path was read, so a cache hit can replay it into the right ledger.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum ReadKind {
+    Dependency,
+    Pending,
+    Configuration,
+    /// Parsed for its text; recorded for validation only.
+    Source,
+}
+
+/// One exported value, with every file its evaluation looked at and what each held then.
+#[derive(Clone)]
+struct CachedExport {
+    result: EvalResult,
+    reads: Vec<(ReadKind, String)>,
+    /// Path → content hash, `None` for a path that did not exist.
+    witnesses: Vec<(String, Option<u64>)>,
+}
+
+/// Exported values, across native calls.
+///
+/// A Vite transform is one `compileModules` call, and each builds a fresh `ProjectEvaluator` —
+/// so without this, a module importing three names from a fifty-module barrel re-parsed the
+/// barrel's members on every transform, and every re-transform an edit caused. An entry is
+/// used only when every file its evaluation read — source text, manifests, candidates that did
+/// not exist — still hashes the same, so an edit anywhere on its route invalidates it.
+/// Project fingerprint, file, exported name.
+type ExportCacheKey = (u64, String, String);
+
+static EXPORT_CACHE: OnceLock<Mutex<HashMap<ExportCacheKey, CachedExport>>> = OnceLock::new();
+const EXPORT_CACHE_LIMIT: usize = 50_000;
+
+/// A file's content hash by path, valid while its modification time and size stand still.
+type FileStamp = (Option<std::time::SystemTime>, u64);
+static FILE_HASHES: OnceLock<Mutex<HashMap<String, (FileStamp, u64)>>> = OnceLock::new();
+
+fn content_hash(text: &str) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    text.hash(&mut hasher);
+    hasher.finish()
+}
+
+/// One `evaluate_export` frame's reads, and whether a cycle guard cut it short.
+#[derive(Default)]
+struct ExportFrame {
+    reads: HashSet<(ReadKind, String)>,
+    cycle: bool,
+}
+
 pub(crate) struct ProjectEvaluator<'a> {
     sources: HashMap<String, &'a str>,
     source_types: HashMap<String, SourceType>,
@@ -107,6 +158,10 @@ pub(crate) struct ProjectEvaluator<'a> {
     dependencies: RefCell<HashMap<String, HashSet<String>>>,
     pending_candidates: RefCell<HashMap<String, HashSet<String>>>,
     configuration_files: RefCell<HashMap<String, HashSet<String>>>,
+    /// Options an exported value depends on besides the files it read. Computed on first use:
+    /// hashing the token table costs more than a module with no imports takes to analyze.
+    fingerprint: std::cell::OnceCell<u64>,
+    frames: RefCell<Vec<ExportFrame>>,
 }
 
 impl<'a> ProjectEvaluator<'a> {
@@ -130,7 +185,7 @@ impl<'a> ProjectEvaluator<'a> {
         let base_url = options
             .and_then(|options| options.base_url.as_deref())
             .map(|base| cwd.join(base));
-        let paths = options
+        let paths: Vec<(String, Vec<String>)> = options
             .map(|options| {
                 options
                     .paths
@@ -139,7 +194,7 @@ impl<'a> ProjectEvaluator<'a> {
                     .collect()
             })
             .unwrap_or_default();
-        let tokens = options
+        let tokens: HashMap<String, (Option<serde_json::Value>, Option<String>)> = options
             .map(|options| {
                 options
                     .tokens
@@ -154,6 +209,8 @@ impl<'a> ProjectEvaluator<'a> {
             })
             .unwrap_or_default();
         Self {
+            fingerprint: std::cell::OnceCell::new(),
+            frames: RefCell::new(Vec::new()),
             sources: source_map,
             source_types,
             entrypoints,
@@ -227,6 +284,64 @@ impl<'a> ProjectEvaluator<'a> {
         (value, reads)
     }
 
+    /// Run `work` with every file it reads — source text, resolution probes, manifests —
+    /// collected, and return them with what each held, for a caller caching the result.
+    pub fn witnessed<T>(&self, work: impl FnOnce() -> T) -> (T, Vec<(String, Option<u64>)>) {
+        self.frames.borrow_mut().push(ExportFrame::default());
+        let value = work();
+        let frame = self.frames.borrow_mut().pop().unwrap_or_default();
+        if let Some(parent) = self.frames.borrow_mut().last_mut() {
+            parent.reads.extend(frame.reads.iter().cloned());
+        }
+        let mut paths: Vec<String> = frame.reads.into_iter().map(|(_, path)| path).collect();
+        paths.sort();
+        paths.dedup();
+        let witnesses = paths
+            .into_iter()
+            .map(|path| {
+                let hash = self.witness(&path);
+                (path, hash)
+            })
+            .collect();
+        (value, witnesses)
+    }
+
+    /// Whether every witnessed file still holds what it held.
+    pub fn witnesses_hold(&self, witnesses: &[(String, Option<u64>)]) -> bool {
+        witnesses
+            .iter()
+            .all(|(path, hash)| self.witness(path) == *hash)
+    }
+
+    /// Options an evaluation depends on besides the files it read.
+    pub fn fingerprint(&self) -> u64 {
+        *self.fingerprint.get_or_init(|| {
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            self.cwd.hash(&mut hasher);
+            self.base_url.hash(&mut hasher);
+            self.paths.hash(&mut hasher);
+            let mut token_keys: Vec<_> = self
+                .tokens
+                .iter()
+                .map(|(path, (value, variable))| {
+                    (
+                        path.clone(),
+                        value.as_ref().map(ToString::to_string),
+                        variable.clone(),
+                    )
+                })
+                .collect();
+            token_keys.sort();
+            token_keys.hash(&mut hasher);
+            for entrypoint in self.entrypoints {
+                entrypoint.kind.hash(&mut hasher);
+                entrypoint.modules.hash(&mut hasher);
+                entrypoint.names.hash(&mut hasher);
+            }
+            hasher.finish()
+        })
+    }
+
     /// The text of a module as the project holds it (a supplied source, or disk).
     pub fn module_text(&self, filename: &str) -> Option<String> {
         self.source(filename)
@@ -253,18 +368,95 @@ impl<'a> ProjectEvaluator<'a> {
 
     fn source(&self, filename: &str) -> Option<StringSource<'a>> {
         let normalized = normalize_path(filename);
-        if let Some(source) = self.sources.get(&normalized) {
+        self.note_read(ReadKind::Source, &normalized);
+        self.source_unrecorded(&normalized)
+    }
+
+    fn source_unrecorded(&self, normalized: &str) -> Option<StringSource<'a>> {
+        if let Some(source) = self.sources.get(normalized) {
             return Some(StringSource::Borrowed(source));
         }
-        fs::read_to_string(filename).ok().map(StringSource::Owned)
+        fs::read_to_string(normalized).ok().map(StringSource::Owned)
+    }
+
+    /// Add a read to every open export frame, so each can be cached with what it depends on.
+    fn note_read(&self, kind: ReadKind, path: &str) {
+        let mut frames = self.frames.borrow_mut();
+        if let Some(frame) = frames.last_mut() {
+            frame.reads.insert((kind, path.to_string()));
+        }
     }
 
     fn record_read(&self, map: &RefCell<HashMap<String, HashSet<String>>>, path: &Path) {
+        let normalized = normalize_path(path.to_string_lossy().as_ref());
+        let kind = if std::ptr::eq(map, &self.dependencies) {
+            ReadKind::Dependency
+        } else if std::ptr::eq(map, &self.pending_candidates) {
+            ReadKind::Pending
+        } else {
+            ReadKind::Configuration
+        };
+        self.note_read(kind, &normalized);
+        self.record_normalized(map, normalized);
+    }
+
+    fn record_normalized(
+        &self,
+        map: &RefCell<HashMap<String, HashSet<String>>>,
+        normalized: String,
+    ) {
         if let Some(owner) = self.active_owner.borrow().as_ref() {
             map.borrow_mut()
                 .entry(owner.clone())
                 .or_default()
-                .insert(normalize_path(path.to_string_lossy().as_ref()));
+                .insert(normalized);
+        }
+    }
+
+    /// The content hash of a path as this project reads it, `None` when it does not exist.
+    ///
+    /// A file on disk is re-read only when its modification time or size moved: validating a
+    /// cached barrel lookup checks every member, and hashing each one's text on every transform
+    /// cost a noticeable share of what the cache saved.
+    fn witness(&self, path: &str) -> Option<u64> {
+        if let Some(source) = self.sources.get(path) {
+            return Some(content_hash(source));
+        }
+        let metadata = fs::metadata(path).ok()?;
+        if !metadata.is_file() {
+            return fs::read_to_string(path)
+                .ok()
+                .map(|text| content_hash(&text));
+        }
+        let stamp = (metadata.modified().ok(), metadata.len());
+        let memo = FILE_HASHES.get_or_init(|| Mutex::new(HashMap::new()));
+        if let Some((known, hash)) = memo.lock().ok().and_then(|memo| memo.get(path).cloned())
+            && known == stamp
+        {
+            return Some(hash);
+        }
+        let hash = content_hash(&fs::read_to_string(path).ok()?);
+        if let Ok(mut memo) = memo.lock() {
+            if memo.len() >= EXPORT_CACHE_LIMIT {
+                memo.clear();
+            }
+            memo.insert(path.to_string(), (stamp, hash));
+        }
+        Some(hash)
+    }
+
+    /// Replay a cached entry's reads as if the evaluation had just made them.
+    fn replay(&self, reads: &[(ReadKind, String)]) {
+        for (kind, path) in reads {
+            self.note_read(*kind, path);
+            match kind {
+                ReadKind::Dependency => self.record_normalized(&self.dependencies, path.clone()),
+                ReadKind::Pending => self.record_normalized(&self.pending_candidates, path.clone()),
+                ReadKind::Configuration => {
+                    self.record_normalized(&self.configuration_files, path.clone())
+                }
+                ReadKind::Source => {}
+            }
         }
     }
 
@@ -457,11 +649,67 @@ impl<'a> ProjectEvaluator<'a> {
         {
             let mut stack = self.export_stack.borrow_mut();
             if !stack.insert(key.clone()) {
+                // Cut short by a cycle: nothing above this may be cached, because the same
+                // name asked from elsewhere would not be.
+                for frame in self.frames.borrow_mut().iter_mut() {
+                    frame.cycle = true;
+                }
                 return EvalResult::unknown();
             }
         }
+        let cache_key = (self.fingerprint(), key.file.clone(), key.name.clone());
+        let cached = EXPORT_CACHE
+            .get_or_init(|| Mutex::new(HashMap::new()))
+            .lock()
+            .ok()
+            .and_then(|cache| cache.get(&cache_key).cloned());
+        if let Some(entry) = cached
+            && entry
+                .witnesses
+                .iter()
+                .all(|(path, hash)| self.witness(path) == *hash)
+        {
+            self.replay(&entry.reads);
+            self.export_stack.borrow_mut().remove(&key);
+            return entry.result;
+        }
+
+        self.frames.borrow_mut().push(ExportFrame::default());
         let result = self.evaluate_export_uncached(&key.file, &key.name);
+        let frame = self.frames.borrow_mut().pop().unwrap_or_default();
         self.export_stack.borrow_mut().remove(&key);
+
+        // Everything this frame read, the enclosing frame read too.
+        if let Some(parent) = self.frames.borrow_mut().last_mut() {
+            parent.reads.extend(frame.reads.iter().cloned());
+        }
+        if !frame.cycle {
+            let mut reads: Vec<_> = frame.reads.into_iter().collect();
+            reads.sort_by(|a, b| a.1.cmp(&b.1).then((a.0 as u8).cmp(&(b.0 as u8))));
+            let mut paths: Vec<&String> = reads.iter().map(|(_, path)| path).collect();
+            paths.sort();
+            paths.dedup();
+            let witnesses = paths
+                .into_iter()
+                .map(|path| (path.clone(), self.witness(path)))
+                .collect();
+            if let Ok(mut cache) = EXPORT_CACHE
+                .get_or_init(|| Mutex::new(HashMap::new()))
+                .lock()
+            {
+                if cache.len() >= EXPORT_CACHE_LIMIT {
+                    cache.clear();
+                }
+                cache.insert(
+                    cache_key,
+                    CachedExport {
+                        result: result.clone(),
+                        reads,
+                        witnesses,
+                    },
+                );
+            }
+        }
         result
     }
 

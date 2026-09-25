@@ -1371,13 +1371,7 @@ fn imported_recipe_walk(
         if crate::evaluator::normalize_path(&target) == crate::evaluator::normalize_path(filename) {
             continue;
         }
-        let exports = exported_recipes(
-            project,
-            &target,
-            entrypoints,
-            &mut cache,
-            &mut HashSet::new(),
-        );
+        let exports = exported_recipes_cached(project, &target, entrypoints, &mut cache);
         let Some(exports) = exports else { continue };
         for named in named {
             let imported = named.imported.name().to_string();
@@ -1453,6 +1447,7 @@ struct ModuleRecipes {
     reads: Vec<String>,
 }
 
+#[derive(Clone)]
 struct ExportedRecipes {
     names: HashMap<String, RecipeOrigin>,
 }
@@ -1468,7 +1463,47 @@ fn module_recipes(
     if let Some(cached) = cache.get(&key) {
         return cached.clone();
     }
-    let result = (|| {
+    // Across native calls too: every transform of a module importing from a barrel walks the
+    // barrel's members for recipes, and without this parsed each of them every time.
+    let global_key = (project.fingerprint(), key.clone());
+    let stored = MODULE_RECIPES_CACHE
+        .get_or_init(|| std::sync::Mutex::new(HashMap::new()))
+        .lock()
+        .ok()
+        .and_then(|cache| cache.get(&global_key).cloned());
+    if let Some((result, witnesses)) = stored
+        && project.witnesses_hold(&witnesses)
+    {
+        cache.insert(key, result.clone());
+        return result;
+    }
+    let (result, witnesses) =
+        project.witnessed(|| module_recipes_uncached(project, filename, entrypoints));
+    if let Ok(mut global) = MODULE_RECIPES_CACHE
+        .get_or_init(|| std::sync::Mutex::new(HashMap::new()))
+        .lock()
+    {
+        if global.len() >= 50_000 {
+            global.clear();
+        }
+        global.insert(global_key, (result.clone(), witnesses));
+    }
+    cache.insert(key, result.clone());
+    result
+}
+
+/// One module's recipes, keyed by project fingerprint and path, with the files they read.
+type ModuleRecipesEntry = (Option<ModuleRecipes>, Vec<(String, Option<u64>)>);
+static MODULE_RECIPES_CACHE: std::sync::OnceLock<
+    std::sync::Mutex<HashMap<(u64, String), ModuleRecipesEntry>>,
+> = std::sync::OnceLock::new();
+
+fn module_recipes_uncached(
+    project: &ProjectEvaluator<'_>,
+    filename: &str,
+    entrypoints: &FoldEntrypoints<'_>,
+) -> Option<ModuleRecipes> {
+    (|| {
         let text = project.module_text(filename)?;
         let allocator = Allocator::default();
         let source_type = crate::evaluator::source_type_for(filename);
@@ -1531,8 +1566,45 @@ fn module_recipes(
             imports,
             reads,
         })
-    })();
-    cache.insert(key, result.clone());
+    })()
+}
+
+type ExportedRecipesEntry = (Option<ExportedRecipes>, Vec<(String, Option<u64>)>);
+static EXPORTED_RECIPES_CACHE: std::sync::OnceLock<
+    std::sync::Mutex<HashMap<(u64, String), ExportedRecipesEntry>>,
+> = std::sync::OnceLock::new();
+
+/// `exported_recipes` from a fresh walk, remembered across native calls while every file the
+/// walk read still holds what it held. Only the whole walk is stored: a nested one can be cut
+/// short by a cycle, and its answer then depends on where the walk started.
+fn exported_recipes_cached(
+    project: &ProjectEvaluator<'_>,
+    filename: &str,
+    entrypoints: &FoldEntrypoints<'_>,
+    cache: &mut HashMap<String, Option<ModuleRecipes>>,
+) -> Option<ExportedRecipes> {
+    let key = (
+        project.fingerprint(),
+        crate::evaluator::normalize_path(filename),
+    );
+    let global = EXPORTED_RECIPES_CACHE.get_or_init(|| std::sync::Mutex::new(HashMap::new()));
+    let stored = global
+        .lock()
+        .ok()
+        .and_then(|cache| cache.get(&key).cloned());
+    if let Some((result, witnesses)) = stored
+        && project.witnesses_hold(&witnesses)
+    {
+        return result;
+    }
+    let (result, witnesses) = project
+        .witnessed(|| exported_recipes(project, filename, entrypoints, cache, &mut HashSet::new()));
+    if let Ok(mut global) = global.lock() {
+        if global.len() >= 50_000 {
+            global.clear();
+        }
+        global.insert(key, (result.clone(), witnesses));
+    }
     result
 }
 

@@ -1179,9 +1179,6 @@ importers:
       '@vitejs/plugin-react':
         specifier: 5.1.1
         version: 5.1.1(vite@7.2.6(@types/node@24.10.1)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))
-      postcss:
-        specifier: 8.5.26
-        version: 8.5.26
       source-map-explorer:
         specifier: 2.5.3
         version: 2.5.3

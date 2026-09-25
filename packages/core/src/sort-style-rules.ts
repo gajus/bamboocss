@@ -93,6 +93,10 @@ const compareFlattened = (aConds: Array<ConditionDetails>, bConds: Array<Conditi
       const atRule1 = aCond.params ?? aCond.raw
       const atRule2 = bCond.params ?? bCond.raw
 
+      // A parameterless at-rule — `@starting-style` — sorts before one with params, and two of
+      // them are equal. Returning -1 for both orders made the comparator disagree with itself,
+      // so which rule came first depended on which was encountered first.
+      if (!atRule1 && !atRule2) continue
       if (!atRule1) return -1
       if (!atRule2) return 1
 

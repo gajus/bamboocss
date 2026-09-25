@@ -110,8 +110,127 @@ function splitProp(prop: string): {
   }
 }
 
+/**
+ * Shorthands whose longhands do not share their name as a prefix.
+ *
+ * `splitProp` treats `margin-top` as conflicting with `margin` because it starts with it; these
+ * do not, so the merge used to move a longhand across the shorthand it overrides — `.b { inset:
+ * 5px; top: 0 }` became `.a,.b { top: 0 }` then `.b { inset: 5px }`, and `inset` won. Listed by
+ * the longhands each one sets.
+ */
+const SHORTHAND_LONGHANDS: Record<string, readonly string[]> = {
+  inset: ['top', 'right', 'bottom', 'left'],
+  'inset-block': ['inset-block-start', 'inset-block-end', 'top', 'bottom'],
+  'inset-inline': ['inset-inline-start', 'inset-inline-end', 'left', 'right'],
+  gap: ['row-gap', 'column-gap', 'grid-row-gap', 'grid-column-gap', 'grid-gap'],
+  'grid-gap': ['row-gap', 'column-gap', 'grid-row-gap', 'grid-column-gap'],
+  font: [
+    'font-family',
+    'font-size',
+    'font-style',
+    'font-variant',
+    'font-weight',
+    'font-stretch',
+    'line-height',
+    'font-size-adjust',
+    'font-kerning',
+    'font-optical-sizing',
+    'font-feature-settings',
+    'font-variation-settings',
+  ],
+  grid: [
+    'grid-template',
+    'grid-template-rows',
+    'grid-template-columns',
+    'grid-template-areas',
+    'grid-auto-rows',
+    'grid-auto-columns',
+    'grid-auto-flow',
+  ],
+  'grid-template': ['grid-template-rows', 'grid-template-columns', 'grid-template-areas'],
+  'grid-area': ['grid-row', 'grid-column', 'grid-row-start', 'grid-row-end', 'grid-column-start', 'grid-column-end'],
+  flex: ['flex-grow', 'flex-shrink', 'flex-basis'],
+  'flex-flow': ['flex-direction', 'flex-wrap'],
+  overflow: ['overflow-x', 'overflow-y', 'overflow-block', 'overflow-inline'],
+  'overscroll-behavior': ['overscroll-behavior-x', 'overscroll-behavior-y'],
+  'text-decoration': [
+    'text-decoration-line',
+    'text-decoration-style',
+    'text-decoration-color',
+    'text-decoration-thickness',
+  ],
+  'place-content': ['align-content', 'justify-content'],
+  'place-items': ['align-items', 'justify-items'],
+  'place-self': ['align-self', 'justify-self'],
+  columns: ['column-width', 'column-count'],
+  'list-style': ['list-style-type', 'list-style-position', 'list-style-image'],
+  background: [
+    'background-color',
+    'background-image',
+    'background-position',
+    'background-position-x',
+    'background-position-y',
+    'background-size',
+    'background-repeat',
+    'background-origin',
+    'background-clip',
+    'background-attachment',
+  ],
+  transition: [
+    'transition-property',
+    'transition-duration',
+    'transition-timing-function',
+    'transition-delay',
+    'transition-behavior',
+  ],
+  animation: [
+    'animation-name',
+    'animation-duration',
+    'animation-timing-function',
+    'animation-delay',
+    'animation-iteration-count',
+    'animation-direction',
+    'animation-fill-mode',
+    'animation-play-state',
+    'animation-timeline',
+  ],
+  'border-radius': [
+    'border-top-left-radius',
+    'border-top-right-radius',
+    'border-bottom-right-radius',
+    'border-bottom-left-radius',
+    'border-start-start-radius',
+    'border-start-end-radius',
+    'border-end-start-radius',
+    'border-end-end-radius',
+  ],
+  container: ['container-name', 'container-type'],
+  'contain-intrinsic-size': ['contain-intrinsic-width', 'contain-intrinsic-height'],
+  outline: ['outline-color', 'outline-style', 'outline-width'],
+  mask: [
+    'mask-image',
+    'mask-mode',
+    'mask-repeat',
+    'mask-position',
+    'mask-clip',
+    'mask-origin',
+    'mask-size',
+    'mask-composite',
+  ],
+}
+
+/** Whether one of the two is a shorthand that sets the other, directly or through a longhand. */
+const isShorthandOf = (shorthand: string, longhand: string): boolean => {
+  const longhands = SHORTHAND_LONGHANDS[shorthand]
+  if (!longhands) return false
+  return longhands.some((entry) => entry === longhand || isShorthandOf(entry, longhand))
+}
+
 function isConflictingProp(propA: string, propB: string): boolean {
   if (propA === propB) return true
+  const lowerA = propA.toLowerCase()
+  const lowerB = propB.toLowerCase()
+  if (isShorthandOf(lowerA, lowerB) || isShorthandOf(lowerB, lowerA)) return true
   const a = splitProp(propA)
   const b = splitProp(propB)
   if (!a.base && !b.base) return true

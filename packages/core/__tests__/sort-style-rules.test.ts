@@ -315,4 +315,26 @@ describe('sort style rules', () => {
       }"
     `)
   })
+
+  /**
+   * Two parameterless at-rules — `@starting-style` has no params — compare equal, so their
+   * rules keep the order the rest of the comparator gives them. The comparator used to rank the
+   * first argument lower in both directions, which made `margin` land after `margin-top` or
+   * before it depending on which one the build happened to meet first.
+   */
+  test('the order under @starting-style does not depend on which rule was encountered first', () => {
+    const cssFor = (order: Array<Record<string, unknown>>) => {
+      const ctx = createContext()
+      for (const styles of order) ctx.encoder.processAtomic(styles)
+      const sheet = ctx.createSheet()
+      ctx.appendParserCss(sheet)
+      return ctx.getCss(sheet)
+    }
+    const margin = { _starting: { margin: '2' } }
+    const marginTop = { _starting: { marginTop: '4' } }
+
+    const forward = cssFor([margin, marginTop])
+    expect(cssFor([marginTop, margin])).toBe(forward)
+    expect(forward.indexOf('margin: var')).toBeLessThan(forward.indexOf('margin-top'))
+  })
 })

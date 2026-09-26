@@ -1,5 +1,17 @@
 # @bamboocss/vite
 
+## 1.56.2
+
+### Patch Changes
+
+- Updated dependencies [dfea0e6]
+  - @bamboocss/node@1.56.2
+  - @bamboocss/config@1.56.2
+  - @bamboocss/core@1.56.2
+  - @bamboocss/logger@1.56.2
+  - @bamboocss/shared@1.56.2
+  - @bamboocss/types@1.56.2
+
 ## 1.56.1
 
 ### Patch Changes

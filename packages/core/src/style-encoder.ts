@@ -604,6 +604,23 @@ class OrderIndex {
   private ownerTree: OrderOwnerNode | null = null
   private first: OrderNode | null = null
   private last: OrderNode | null = null
+  /**
+   * Whether the constraint layout is out of date.
+   *
+   * Laying keys out by every owner's declared order is a sort over the whole collection. It
+   * used to run on every owner change — once per file on an extraction pass — so the cost grew
+   * with the square of the project: 4,665 files spent 94 s of a 108 s `cssgen` in it. The list
+   * between sorts holds the earliest-owner layout, which is the sort's tie-break; the sort runs
+   * once, when something next reads the order.
+   *
+   * Sorting once from that layout rather than folding every change into the last sort also
+   * makes the result a function of the current files alone. Folding it in made a tie a cycle
+   * forced depend on the order the files had been read, so a rebuild could lay out a
+   * different sheet from a cold build of the same source.
+   */
+  private orderStale = false
+  /** @internal Sorts actually performed, for a test that counts them. */
+  rebuilds = 0
 
   add = (key: string) => {
     if (this.nodes.has(key)) return
@@ -631,9 +648,11 @@ class OrderIndex {
     this.ownerTree = null
     this.first = null
     this.last = null
+    this.orderStale = false
   };
 
   *keys(): IterableIterator<string> {
+    this.settle()
     let node = this.first
     while (node) {
       if (node.key !== undefined) yield node.key
@@ -877,8 +896,16 @@ class OrderIndex {
         work += keys.length
         this.repositionAfterOwner(keys, owner)
       })
-    work += this.rebuildOrder()
+    this.orderStale = true
     return work
+  }
+
+  /** Lay the keys out by every owner's declared order, if anything changed since the last time. */
+  private settle = () => {
+    if (!this.orderStale) return
+    this.orderStale = false
+    this.rebuilds++
+    this.rebuildOrder()
   }
 
   /**
@@ -919,7 +946,7 @@ class OrderIndex {
     // substitute: it retains insertion order rather than live order.
     const sequence = new Map<string, number>()
     let next = 0
-    for (const key of this.keys()) sequence.set(key, next++)
+    for (let node = this.first; node; node = node.next) if (node.key !== undefined) sequence.set(node.key, next++)
 
     // Current position is the whole tie-break. It already encodes the earliest-owner order
     // the previous model produced, and for a pinned key — `staticCss`, a restored dump —
@@ -1074,6 +1101,10 @@ class OrderableSet extends Set<string> {
   getEffectiveOwner = (key: string) => this.order.getEffectiveOwner(key)
   pinKey = (key: string) => this.order.pinKey(key)
   repositionAfterOwner = (keys: readonly string[], owner: string) => this.order.repositionAfterOwner(keys, owner)
+  /** @internal Constraint sorts performed, for a test that counts them. */
+  get orderRebuilds() {
+    return this.order.rebuilds
+  }
 }
 
 class OrderableMap<T> extends Map<string, T> {

@@ -133,3 +133,60 @@ describe('declaration order survives sharing', () => {
     expect(colorOrder(once)).toHaveLength(2)
   })
 })
+
+/**
+ * What laying the order out costs, counted rather than timed.
+ *
+ * The constraint sort covers the whole collection. It used to run on every file's contribution,
+ * so an extraction pass paid for it once per file and the cost grew with the square of the
+ * project: a 4,665-file app spent 94 s of a 108 s `cssgen` in it. It now runs when the order is
+ * read, which a pass does once.
+ */
+describe('declaration order is laid out once per read, not once per file', () => {
+  const files = Object.fromEntries(
+    Array.from({ length: 40 }, (_, index) => [
+      `src/file-${index}.tsx`,
+      `import { css } from 'styled-system/css'\nexport const a = css({ color: "#${String(index).padStart(6, '0')}", padding: "${index % 7}px" })\nexport const b = css({ color: "#ffffff" })\n`,
+    ]),
+  )
+
+  test('an extraction pass sorts at most once before the sheet is read', () => {
+    const ctx = createContext() as any
+    const paths = Object.keys(files).map((file) => ctx.runtime.path.abs(ctx.config.cwd, file))
+    Object.values(files).forEach((source, index) => ctx.project.addSourceFile(paths[index], source))
+    ctx.getFiles = () => paths
+    ctx.parseFiles()
+
+    const before = ctx.encoder.atomic.orderRebuilds
+    expect(before).toBeLessThanOrEqual(1)
+    const sheet = ctx.createSheet()
+    ctx.appendParserCss(sheet)
+    ctx.getCss(sheet)
+    expect(ctx.encoder.atomic.orderRebuilds - before).toBeLessThanOrEqual(1)
+  })
+
+  /**
+   * The layout is a function of the files, not of the order they were read in. Folding every
+   * change into the previous sort made a tie a cycle forced depend on history, so a watch
+   * rebuild could emit a different sheet from a cold build of the same source.
+   */
+  test('re-reading a file lays out the same sheet as a cold build', () => {
+    const conflicting = {
+      ...files,
+      'src/z-reverse.tsx': `import { css } from 'styled-system/css'\nexport const b = css({ color: "#ffffff" })\nexport const a = css({ color: "#000003" })\n`,
+    }
+    const cold = sheetFor(conflicting)
+
+    const ctx = createContext() as any
+    const paths = Object.keys(conflicting).map((file) => ctx.runtime.path.abs(ctx.config.cwd, file))
+    Object.values(conflicting).forEach((source, index) => ctx.project.addSourceFile(paths[index], source))
+    ctx.getFiles = () => paths
+    ctx.parseFiles()
+    // A watch rebuild: one file read again, the rest left as they were.
+    ctx.parseFile(paths[3])
+    const sheet = ctx.createSheet()
+    ctx.appendParserCss(sheet)
+
+    expect(ctx.getCss(sheet)).toBe(cold)
+  })
+})

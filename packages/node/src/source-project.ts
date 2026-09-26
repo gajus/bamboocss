@@ -24,6 +24,8 @@ export interface SourceProjectOptions {
 export class SourceProject {
   /** Bytes explicitly supplied by a caller rather than read from disk, by normalized path. */
   private overlays = new Map<string, string>()
+  /** Bumped whenever an overlay is set or removed, so a reader can tell its copy is current. */
+  overlayRevision = 0
   private compilerOptions: { baseUrl?: string; paths?: Record<string, string[]> }
 
   constructor(private readonly options: SourceProjectOptions) {
@@ -65,7 +67,10 @@ export class SourceProject {
 
   /** Supply the bytes for a path. */
   overlaySource = (filePath: string, content: string): void => {
-    this.overlays.set(this.normalizePath(filePath), content)
+    const key = this.normalizePath(filePath)
+    if (this.overlays.get(key) === content) return
+    this.overlays.set(key, content)
+    this.overlayRevision++
   }
 
   /**
@@ -82,7 +87,11 @@ export class SourceProject {
     isAbsolute(filePath) ? filePath : join(this.options.cwd ?? process.cwd(), filePath)
 
   /** Forget bytes supplied through `overlaySource`. Returns whether there were any. */
-  removeOverlay = (filePath: string): boolean => this.overlays.delete(this.normalizePath(filePath))
+  removeOverlay = (filePath: string): boolean => {
+    const removed = this.overlays.delete(this.normalizePath(filePath))
+    if (removed) this.overlayRevision++
+    return removed
+  }
 
   /**
    * A watched file changed on disk. Disk is now the truth for it, so an overlay that

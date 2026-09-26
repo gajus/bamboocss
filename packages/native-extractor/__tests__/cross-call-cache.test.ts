@@ -150,4 +150,34 @@ describe('the cross-call export cache', () => {
       ),
     ).toEqual([[{ color: 'red' }]])
   })
+
+  /**
+   * Finding which imports are recipes follows only the imports a module re-exports. Following
+   * every one walked the importer's whole transitive graph — a component file's rest-of-the-app
+   * — on every transform, which made one production build spend 25 minutes in it.
+   */
+  test('an import that is never re-exported is not walked for recipes', () => {
+    const p = project({
+      'src/ui/index.ts': `export { badge } from './badge'\n`,
+      'src/ui/badge.ts': `import { cva } from '../../styled-system/css'\nimport { heavy } from './heavy'\nexport const badge = cva({ base: { color: 'red' } })\nexport const use = heavy\n`,
+      'src/ui/heavy.ts': `import { cva } from '../../styled-system/css'\nexport const heavy = cva({ base: { color: 'blue' } })\n`,
+    })
+    const consumer = `import { badge } from './ui'\nexport const a = badge()\n`
+    const analysis = p.compile(consumer)
+
+    expect(analysis.importedRecipes.map((recipe) => recipe.config)).toEqual([{ base: { color: 'red' } }])
+    // `heavy` is imported by the recipe's module and never re-exported, so nothing about it is
+    // a route this consumer's recipe travelled.
+    expect(analysis.importedRecipes[0]!.dependencies.some((path) => path.endsWith('/heavy.ts'))).toBe(false)
+  })
+
+  test('an import that is re-exported is still followed', () => {
+    const p = project({
+      'src/ui/index.ts': `import { badge } from './badge'\nexport { badge }\n`,
+      'src/ui/badge.ts': `import { cva } from '../../styled-system/css'\nexport const badge = cva({ base: { color: 'green' } })\n`,
+    })
+    const analysis = p.compile(`import { badge } from './ui'\nexport const a = badge()\n`)
+
+    expect(analysis.importedRecipes.map((recipe) => recipe.config)).toEqual([{ base: { color: 'green' } }])
+  })
 })

@@ -24,6 +24,7 @@ import type {
 } from '@bamboocss/types'
 import { debounce } from 'perfect-debounce'
 import { createRequire } from 'node:module'
+import { statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createBox } from './cli-box'
@@ -458,17 +459,15 @@ export class BambooContext extends Generator {
     const { baseUrl, paths = {} } = this.project.resolutionOptions
     const own = new Set(sources.map((source) => source.filename.replaceAll('\\', '/')))
     const auxiliary: NativeSource[] = []
-    for (const filePath of new Set([...this.nativeAuxiliaryFiles, ...this.project.getOverriddenSources()])) {
+    const candidates =
+      this.runtime === nodeRuntime
+        ? [...this.hookedAuxiliaryFiles(), ...this.project.getOverriddenSources()]
+        : [...this.nativeAuxiliaryFiles, ...this.project.getOverriddenSources()]
+    for (const filePath of new Set(candidates)) {
       const filename = this.runtime.path.abs(this.config.cwd, filePath)
       if (own.has(filename.replaceAll('\\', '/'))) continue
-      const overridden = this.project.sourceIsOverridden(filename)
-      if (!overridden && !this.parserHooks['parser:before'] && this.runtime === nodeRuntime) continue
-      const original = this.project.getSourceText(filename)
-      if (original === undefined) continue
-      const prepared = this.prepareNativeSource(filename, original)
-      if (prepared.source !== original || overridden || this.runtime !== nodeRuntime) {
-        auxiliary.push({ filename, source: prepared.source })
-      }
+      const prepared = this.auxiliarySource(filename, this.project.sourceIsOverridden(filename))
+      if (prepared) auxiliary.push(prepared)
     }
     return this.loadNativeExtractor().compileModules(sources, auxiliary, {
       cwd: this.config.cwd,
@@ -501,6 +500,62 @@ export class BambooContext extends Generator {
     return this.nativeTokenTable
   }
   private nativeTokenTable: NativeToken[] | undefined
+
+  /**
+   * One auxiliary module as the native engine has to be handed it, or `undefined` when the
+   * Rust resolver can read it off disk itself.
+   *
+   * Remembered across calls. `compileModules` runs once per transformed module, and a project
+   * with any `parser:before` hook — every project, since the framework converters are built in
+   * — used to read and hook every auxiliary file on each call: 3,615 files per transform on one
+   * app, which made its production build spend 99% of 25 minutes in `readFileSync`. An entry is
+   * reused while the file's size and modification time stand still and no overlay has moved.
+   */
+  private auxiliarySource = (filename: string, overridden: boolean): NativeSource | undefined => {
+    const key = filename.replaceAll('\\', '/')
+    let stamp: string
+    if (overridden) stamp = `overlay:${this.project.overlayRevision}`
+    else {
+      try {
+        const stat = statSync(filename)
+        stamp = `${stat.mtimeMs}:${stat.size}`
+      } catch {
+        stamp = 'missing'
+      }
+    }
+    const cached = this.auxiliarySources.get(key)
+    if (cached && cached.stamp === stamp) return cached.source
+
+    const original = this.project.getSourceText(filename)
+    let source: NativeSource | undefined
+    if (original !== undefined) {
+      const prepared = this.prepareNativeSource(filename, original)
+      if (prepared.source !== original || overridden || this.runtime !== nodeRuntime) {
+        source = { filename, source: prepared.source }
+      }
+    }
+    this.auxiliarySources.set(key, { stamp, source })
+    return source
+  }
+  private auxiliarySources = new Map<string, { stamp: string; source: NativeSource | undefined }>()
+
+  /**
+   * The auxiliary files a `parser:before` hook rewrites — the only ones the native resolver
+   * cannot read off disk itself. Decided once per inventory rather than per call: asking every
+   * auxiliary file on each transform cost a `stat` of all 3,615 of them per module on one app.
+   * A file event clears the entry for that path through `forgetNativeFile`, and a new
+   * inventory recomputes the list.
+   */
+  private hookedAuxiliaryFiles = (): readonly string[] => {
+    if (this.hookedAuxiliary) return this.hookedAuxiliary
+    if (!this.parserHooks['parser:before']) return (this.hookedAuxiliary = [])
+    this.hookedAuxiliary = this.nativeAuxiliaryFiles.filter((filePath) => {
+      const filename = this.runtime.path.abs(this.config.cwd, filePath)
+      return this.auxiliarySource(filename, false) !== undefined
+    })
+    return this.hookedAuxiliary
+  }
+  private hookedAuxiliary: readonly string[] | undefined
 
   /** Load the required Rust extractor from the workspace or the published prebuild directory. */
   private loadNativeExtractor = (): NativeExtractor => {
@@ -661,8 +716,17 @@ export class BambooContext extends Generator {
       dependencies.map((dependency) => [dependency.replaceAll('\\', '/'), owner] as const),
     )
 
+  /** An edited file's hooked source, which the next compile has to prepare again. */
+  forgetAuxiliarySource = (filePath: string) => {
+    this.auxiliarySources.delete(this.runtime.path.abs(this.config.cwd, filePath).replaceAll('\\', '/'))
+    this.hookedAuxiliary = undefined
+  }
+
   forgetNativeFile = (filePath: string) => {
     const file = this.runtime.path.abs(this.config.cwd, filePath).replaceAll('\\', '/')
+    this.auxiliarySources.delete(file)
+    // Whether the hook rewrites this file may have changed with its content.
+    this.hookedAuxiliary = undefined
     this.nativeDependencies.delete(file)
     this.nativePendingCandidates.delete(file)
     this.nativeConfigurationFiles.delete(file)
@@ -868,6 +932,7 @@ export class BambooContext extends Generator {
     })
 
     this.nativeAuxiliaryFiles = auxiliary
+    this.hookedAuxiliary = undefined
 
     // Auxiliary modules remain outside the TypeScript project. The native resolver reads
     // ordinary files lazily; virtual, overridden, and parser-transformed sources cross in the

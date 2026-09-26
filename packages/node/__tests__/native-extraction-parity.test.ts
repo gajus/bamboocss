@@ -297,3 +297,47 @@ test('a JSON encoder dump in the inventory is restored', () => {
   ctx.appendParserCss(sheet)
   expect(ctx.getCss(sheet)).toContain('rebeccapurple')
 })
+
+/**
+ * Auxiliary modules are prepared once, not once per compiled module.
+ *
+ * Every project carries a `parser:before` hook — the framework converters are built in — so
+ * each `compileModules` call used to read, and hook, every auxiliary file of the inventory:
+ * 3,615 of them per transformed module on one app, 25 minutes of a production build.
+ */
+test('compiling many modules reads each auxiliary file once', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'bamboo-native-auxiliary-'))
+  temporaryDirectories.add(cwd)
+  mkdirSync(join(cwd, 'src'))
+  mkdirSync(join(cwd, 'lib'))
+  for (let index = 0; index < 20; index++)
+    writeFileSync(join(cwd, `lib/helper-${index}.ts`), `export const value${index} = ${index}\n`)
+  const modules = Array.from({ length: 10 }, (_, index) => join(cwd, `src/module-${index}.tsx`))
+  for (const [index, file] of modules.entries()) {
+    writeFileSync(
+      file,
+      `import { css } from '../styled-system/css'\nimport { value${index} } from '../lib/helper-${index}'\nexport const a = css({ zIndex: value${index} })\n`,
+    )
+  }
+
+  // Any `parser:before` hook — every real project has one through the built-in converters.
+  const ctx = createContext({
+    cwd,
+    include: ['src/**/*.tsx'],
+    plugins: [{ name: 'noop', hooks: { 'parser:before': () => undefined } }],
+  } as never)
+  ctx.extractableFiles(modules)
+  const reads = new Map<string, number>()
+  const readFileSync = ctx.runtime.fs.readFileSync
+  ctx.runtime.fs.readFileSync = (filePath: string) => {
+    reads.set(filePath, (reads.get(filePath) ?? 0) + 1)
+    return readFileSync(filePath)
+  }
+
+  for (const file of modules)
+    ctx.compileModules([{ filename: file, source: readFileSync(file) }], { references: false })
+
+  const auxiliaryReads = [...reads].filter(([path]) => path.includes('/lib/'))
+  expect(auxiliaryReads.length).toBeGreaterThan(0)
+  expect(auxiliaryReads.every(([, count]) => count <= 1)).toBe(true)
+})

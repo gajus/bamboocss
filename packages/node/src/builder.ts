@@ -144,6 +144,7 @@ export class Builder {
     const ctx = this.getContextOrThrow()
     this.captureResolutionLedger(ctx, filePath)
     ctx.project.reloadSourceFile(filePath)
+    ctx.forgetAuxiliarySource(filePath)
   }
 
   /** The deletion half of `reloadSource`, with the same snapshot obligation. */
@@ -487,6 +488,7 @@ export class Builder {
         fileModifiedMap.set(file, -Infinity)
       } else {
         ctx.project.reloadSourceFile(file)
+        ctx.forgetAuxiliarySource(file)
       }
     }
 

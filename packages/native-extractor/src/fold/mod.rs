@@ -1646,12 +1646,36 @@ fn exported_recipes(
             }
         }
     }
-    // `import { badge } from './a'` then `export { badge }`.
+    // `import { badge } from './a'` then `export { badge }`. Only an import one of those local
+    // export statements names is followed: walking every import made each lookup visit the
+    // module's whole transitive graph — the rest of the app, for a component file — though only
+    // a re-exported binding can reach this module's exports.
+    let reexported_locals: HashSet<String> = parsed
+        .program
+        .body
+        .iter()
+        .filter_map(|statement| match statement {
+            Statement::ExportNamedDeclaration(export) if !export.export_kind.is_type() => {
+                Some(export)
+            }
+            _ => None,
+        })
+        .flat_map(|export| export.specifiers.iter())
+        .filter(|specifier| !specifier.export_kind.is_type())
+        .map(|specifier| module_export_name(&specifier.local))
+        .collect();
     for statement in &parsed.program.body {
         let Statement::ImportDeclaration(declaration) = statement else {
             continue;
         };
         if declaration.import_kind.is_type() {
+            continue;
+        }
+        let reexports_one = declaration.specifiers.iter().flatten().any(|specifier| {
+            matches!(specifier, ImportDeclarationSpecifier::ImportSpecifier(named)
+                if !named.import_kind.is_type() && reexported_locals.contains(named.local.name.as_str()))
+        });
+        if !reexports_one {
             continue;
         }
         let Some(target) = project.resolve_specifier(filename, declaration.source.value.as_str())

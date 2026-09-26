@@ -1,5 +1,7 @@
 # @bamboocss/shared
 
+## 1.56.1
+
 ## 1.56.0
 
 ### Minor Changes

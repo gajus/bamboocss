@@ -85,7 +85,7 @@ export interface BambooVitePluginOptions {
   splitCss?: boolean
 }
 
-const DEFAULT_EXTENSIONS = /\.(?:[cm]?[jt]sx?)$/
+const DEFAULT_EXTENSIONS = /\.(?:[cm]?[jt]sx?|tsrx)$/
 const SFC_EXTENSIONS = /\.(?:vue|svelte|astro)$/i
 /**
  * Framework script submodules. Vue spells `lang.ts` as a bare query key; Svelte uses
@@ -235,6 +235,9 @@ export const importsSourceModule = (
 export const compilerParsePath = (id: string, code: string): string | null => {
   const [filePath, query = ''] = id.split('?')
   if (!filePath) return null
+  // TSRX is TypeScript with JSX plus template syntax. Give the compiler a synthetic TSX path
+  // so it parses JSX while leaving the original module ID intact for Vite and extraction.
+  if (/\.tsrx$/i.test(filePath)) return `${filePath}.__bamboo__.tsx`
   if (!SFC_EXTENSIONS.test(filePath)) return filePath
   const normalizedQuery = `?${query}`
   if (SFC_SCRIPT_QUERY.test(normalizedQuery)) {

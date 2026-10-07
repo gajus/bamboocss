@@ -1,5 +1,17 @@
 # @bamboocss/vite
 
+## 1.56.3
+
+### Patch Changes
+
+- 3d27178: Recognize `.tsrx` modules in the Vite compiler and parse them with TSX syntax.
+  - @bamboocss/config@1.56.3
+  - @bamboocss/core@1.56.3
+  - @bamboocss/logger@1.56.3
+  - @bamboocss/node@1.56.3
+  - @bamboocss/shared@1.56.3
+  - @bamboocss/types@1.56.3
+
 ## 1.56.2
 
 ### Patch Changes

@@ -553,7 +553,8 @@ const containerFor = (root: postcss.Root, chain: ReadonlyArray<{ name: string; p
  *
  * Each chunk sheet opens with the entry's sublayer order statement, so whichever sheet the
  * document happens to parse first establishes the same order. That is what makes the split
- * safe at all: precedence lives in the sublayers, not in where a rule sits.
+ * safe at all: precedence lives in the sublayers, not in where a rule sits. Where a minifier
+ * removed the statement, it is rebuilt from the order of the blocks, in the entry too.
  */
 export const splitStaticCss = (
   css: string,
@@ -589,10 +590,22 @@ export const splitStaticCss = (
   }
 
   let order: postcss.AtRule | undefined
+  /** The first block of the utilities layer, which a rebuilt statement opens. */
+  let opening: postcss.AtRule | undefined
+  /** The sublayers in the order the browser gives them: first appearance, statement or block. */
+  const sublayers = new Set<string>()
   root.walkAtRules('layer', (atRule) => {
-    if (order || atRule.nodes) return
     const parent = atRule.parent
-    if (parent?.type === 'atrule' && (parent as postcss.AtRule).params === session.utilityLayer) order = atRule
+    if (parent?.type !== 'atrule' || (parent as postcss.AtRule).params !== session.utilityLayer) {
+      if (atRule.nodes && atRule.params === session.utilityLayer) opening ??= atRule
+      return
+    }
+    if (atRule.nodes) {
+      sublayers.add(atRule.params)
+      return
+    }
+    order ??= atRule
+    for (const name of atRule.params.split(',')) sublayers.add(name.trim())
   })
 
   /** The sublayer each single-class utility selector was written into. */
@@ -669,6 +682,21 @@ export const splitStaticCss = (
     if (kept.length) rule.selectors = kept
     else rule.remove()
   })
+
+  // A minifier may have folded the statement into the order of the blocks. LightningCSS does,
+  // and it is Vite 8's default CSS minifier: within one sheet the blocks say the same thing,
+  // but across two they say nothing. The entry no longer places the sublayers that moved out,
+  // so a chunk sheet parsed after it appends them last, and a lower breakpoint then beats a
+  // higher one. So the statement is rebuilt from the order the blocks gave and written into
+  // the entry as well as every chunk. It goes in before emptied wrappers are removed, so the
+  // block it opens is not dropped for having lost its rules.
+  if (roots.size && opening && sublayers.size) {
+    const ordered = [...sublayers].join(',')
+    if (order?.params.replace(/\s/g, '') !== ordered) {
+      order = postcss.atRule({ name: 'layer', params: ordered })
+      opening.prepend(order)
+    }
+  }
 
   // Removing the last rule from a condition or layer should remove its wrappers as well.
   let removed = true

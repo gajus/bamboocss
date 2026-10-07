@@ -110,3 +110,35 @@ describe('the per-chunk split and the cascade', () => {
     expect(winner([css])).toBe('.c_\\#6b7280')
   })
 })
+
+/**
+ * Three breakpoints of one property, as LightningCSS leaves the sheet — and LightningCSS is
+ * Vite 8's default minifier. It folds the sublayer order statement into the order of the
+ * blocks, which is the same order while the sheet is one and no order at all once it is split.
+ */
+const FOLDED =
+  `@layer utilities{` +
+  `@layer s010-c0-p4000{.w_1px{width:1px}}` +
+  `@layer s010-c1-p4000{@media (width>=40rem){.sm\\:w_2px{width:2px}}}` +
+  `@layer s010-c2-p4000{@media (width>=64rem){.lg\\:w_4px{width:4px}}}` +
+  `}` +
+  `:root{--made-with-bamboo:x}`
+
+/** What LightningCSS keeps of a statement naming a sublayer with no block: that name, in place. */
+const PARTIAL = FOLDED.replace('@layer s010-c1-p4000{', '@layer s010-c1-p3000;@layer s010-c1-p4000{')
+
+describe('the per-chunk split of a sheet whose order statement a minifier removed', () => {
+  test.each([
+    ['folded into the blocks', FOLDED],
+    ['folded, keeping a name with no block', PARTIAL],
+  ])('a lower breakpoint moved out still loses to a higher one that stayed (%s)', (_, sheet) => {
+    // The `sm` sublayer leaves the entry entirely, and the entry keeps `lg`.
+    const { css, chunks } = splitStaticCss(sheet, session(), new Map([['sm:w_2px', 'assets/route.js']]))
+    const chunk = chunks.get('assets/route.js')!
+
+    const authored = cascadeOrder(sheet).width
+    expect(authored?.at(-1)).toBe('@media (width>=64rem) .lg\\:w_4px')
+    expect(cascadeOrder(css + chunk).width).toEqual(authored)
+    expect(cascadeOrder(chunk + css).width).toEqual(authored)
+  })
+})

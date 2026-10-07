@@ -61,6 +61,27 @@ describe('splitting the sheet per chunk', () => {
     expect(css).not.toContain('@media')
   })
 
+  test('rebuilds an order statement a minifier removed, in the entry as well as the chunk', () => {
+    // LightningCSS, Vite 8's default minifier, keeps the order only as the order of the blocks.
+    // Once `u1` has left the entry, nothing there would place it between `u0` and `u2`.
+    const folded = sheet.replace('@layer u0,u1,u2;', '')
+    const only = new Map([
+      ['md:route-b_only', 'b'],
+      ['md:shared', 'b'],
+    ])
+    const { css, chunks } = splitStaticCss(folded, createStaticCompilationSession(), only)
+
+    expect(css).not.toContain('@layer u1{')
+    expect(css, 'the entry still places the sublayer that left it').toContain('@layer utilities{@layer u0,u1,u2;')
+    expect(chunks.get('b')).toMatch(/^@layer utilities\{@layer u0,u1,u2;/)
+  })
+
+  test('keeps a statement that still carries the order, once', () => {
+    const { css } = splitStaticCss(sheet, createStaticCompilationSession(), ownership)
+
+    expect(css.match(/@layer u0,u1,u2;/g)).toHaveLength(1)
+  })
+
   test('leaves a sheet with nothing to move byte-identical', () => {
     const { css, chunks } = splitStaticCss(sheet, createStaticCompilationSession(), new Map())
 

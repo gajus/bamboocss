@@ -8,6 +8,7 @@ import { build, createBuilder as createVite7Builder, createServer, type Plugin a
 import { TraceMap, originalPositionFor } from '@jridgewell/trace-mapping'
 import { build as buildVite8, createBuilder, createServer as createVite8Server, type Plugin } from 'vite8'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { cascadeOrder } from '../../../packages/core/__tests__/cascade-oracle'
 
 /**
  * The plugin driven by a real Vite build, rather than by calling its hooks directly.
@@ -4171,7 +4172,8 @@ describe.sequential('per-route stylesheets', () => {
       entry,
       `import 'virtual:bamboo.css'\n` +
         `import { css } from '../styled-system/css'\n` +
-        `document.body.className = css({ color: 'red600' })\n` +
+        // A higher breakpoint than route b's, on the same property, kept in the entry sheet.
+        `document.body.className = css({ color: 'red600', lg: { height: '[814.4px]' } })\n` +
         // Reached from a side effect, or tree-shaking would drop both routes with the exports.
         `window.addEventListener('hashchange', () => {\n` +
         `  const route = location.hash === '#a' ? import('./__split-route-a') : import('./__split-route-b')\n` +
@@ -4196,7 +4198,7 @@ describe.sequential('per-route stylesheets', () => {
     for (const file of [html, entry, routeA, routeB]) rmSync(file, { force: true })
   })
 
-  const buildSplit = async (run: typeof build) => {
+  const buildSplit = async (run: typeof build, options: { minify?: false } = { minify: false }) => {
     const result = (await run({
       root: cwd,
       logLevel: 'silent',
@@ -4205,7 +4207,7 @@ describe.sequential('per-route stylesheets', () => {
       build: {
         write: false,
         manifest: true,
-        minify: false,
+        ...options,
         rollupOptions: { input: html, output: { assetFileNames: 'assets/[name]-[hash][extname]' } },
       },
     })) as Rollup.RollupOutput
@@ -4244,11 +4246,17 @@ describe.sequential('per-route stylesheets', () => {
     expect(cssA, 'nothing shared').not.toContain('812.2px')
     expect(cssA, 'no sentinel: it is not a sheet the late pass should prune again').not.toContain('--made-with-bamboo')
     expect(cssA, 'the sublayer order statement comes first').toMatch(
-      /^\s*@layer utilities\s*\{\s*@layer s\d+-c\d+-p\d+/,
+      /^\s*@layer utilities\s*\{\s*@layer s\d+-c\d+-p\d+(?:\s*,\s*s\d+-c\d+-p\d+)*\s*;/,
     )
     const cssB = source(sheetB!)
     expect(cssB, 'a breakpoint atom keeps its query').toMatch(/@media[^{]*\{[^}]*813\.3px/)
     expect(cssB).not.toContain('812.2px')
+
+    // Route b's `md` height left the entry, and the entry's `lg` height stayed. Whichever sheet
+    // the document parses first, `lg` has to come out on top.
+    for (const sheets of [entryCss + cssB, cssB + entryCss]) {
+      expect(cascadeOrder(sheets).height?.at(-1), 'the higher breakpoint wins across sheets').toContain('lg\\:h_')
+    }
 
     const chunkA = chunkOf('__split-route-a')
     const chunkB = chunkOf('__split-route-b')
@@ -4274,6 +4282,12 @@ describe.sequential('per-route stylesheets', () => {
 
   test('Vite 8 gives each lazy route the atoms only it uses', async () => {
     assertSplit(await buildSplit(buildVite8 as unknown as typeof build))
+  }, 60_000)
+
+  // Vite 8 minifies CSS with LightningCSS by default, which removes the sublayer order statement
+  // before Bamboo splits the sheet. Every split ran unminified above, so none saw that.
+  test('Vite 8 keeps breakpoint order across route sheets under its default minifier', async () => {
+    assertSplit(await buildSplit(buildVite8 as unknown as typeof build, {}))
   }, 60_000)
 
   test('splitCss: false keeps one sheet', async () => {

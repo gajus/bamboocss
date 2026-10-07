@@ -1,6 +1,6 @@
 {
   "name": "@bamboocss/fixture",
-  "version": "1.56.3",
+  "version": "1.56.4",
   "private": true,
   "description": "Test fixtures for Bamboo CSS",
   "license": "MIT",

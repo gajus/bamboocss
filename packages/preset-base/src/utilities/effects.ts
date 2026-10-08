@@ -143,10 +143,12 @@ export const effects: UtilityConfig = {
     values: {
       auto: 'var(--backdrop-blur, ) var(--backdrop-brightness, ) var(--backdrop-contrast, ) var(--backdrop-grayscale, ) var(--backdrop-hue-rotate, ) var(--backdrop-invert, ) var(--backdrop-opacity, ) var(--backdrop-saturate, ) var(--backdrop-sepia, )',
     },
+    // Prefixed first, as in `polyfill.ts`. The other way round, LightningCSS keeps only the
+    // prefixed declaration, and only Safari reads that one.
     transform(value) {
       return {
-        backdropFilter: value,
         WebkitBackdropFilter: value,
+        backdropFilter: value,
       }
     },
     customProperties: {

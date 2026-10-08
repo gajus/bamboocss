@@ -4303,3 +4303,64 @@ describe.sequential('per-route stylesheets', () => {
     expect(String((sheets[0] as Rollup.OutputAsset).source)).toContain('811.1px')
   }, 60_000)
 })
+
+/**
+ * Vendor-prefixed pairs, through the minifier a default Vite 8 build runs.
+ *
+ * LightningCSS reads a pair by its order. With the standard property first it kept only
+ * `-webkit-backdrop-filter`, which Chrome, Edge and Firefox do not support, so a backdrop blur
+ * rendered in Safari alone — in production builds only, since dev does not minify.
+ */
+describe.sequential('vendor-prefixed pairs', () => {
+  const html = join(cwd, '__prefixed-index.html')
+  const entry = join(cwd, 'src/__prefixed-entry.tsx')
+  const pairs = {
+    backdropFilter: ['blur(2px)', 'backdrop-filter'],
+    appearance: ['none', 'appearance'],
+    backfaceVisibility: ['hidden', 'backface-visibility'],
+    clipPath: ['circle(50%)', 'clip-path'],
+    hyphens: ['auto', 'hyphens'],
+    mask: ['url(a.svg)', 'mask'],
+    maskImage: ['url(a.svg)', 'mask-image'],
+    maskSize: ['cover', 'mask-size'],
+    textSizeAdjust: ['none', 'text-size-adjust'],
+    backgroundClip: ['text', 'background-clip'],
+    boxDecorationBreak: ['clone', 'box-decoration-break'],
+    userSelect: ['none', 'user-select'],
+  }
+
+  beforeEach(() => {
+    writeFileSync(html, `<script type="module" src="/src/__prefixed-entry.tsx"></script>`)
+    writeFileSync(
+      entry,
+      `import 'virtual:bamboo.css'\n` +
+        `import { css } from '../styled-system/css'\n` +
+        Object.entries(pairs)
+          .map(([property, [value]]) => `document.body.classList.add(css({ ${property}: '${value}' }))\n`)
+          .join(''),
+    )
+  })
+
+  afterEach(() => {
+    for (const file of [html, entry]) rmSync(file, { force: true })
+  })
+
+  test('keep the standard declaration under Vite 8’s default minifier', async () => {
+    const result = (await buildVite8({
+      root: cwd,
+      logLevel: 'silent',
+      css: { postcss: { plugins: [] } },
+      plugins: [bamboocss({ cwd, reportSummary: false })],
+      build: { write: false, rollupOptions: { input: html } },
+    })) as unknown as Rollup.RollupOutput
+    const css = result.output
+      .filter((item): item is Rollup.OutputAsset => item.type === 'asset' && item.fileName.endsWith('.css'))
+      .map((asset) => String(asset.source))
+      .join('\n')
+
+    expect(css, 'minified, so the minifier ran').not.toMatch(/;\n\s/)
+    for (const [, standard] of Object.values(pairs)) {
+      expect(css, standard).toMatch(new RegExp(`[{;]${standard}:`))
+    }
+  }, 60_000)
+})

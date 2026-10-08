@@ -76,8 +76,8 @@ describe('generate reset', () => {
       }
 
         button,input:where([type='button'], [type='reset'], [type='submit']),::file-selector-button {
-          appearance: button;
           -webkit-appearance: button;
+          appearance: button;
       }
 
         button,input,optgroup,select,textarea,::file-selector-button {
@@ -299,8 +299,8 @@ describe('generate reset', () => {
       }
 
         .pd-reset button,.pd-reset input:where([type='button'], [type='reset'], [type='submit']),.pd-reset ::file-selector-button {
-          appearance: button;
           -webkit-appearance: button;
+          appearance: button;
       }
 
         .pd-reset ::selection {
@@ -440,8 +440,8 @@ describe('generate reset', () => {
       }
 
         button.pd-reset,input:where([type='button'], [type='reset'], [type='submit']).pd-reset,::file-selector-button.pd-reset {
-          appearance: button;
           -webkit-appearance: button;
+          appearance: button;
       }
 
         button.pd-reset,input.pd-reset,optgroup.pd-reset,select.pd-reset,textarea.pd-reset,::file-selector-button.pd-reset {

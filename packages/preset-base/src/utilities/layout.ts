@@ -9,10 +9,11 @@ export const layout: UtilityConfig = {
   boxDecorationBreak: {
     className: 'bx-db',
     group: 'Layout',
+    // Prefixed first, as in `polyfill.ts`.
     transform(value) {
       return {
-        boxDecorationBreak: value,
         WebkitBoxDecorationBreak: value,
+        boxDecorationBreak: value,
       }
     },
   },

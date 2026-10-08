@@ -26,10 +26,11 @@ export const background: UtilityConfig = {
     shorthand: 'bgClip',
     className: 'bg-cp',
     group: 'Background',
+    // Prefixed first, as in `polyfill.ts`.
     transform(value) {
       return {
-        backgroundClip: value,
         WebkitBackgroundClip: value,
+        backgroundClip: value,
       }
     },
   },

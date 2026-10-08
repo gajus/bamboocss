@@ -66,8 +66,17 @@ describe('token resolution happens before the transform', () => {
 
 describe('vendor-prefixed properties emit both spellings', () => {
   // A prefixed-only declaration silently does nothing in an engine that wants the standard
-  // one, and vice versa. Each of these exists to write the pair.
+  // one, and vice versa. Each of these exists to write the pair, prefixed first, so the
+  // standard one applies wherever both are understood. Minifiers read the order too:
+  // LightningCSS, Vite 8's default, kept only `-webkit-backdrop-filter` when it followed the
+  // standard property, and Chrome, Edge and Firefox support only the standard one.
   test.each([
+    {
+      input: { backdropFilter: 'blur(2px)' } as Styles,
+      prefixed: '-webkit-backdrop-filter',
+      standard: 'backdrop-filter',
+    },
+    { input: { mask: 'url(a.svg)' } as Styles, prefixed: '-webkit-mask', standard: 'mask' },
     { input: { appearance: 'none' } as Styles, prefixed: '-webkit-appearance', standard: 'appearance' },
     {
       input: { backfaceVisibility: 'hidden' } as Styles,
@@ -92,8 +101,10 @@ describe('vendor-prefixed properties emit both spellings', () => {
     { input: { userSelect: 'none' } as Styles, prefixed: '-webkit-user-select', standard: 'user-select' },
   ])('$standard', ({ input, prefixed, standard }) => {
     const out = css(input)
-    expect(out, `missing ${prefixed}`).toContain(`${prefixed}:`)
-    expect(out, `missing ${standard}`).toMatch(new RegExp(`(?:^|[{;] )${standard}:`))
+    const at = (property: string) => out.search(new RegExp(`(?:^|[{;] )${property}:`))
+    expect(at(prefixed), `missing ${prefixed}`).toBeGreaterThan(-1)
+    expect(at(standard), `missing ${standard}`).toBeGreaterThan(-1)
+    expect(at(prefixed), `${prefixed} after ${standard}`).toBeLessThan(at(standard))
   })
 })
 

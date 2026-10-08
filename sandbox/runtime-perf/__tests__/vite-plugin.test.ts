@@ -4364,3 +4364,76 @@ describe.sequential('vendor-prefixed pairs', () => {
     }
   }, 60_000)
 })
+
+/**
+ * Mixins composed with other declarations, through a real build.
+ *
+ * The compiler writes such a mixin out into ordinary atoms, which only works if the sheet has
+ * rules for them — and extraction reads the mixin as one call, without seeing what it is
+ * composed with. The sheet carries both forms at every application, and pruning keeps the one
+ * the output named.
+ */
+describe.sequential('composed mixins', () => {
+  const html = join(cwd, '__mixin-index.html')
+  const entry = join(cwd, 'src/__mixin-entry.tsx')
+  const configPath = join(cwd, '__mixin.bamboo.config.ts')
+
+  beforeEach(() => {
+    writeFileSync(
+      configPath,
+      `import base from './bamboo.config'\n` +
+        `export default { ...base, theme: { ...base.theme, extend: { mixins: {\n` +
+        `  cardA: { value: { color: 'red', letterSpacing: '0.1em' } },\n` +
+        `  cardB: { value: { color: 'blue' } },\n` +
+        `} } } }\n`,
+    )
+    writeFileSync(html, `<script type="module" src="/src/__mixin-entry.tsx"></script>`)
+    writeFileSync(
+      entry,
+      `import 'virtual:bamboo.css'\n` +
+        `import { css, cva } from '../styled-system/css'\n` +
+        `const tone = cva({ base: { color: 'green' }, variants: { tone: { loud: { mixin: 'cardA' } } } })\n` +
+        `document.body.className = tone({ tone: 'loud' })\n` +
+        `document.documentElement.className = css({ mixin: 'cardB' })\n`,
+    )
+  })
+
+  afterEach(() => {
+    for (const file of [html, entry, configPath]) rmSync(file, { force: true })
+  })
+
+  test('compile to atoms the pruned sheet keeps, while a lone mixin keeps its class', async () => {
+    const result = (await build({
+      root: cwd,
+      logLevel: 'silent',
+      css: { postcss: { plugins: [] } },
+      plugins: [bamboocss({ cwd, configPath, reportSummary: false })],
+      build: { write: false, minify: false, rollupOptions: { input: html } },
+    })) as Rollup.RollupOutput
+    const js = result.output
+      .filter((item): item is Rollup.OutputChunk => item.type === 'chunk')
+      .map((chunk) => chunk.code)
+      .join('\n')
+    const css = result.output
+      .filter((item): item is Rollup.OutputAsset => item.type === 'asset' && item.fileName.endsWith('.css'))
+      .map((asset) => String(asset.source))
+      .join('\n')
+
+    // The variant's mixin wins over the base, so the base colour is gone from the element.
+    const variant = js.match(/document\.body\.className = "([^"]*)"/)?.[1]
+    expect(variant?.split(' ')).toEqual(expect.arrayContaining(['c_red', 'ls_0.1em']))
+    expect(variant).not.toContain('c_green')
+    expect(variant).not.toContain('mixin_')
+    expect(css).toMatch(/\.c_red\s*\{\s*color:\s*red/)
+    expect(css).toMatch(/\.ls_0\\\.1em\s*\{\s*letter-spacing:\s*0\.1em/)
+
+    const lone = js.match(/document\.documentElement\.className = "([^"]*)"/)?.[1]
+    expect(lone).toBe('mixin_cardB')
+    expect(css).toContain('.mixin_cardB')
+
+    // What no output names is pruned: the class of the mixin that was written out, and the
+    // base colour the variant replaced.
+    expect(css).not.toContain('.mixin_cardA')
+    expect(css).not.toContain('.c_green')
+  }, 60_000)
+})

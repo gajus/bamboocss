@@ -1261,6 +1261,8 @@ export class StyleEncoder {
   recordOrigins = false
   /** The call site `withOrigin` is encoding for, if any. */
   private activeOrigin: AtomOrigin | null = null
+  /** Whether `processAtomic` also interns a mixin's declarations. @see withMixinAtoms */
+  private mixinAtoms = false
 
   /** Stable owner rank shared by every ordered registry, including registries first touched later. */
   private ownerOrderRanks = new Map<string, OrderOwnerRank>()
@@ -1521,6 +1523,27 @@ export class StyleEncoder {
       return fn()
     } finally {
       this.activeOrigin = previous
+    }
+  }
+
+  /**
+   * Run `fn` with `processAtomic` interning each mixin's declarations as ordinary atoms, beside
+   * the mixin's own class.
+   *
+   * For a sheet the Vite compiler's output is checked against. The compiler keeps a mixin's one
+   * class only where the mixin is the whole style set; composed with anything else it writes the
+   * mixin out (`Mixins.expand`) and asks for those declarations' atoms — a composition the
+   * extraction side cannot see, since it reads `cx(a, b)` as two calls. Interning both forms at
+   * every application, in the same scope as the call, puts a rule behind whichever the compiler
+   * chose, and pruning drops the one no output named.
+   */
+  withMixinAtoms = <T>(fn: () => T): T => {
+    const previous = this.mixinAtoms
+    this.mixinAtoms = true
+    try {
+      return fn()
+    } finally {
+      this.mixinAtoms = previous
     }
   }
 
@@ -2243,7 +2266,9 @@ export class StyleEncoder {
     }
   }
 
-  constructor(private context: Pick<Context, 'isValidProperty' | 'recipes' | 'patterns' | 'conditions' | 'utility'>) {}
+  constructor(
+    private context: Pick<Context, 'isValidProperty' | 'recipes' | 'patterns' | 'conditions' | 'utility' | 'mixins'>,
+  ) {}
 
   filterStyleProps = (props: Dict): Dict => {
     return filterProps(this.context.isValidProperty, props)
@@ -2369,6 +2394,10 @@ export class StyleEncoder {
     // hash already there does not move, and a new one still arrives in traversal order.
     const set = new Set<string>()
     this.hashStyleObject(set, styles)
+    if (this.mixinAtoms) {
+      const expanded = this.context.mixins.expand(styles)
+      if (expanded !== styles) this.hashStyleObject(set, expanded)
+    }
 
     const scope = this.activeScope
     const unowned = this.activeOwner === null
@@ -2775,9 +2804,11 @@ export class StyleEncoder {
    * contributing to the observed recipe set before emission atomizes it.
    */
   atomizeObservedRecipes = () => {
+    // A fragment is composed with the base and the other variants it is selected with, so a
+    // mixin in one is written out by the compiler and needs its declarations' atoms.
     const atomize = (value: unknown) => {
       if (!value || typeof value !== 'object' || Array.isArray(value)) return
-      this.processAtomic(value as StyleResultObject)
+      this.withMixinAtoms(() => this.processAtomic(value as StyleResultObject))
     }
 
     for (const name of this.observedRecipes) {

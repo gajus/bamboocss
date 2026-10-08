@@ -195,6 +195,7 @@ Perf-sensitive code has Vitest benchmarks in `{packages,sandbox}/*/__tests__/**/
 | ----------------------------------------------- | ------------------------------------------------------------- |
 | `core/static-css-perf`, `static-css-real-world` | static css generation, up to `getCssRuleObjects`              |
 | `core/optimize-css`                             | the postcss pipeline after the sheet is built                 |
+| `core/encode-atomic`                            | encoding extracted `css()` calls, mixins written out included |
 | `core/prune`                                    | keyframe and token pruning                                    |
 | `core/sort-style-rules`                         | rule ordering                                                 |
 | `generator/css-fn`                              | the generated runtime, cached path                            |

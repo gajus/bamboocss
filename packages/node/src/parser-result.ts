@@ -124,8 +124,12 @@ export class ParserResult implements ParserResultInterface {
       })
     }
 
+    // With mixin atoms: the Vite compiler writes a mixin out wherever it is composed with
+    // anything, `cx()` included, and that composition is not visible from this one call.
     const encoder = this.encoder
-    encoder.withOrigin(this.originOf(result), () => result.data.forEach((obj) => encoder.processAtomic(obj)))
+    encoder.withOrigin(this.originOf(result), () =>
+      encoder.withMixinAtoms(() => result.data.forEach((obj) => encoder.processAtomic(obj))),
+    )
   }
 
   /** The call site of `result`, when the encoder is recording them. */
@@ -168,7 +172,7 @@ export class ParserResult implements ParserResultInterface {
     set.add(this.append(Object.assign({ type: 'pattern', name }, result)))
 
     this.encoder.withOrigin(this.originOf(result), () =>
-      result.data.forEach((obj) => this.encoder.processPattern(name, obj)),
+      this.encoder.withMixinAtoms(() => result.data.forEach((obj) => this.encoder.processPattern(name, obj))),
     )
   }
 

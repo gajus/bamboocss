@@ -87,6 +87,23 @@ function App() {
 }
 ```
 
+## Combining a mixin with other styles
+
+A mixin means what writing its declarations in its place means. A property written after it overrides it, a property
+written before it is overridden by it, and its own conditions still apply as conditions:
+
+```jsx
+// card: { value: { color: 'gray.700', _hover: { color: 'blue.600' } } }
+css({ color: 'red.500', mixin: 'card' }) // gray, blue on hover
+css({ mixin: 'card', color: 'red.500' }) // red, blue on hover
+```
+
+The same holds wherever styles are combined: a recipe variant's mixin overrides the base, a compound variant's overrides
+the variants it matches, and `cx()` keeps what an earlier mixin sets that a later one does not.
+
+A mixin that is the whole style, as in `css({ mixin: 'card' })`, compiles to one class, `mixin_card`. Combined with
+anything else, it compiles to the atoms of the declarations it applies, which is what lets them take part in that order.
+
 ## Nesting mixins
 
 Mixins support nested structures with a special `DEFAULT` key. This allows you to create variants of a mixin while

@@ -31,6 +31,30 @@ export interface StaticStyleSetCompiler {
 
 const isRecord = (value: unknown): value is Dict => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 
+/**
+ * Whether `styles`, counted across every fragment, apply one mixin and nothing else.
+ *
+ * The one shape in which the mixin's own class means what applying it means: the class sits in
+ * the `compositions` layer, below every other utility, which is harmless only while nothing else
+ * in the style set competes with it. Anything beside it, a second mixin included, can.
+ */
+const isLoneMixin = (styles: Dict[]) => {
+  let mixins = 0
+  let others = 0
+  const count = (style: Dict, applied: boolean) => {
+    for (const key in style) {
+      const value = style[key]
+      if (value == null) continue
+      const mixin = applied || key === 'mixin'
+      if (isRecord(value)) count(value, mixin)
+      else if (mixin) mixins++
+      else others++
+    }
+  }
+  for (const style of styles) if (isRecord(style)) count(style, false)
+  return mixins === 1 && others === 0
+}
+
 /** A compound selector matches only through variant classes the recipe actually emits. */
 const matchesCompound = (
   compound: Record<string, unknown>,
@@ -68,7 +92,22 @@ export const createStaticStyleSetCompiler = (
 ): StaticStyleSetCompiler => {
   const { mergeCssUncached } = createMergeCss(createCssContext(ctx))
 
-  const compose = (...styles: Dict[]) => mergeCssUncached(...styles)
+  /**
+   * One style set's fragments, with every mixin written out where it is applied — unless one
+   * mixin is all of it, which keeps its class.
+   *
+   * Merged as an opaque `mixin` key, a mixin lost twice over: a later fragment's mixin replaced an
+   * earlier one outright, and a surviving one became a class every other utility beat, so a
+   * variant's mixin lost to the base and the mixin's own `_hover` to any `color`. Written out, its
+   * declarations merge like any others and rank by their own conditions. The stylesheet interns
+   * the same declarations at every application, so these classes have rules. @see Mixins.expand
+   */
+  const prepare = (styles: Dict[]) => {
+    if (!styles.some((style) => ctx.mixins.has(style)) || isLoneMixin(styles)) return styles
+    return styles.map((style) => (isRecord(style) ? ctx.mixins.expand(style) : style))
+  }
+
+  const compose = (...styles: Dict[]) => mergeCssUncached(...prepare(styles))
 
   const resolveRecipe = (config: StyleSetRecipeConfig, input: Dict = {}, slot?: string): Dict | undefined => {
     const slots = Array.isArray(config.slots) ? config.slots : undefined
@@ -109,7 +148,7 @@ export const createStaticStyleSetCompiler = (
   return {
     compose,
     resolveRecipe,
-    className: (...styles) => runtimeCss(...styles),
+    className: (...styles) => runtimeCss(...prepare(styles)),
     allocateClassString,
   }
 }

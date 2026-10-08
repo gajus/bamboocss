@@ -25,6 +25,7 @@ import { ImportMap } from './import-map'
 import { JsxEngine } from './jsx'
 import { Layers } from './layers'
 import { getMessages, type Messages } from './messages'
+import { Mixins } from './mixins'
 import { PathEngine } from './path'
 import { Patterns } from './patterns'
 import { Recipes } from './recipes'
@@ -67,6 +68,7 @@ export class Context {
   recipes: Recipes
   conditions: Conditions
   patterns: Patterns
+  mixins: Mixins
   staticCss: StaticCss
   jsx: JsxEngine
   imports: ImportMap
@@ -116,6 +118,8 @@ export class Context {
 
     this.conditions = this.createConditions(config)
 
+    this.mixins = new Mixins({ mixins: theme.mixins, utility: this.utility })
+
     this.patterns = new Patterns({
       config,
       tokens: this.tokens,
@@ -133,6 +137,7 @@ export class Context {
       recipes: this.recipes,
       conditions: this.conditions,
       patterns: this.patterns,
+      mixins: this.mixins,
       isValidProperty: this.isValidProperty,
     })
 

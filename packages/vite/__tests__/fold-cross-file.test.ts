@@ -313,12 +313,17 @@ describe('pure local helpers', () => {
 })
 
 /**
- * Two shapes where inlining a helper is not equivalent to calling it. Both are pinned
- * because they are the edges of what "pure" is taken to mean here, and neither is
- * currently detected — a reader deciding whether to trust a helper needs to know which.
+ * Two shapes where inlining a helper is not equivalent to calling it: a helper with an effect,
+ * and a binding written after its declaration. Both decline, which the strict compiler reports.
+ *
+ * Both used to fold. The first dropped the increment along with the call that performed it.
+ * The second compiled the initializer the program had already replaced, `p_4` for an element
+ * that renders `p_8`, on the grounds that the stylesheet was written against the same answer.
+ * With no runtime fallback, declining is not an element asking for a rule nobody emitted; it
+ * is a build error at the call, which is what both of these are.
  */
 describe('local helpers, where inlining is not calling', () => {
-  test('a side effect in the helper body is dropped', () => {
+  test('a side effect in the helper body declines', () => {
     const { fold } = createFoldFixture()
 
     const result = fold(`
@@ -328,15 +333,11 @@ describe('local helpers, where inlining is not calling', () => {
       export const cls = css(pad('4'))
     `)
 
-    // The class is right and the increment is gone: the call the fold removed was the
-    // only thing performing it. A style helper that mutates is pathological, and telling
-    // one apart needs real analysis of the body rather than of the value it returns — so
-    // this is a known limitation rather than a case that declines.
-    expect(result.folded[0]!.className).toBe('p_4')
-    expect(result.code).not.toContain('pad(')
+    expect(result.folded).toHaveLength(0)
+    expect(result.code).toContain('pad(')
   })
 
-  test('a reassigned binding resolves to its initializer, and the CSS agrees', () => {
+  test('a reassigned binding declines, and the stylesheet has a rule for neither value', () => {
     const { fold, getCss } = createFoldFixture()
 
     const result = fold(`
@@ -347,12 +348,8 @@ describe('local helpers, where inlining is not calling', () => {
       export const cls = css(pad())
     `)
 
-    // At runtime this call returns `p_8`; the extractor reads the initializer and says
-    // `p_4`. That is extraction's answer, not the fold's — and it is the answer the
-    // stylesheet is written against, so folding to it is what makes the rendered element
-    // match the CSS that exists. Left unfolded, the element asks for a rule nobody emitted.
-    expect(result.folded[0]!.className).toBe('p_4')
-    expect(getCss()).toContain('p_4')
+    expect(result.folded).toHaveLength(0)
+    expect(getCss()).not.toContain('p_4')
     expect(getCss()).not.toContain('p_8')
   })
 })

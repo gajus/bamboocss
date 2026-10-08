@@ -133,7 +133,7 @@ describe('native extraction analysis', () => {
     })
   })
 
-  test('reads const initializers like the TypeScript extractor rather than executing mutations', () => {
+  test('treats a binding written after its declaration as unknown, not as its initializer', () => {
     const result = analyze(
       'source.ts',
       `import { css } from 'styled-system/css'
@@ -142,7 +142,10 @@ describe('native extraction analysis', () => {
        css(styles)`,
       entrypoints,
     )
-    expect(result).toMatchObject({ calls: [{ arguments: [{ color: 'red' }] }], errors: [] })
+    // The call reads `blue` at runtime. Reading the initializer instead, as the TypeScript
+    // extractor did, compiled a class for a value the element never has.
+    expect(result).toMatchObject({ calls: [{ complete: false }], errors: [] })
+    expect(JSON.stringify(result.calls[0]!.arguments)).not.toContain('red')
   })
 
   test('fails open when an argument needs JavaScript evaluation', () => {

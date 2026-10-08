@@ -291,3 +291,145 @@ describe('destructuring defaults', () => {
     expect(result.code).toContain('"c_blue.500"')
   })
 })
+
+/**
+ * Code the evaluator does not run.
+ *
+ * A value is read from its declaration rather than by running the module, so a statement the
+ * evaluator stepped over, or a write to a binding it read, left the fold holding a value the
+ * program never produces: a `switch` folded to its fall-through, a loop to the object before
+ * it ran, a mutation to the value before it. Each compiled to the wrong classes with no error.
+ * Declining is what turns them into the strict compiler's error instead.
+ */
+describe('code the evaluator cannot follow', () => {
+  test.each([
+    [
+      'a switch',
+      `const tone = (t) => { switch (t) { case 'danger': return { color: 'red.300' }; default: return { color: 'blue.300' } } }\nexport const A = css(tone('danger'))`,
+    ],
+    [
+      'a switch before a return',
+      `const tone = (t) => { switch (t) { case 'danger': return { color: 'red.300' } }\nreturn { color: 'blue.300' } }\nexport const A = css(tone('danger'))`,
+    ],
+    [
+      'a for loop',
+      `const make = (tone) => { const out = {}; for (const key of ['color', 'borderColor']) { out[key] = tone }\nreturn out }\nexport const A = css(make('red.300'))`,
+    ],
+    [
+      'a while loop',
+      `const make = () => { let size = 'sm'; while (size !== 'lg') { size = 'lg' }\nreturn { fontSize: size } }\nexport const A = css(make())`,
+    ],
+    [
+      'a try block',
+      `const make = () => { try { return { color: 'red.300' } } catch { return {} } }\nexport const A = css(make())`,
+    ],
+    [
+      'a property assignment',
+      `const make = (primary) => { const styles = { paddingX: '4' }; if (primary) { styles.color = 'red.300' }\nreturn styles }\nexport const A = css(make(true))`,
+    ],
+    [
+      'a reassigned local',
+      `const make = (dense) => { let padding = '4'; if (dense) padding = '2'\nreturn { padding } }\nexport const A = css(make(true))`,
+    ],
+    [
+      'Object.assign into a local',
+      `const make = () => { const out = { color: 'red.300' }; Object.assign(out, { color: 'blue.300' })\nreturn out }\nexport const A = css(make())`,
+    ],
+    [
+      'a call run for its effect',
+      `const make = () => { track()\nreturn { color: 'red.300' } }\nexport const A = css(make())`,
+    ],
+  ])('a helper with %s', (_, body) => {
+    expectUnchanged(withImport(body))
+  })
+
+  test.each([
+    ['a reassignment', `let tone = 'red.300'\ntone = 'blue.300'\nexport const A = css({ color: tone })`],
+    ['a property assignment', `const base = { color: 'red.300' }\nbase.color = 'blue.300'\nexport const A = css(base)`],
+    [
+      'a nested property assignment',
+      `const theme = { text: { color: 'red.300' } }\ntheme.text.color = 'blue.300'\nexport const A = css(theme.text)`,
+    ],
+    [
+      'Object.assign',
+      `const base = { color: 'red.300' }\nObject.assign(base, { color: 'blue.300' })\nexport const A = css(base)`,
+    ],
+    ['delete', `const base = { color: 'red.300', padding: '4' }\ndelete base.padding\nexport const A = css(base)`],
+    [
+      'a mutating array method',
+      `const fonts = ['Inter']\nfonts.push('sans-serif')\nexport const A = css({ fontFamily: fonts.join(',') })`,
+    ],
+    [
+      'a write inside a function',
+      `const base = { color: 'red.300' }\nexport const reset = () => { base.color = 'blue.300' }\nexport const A = css(base)`,
+    ],
+  ])('a binding changed by %s', (_, body) => {
+    expectUnchanged(withImport(body))
+  })
+
+  test('every expression of a sequence runs, not only the last', () => {
+    expectUnchanged(withImport(`export const A = css((track(), { color: 'red.300' }))`))
+  })
+
+  test('an early return without a value returns undefined rather than falling through', () => {
+    const { fold } = createFoldFixture()
+    const result = fold(
+      withImport(
+        `const maybe = (on) => { if (!on) return\nreturn { color: 'red.300' } }\nexport const A = css(maybe(false))`,
+      ),
+    )
+
+    // `maybe(false)` is `undefined`, so the call styles nothing, as `css(undefined)` does.
+    expect(result.folded.map((call) => call.className)).toEqual([''])
+  })
+})
+
+/** The other side of the guard: code that only looks like it, which has to keep compiling. */
+describe('code the evaluator can follow beside it', () => {
+  test('a guard that throws when it is not reached', () => {
+    const result = expectFolded(
+      withImport(
+        `const tone = (t) => { if (!t) throw new Error('tone')\nreturn { color: t } }\nexport const A = css(tone('red.300'))`,
+      ),
+    )
+    expect(result.code).toContain('"c_red.300"')
+  })
+
+  test('a guard that throws when it is reached declines', () => {
+    expectUnchanged(
+      withImport(
+        `const tone = (t) => { if (!t) throw new Error('tone')\nreturn { color: t } }\nexport const A = css(tone(''))`,
+      ),
+    )
+  })
+
+  test('declarations that run nothing', () => {
+    const result = expectFolded(
+      withImport(
+        `const tone = (t: string) => { type Tone = string; function pick(value: Tone) { return value };\nreturn { color: pick(t) } }\nexport const A = css(tone('red.300'))`,
+      ),
+    )
+    expect(result.code).toContain('"c_red.300"')
+  })
+
+  test('a let nothing reassigns', () => {
+    const result = expectFolded(withImport(`let tone = 'red.300'\nexport const A = css({ color: tone })`))
+    expect(result.code).toContain('"c_red.300"')
+  })
+
+  test('a binding only read, including by methods that leave it alone', () => {
+    const result = expectFolded(
+      withImport(
+        `const fonts = ['Inter', 'sans-serif']\nexport const upper = fonts.map((font) => font.toUpperCase())\nexport const keys = Object.keys({ fonts })\nexport const A = css({ fontFamily: fonts.join(',') })`,
+      ),
+    )
+    expect(result.folded).toHaveLength(1)
+  })
+
+  test('Object.assign into a fresh object', () => {
+    const result = expectFolded(
+      withImport(`const base = { color: 'red.300' }\nexport const A = css(Object.assign({}, base, { padding: '4' }))`),
+    )
+    expect(result.code).toContain('c_red.300')
+  })
+})

@@ -401,6 +401,12 @@ const compact = { padding: '2' }
 const className = css(base, compact)
 ```
 
+Statically available means the value is the one the source writes. A binding that is reassigned, or written into
+anywhere in its module (`base.padding = '2'`, `delete base.padding`, `Object.assign(base, { padding: '2' })`,
+`fonts.push('serif')`), is not. Neither is the result of a helper whose body goes beyond declarations, `if` and
+`return`: a `switch`, a loop, `try`, or a statement run for its effect. The compiler rejects such a call rather than
+compiling the value as it was first written.
+
 Use a declared recipe variant when a component needs a finite public choice. An arbitrary runtime style-object prop is
 not statically available, so replacing `className` with `css(base, props.css)` does not make it compilable.
 

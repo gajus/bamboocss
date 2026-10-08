@@ -18,8 +18,8 @@ use oxc_ast::{
     },
 };
 use oxc_parser::Parser;
-use oxc_semantic::{Scoping, Semantic, SemanticBuilder};
-use oxc_span::SourceType;
+use oxc_semantic::{AstNodes, NodeId, Scoping, Semantic, SemanticBuilder};
+use oxc_span::{GetSpan, SourceType};
 use oxc_syntax::{
     operator::{BinaryOperator, LogicalOperator, UnaryOperator},
     symbol::SymbolId,
@@ -963,6 +963,8 @@ pub(crate) struct FileEvaluator<'a, 'project, 'sources> {
     imports: HashMap<SymbolId, ImportBinding>,
     environment: HashMap<SymbolId, EvalResult>,
     evaluating: HashSet<SymbolId>,
+    /// `is_mutated`, once per symbol: the answer scans every reference to it.
+    mutated: HashMap<SymbolId, bool>,
 }
 
 impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
@@ -1010,6 +1012,7 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
             imports,
             environment: HashMap::new(),
             evaluating: HashSet::new(),
+            mutated: HashMap::new(),
         }
     }
 
@@ -1198,10 +1201,18 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
                 }
             }
             Expression::CallExpression(call) => self.evaluate_call(call),
-            Expression::SequenceExpression(sequence) => sequence
-                .expressions
-                .last()
-                .map_or_else(EvalResult::undefined, |value| self.evaluate(value)),
+            // Every expression runs, and the value is the last one's. An earlier one the
+            // evaluator cannot follow may be what changes it, as in `(track(), styles)`.
+            Expression::SequenceExpression(sequence) => {
+                let mut complete = true;
+                let mut result = EvalResult::undefined();
+                for expression in &sequence.expressions {
+                    result = self.evaluate(expression);
+                    complete &= result.complete;
+                }
+                result.complete = complete;
+                result
+            }
             Expression::ChainExpression(chain) => self.evaluate_chain(&chain.expression),
             _ => EvalResult::unknown(),
         }
@@ -1305,6 +1316,9 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
     }
 
     pub fn evaluate_symbol(&mut self, symbol: SymbolId) -> EvalResult {
+        if self.is_mutated(symbol) {
+            return EvalResult::unknown();
+        }
         if let Some(value) = self.environment.get(&symbol) {
             return value.clone();
         }
@@ -1345,6 +1359,30 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
         };
         self.evaluating.remove(&symbol);
         result
+    }
+
+    /// Whether anything in the file can change what `symbol` holds after its declaration.
+    ///
+    /// A binding is read from its declaration, not by running the module, so a later write
+    /// goes unseen: a `let` reassigned in a branch, or a `const` object changed through
+    /// `base.color = …`, `delete base.color`, `Object.assign(base, …)` or `fonts.push(…)`
+    /// before a style call reads it. Any such use anywhere in the file makes the binding's
+    /// value unknown, since where the write runs relative to the read is not knowable here.
+    ///
+    /// Reads are left alone, including passing the binding to a function: `Object.keys(base)`
+    /// and `css(base)` are what a style object is for. A function that mutates what it is
+    /// given, an alias written through, or a write from another module is not seen.
+    pub fn is_mutated(&mut self, symbol: SymbolId) -> bool {
+        if let Some(&mutated) = self.mutated.get(&symbol) {
+            return mutated;
+        }
+        let nodes = self.semantic.nodes();
+        let mutated = self
+            .scoping
+            .get_resolved_references(symbol)
+            .any(|reference| reference.is_write() || mutates_through(nodes, reference.node_id()));
+        self.mutated.insert(symbol, mutated);
+        mutated
     }
 
     /// An enum as the object its members compile to.
@@ -1687,6 +1725,7 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
             // member path through object-literal initializers to the property's expression and
             // call that. Anything the walk cannot follow is unknown, as before.
             if !self.imports.contains_key(&symbol)
+                && !self.is_mutated(symbol)
                 && let Some(callee) = self.object_member_expression(symbol, &members)
             {
                 return self.call_expression_value(callee, arguments);
@@ -1725,6 +1764,11 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
     }
 
     pub fn call_symbol(&mut self, symbol: SymbolId, arguments: Vec<EvalResult>) -> EvalResult {
+        // Reassigned, the function called may not be the one declared. A property written onto
+        // it, like `displayName`, does not change what calling it returns.
+        if self.scoping.symbol_is_mutated(symbol) {
+            return EvalResult::unknown();
+        }
         if let Some(binding) = self.imports.get(&symbol).cloned() {
             return self
                 .project
@@ -1835,7 +1879,9 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
         let previous = self.environment.clone();
         self.bind_parameters(&function.params, arguments);
         let result = match &function.body {
-            ArrowFunctionBody::FunctionBody(body) => self.execute_statements(&body.statements),
+            ArrowFunctionBody::FunctionBody(body) => self
+                .execute_statements(&body.statements)
+                .unwrap_or_else(EvalResult::undefined),
             _ => function
                 .body
                 .as_expression()
@@ -1853,7 +1899,9 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
     ) -> EvalResult {
         let previous = self.environment.clone();
         self.bind_parameters(parameters, arguments);
-        let result = self.execute_statements(&body.statements);
+        let result = self
+            .execute_statements(&body.statements)
+            .unwrap_or_else(EvalResult::undefined);
         self.environment = previous;
         result
     }
@@ -1977,62 +2025,64 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
         }
     }
 
-    fn execute_statements(&mut self, statements: &'a [Statement<'a>]) -> EvalResult {
-        for statement in statements {
-            match statement {
-                Statement::ReturnStatement(statement) => {
-                    return statement
-                        .argument
-                        .as_ref()
-                        .map_or_else(EvalResult::undefined, |value| self.evaluate(value));
-                }
-                Statement::VariableDeclaration(declaration) => {
-                    for declarator in &declaration.declarations {
-                        let value = declarator
-                            .init
-                            .as_ref()
-                            .map_or_else(EvalResult::undefined, |value| self.evaluate(value));
-                        self.bind_pattern(&declarator.id, value);
-                    }
-                }
-                Statement::IfStatement(statement) => {
-                    let test = self.evaluate(&statement.test);
-                    if let Some(test) = test.value {
-                        let selected = if truthy(&test) {
-                            Some(&statement.consequent)
-                        } else {
-                            statement.alternate.as_ref()
-                        };
-                        if let Some(selected) = selected {
-                            let result = self.execute_statement(selected);
-                            if result.value.is_some() || !result.complete {
-                                return result;
-                            }
-                        }
-                    } else {
-                        return EvalResult::unknown();
-                    }
-                }
-                Statement::BlockStatement(block) => {
-                    let result = self.execute_statements(&block.body);
-                    if result.value.is_some() || !result.complete {
-                        return result;
-                    }
-                }
-                _ => {}
-            }
-        }
-        EvalResult::undefined()
+    /// Runs statements in order until one returns.
+    ///
+    /// `None` is running off the end. `Some` is what the function returns: the value of a
+    /// `return`, including a bare `return` — which is `undefined`, not a statement to step past
+    /// — or unknown, at the first statement the evaluator cannot run.
+    fn execute_statements(&mut self, statements: &'a [Statement<'a>]) -> Option<EvalResult> {
+        statements
+            .iter()
+            .find_map(|statement| self.execute_statement(statement))
     }
 
-    fn execute_statement(&mut self, statement: &'a Statement<'a>) -> EvalResult {
+    /// One statement. Only what is listed here runs.
+    ///
+    /// Anything else makes the result unknown rather than being stepped over. Stepping over was
+    /// a guess that compiled to the wrong classes with no error: a `switch` or loop that chose or
+    /// built the value, a `try`, a `throw` that is reached, and every expression statement, since
+    /// what one is for is its effect — an assignment, `Object.assign(out, …)`, a call.
+    fn execute_statement(&mut self, statement: &'a Statement<'a>) -> Option<EvalResult> {
         match statement {
+            Statement::ReturnStatement(statement) => Some(
+                statement
+                    .argument
+                    .as_ref()
+                    .map_or_else(EvalResult::undefined, |value| self.evaluate(value)),
+            ),
+            Statement::VariableDeclaration(declaration) => {
+                // `using` disposes of its value when the block ends, which runs code.
+                if declaration.kind.is_using() {
+                    return Some(EvalResult::unknown());
+                }
+                for declarator in &declaration.declarations {
+                    let value = declarator
+                        .init
+                        .as_ref()
+                        .map_or_else(EvalResult::undefined, |value| self.evaluate(value));
+                    self.bind_pattern(&declarator.id, value);
+                }
+                None
+            }
+            Statement::IfStatement(statement) => {
+                let Some(test) = self.evaluate(&statement.test).value else {
+                    return Some(EvalResult::unknown());
+                };
+                let selected = if truthy(&test) {
+                    Some(&statement.consequent)
+                } else {
+                    statement.alternate.as_ref()
+                };
+                selected.and_then(|selected| self.execute_statement(selected))
+            }
             Statement::BlockStatement(block) => self.execute_statements(&block.body),
-            Statement::ReturnStatement(statement) => statement
-                .argument
-                .as_ref()
-                .map_or_else(EvalResult::undefined, |value| self.evaluate(value)),
-            _ => self.execute_statements(std::slice::from_ref(statement)),
+            // Nothing runs: a function declaration is read where it is called, and a type is
+            // erased.
+            Statement::EmptyStatement(_)
+            | Statement::FunctionDeclaration(_)
+            | Statement::TSTypeAliasDeclaration(_)
+            | Statement::TSInterfaceDeclaration(_) => None,
+            _ => Some(EvalResult::unknown()),
         }
     }
 }
@@ -2077,6 +2127,117 @@ fn global_callee_path(expression: &Expression<'_>) -> Option<Vec<String>> {
             Some(path)
         }
         _ => None,
+    }
+}
+
+/// Whether the reference at `reference` changes the value behind it.
+///
+/// The reference being written itself is the symbol's write flag. This is the object behind it
+/// changing while the binding stays put: a property written, updated or deleted through it at
+/// any depth (`theme.text.color = …`), a method that changes it in place (`fonts.push(…)`), or
+/// a global that writes into its first argument (`Object.assign(base, …)`).
+fn mutates_through(nodes: &AstNodes<'_>, reference: NodeId) -> bool {
+    let mut current = reference;
+    let mut through_member = false;
+    loop {
+        let span = nodes.kind(current).span();
+        let parent = nodes.parent_id(current);
+        if parent == current {
+            return false;
+        }
+        match nodes.kind(parent) {
+            AstKind::ParenthesizedExpression(_)
+            | AstKind::TSAsExpression(_)
+            | AstKind::TSSatisfiesExpression(_)
+            | AstKind::TSNonNullExpression(_)
+            | AstKind::TSTypeAssertion(_) => {}
+            AstKind::StaticMemberExpression(member) if member.object.span() == span => {
+                through_member = true;
+            }
+            AstKind::ComputedMemberExpression(member) if member.object.span() == span => {
+                through_member = true;
+            }
+            AstKind::PrivateFieldExpression(member) if member.object.span() == span => {
+                through_member = true;
+            }
+            AstKind::AssignmentExpression(assignment) => {
+                return through_member && assignment.left.span() == span;
+            }
+            AstKind::UpdateExpression(_)
+            | AstKind::ArrayAssignmentTarget(_)
+            | AstKind::AssignmentTargetRest(_) => return through_member,
+            AstKind::AssignmentTargetWithDefault(target) => {
+                return through_member && target.binding.span() == span;
+            }
+            AstKind::AssignmentTargetPropertyProperty(property) => {
+                return through_member && property.binding.span() == span;
+            }
+            AstKind::ForInStatement(statement) => {
+                return through_member && statement.left.span() == span;
+            }
+            AstKind::ForOfStatement(statement) => {
+                return through_member && statement.left.span() == span;
+            }
+            AstKind::UnaryExpression(unary) => {
+                return through_member && unary.operator == UnaryOperator::Delete;
+            }
+            AstKind::CallExpression(call) => {
+                if call.callee.span() == span {
+                    return through_member && is_mutating_method(nodes.kind(current));
+                }
+                return call
+                    .arguments
+                    .first()
+                    .is_some_and(|argument| argument.span() == span)
+                    && global_callee_path(&call.callee)
+                        .is_some_and(|path| writes_first_argument(&path));
+            }
+            _ => return false,
+        }
+        current = parent;
+    }
+}
+
+/// The array methods that change an array in place. A style value is JSON, so these are the
+/// only methods on it that write.
+fn is_mutating_method(callee: AstKind<'_>) -> bool {
+    let name = match callee {
+        AstKind::StaticMemberExpression(member) => member.property.name.as_str(),
+        AstKind::ComputedMemberExpression(member) => match &member.expression {
+            Expression::StringLiteral(name) => name.value.as_str(),
+            // A method the build cannot name could be any of them.
+            _ => return true,
+        },
+        _ => return false,
+    };
+    matches!(
+        name,
+        "push"
+            | "pop"
+            | "shift"
+            | "unshift"
+            | "splice"
+            | "sort"
+            | "reverse"
+            | "fill"
+            | "copyWithin"
+    )
+}
+
+/// The globals that write into the object given as their first argument.
+fn writes_first_argument(path: &[String]) -> bool {
+    match path {
+        [object, method] => matches!(
+            (object.as_str(), method.as_str()),
+            (
+                "Object",
+                "assign" | "defineProperty" | "defineProperties" | "setPrototypeOf"
+            ) | (
+                "Reflect",
+                "set" | "defineProperty" | "deleteProperty" | "setPrototypeOf"
+            )
+        ),
+        _ => false,
     }
 }
 

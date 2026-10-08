@@ -19,7 +19,7 @@ const createProject = () => {
   )
   writeFileSync(
     join(directory, 'src/styles.ts'),
-    `import { css, cva } from '../styled-system/css'\nconst styles = { color: 'red' }\nstyles.color = 'green'\nexport const className = css(styles)\nexport const badge = cva({ base: { backgroundColor: 'blue' } })\n`,
+    `import { css, cva } from '../styled-system/css'\nconst styles = { color: 'red' }\nexport const className = css(styles)\nexport const badge = cva({ base: { backgroundColor: 'blue' } })\n`,
   )
   writeFileSync(
     join(directory, 'src/consumer.ts'),
@@ -43,7 +43,7 @@ test('a cold Builder pass parses only files that can reach bamboo', async () => 
   expect(nativeCss).toContain('background-color: blue')
   expect([...builder.getAtomOrigins().values()]).toContainEqual({
     filePath: join(context.config.cwd, 'src/styles.ts'),
-    line: 4,
+    line: 3,
     column: 26,
   })
 })

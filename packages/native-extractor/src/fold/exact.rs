@@ -297,6 +297,10 @@ impl<'a> Exactness<'_, 'a, '_, '_> {
         else {
             return false;
         };
+        // Written after its declaration, a binding no longer holds what its initializer says.
+        if self.evaluator.is_mutated(symbol) {
+            return false;
+        }
         if self.evaluator.is_import(symbol) {
             // Cross-module values are resolved by the evaluator from the exporting module's
             // initializer; the exactness of that initializer was established there.

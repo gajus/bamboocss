@@ -1,5 +1,55 @@
 # @bamboocss/vite
 
+## 1.56.5
+
+### Patch Changes
+
+- 8bd9524: Fail the compile on code the evaluator cannot run, instead of compiling a style call to the wrong classes.
+  - A style helper whose body uses a `switch`, a loop, `try`, a `throw` that is reached, or a statement run for its
+    effect, such as `styles.color = …` or `Object.assign(out, …)`, now makes the call a compile error. These statements
+    used to be skipped, so `css(tone('danger'))` compiled to a fall-through value, to an empty class, or to the object
+    as it was before a loop or assignment changed it.
+  - A binding that is reassigned, or written into anywhere in its module (`base.color = …`, `delete base.color`,
+    `Object.assign(base, …)`, `fonts.push(…)`), is no longer read as its initializer, so a call that uses it is a
+    compile error rather than a class for a value the element never has.
+  - A bare `return` inside a branch now returns `undefined` instead of continuing to the next statement, and every
+    expression of a comma sequence is evaluated, not only the last.
+
+  Builds that compiled such calls now fail at the call, naming the file and line. Code that only declares values,
+  branches with `if` and returns is unaffected.
+
+- 79d72d0: Make a mixin combined with other styles mean what writing its declarations in its place means.
+  - The compiler kept an applied mixin as its one class in the `compositions` layer, below every other utility, so any
+    other utility on the element won: a recipe variant's mixin lost to the base, a compound variant's lost to a plain
+    variant, a mixin written after a property lost to it, and a mixin's own `_hover` never applied over a `color` set
+    beside it. Merging styles also treated `mixin` as one key, so `cx(css({ mixin: 'a' }), css({ mixin: 'b' }))` dropped
+    everything `a` set that `b` does not.
+  - A mixin combined with anything else now compiles to the atoms of the declarations it applies, merged in place: a
+    property after it wins, one before it loses, and its conditions rank as conditions. A mixin that is the whole style
+    still compiles to its one `mixin_*` class.
+  - The stylesheet interns a mixin's declarations wherever one is applied, so every class the compiler emits has a rule,
+    and pruning drops whichever form no output uses.
+
+- 1fef999: Say why the compiler refused a call: what the code does that it will not run, and where.
+  - A call that fails to compile because a helper's body uses a statement the compiler does not run now names the
+    helper, the statement and its location, which may be in another file:
+    ``css() — dynamic: `tone` uses a `switch` statement at src/theme.ts:4:3, which the compiler does not run``.
+  - A call that reads a binding written after its declaration names the binding and the write:
+    ``css() — dynamic: `base` is written after its declaration, by `base.color = 'blue.300'` at src/a.ts:3:1, so it no longer holds the value it was declared with``.
+  - A helper statement run only for its effect is quoted:
+    ``css() — dynamic: `tone` runs `styles.color = 'red.300'` for its effect at src/theme.ts:4:3, which the compiler does not run``.
+  - `reportSkipped` lists the same reasons.
+
+- Updated dependencies [8bd9524]
+- Updated dependencies [79d72d0]
+- Updated dependencies [1fef999]
+  - @bamboocss/node@1.56.5
+  - @bamboocss/core@1.56.5
+  - @bamboocss/config@1.56.5
+  - @bamboocss/logger@1.56.5
+  - @bamboocss/shared@1.56.5
+  - @bamboocss/types@1.56.5
+
 ## 1.56.4
 
 ### Patch Changes

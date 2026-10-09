@@ -1,6 +1,6 @@
 import { resolveTsPathPattern } from '@bamboocss/config/ts-path'
 import type { Context } from '@bamboocss/core'
-import type { FoldAnalysis, FoldCall, FoldCxArgument } from '@bamboocss/native-extractor'
+import type { FoldAnalysis, FoldCall, FoldCxArgument, FoldRefusal } from '@bamboocss/native-extractor'
 import { viewTransitionClassName } from '@bamboocss/shared'
 import type { Dict } from '@bamboocss/types'
 import MagicString from 'magic-string'
@@ -67,6 +67,12 @@ export interface SkippedCall {
   reason: SkipReason
   start: number
   end: number
+  /**
+   * For `dynamic`: the code the evaluator refused, when that is why. The call site alone does
+   * not show it — the statement is in a helper, perhaps in another module, and a write to a
+   * binding may be anywhere in its module.
+   */
+  refusal?: FoldRefusal
 }
 
 export interface FoldResult {
@@ -347,7 +353,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       // conditional would have left undecided, and nothing else. Later entries in `data` are
       // the trailing arguments, judged below by what they are rather than what they evaluate to.
       if (!call.exact || typeof call.data[0] !== 'string') {
-        skipped.push({ name, reason: 'dynamic', start, end })
+        skipped.push({ name, reason: 'dynamic', start, end, ...(call.refusal && { refusal: call.refusal }) })
         continue
       }
 
@@ -491,7 +497,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     }
 
     if (!call.exact || !hasStyles(call.data)) {
-      skipped.push({ name, reason: 'dynamic', start, end })
+      skipped.push({ name, reason: 'dynamic', start, end, ...(call.refusal && { refusal: call.refusal }) })
       continue
     }
 

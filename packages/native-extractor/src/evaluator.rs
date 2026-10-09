@@ -1,10 +1,11 @@
 use std::{
+    borrow::Cow,
     cell::RefCell,
     collections::{HashMap, HashSet},
     fs,
     hash::{Hash, Hasher},
     path::{Path, PathBuf},
-    sync::{Mutex, OnceLock},
+    sync::{Arc, Mutex, OnceLock},
 };
 
 use oxc_allocator::Allocator;
@@ -27,12 +28,37 @@ use oxc_syntax::{
 
 use crate::{NativeEntrypoint, NativePathMapping, NativeProjectOptions, NativeToken};
 
+/// Code the evaluator will not run, and where — the reason an unknown value is unknown.
+///
+/// Most unknowns explain themselves at the call: a parameter, a prop, an import the build
+/// cannot read. A refusal does not. The statement is in a helper's body, which may be in another
+/// file, and a write to a binding may be anywhere in its module, so the call site alone gives the
+/// author nothing to change. Carried with the value, through the caches that hold it.
+#[derive(Clone, Debug)]
+pub(crate) struct Refusal {
+    /// `statement`: a helper's body uses one the evaluator does not run.
+    /// `write`: a binding is reassigned or written into after its declaration.
+    pub kind: &'static str,
+    /// For `statement`, its keyword — `switch`, `for…of`, `throw` — or `expression` for one run
+    /// for its effect. For `write`, the binding's name.
+    pub subject: String,
+    /// For `statement`, the helper whose body it is in, when it has a name.
+    pub helper: Option<String>,
+    /// The statement, or the one making the write, as written: its first line, shortened.
+    pub excerpt: String,
+    pub file_path: String,
+    pub line: u32,
+    pub column: u32,
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct EvalResult {
     pub value: Option<serde_json::Value>,
     /// Fragments emitted for branches whose condition is not statically known.
     pub conditions: Vec<serde_json::Value>,
     pub complete: bool,
+    /// Why the value is not known, when the evaluator refused something along the way.
+    pub refusal: Option<Arc<Refusal>>,
 }
 
 impl EvalResult {
@@ -41,6 +67,7 @@ impl EvalResult {
             value: Some(value.into()),
             conditions: Vec::new(),
             complete: true,
+            refusal: None,
         }
     }
 
@@ -49,6 +76,14 @@ impl EvalResult {
             value: None,
             conditions: Vec::new(),
             complete: false,
+            refusal: None,
+        }
+    }
+
+    fn refused(refusal: Refusal) -> Self {
+        Self {
+            refusal: Some(Arc::new(refusal)),
+            ..Self::unknown()
         }
     }
 
@@ -59,6 +94,7 @@ impl EvalResult {
             value: None,
             conditions: Vec::new(),
             complete: true,
+            refusal: None,
         }
     }
 
@@ -879,7 +915,9 @@ impl<'a> ProjectEvaluator<'a> {
                     Declaration::FunctionDeclaration(function)
                         if function.id.as_ref().is_some_and(|id| id.name == name) =>
                     {
-                        return evaluator.call_function(function, arguments);
+                        return evaluator.with_helper(name, |evaluator| {
+                            evaluator.call_function(function, arguments)
+                        });
                     }
                     Declaration::VariableDeclaration(declaration) => {
                         for declarator in &declaration.declarations {
@@ -889,7 +927,9 @@ impl<'a> ProjectEvaluator<'a> {
                                 .is_some_and(|id| id.name == name)
                                 && let Some(expression) = &declarator.init
                             {
-                                return evaluator.call_expression_value(expression, arguments);
+                                return evaluator.with_helper(name, |evaluator| {
+                                    evaluator.call_expression_value(expression, arguments)
+                                });
                             }
                         }
                     }
@@ -963,8 +1003,11 @@ pub(crate) struct FileEvaluator<'a, 'project, 'sources> {
     imports: HashMap<SymbolId, ImportBinding>,
     environment: HashMap<SymbolId, EvalResult>,
     evaluating: HashSet<SymbolId>,
-    /// `is_mutated`, once per symbol: the answer scans every reference to it.
-    mutated: HashMap<SymbolId, bool>,
+    /// `mutation`, once per symbol: the answer scans every reference to it.
+    mutations: HashMap<SymbolId, Option<NodeId>>,
+    /// The helper whose body is running, for a refusal inside it to name. Borrowed from the
+    /// symbol table wherever it can be, since only a refusal ever reads it.
+    helper: Option<Cow<'a, str>>,
 }
 
 impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
@@ -1012,7 +1055,8 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
             imports,
             environment: HashMap::new(),
             evaluating: HashSet::new(),
-            mutated: HashMap::new(),
+            mutations: HashMap::new(),
+            helper: None,
         }
     }
 
@@ -1030,6 +1074,7 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
             Expression::TemplateLiteral(template) => {
                 let mut output = String::new();
                 let mut complete = true;
+                let mut refusal = None;
                 for (index, quasi) in template.quasis.iter().enumerate() {
                     let raw = quasi
                         .value
@@ -1040,25 +1085,32 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
                     if let Some(expression) = template.expressions.get(index) {
                         let value = self.evaluate(expression);
                         complete &= value.complete;
+                        refusal = refusal.or(value.refusal);
                         let Some(value) = value.value else {
-                            return EvalResult::unknown();
+                            return EvalResult {
+                                refusal,
+                                ..EvalResult::unknown()
+                            };
                         };
                         output.push_str(&to_js_string(&value));
                     }
                 }
                 let mut result = EvalResult::known(normalize_whitespace(&output));
                 result.complete = complete;
+                result.refusal = refusal;
                 result
             }
             Expression::ArrayExpression(array) => {
                 let mut output = Vec::new();
                 let mut conditions = Vec::new();
                 let mut complete = true;
+                let mut refusal = None;
                 for element in &array.elements {
                     match element {
                         oxc_ast::ast::ArrayExpressionElement::SpreadElement(spread) => {
                             let value = self.evaluate(&spread.argument);
                             complete &= value.complete;
+                            refusal = refusal.or(value.refusal);
                             conditions.extend(value.conditions);
                             if let Some(serde_json::Value::Array(values)) = value.value {
                                 output.extend(values);
@@ -1074,6 +1126,7 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
                                 .as_expression()
                                 .map_or_else(EvalResult::unknown, |value| self.evaluate(value));
                             complete &= value.complete;
+                            refusal = refusal.or(value.refusal);
                             conditions.extend(value.conditions);
                             output.push(value.value.unwrap_or(serde_json::Value::Null));
                         }
@@ -1083,12 +1136,14 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
                     value: Some(output.into()),
                     conditions,
                     complete,
+                    refusal,
                 }
             }
             Expression::ObjectExpression(object) => {
                 let mut output = serde_json::Map::with_capacity(object.properties.len());
                 let mut conditions = Vec::new();
                 let mut complete = true;
+                let mut refusal = None;
                 for property in &object.properties {
                     match property {
                         ObjectPropertyKind::ObjectProperty(property) => {
@@ -1111,6 +1166,7 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
                             };
                             let value = self.evaluate(&property.value);
                             complete &= value.complete;
+                            refusal = refusal.or(value.refusal);
                             for condition in value.conditions {
                                 let mut fragment = serde_json::Map::new();
                                 fragment.insert(key.clone(), condition);
@@ -1123,6 +1179,7 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
                         ObjectPropertyKind::SpreadProperty(spread) => {
                             let value = self.evaluate(&spread.argument);
                             complete &= value.complete;
+                            refusal = refusal.or(value.refusal);
                             conditions.extend(value.conditions);
                             if let Some(serde_json::Value::Object(values)) = value.value {
                                 output.extend(values);
@@ -1136,6 +1193,7 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
                     value: Some(output.into()),
                     conditions,
                     complete,
+                    refusal,
                 }
             }
             Expression::Identifier(identifier) => {
@@ -1198,6 +1256,7 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
                     value: None,
                     conditions,
                     complete: left.complete && right.complete,
+                    refusal: test.refusal.or(left.refusal).or(right.refusal),
                 }
             }
             Expression::CallExpression(call) => self.evaluate_call(call),
@@ -1205,12 +1264,15 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
             // evaluator cannot follow may be what changes it, as in `(track(), styles)`.
             Expression::SequenceExpression(sequence) => {
                 let mut complete = true;
+                let mut refusal = None;
                 let mut result = EvalResult::undefined();
                 for expression in &sequence.expressions {
                     result = self.evaluate(expression);
                     complete &= result.complete;
+                    refusal = refusal.or_else(|| result.refusal.clone());
                 }
                 result.complete = complete;
+                result.refusal = refusal;
                 result
             }
             Expression::ChainExpression(chain) => self.evaluate_chain(&chain.expression),
@@ -1316,8 +1378,8 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
     }
 
     pub fn evaluate_symbol(&mut self, symbol: SymbolId) -> EvalResult {
-        if self.is_mutated(symbol) {
-            return EvalResult::unknown();
+        if let Some(write) = self.mutation(symbol) {
+            return EvalResult::refused(self.write_refusal(symbol, write));
         }
         if let Some(value) = self.environment.get(&symbol) {
             return value.clone();
@@ -1373,16 +1435,103 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
     /// and `css(base)` are what a style object is for. A function that mutates what it is
     /// given, an alias written through, or a write from another module is not seen.
     pub fn is_mutated(&mut self, symbol: SymbolId) -> bool {
-        if let Some(&mutated) = self.mutated.get(&symbol) {
-            return mutated;
+        self.mutation(symbol).is_some()
+    }
+
+    /// The first reference to `symbol`, in source order, through which it is written.
+    fn mutation(&mut self, symbol: SymbolId) -> Option<NodeId> {
+        if let Some(&mutation) = self.mutations.get(&symbol) {
+            return mutation;
         }
         let nodes = self.semantic.nodes();
-        let mutated = self
+        let mutation = self
             .scoping
             .get_resolved_references(symbol)
-            .any(|reference| reference.is_write() || mutates_through(nodes, reference.node_id()));
-        self.mutated.insert(symbol, mutated);
-        mutated
+            .find(|reference| reference.is_write() || mutates_through(nodes, reference.node_id()))
+            .map(|reference| reference.node_id());
+        self.mutations.insert(symbol, mutation);
+        mutation
+    }
+
+    /// `symbol` is written at `reference`: by the statement there, read as written.
+    fn write_refusal(&self, symbol: SymbolId, reference: NodeId) -> Refusal {
+        let nodes = self.semantic.nodes();
+        let statement = nodes
+            .ancestor_kinds(reference)
+            .find(|kind| kind.is_statement())
+            .unwrap_or_else(|| nodes.kind(reference));
+        self.refusal(
+            "write",
+            self.scoping.symbol_name(symbol).to_string(),
+            None,
+            nodes.kind(reference).span(),
+            statement.span(),
+        )
+    }
+
+    /// `statement`, which the evaluator does not run, in the helper whose body is running.
+    fn statement_refusal(&self, statement: &Statement<'_>) -> Refusal {
+        let keyword = match statement {
+            Statement::SwitchStatement(_) => "switch",
+            Statement::ForStatement(_) => "for",
+            Statement::ForInStatement(_) => "for…in",
+            Statement::ForOfStatement(_) => "for…of",
+            Statement::WhileStatement(_) => "while",
+            Statement::DoWhileStatement(_) => "do…while",
+            Statement::TryStatement(_) => "try",
+            Statement::ThrowStatement(_) => "throw",
+            Statement::LabeledStatement(_) => "labeled",
+            Statement::BreakStatement(_) => "break",
+            Statement::ContinueStatement(_) => "continue",
+            Statement::WithStatement(_) => "with",
+            Statement::ClassDeclaration(_) => "class",
+            Statement::TSEnumDeclaration(_) => "enum",
+            Statement::DebuggerStatement(_) => "debugger",
+            Statement::ExpressionStatement(_) => "expression",
+            Statement::VariableDeclaration(_) => "using",
+            _ => "statement",
+        };
+        self.refusal(
+            "statement",
+            keyword.to_string(),
+            self.helper.as_deref().map(str::to_string),
+            statement.span(),
+            statement.span(),
+        )
+    }
+
+    /// A refusal at `at`, in this file, showing the code at `excerpt`.
+    fn refusal(
+        &self,
+        kind: &'static str,
+        subject: String,
+        helper: Option<String>,
+        at: oxc_span::Span,
+        excerpt: oxc_span::Span,
+    ) -> Refusal {
+        let source = self.semantic.source_text();
+        let (line, column) = crate::line_and_column(source, at.start);
+        Refusal {
+            kind,
+            subject,
+            helper,
+            excerpt: excerpt_of(&source[excerpt.start as usize..excerpt.end as usize]),
+            file_path: self.filename.to_string(),
+            line,
+            column,
+        }
+    }
+
+    /// Run `call` as the body of the helper named `name`, for a refusal inside it to name.
+    pub fn with_helper<T>(
+        &mut self,
+        name: impl Into<Cow<'a, str>>,
+        call: impl FnOnce(&mut Self) -> T,
+    ) -> T {
+        let previous = self.helper.replace(name.into());
+        let result = call(self);
+        self.helper = previous;
+        result
     }
 
     /// An enum as the object its members compile to.
@@ -1447,6 +1596,7 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
             value: Some(object.into()),
             conditions: Vec::new(),
             complete,
+            refusal: None,
         }
     }
 
@@ -1497,9 +1647,12 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
         if operator == UnaryOperator::Void {
             return EvalResult::undefined();
         }
-        let value = self.evaluate(argument);
-        let Some(value) = value.value else {
-            return EvalResult::unknown();
+        let result = self.evaluate(argument);
+        let Some(value) = result.value else {
+            return EvalResult {
+                refusal: result.refusal,
+                ..EvalResult::unknown()
+            };
         };
         match operator {
             UnaryOperator::LogicalNot => EvalResult::known(!truthy(&value)),
@@ -1546,8 +1699,12 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
         right: EvalResult,
     ) -> EvalResult {
         let complete = left.complete && right.complete;
+        let refusal = left.refusal.or(right.refusal);
         let (Some(left), Some(right)) = (left.value, right.value) else {
-            return EvalResult::unknown();
+            return EvalResult {
+                refusal,
+                ..EvalResult::unknown()
+            };
         };
         let value = match operator {
             // The established extractor boxes `+` through property-name evaluation, which
@@ -1594,11 +1751,18 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
             },
             BinaryOperator::Instanceof => None,
         };
-        value.map_or_else(EvalResult::unknown, |value| EvalResult {
-            value: Some(value),
-            conditions: Vec::new(),
-            complete,
-        })
+        match value {
+            Some(value) => EvalResult {
+                value: Some(value),
+                conditions: Vec::new(),
+                complete,
+                refusal,
+            },
+            None => EvalResult {
+                refusal,
+                ..EvalResult::unknown()
+            },
+        }
     }
 
     fn evaluate_logical(&mut self, expression: &'a LogicalExpression<'a>) -> EvalResult {
@@ -1625,6 +1789,7 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
             value: None,
             conditions,
             complete: left.complete && right.complete,
+            refusal: left.refusal.or(right.refusal),
         }
     }
 
@@ -1640,6 +1805,9 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
             })
             .collect::<Vec<_>>();
 
+        // `x.join()` on an `x` the evaluator refused is unknown for that reason — unless a path
+        // below calls it anyway, as it does a method on an object literal.
+        let mut receiver_refusal = None;
         if let Expression::StaticMemberExpression(member) = &call.callee
             && member.property.name == "join"
         {
@@ -1660,8 +1828,14 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
                     ),
                     conditions: Vec::new(),
                     complete: array.complete && arguments.iter().all(|argument| argument.complete),
+                    refusal: array.refusal.or_else(|| {
+                        arguments
+                            .iter()
+                            .find_map(|argument| argument.refusal.clone())
+                    }),
                 };
             }
+            receiver_refusal = array.refusal;
         }
 
         if let Some((symbol, members)) = callee_symbol_and_members(&call.callee, self.scoping) {
@@ -1728,7 +1902,10 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
                 && !self.is_mutated(symbol)
                 && let Some(callee) = self.object_member_expression(symbol, &members)
             {
-                return self.call_expression_value(callee, arguments);
+                let name = format!("{}.{}", self.scoping.symbol_name(symbol), members.join("."));
+                return self.with_helper(name, |evaluator| {
+                    evaluator.call_expression_value(callee, arguments)
+                });
             }
         }
 
@@ -1746,8 +1923,10 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
         {
             let mut output = serde_json::Map::new();
             let mut complete = true;
+            let mut refusal = None;
             for argument in arguments {
                 complete &= argument.complete;
+                refusal = refusal.or(argument.refusal);
                 if let Some(serde_json::Value::Object(value)) = argument.value {
                     output.extend(value);
                 } else {
@@ -1758,32 +1937,45 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
                 value: Some(output.into()),
                 conditions: Vec::new(),
                 complete,
+                refusal,
             };
         }
-        EvalResult::unknown()
+        EvalResult {
+            refusal: receiver_refusal,
+            ..EvalResult::unknown()
+        }
     }
 
     pub fn call_symbol(&mut self, symbol: SymbolId, arguments: Vec<EvalResult>) -> EvalResult {
         // Reassigned, the function called may not be the one declared. A property written onto
         // it, like `displayName`, does not change what calling it returns.
-        if self.scoping.symbol_is_mutated(symbol) {
-            return EvalResult::unknown();
+        if self.scoping.symbol_is_mutated(symbol)
+            && let Some(write) = self
+                .scoping
+                .get_resolved_references(symbol)
+                .find(|reference| reference.is_write())
+        {
+            let write = write.node_id();
+            return EvalResult::refused(self.write_refusal(symbol, write));
         }
         if let Some(binding) = self.imports.get(&symbol).cloned() {
             return self
                 .project
                 .call_imported(self.filename, &binding, arguments);
         }
-        match self.semantic.symbol_declaration(symbol).kind() {
-            AstKind::Function(function) => self.call_function(function, arguments),
-            AstKind::VariableDeclarator(declarator) => declarator
-                .init
-                .as_ref()
-                .map_or_else(EvalResult::unknown, |expression| {
-                    self.call_expression_value(expression, arguments)
-                }),
-            _ => EvalResult::unknown(),
-        }
+        let scoping: &'a Scoping = self.scoping;
+        self.with_helper(scoping.symbol_name(symbol), |evaluator| {
+            match evaluator.semantic.symbol_declaration(symbol).kind() {
+                AstKind::Function(function) => evaluator.call_function(function, arguments),
+                AstKind::VariableDeclarator(declarator) => declarator
+                    .init
+                    .as_ref()
+                    .map_or_else(EvalResult::unknown, |expression| {
+                        evaluator.call_expression_value(expression, arguments)
+                    }),
+                _ => EvalResult::unknown(),
+            }
+        })
     }
 
     /// The source expression at `symbol.a.b`, following object-literal initializers only.
@@ -1942,6 +2134,7 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
                     value,
                     conditions: Vec::new(),
                     complete,
+                    refusal: values.iter().find_map(|value| value.refusal.clone()),
                 },
             );
         }
@@ -2053,7 +2246,7 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
             Statement::VariableDeclaration(declaration) => {
                 // `using` disposes of its value when the block ends, which runs code.
                 if declaration.kind.is_using() {
-                    return Some(EvalResult::unknown());
+                    return Some(EvalResult::refused(self.statement_refusal(statement)));
                 }
                 for declarator in &declaration.declarations {
                     let value = declarator
@@ -2065,8 +2258,12 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
                 None
             }
             Statement::IfStatement(statement) => {
-                let Some(test) = self.evaluate(&statement.test).value else {
-                    return Some(EvalResult::unknown());
+                let test = self.evaluate(&statement.test);
+                let Some(test) = test.value else {
+                    return Some(EvalResult {
+                        refusal: test.refusal,
+                        ..EvalResult::unknown()
+                    });
                 };
                 let selected = if truthy(&test) {
                     Some(&statement.consequent)
@@ -2082,7 +2279,7 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
             | Statement::FunctionDeclaration(_)
             | Statement::TSTypeAliasDeclaration(_)
             | Statement::TSInterfaceDeclaration(_) => None,
-            _ => Some(EvalResult::unknown()),
+            _ => Some(EvalResult::refused(self.statement_refusal(statement))),
         }
     }
 }
@@ -2128,6 +2325,23 @@ fn global_callee_path(expression: &Expression<'_>) -> Option<Vec<String>> {
         }
         _ => None,
     }
+}
+
+/// Code as a refusal shows it: its first line, without a trailing `;`, shortened past 60
+/// characters.
+fn excerpt_of(text: &str) -> String {
+    let line = text
+        .lines()
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .trim_end_matches(';');
+    if line.chars().count() <= 60 {
+        return line.to_string();
+    }
+    let mut shortened = line.chars().take(59).collect::<String>();
+    shortened.push('…');
+    shortened
 }
 
 /// Whether the reference at `reference` changes the value behind it.

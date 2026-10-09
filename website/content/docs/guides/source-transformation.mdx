@@ -200,7 +200,7 @@ reflectively, or missed because a transform threw is still a survivor and fails 
 bamboocss: 2 call(s) could not be compiled.
 
   src/card.tsx
-    18: css() — dynamic
+    18: css() — dynamic: `tone` uses a `switch` statement at src/theme.ts:4:3, which the compiler does not run
   src/styles.ts
     7: badge — runtime-binding
 ```
@@ -215,6 +215,12 @@ Common reasons:
 | `unsupported-kind` | The result shape cannot be represented as the requested class value.       |
 | `runtime-binding`  | A Bamboo runtime binding remains referenced after planned rewrites.        |
 | `compile-failed`   | Compilation of the module threw; no clean result can be claimed.           |
+
+Some `dynamic` calls are code the compiler refused to run rather than a value it cannot know, and the line says what and
+where, since the call site does not show it. Either a helper's body uses a statement the compiler does not run (a
+`switch`, a loop, `try`, a `throw` it reaches, or a statement run for its effect), possibly in another file, or a value
+the call reads is reassigned or written into after its declaration. A helper's body may declare values, branch with `if`
+and return.
 
 `not-imported` is not an error: it means a local or third-party function happened to use the same name. An `overlapping`
 inner candidate is owned by the enclosing compiled expression. Neither is `opaque-composition`, which is a `cx()` that

@@ -50,6 +50,9 @@ pub struct FoldCall {
     /// leaf, no branch collapsed to one arm, no destructuring default standing in for a value,
     /// no spread or computed key the value cannot account for.
     pub exact: bool,
+    /// For a call that is not exact because the evaluator refused code it does not run: what,
+    /// and where. Absent when it is not exact for any other reason.
+    pub refusal: Option<FoldRefusal>,
     /// Number of arguments written at the call site.
     pub argument_count: u32,
     /// Every argument after the first is a literal whose evaluation cannot run anything.
@@ -63,6 +66,28 @@ pub struct FoldCall {
     pub binding: Option<String>,
     /// For a `cx()` call: its arguments, classified.
     pub cx_arguments: Vec<FoldCxArgument>,
+}
+
+/// Code the evaluator does not run, which is why a call's arguments are not known.
+///
+/// The call site says nothing about it: the statement is in a helper's body, possibly in another
+/// module, and a binding's write may be anywhere in its module.
+#[napi(object)]
+pub struct FoldRefusal {
+    /// `statement`: a helper's body uses a statement the evaluator does not run.
+    /// `write`: a binding is reassigned or written into after its declaration.
+    pub kind: String,
+    /// For `statement`, its keyword — `switch`, `for…of`, `throw` — or `expression` for one run
+    /// for its effect. For `write`, the binding's name.
+    pub subject: String,
+    /// For `statement`, the helper whose body it is in, when it has a name.
+    pub helper: Option<String>,
+    /// The statement, or the one making the write, as written: its first line, shortened.
+    pub excerpt: String,
+    pub file_path: String,
+    /// 1-based, the column in UTF-16 code units.
+    pub line: u32,
+    pub column: u32,
 }
 
 /// A recipe invocation's single argument, as the call site writes it.

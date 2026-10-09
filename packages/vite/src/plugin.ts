@@ -1,6 +1,6 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { dirname, isAbsolute, relative, resolve } from 'node:path'
 
 import { logger } from '@bamboocss/logger'
 import type { ImportMapOutput } from '@bamboocss/types'
@@ -10,6 +10,7 @@ import type { Plugin } from 'vite'
 import { asError, bamboocssCss, bamboocssCssEarly, VIRTUAL_CSS_ID } from './css'
 import { bare } from './class-name'
 import { createCompilationHost, type CompilationGeneration } from './compilation-host'
+import type { FoldRefusal } from '@bamboocss/native-extractor'
 import type { FoldResult, SkipReason, SkippedCall } from './fold'
 import { loadCssOutputModule, loadFoldModule } from './lazy-modules'
 import type { StaticStyleSetCompiler } from './style-set'
@@ -97,7 +98,7 @@ const SFC_JSX_QUERY = /[?&](?:lang\.tsx|lang=tsx|lang\.jsx|lang=jsx)(?:&|$)/i
 const SFC_SCRIPT_TAG = /<script[\s>/]/i
 const NODE_MODULES = /node_modules/
 const TRANSFORM_META_KEY = 'bamboocss:transform'
-const TRANSFORM_ARTIFACT_VERSION = 3 as const
+const TRANSFORM_ARTIFACT_VERSION = 4 as const
 
 /**
  * Queries that make Vite serve something other than the module's own source.
@@ -293,7 +294,33 @@ export const normalizeFsPath = (file: string) =>
     .replaceAll('\\', '/')
     .replace(/^[a-z]:\//, (drive) => drive.toUpperCase())
 
-const formatSkipped = (id: string, skipped: SkippedCall[]) => {
+/**
+ * Why the compiler refused a call, as a sentence: what the code does, and where it is.
+ *
+ * Located relative to the project when it is inside it. The helper is often in another module,
+ * so the location is the part that says where to look. @see FoldRefusal
+ */
+export const describeRefusal = (refusal: FoldRefusal, root: string) => {
+  const path = relative(root, refusal.filePath)
+  const at = `${path && !path.startsWith('..') && !isAbsolute(path) ? path : refusal.filePath}:${refusal.line}:${refusal.column}`
+  if (refusal.kind === 'write') {
+    return (
+      `\`${refusal.subject}\` is written after its declaration, by \`${refusal.excerpt}\` at ${at}, so it no ` +
+      `longer holds the value it was declared with`
+    )
+  }
+  const helper = refusal.helper ? `\`${refusal.helper}\`` : 'a function it calls'
+  if (refusal.subject === 'expression') {
+    return `${helper} runs \`${refusal.excerpt}\` for its effect at ${at}, which the compiler does not run`
+  }
+  const statement =
+    refusal.subject === 'statement'
+      ? 'a statement'
+      : `${refusal.subject === 'enum' ? 'an' : 'a'} \`${refusal.subject}\` statement`
+  return `${helper} uses ${statement} at ${at}, which the compiler does not run`
+}
+
+const formatSkipped = (id: string, skipped: SkippedCall[], root: string) => {
   const counts = new Map<string, number>()
   for (const entry of skipped) {
     counts.set(entry.reason, (counts.get(entry.reason) ?? 0) + 1)
@@ -301,7 +328,10 @@ const formatSkipped = (id: string, skipped: SkippedCall[]) => {
   const summary = Array.from(counts.entries())
     .map(([reason, count]) => `${reason}=${count}`)
     .join(' ')
-  return `${id}: ${summary}`
+  const refusals = skipped.flatMap((entry) =>
+    entry.refusal ? [`\n  ${entry.name}(): ${describeRefusal(entry.refusal, root)}`] : [],
+  )
+  return `${id}: ${summary}${refusals.join('')}`
 }
 
 /**
@@ -324,6 +354,8 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     pruneCss = true,
     splitCss = true,
   } = options
+  /** What a refusal's location is shown relative to. */
+  const root = resolve(cwd ?? process.cwd())
 
   // Announced as the Vite config is evaluated so generated runtime guards and internal
   // integrations can identify the compiler before any application module runs.
@@ -360,7 +392,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
    */
   const host = createCompilationHost({ configPath, cwd })
 
-  type Survivor = { file: string; line: number; name: string; reason: SkipReason }
+  type Survivor = { file: string; line: number; name: string; reason: SkipReason; detail?: string }
   interface TransformArtifactPayload {
     version: typeof TRANSFORM_ARTIFACT_VERSION
     moduleId: string
@@ -390,7 +422,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       artifact.file,
       artifact.folded,
       artifact.skipped.map(([reason, count]) => [reason, count]),
-      artifact.survivors.map(({ line, name, reason }) => [line, name, reason]),
+      artifact.survivors.map(({ line, name, reason, detail }) => [line, name, reason, detail ?? null]),
       artifact.transformedFile,
       [...artifact.classNames],
       [...artifact.dependencies],
@@ -464,7 +496,8 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
           (entry.line as number) >= 1 &&
           typeof entry.name === 'string' &&
           typeof entry.reason === 'string' &&
-          skipReasons.has(entry.reason as SkipReason),
+          skipReasons.has(entry.reason as SkipReason) &&
+          (entry.detail === undefined || typeof entry.detail === 'string'),
       )
     ) {
       return false
@@ -690,7 +723,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
   const allSurvivors = (states: Iterable<EnvironmentTransformState>) =>
     [...states].flatMap((state) =>
       [...state.transformArtifactsByModule.values()].flatMap((artifact) =>
-        artifact.survivors.map(({ line, name, reason }) => ({ file: artifact.file, line, name, reason })),
+        artifact.survivors.map((survivor) => ({ file: artifact.file, ...survivor })),
       ),
     )
   const createSurvivorError = (entries: Survivor[]) => {
@@ -705,7 +738,12 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       entry.reason === 'runtime-binding' || entry.reason === 'compile-failed' ? entry.name : `${entry.name}()`
     const detail = truncateList(
       Array.from(byFile.entries(), ([file, fileEntries]) =>
-        [`  ${file}`, ...fileEntries.map((entry) => `    ${entry.line}: ${named(entry)} — ${entry.reason}`)].join('\n'),
+        [
+          `  ${file}`,
+          ...fileEntries.map(
+            (entry) => `    ${entry.line}: ${named(entry)} — ${entry.reason}${entry.detail ? `: ${entry.detail}` : ''}`,
+          ),
+        ].join('\n'),
       ),
       { unit: 'file', separator: '\n' },
     )
@@ -717,6 +755,11 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
         (threw
           ? `\`compile-failed\` is a module the compiler threw on — see the error logged for it above. ` +
             `Nothing was established about its calls either way.\n\n`
+          : '') +
+        (entries.some((entry) => entry.detail)
+          ? `A \`dynamic\` call with a reason is code the compiler will not run rather than guess at: a ` +
+            `helper's body may declare values, branch with \`if\` and return, and a value a style reads must not ` +
+            `be written after its declaration.\n\n`
           : '') +
         (entries.some((entry) => entry.reason === 'runtime-binding')
           ? `\`runtime-binding\` is a Bamboo value read rather than called. An inline \`cva\`/\`sva\` ` +
@@ -2468,7 +2511,12 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       if (entry.name === 'cx' && (entry.reason === 'dynamic' || entry.reason === 'opaque-composition')) continue
       // Every skipped entry indexes the module being folded: each module reports only about
       // its own text, so there is no foreign offset to translate.
-      survivorsHere.push({ line: lineAt(code, entry.start), name: entry.name, reason: entry.reason })
+      survivorsHere.push({
+        line: lineAt(code, entry.start),
+        name: entry.name,
+        reason: entry.reason,
+        ...(entry.refusal && { detail: describeRefusal(entry.refusal, root) }),
+      })
     }
 
     const artifact: TransformArtifactPayload = {
@@ -2499,7 +2547,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     }
 
     if (reportSkipped && result.skipped.length) {
-      logger.info('vite:transform', formatSkipped(filePath, result.skipped))
+      logger.info('vite:transform', formatSkipped(filePath, result.skipped, root))
     }
 
     // A folded literal can depend on a module this one only imports. Register the

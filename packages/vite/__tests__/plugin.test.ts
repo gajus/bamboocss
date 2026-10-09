@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, test, vi } from 'vitest'
 import { VIRTUAL_CSS_ID } from '../src/css'
-import { bamboocss, compilerParsePath, isGeneratedOutput, shouldTransform } from '../src/plugin'
+import { bamboocss, compilerParsePath, describeRefusal, isGeneratedOutput, shouldTransform } from '../src/plugin'
 
 /**
  * The plugin wrapper, separate from the fold itself.
@@ -204,6 +204,68 @@ describe('plugin contract', () => {
   })
 })
 
+describe('a refusal, as the error says it', () => {
+  const root = '/project'
+  const statement = (subject: string, helper?: string) => ({
+    kind: 'statement' as const,
+    subject,
+    ...(helper && { helper }),
+    excerpt: '',
+    filePath: '/project/src/theme.ts',
+    line: 4,
+    column: 3,
+  })
+
+  test('a statement, in the helper that uses it', () => {
+    expect(describeRefusal(statement('switch', 'tone'), root)).toBe(
+      '`tone` uses a `switch` statement at src/theme.ts:4:3, which the compiler does not run',
+    )
+    expect(describeRefusal(statement('enum', 'tone'), root)).toBe(
+      '`tone` uses an `enum` statement at src/theme.ts:4:3, which the compiler does not run',
+    )
+    expect(describeRefusal(statement('statement', 'tone'), root)).toBe(
+      '`tone` uses a statement at src/theme.ts:4:3, which the compiler does not run',
+    )
+  })
+
+  test('a statement in a function with no name', () => {
+    expect(describeRefusal(statement('for…of'), root)).toBe(
+      'a function it calls uses a `for…of` statement at src/theme.ts:4:3, which the compiler does not run',
+    )
+  })
+
+  test('a statement run for its effect, quoted', () => {
+    expect(describeRefusal({ ...statement('expression', 'make'), excerpt: "styles.color = 'red.300'" }, root)).toBe(
+      "`make` runs `styles.color = 'red.300'` for its effect at src/theme.ts:4:3, which the compiler does not run",
+    )
+  })
+
+  test('a write, quoted', () => {
+    expect(
+      describeRefusal(
+        {
+          kind: 'write',
+          subject: 'base',
+          excerpt: "base.color = 'blue.300'",
+          filePath: '/project/src/a.ts',
+          line: 3,
+          column: 1,
+        },
+        root,
+      ),
+    ).toBe(
+      "`base` is written after its declaration, by `base.color = 'blue.300'` at src/a.ts:3:1, so it no longer " +
+        'holds the value it was declared with',
+    )
+  })
+
+  test('outside the project, where it is in full', () => {
+    expect(describeRefusal({ ...statement('switch', 'tone'), filePath: '/elsewhere/theme.ts' }, root)).toBe(
+      '`tone` uses a `switch` statement at /elsewhere/theme.ts:4:3, which the compiler does not run',
+    )
+  })
+})
+
 describe('file filtering', () => {
   const ignored = [
     '/app/node_modules/pkg/index.js',
@@ -335,7 +397,7 @@ describe('compiler', () => {
       expect(result).toMatchObject({
         meta: {
           'bamboocss:transform': {
-            version: 3,
+            version: 4,
             moduleId: id,
             file: id,
             classNames: ['c_red.300'],
@@ -346,6 +408,49 @@ describe('compiler', () => {
     } finally {
       structuredCloneSpy.mockRestore()
     }
+  })
+
+  test('a rebuild from cached transform metadata still says why a call was refused', async () => {
+    const plugin = plugins({ cwd, reportSummary: false }).fold
+    const buildStart = hookOf(plugin.buildStart)!
+    const transform = hookOf(plugin.transform)!
+    const buildEnd = hookOf(plugin.buildEnd)!
+    const id = join(cwd, 'src/__cached-refusal.tsx')
+    const source =
+      `import { css } from 'styled-system/css'\n` +
+      `const tone = (t) => {\n  switch (t) { case 'a': return { color: 'red.300' } }\n  return {}\n}\n` +
+      `export const cls = css(tone('a'))\n`
+    const context = { addWatchFile() {}, environment: { name: 'client' }, getModuleInfo: () => null }
+    const reason =
+      '6: css() — dynamic: `tone` uses a `switch` statement at src/__cached-refusal.tsx:3:3, which the compiler does not run'
+    const failure = (end: () => unknown) => {
+      try {
+        end()
+      } catch (error) {
+        return (error as Error).message
+      }
+      throw new Error('the build was expected to fail')
+    }
+
+    await buildStart.call(context as never, {} as never)
+    const result = await transform.call(context as never, source, id, {} as never)
+    const meta = (result as { meta: Record<string, unknown> }).meta
+
+    expect(failure(() => buildEnd.call(context as never))).toContain(reason)
+
+    // Rollup reuses the module's transform rather than calling it again, so the reason now
+    // reaches the error only through the sealed metadata. A cached artifact the plugin rejected
+    // would fail too, but with its JSON quoted, so the line is matched whole.
+    await buildStart.call(context as never, {} as never)
+    const rebuilt = {
+      ...context,
+      getModuleIds: () => [id][Symbol.iterator](),
+      getModuleInfo: (candidate: string) => (candidate === id ? { meta } : null),
+    }
+    const message = failure(() => buildEnd.call(rebuilt as never))
+
+    expect(message).toContain('1 call(s) could not be compiled')
+    expect(message).toContain(reason)
   })
 
   test('keeps aggregate reachability exact when module contributions are replaced', async () => {

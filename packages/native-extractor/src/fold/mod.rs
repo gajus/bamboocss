@@ -3,7 +3,10 @@
 pub mod exact;
 pub mod model;
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use oxc_allocator::Allocator;
 use oxc_ast::{
@@ -18,7 +21,7 @@ use oxc_semantic::{Scoping, Semantic, SemanticBuilder};
 use oxc_span::{GetSpan, Span};
 use oxc_syntax::symbol::SymbolId;
 
-use crate::evaluator::{EvalResult, FileEvaluator, ProjectEvaluator};
+use crate::evaluator::{EvalResult, FileEvaluator, ProjectEvaluator, Refusal};
 use exact::{Exactness, exact_result, is_inert, is_inert_literal, unwrap};
 use model::*;
 
@@ -741,6 +744,7 @@ fn analyze_facts<'a>(
                     callee_property: None,
                     data: Vec::new(),
                     exact: false,
+                    refusal: None,
                     argument_count: call.arguments.len() as u32,
                     trailing_arguments_inert: true,
                     selection: None,
@@ -759,7 +763,7 @@ fn analyze_facts<'a>(
                 .iter()
                 .find(|(_, definition, _)| definition.span == call.span)
                 .map(|(name, _, _)| name.clone());
-            let (data, _) = argument_values(&mut evaluator, call);
+            let (data, _, _) = argument_values(&mut evaluator, call);
             calls.push(FoldCall {
                 name,
                 kind,
@@ -772,6 +776,7 @@ fn analyze_facts<'a>(
                 callee_property: None,
                 data,
                 exact: true,
+                refusal: None,
                 argument_count: call.arguments.len() as u32,
                 trailing_arguments_inert: true,
                 selection: None,
@@ -795,6 +800,7 @@ fn analyze_facts<'a>(
                 callee_property: None,
                 data: Vec::new(),
                 exact: false,
+                refusal: None,
                 argument_count: call.arguments.len() as u32,
                 trailing_arguments_inert: true,
                 selection: None,
@@ -824,7 +830,7 @@ fn analyze_facts<'a>(
             continue;
         }
 
-        let (data, _) = argument_values(&mut evaluator, call);
+        let (data, _, refusal) = argument_values(&mut evaluator, call);
         // A token's path is its first argument; whatever follows is discarded once it resolves,
         // and is judged by `trailing_arguments_inert` rather than by what it evaluates to.
         let judged = if kind == "token" || kind == "tokenValue" {
@@ -861,6 +867,9 @@ fn analyze_facts<'a>(
             callee_property: property,
             data,
             exact,
+            refusal: refusal
+                .filter(|_| !exact)
+                .map(|refusal| fold_refusal(&refusal)),
             argument_count: call.arguments.len() as u32,
             trailing_arguments_inert,
             selection: None,
@@ -1057,9 +1066,10 @@ fn literal_string(expression: &Expression<'_>) -> Option<String> {
 fn argument_values<'a>(
     evaluator: &mut FileEvaluator<'a, '_, '_>,
     call: &'a oxc_ast::ast::CallExpression<'a>,
-) -> (Vec<serde_json::Value>, bool) {
+) -> (Vec<serde_json::Value>, bool, Option<Arc<Refusal>>) {
     let mut output = Vec::new();
     let mut complete = true;
+    let mut refusal = None;
     for argument in &call.arguments {
         let result = argument
             .as_expression()
@@ -1067,6 +1077,7 @@ fn argument_values<'a>(
                 evaluator.evaluate(expression)
             });
         complete &= result.complete;
+        refusal = refusal.or_else(|| result.refusal.clone());
         let mut data = result.data();
         if data.is_empty() {
             data.push(serde_json::Value::Object(serde_json::Map::new()));
@@ -1076,7 +1087,20 @@ fn argument_values<'a>(
     if call.arguments.is_empty() {
         output.push(serde_json::Value::Object(serde_json::Map::new()));
     }
-    (output, complete)
+    (output, complete, refusal)
+}
+
+/// What the evaluator refused, as the record JavaScript reads.
+fn fold_refusal(refusal: &Refusal) -> FoldRefusal {
+    FoldRefusal {
+        kind: refusal.kind.to_string(),
+        subject: refusal.subject.clone(),
+        helper: refusal.helper.clone(),
+        excerpt: refusal.excerpt.clone(),
+        file_path: refusal.file_path.clone(),
+        line: refusal.line,
+        column: refusal.column,
+    }
 }
 
 /// `call(...).slot` or `call(...)['slot']` directly around the call.
@@ -1117,7 +1141,7 @@ fn recipe_invocation<'a>(
     shadowed_helpers: Vec<String>,
     config_recipe: bool,
 ) -> FoldCall {
-    let (data, _) = argument_values(evaluator, call);
+    let (data, _, _) = argument_values(evaluator, call);
     let selection = match call
         .arguments
         .first()
@@ -1214,6 +1238,7 @@ fn recipe_invocation<'a>(
         callee_property: None,
         data,
         exact: true,
+        refusal: None,
         argument_count: call.arguments.len() as u32,
         trailing_arguments_inert: true,
         selection,
@@ -1529,7 +1554,7 @@ fn module_recipes_uncached(
                 let config = if configs.contains_key(name) {
                     None
                 } else {
-                    let (data, _) = argument_values(&mut evaluator, call);
+                    let (data, _, _) = argument_values(&mut evaluator, call);
                     (data.len() == 1).then(|| data.into_iter().next()).flatten()
                 };
                 configs.insert(name.clone(), config);

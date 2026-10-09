@@ -58,6 +58,31 @@ describe('strict compiler', () => {
     expect(end).toThrow(/dynamic|runtime-binding/)
   }, 60_000)
 
+  describe('a call the evaluator refused', () => {
+    test('says what the helper does that the compiler does not run, and where', async () => {
+      const end = await run(
+        src(
+          `const tone = (t) => {\n  switch (t) { case 'a': return { color: 'red.300' } }\n  return {}\n}\nexport const A = css(tone('a'))`,
+        ),
+        'src/strict-refusal.tsx',
+      )
+
+      expect(end).toThrow(/`tone` uses a `switch` statement at src\/strict-refusal\.tsx:3:3/)
+      expect(end).toThrow(/a helper's body may declare values, branch with `if` and return/)
+    }, 60_000)
+
+    test('says which binding is written after its declaration, and by what', async () => {
+      const end = await run(
+        src(`const base = { color: 'red.300' }\nbase.color = 'blue.300'\nexport const A = css(base)`),
+        'src/strict-write.tsx',
+      )
+
+      expect(end).toThrow(
+        /`base` is written after its declaration, by `base\.color = 'blue\.300'` at src\/strict-write\.tsx:3:1/,
+      )
+    }, 60_000)
+  })
+
   test('says nothing when every call folded', async () => {
     const end = await run(src(`export const cls = css({ color: 'red.300' })`), 'src/strict-static.tsx')
 

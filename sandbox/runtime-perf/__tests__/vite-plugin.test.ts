@@ -794,7 +794,7 @@ describe.sequential('vite plugin, real rebuild', () => {
       expect(transformCalls, 'the Bamboo-compiled entry took Rollup’s cached transform path').toBe(1)
       expect(error?.message).toContain('cached transform metadata')
       expect(error?.message).toContain(JSON.stringify(staleEntry))
-      expect(error?.message).toContain('version 1; expected schema version 3')
+      expect(error?.message).toContain('version 1; expected schema version 4')
       expect(error?.message).toContain('cached JavaScript may still name CSS classes whose rules would be dropped')
       expect(error?.message).toContain('Restart Vite to invalidate its in-memory transform cache')
     } finally {
@@ -825,7 +825,7 @@ describe.sequential('vite plugin, real rebuild', () => {
           throw new Error('test fixture could not observe Bamboo transform metadata')
         }
         expect(artifact).toMatchObject({
-          version: 3,
+          version: 4,
           classNames: [`w_[${width}]`],
           integrity: expect.any(String),
         })
@@ -909,7 +909,7 @@ describe.sequential('vite plugin, real rebuild', () => {
       expect(transformCalls, 'the altered Bamboo entry took Rollup’s cached transform path').toBe(1)
       expect(error?.message).toContain('cached transform metadata')
       expect(error?.message).toContain(JSON.stringify(integrityEntry))
-      expect(error?.message).toContain('schema version 3 integrity check')
+      expect(error?.message).toContain('schema version 4 integrity check')
       expect(error?.message).toContain('cached JavaScript may still name CSS classes whose rules would be dropped')
       expect(error?.message).toContain('Restart Vite to invalidate its in-memory transform cache')
     } finally {
@@ -950,7 +950,7 @@ describe.sequential('vite plugin, real rebuild', () => {
           throw new Error('test fixture could not observe Bamboo transform metadata')
         }
         expect(artifact).toMatchObject({
-          version: 3,
+          version: 4,
           classNames: [`w_[${width}]`],
           integrity: expect.any(String),
         })

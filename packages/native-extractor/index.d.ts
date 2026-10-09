@@ -149,12 +149,29 @@ export interface FoldCall {
   calleeProperty?: string
   data: unknown[]
   exact: boolean
+  /** Why the call is not exact, when the evaluator refused code it does not run. */
+  refusal?: FoldRefusal
   argumentCount: number
   trailingArgumentsInert: boolean
   selection?: FoldSelection
   origin?: { filePath: string; name: string }
   binding?: string
   cxArguments: FoldCxArgument[]
+}
+
+/**
+ * Code the evaluator does not run. `statement`: a helper's body uses one — `subject` is its
+ * keyword, or `expression` for a statement run for its effect. `write`: the binding `subject` is
+ * reassigned or written into after its declaration. `line` is 1-based; `column` too, in UTF-16.
+ */
+export interface FoldRefusal {
+  kind: 'statement' | 'write'
+  subject: string
+  helper?: string
+  excerpt: string
+  filePath: string
+  line: number
+  column: number
 }
 
 export interface FoldSplitCall {

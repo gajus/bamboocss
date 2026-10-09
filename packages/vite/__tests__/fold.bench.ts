@@ -151,6 +151,27 @@ const parseAndFold = (code: string) => {
   return foldSource({ ctx, code, analysis: analyze(code, filePath), filePath, styleCompiler, reportSurvivors: true })
 }
 
+/**
+ * The fold with no class name cached: a fresh compiler for every module.
+ *
+ * Every other case shares one compiler across iterations, so after the first its names come out
+ * of the memo — the warm path of a long dev session. A cold build, a dev server's first visit to
+ * a module and a style just edited name from scratch, and that is where checking each
+ * declaration's path for a key that is not a condition is paid.
+ */
+const parseAndFoldCold = (code: string) => {
+  const filePath = nextPath()
+  const cold = createStaticStyleSetCompiler(ctx, createRuntimeCss(ctx))
+  return foldSource({
+    ctx,
+    code,
+    analysis: analyze(code, filePath),
+    filePath,
+    styleCompiler: cold,
+    reportSurvivors: true,
+  })
+}
+
 describe('per-module transform cost', () => {
   bench('analyze only (synthetic module)', () => {
     parseOnly(SYNTHETIC)
@@ -179,6 +200,10 @@ describe('per-module transform cost', () => {
     parseAndFold(JSX_MODULE)
   })
 
+  bench('analyze + fold, names cold (jsx module)', () => {
+    parseAndFoldCold(JSX_MODULE)
+  })
+
   // The control for the pair below: analysis dominates, so a change to the recipe path shows
   // up as the gap between these two rather than in either alone.
   bench('analyze only (recipe module)', () => {
@@ -187,6 +212,10 @@ describe('per-module transform cost', () => {
 
   bench('analyze + fold (recipe module)', () => {
     parseAndFold(RECIPE_MODULE)
+  })
+
+  bench('analyze + fold, names cold (recipe module)', () => {
+    parseAndFoldCold(RECIPE_MODULE)
   })
 
   for (const { file, code } of SANDBOX_FILES) {

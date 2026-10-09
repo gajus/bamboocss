@@ -71,6 +71,23 @@ Reported per _call_, not per import. Both entrypoints export types beside their 
 prop. A type is never called, which is the difference. A binding nobody calls is left alone for the same reason: nothing
 asked it for a class, so no rule is missing.
 
+### A nested key that is neither a property nor a condition
+
+Reported by the Vite compiler as `unknown-condition`
+
+A key nested in a style object is either the property a declaration sets or a condition it applies under: one from your
+config, a selector with `&` in it, or an at-rule. A key that is neither — `_hovr`, or `svg` written without its `&` —
+has no rule anywhere. The class the element gets keeps the key, while the stylesheet drops it and writes the declaration
+with no condition at all, so the two never meet.
+
+```text
+bamboocss: 2 call(s) could not be compiled.
+
+  src/button.tsx
+    12: css() — unknown-condition: `_hovr` is not a condition; did you mean `_hover`?
+    18: css() — unknown-condition: `has` is not a condition; did you mean `'&:has(svg)'`?
+```
+
 ### A class name the build and the browser would spell differently
 
 `ERR_BAMBOO_NAMING_DISAGREEMENT`

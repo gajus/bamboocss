@@ -207,20 +207,25 @@ bamboocss: 2 call(s) could not be compiled.
 
 Common reasons:
 
-| reason             | meaning                                                                    |
-| ------------------ | -------------------------------------------------------------------------- |
-| `dynamic`          | The call contains an open value or source shape the compiler cannot prove. |
-| `recipe-call`      | An inline recipe selection is not a finite analyzable shape.               |
-| `raw-call`         | The API returns a style object rather than a class.                        |
-| `unsupported-kind` | The result shape cannot be represented as the requested class value.       |
-| `runtime-binding`  | A Bamboo runtime binding remains referenced after planned rewrites.        |
-| `compile-failed`   | Compilation of the module threw; no clean result can be claimed.           |
+| reason              | meaning                                                                                               |
+| ------------------- | ----------------------------------------------------------------------------------------------------- |
+| `dynamic`           | The call contains an open value or source shape the compiler cannot prove.                            |
+| `recipe-call`       | An inline recipe selection is not a finite analyzable shape.                                          |
+| `raw-call`          | The API returns a style object rather than a class.                                                   |
+| `unsupported-kind`  | The result shape cannot be represented as the requested class value.                                  |
+| `runtime-binding`   | A Bamboo runtime binding remains referenced after planned rewrites.                                   |
+| `compile-failed`    | Compilation of the module threw; no clean result can be claimed.                                      |
+| `unknown-condition` | A nested key is neither a property nor a condition: a misspelled `_hover`, or a selector without `&`. |
 
 Some `dynamic` calls are code the compiler refused to run rather than a value it cannot know, and the line says what and
 where, since the call site does not show it. Either a helper's body uses a statement the compiler does not run (a
 `switch`, a loop, `try`, a `throw` it reaches, or a statement run for its effect), possibly in another file, or a value
 the call reads is reassigned or written into after its declaration. A helper's body may declare values, branch with `if`
 and return.
+
+An `unknown-condition` line names the key and what it was probably meant to be — `_hovr` is not a condition; did you
+mean `_hover`? — and is reported by the call it is written in. In a recipe, the declaration holding it reports it, and
+so does any call compiling the variant it is in.
 
 `not-imported` is not an error: it means a local or third-party function happened to use the same name. An `overlapping`
 inner candidate is owned by the enclosing compiled expression. Neither is `opaque-composition`, which is a `cx()` that

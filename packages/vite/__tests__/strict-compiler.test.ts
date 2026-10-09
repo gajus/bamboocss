@@ -58,6 +58,25 @@ describe('strict compiler', () => {
     expect(end).toThrow(/dynamic|runtime-binding/)
   }, 60_000)
 
+  test('fails on a nested key that is neither a property nor a condition, and says what it may have meant', async () => {
+    const end = await run(
+      src(
+        `export const A = css({ _hovr: { color: 'red.300' } })\nexport const B = css({ has: { svg: { color: 'red.300' } } })`,
+      ),
+      'src/strict-unknown-condition.tsx',
+    )
+
+    expect(end).toThrow(/2: css\(\) — unknown-condition: `_hovr` is not a condition; did you mean `_hover`\?/)
+    expect(end).toThrow(/3: css\(\) — unknown-condition: `has` is not a condition; did you mean `'&:has\(svg\)'`\?/)
+    expect(end).toThrow(
+      /`unknown-condition` is a key nested in a style object that is neither a property nor a condition/,
+    )
+    // The two fail as themselves, not as calls that stayed for another reason, and the advice for
+    // values the build cannot know is not given for a typo.
+    expect(end).toThrow(/^bamboocss: 2 call\(s\) could not be compiled\./)
+    expect(end).not.toThrow(/— (dynamic|runtime-binding)|Make the values finite/)
+  }, 60_000)
+
   describe('a call the evaluator refused', () => {
     test('says what the helper does that the compiler does not run, and where', async () => {
       const end = await run(

@@ -328,10 +328,11 @@ const formatSkipped = (id: string, skipped: SkippedCall[], root: string) => {
   const summary = Array.from(counts.entries())
     .map(([reason, count]) => `${reason}=${count}`)
     .join(' ')
-  const refusals = skipped.flatMap((entry) =>
-    entry.refusal ? [`\n  ${entry.name}(): ${describeRefusal(entry.refusal, root)}`] : [],
-  )
-  return `${id}: ${summary}${refusals.join('')}`
+  const reasons = skipped.flatMap((entry) => {
+    const detail = entry.detail ?? (entry.refusal && describeRefusal(entry.refusal, root))
+    return detail ? [`\n  ${entry.name}(): ${detail}`] : []
+  })
+  return `${id}: ${summary}${reasons.join('')}`
 }
 
 /**
@@ -461,6 +462,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     'runtime-binding',
     'compile-failed',
     'opaque-composition',
+    'unknown-condition',
   ])
   const isRecord = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -756,10 +758,16 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
           ? `\`compile-failed\` is a module the compiler threw on — see the error logged for it above. ` +
             `Nothing was established about its calls either way.\n\n`
           : '') +
-        (entries.some((entry) => entry.detail)
+        (entries.some((entry) => entry.reason === 'dynamic' && entry.detail)
           ? `A \`dynamic\` call with a reason is code the compiler will not run rather than guess at: a ` +
             `helper's body may declare values, branch with \`if\` and return, and a value a style reads must not ` +
             `be written after its declaration.\n\n`
+          : '') +
+        (entries.some((entry) => entry.reason === 'unknown-condition')
+          ? `\`unknown-condition\` is a key nested in a style object that is neither a property nor a ` +
+            `condition. The stylesheet drops it, so the class named for it would have no rule and the styles ` +
+            `under it would never apply. A nested key is a condition (\`_hover\`, \`md\`) or a selector ` +
+            `written with \`&\` (\`'& svg'\`, \`'&:has(svg)'\`).\n\n`
           : '') +
         (entries.some((entry) => entry.reason === 'runtime-binding')
           ? `\`runtime-binding\` is a Bamboo value read rather than called. An inline \`cva\`/\`sva\` ` +
@@ -768,9 +776,11 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
             `re-exporting it — has nothing behind it. The location given is the read to change, not the ` +
             `declaration.\n\n`
           : '') +
-        `Bamboo emits no runtime styling fallback or recipe layer. Make the values finite and statically ` +
-        `analyzable, move variation into declared recipe variants, or safelist intentional dynamic classes ` +
-        `with \`staticCss\`.\n\n` +
+        (entries.some((entry) => entry.reason !== 'unknown-condition')
+          ? `Bamboo emits no runtime styling fallback or recipe layer. Make the values finite and statically ` +
+            `analyzable, move variation into declared recipe variants, or safelist intentional dynamic classes ` +
+            `with \`staticCss\`.\n\n`
+          : '') +
         `Set \`BAMBOO_DIAGNOSTIC_LIMIT=all\` to list every finding rather than the first few.`,
     )
   }
@@ -2515,7 +2525,9 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
         line: lineAt(code, entry.start),
         name: entry.name,
         reason: entry.reason,
-        ...(entry.refusal && { detail: describeRefusal(entry.refusal, root) }),
+        ...(entry.detail
+          ? { detail: entry.detail }
+          : entry.refusal && { detail: describeRefusal(entry.refusal, root) }),
       })
     }
 

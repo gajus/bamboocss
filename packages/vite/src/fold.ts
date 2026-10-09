@@ -19,6 +19,7 @@ import {
 } from './fold-recipe'
 import { createRuntimeToken, createRuntimeTokenValue } from './runtime-css'
 import type { StaticStyleSetCompiler } from './style-set'
+import { UnknownConditionError } from './unknown-condition'
 
 /**
  * Why a call site could not be compiled. Surfaced through diagnostics so a user can tell
@@ -36,6 +37,7 @@ export type SkipReason =
   | 'runtime-binding' // a bamboo import still referenced after the rewrite, whoever left it
   | 'compile-failed' // compilation threw on this module, so nothing about it was established
   | 'opaque-composition' // a `cx()` joining compiled atoms with a class the build cannot see
+  | 'unknown-condition' // a nested key that is neither a property nor a condition, so no rule has its class
 
 export interface FoldedCall {
   name: string
@@ -73,6 +75,8 @@ export interface SkippedCall {
    * binding may be anywhere in its module.
    */
   refusal?: FoldRefusal
+  /** For `unknown-condition`: the key, and what it was probably meant to be. */
+  detail?: string
 }
 
 export interface FoldResult {
@@ -135,6 +139,7 @@ export const SURVIVES_TO_RUNTIME = new Set<SkipReason>([
   // A module the fold threw on. Unknown has to read as survives: the guarantee is that
   // *nothing* still calls `css()`, and a module nobody checked cannot support it.
   'compile-failed',
+  'unknown-condition',
 ])
 
 /**
@@ -293,6 +298,11 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     mapHelperName?: string
     /** Set once an enclosing semantic composition owns this candidate. */
     subsumed?: boolean
+    /**
+     * Reported as `unknown-condition` already. Nothing is emitted for it, and a `cx()` holding it
+     * adds no report of its own.
+     */
+    failed?: boolean
     /** The replacement evaluates to a slot-name → class-string object. */
     outputKind?: 'slots'
     /** Replacement text for a compiled call, in place of a bare class string. */
@@ -309,7 +319,52 @@ export const foldSource = (options: FoldOptions): FoldResult => {
 
   const candidates: Candidate[] = []
   const seenRanges = new Set<string>()
-  const recipeDefinitions: Array<{ name: string; start: number; end: number }> = []
+  const recipeDefinitions: Array<{ name: string; factory: string; start: number; end: number }> = []
+
+  /**
+   * The key `allocate` found that is neither a property nor a condition, when that is why it threw.
+   * Anything else it throws is not this call's to report.
+   */
+  const unknownConditionIn = (allocate: () => unknown) => {
+    try {
+      allocate()
+    } catch (error) {
+      if (error instanceof UnknownConditionError) return error
+      throw error
+    }
+    return undefined
+  }
+
+  const reportUnknownCondition = (name: string, start: number, end: number, error: UnknownConditionError) => {
+    skipped.push({ name, reason: 'unknown-condition', start, end, detail: error.message })
+  }
+
+  /**
+   * Report a key that is not a condition, found composing `parts` in `composition`, by the parts
+   * it is written in.
+   *
+   * Composing is where the key surfaces, but a `cx()` is rarely where it is written. Each part that
+   * holds one on its own reports it and is not emitted; the composition reports it only when none
+   * does, which is a mixin written out once its part is no longer alone. Run only once composing
+   * has thrown, so naming the parts again costs nothing on the way to a successful build.
+   */
+  const reportComposing = (
+    composition: { name: string; start: number; end: number },
+    parts: Candidate[],
+    error: UnknownConditionError,
+  ) => {
+    let reported = false
+    for (const part of parts) {
+      const unknown = unknownConditionIn(() =>
+        part.styleMap ? part.styleMap.compile() : styleCompiler.className(part.styleSet ?? {}),
+      )
+      if (!unknown) continue
+      reportUnknownCondition(part.name, part.start, part.end, unknown)
+      part.failed = true
+      reported = true
+    }
+    if (!reported) reportUnknownCondition(composition.name, composition.start, composition.end, error)
+  }
 
   for (const call of analysis.calls) {
     const { kind } = call
@@ -322,7 +377,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     if (kind === 'cva' || kind === 'sva') {
       const entry = call.binding ? recipeConfigs.get(call.binding) : undefined
       if (call.binding && entry && entry !== AMBIGUOUS) {
-        recipeDefinitions.push({ name: call.binding, start, end })
+        recipeDefinitions.push({ name: call.binding, factory: name, start, end })
       }
       continue
     }
@@ -407,7 +462,15 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       const slot = call.slot !== undefined && declaredSlots.includes(call.slot) ? call.slot : undefined
       const replaceEnd = slot !== undefined ? (call.slotEnd ?? end) : end
 
-      const lowered = lowerRecipeCall(call, entry, styleCompiler, slot, maxRecipeStates)
+      let lowered: ReturnType<typeof lowerRecipeCall>
+      try {
+        lowered = lowerRecipeCall(call, entry, styleCompiler, slot, maxRecipeStates)
+      } catch (error) {
+        if (!(error instanceof UnknownConditionError)) throw error
+        reportUnknownCondition(name, start, end, error)
+        candidates.push({ call, name, start, end: replaceEnd, failed: true })
+        continue
+      }
       const helperFor = (helper: string) =>
         ensureRecipeHelperImport(
           helper,
@@ -511,6 +574,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
    */
   for (const candidate of candidates) {
     if (candidate.styleSet || candidate.value !== undefined || candidate.replacement || candidate.styleMap) continue
+    if (candidate.failed) continue
 
     const { call } = candidate
     const data = call.data as Dict[]
@@ -546,9 +610,14 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     const dynamic: Candidate[] = []
     const constantCandidates: Candidate[] = []
     let supported = true
+    let holdsFailure = false
 
     const take = (arg: FoldCxArgument): boolean => {
       const candidate = byRange.get(`${arg.span.start}:${arg.span.end}`)
+      if (candidate?.failed) {
+        holdsFailure = true
+        return false
+      }
       if (candidate?.styleMap?.outputKind === 'class') {
         dynamic.push(candidate)
         parts.push({ kind: 'dynamic', candidate })
@@ -587,6 +656,8 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     // call whether or not the walk finished. It is the *mix* of compiled atoms and an opaque
     // class that is worth a separate word.
     if (!supported || dynamic.length > 1) {
+      // An argument reported already says what is wrong; the composition has nothing to add.
+      if (holdsFailure) continue
       const composesStyleSet = (arg: FoldCxArgument): boolean => {
         const candidate = byRange.get(`${arg.span.start}:${arg.span.end}`)
         if (candidate?.styleSet || candidate?.styleMap?.outputKind === 'class' || candidate?.replacement) return true
@@ -618,7 +689,18 @@ export const foldSource = (options: FoldOptions): FoldResult => {
         .slice(dynamicIndex + 1)
         .filter((part) => part.kind === 'style')
         .map((part) => part.candidate.styleSet!)
-      const compiled = dynamicCandidate.styleMap!.compile(before, after)
+      let compiled: ReturnType<DynamicStyleMap['compile']>
+      try {
+        compiled = dynamicCandidate.styleMap!.compile(before, after)
+      } catch (error) {
+        if (!(error instanceof UnknownConditionError)) throw error
+        reportComposing(
+          { name: 'cx', start: call.span.start, end: call.span.end },
+          styleParts.map((part) => part.candidate),
+          error,
+        )
+        continue
+      }
       const expression =
         compiled.usesHelper && dynamicCandidate.mapHelperName && dynamicCandidate.mapHelperName !== RECIPE_MAP_HELPER
           ? compiled.expression.replaceAll(`${RECIPE_MAP_HELPER}(`, `${dynamicCandidate.mapHelperName}(`)
@@ -675,7 +757,14 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     }
 
     const merged = styleCompiler.compose(...matched.map((candidate) => candidate.styleSet!))
-    const compiled = styleCompiler.className(merged)
+    let compiled: string
+    try {
+      compiled = styleCompiler.className(merged)
+    } catch (error) {
+      if (!(error instanceof UnknownConditionError)) throw error
+      reportComposing({ name: 'cx', start: call.span.start, end: call.span.end }, matched, error)
+      continue
+    }
     const classParts: string[] = []
     let wroteCompiled = false
     for (const part of parts) {
@@ -705,8 +794,16 @@ export const foldSource = (options: FoldOptions): FoldResult => {
   // Runtime maps are allocated only after semantic `cx()` has had a chance to merge every
   // leaf. This prevents the uncomposed intermediate atoms from entering the stylesheet.
   for (const candidate of candidates) {
-    if (!candidate.styleMap || candidate.subsumed || candidate.replacement) continue
-    const compiled = candidate.styleMap.compile()
+    if (!candidate.styleMap || candidate.subsumed || candidate.replacement || candidate.failed) continue
+    let compiled: ReturnType<DynamicStyleMap['compile']>
+    try {
+      compiled = candidate.styleMap.compile()
+    } catch (error) {
+      if (!(error instanceof UnknownConditionError)) throw error
+      reportUnknownCondition(candidate.name, candidate.start, candidate.end, error)
+      candidate.failed = true
+      continue
+    }
     candidate.replacement =
       compiled.usesHelper && candidate.mapHelperName && candidate.mapHelperName !== RECIPE_MAP_HELPER
         ? compiled.expression.replaceAll(`${RECIPE_MAP_HELPER}(`, `${candidate.mapHelperName}(`)
@@ -766,7 +863,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
   const collides = (start: number, end: number) => applied.some(([from, to]) => start < to && from < end)
 
   for (const candidate of candidates) {
-    if (candidate.subsumed) continue
+    if (candidate.subsumed || candidate.failed) continue
     const { name, start, end } = candidate
 
     if (collides(start, end)) {
@@ -802,8 +899,9 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     let className: string
     try {
       className = styleCompiler.className(candidate.styleSet ?? {})
-    } catch {
-      skipped.push({ name, reason: 'dynamic', start, end })
+    } catch (error) {
+      if (error instanceof UnknownConditionError) reportUnknownCondition(name, start, end, error)
+      else skipped.push({ name, reason: 'dynamic', start, end })
       continue
     }
 
@@ -846,13 +944,18 @@ export const foldSource = (options: FoldOptions): FoldResult => {
 
   // Erase every successfully extracted recipe declaration. Calls and supported metadata
   // operations above no longer read the binding; any other read is reported below.
-  for (const { name, start, end } of recipeDefinitions) {
+  for (const { name, factory, start, end } of recipeDefinitions) {
     if (collides(start, end)) continue
     // Only a config whose every fragment compiles. Erasing one the stylesheet cannot emit —
     // a retired `{token}` reference, say — deletes the only place the error was visible, and
     // the module the user sees is a recipe that silently became `undefined`. A throw here is
-    // what makes the plugin report the module as one it could not compile.
-    assertCompiles(recipeConfigs.get(name)?.config)
+    // what makes the plugin report the module as one it could not compile — or, for a key that
+    // is not a condition, the declaration as the place it is written.
+    const unknown = unknownConditionIn(() => assertCompiles(recipeConfigs.get(name)?.config))
+    if (unknown) {
+      reportUnknownCondition(factory, start, end, unknown)
+      continue
+    }
     magic.overwrite(start, end, 'undefined')
     applied.push([start, end])
     folded.push({ name, kind: 'definition', className: '', classNames: [], start, end })

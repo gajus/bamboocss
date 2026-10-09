@@ -114,6 +114,10 @@ const App = () => {
 }
 ```
 
+A nested key has to be one of these: a condition from your config, a selector with `&` in it, or an at-rule. Anything
+else, such as `svg` without its `&` or a misspelled `_hovr`, fails the build as
+[`unknown-condition`](/docs/guides/source-transformation#compiler-errors), naming what it was probably meant to be.
+
 ## Pseudo Classes
 
 Every pseudo class in the [Reference](#reference) has a `_` modifier that works like the `_hover` above — `_active`,

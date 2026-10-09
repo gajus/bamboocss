@@ -1,6 +1,7 @@
 import type { Context } from '@bamboocss/core'
 import { createCssUncached, createMergeCss, memo } from '@bamboocss/shared'
 import type { Dict } from '@bamboocss/types'
+import { createConditionCheck } from './unknown-condition'
 
 /**
  * The generated runtime's `css`, rebuilt in-process from a resolved context.
@@ -20,6 +21,10 @@ import type { Dict } from '@bamboocss/types'
  * cssFn(mergeCssUncached(...styles)))`, with the memo on the argument list and neither
  * inner cache. Unlike the generated runtime this one is built once per build and shared
  * across every module, so the outer cache is what carries the repeats.
+ *
+ * It departs from the runtime in one place: a key that is neither a property nor a condition
+ * throws `UnknownConditionError` instead of being named. The runtime returns `_hovr:c_red.300`
+ * for it, a class the stylesheet has no rule for.
  */
 export interface RuntimeCss {
   (...styles: Dict[]): string
@@ -43,8 +48,22 @@ export const createCssContext = (ctx: Context) => ({
 
 export const createRuntimeCss = (ctx: Context): RuntimeCss => {
   const cssContext = createCssContext(ctx)
+  const checkConditions = createConditionCheck(ctx)
+  const { shift } = cssContext.conditions
 
-  const cssFn = createCssUncached(cssContext)
+  // The one thing this does that the runtime does not: refuse a key that is neither a property
+  // nor a condition, which the runtime names a class for that no rule matches.
+  // @see UnknownConditionError
+  const cssFn = createCssUncached({
+    ...cssContext,
+    conditions: {
+      ...cssContext.conditions,
+      shift: (paths) => {
+        checkConditions(paths)
+        return shift(paths)
+      },
+    },
+  })
   const { mergeCssUncached } = createMergeCss(cssContext)
 
   return memo((...styles: Dict[]) => cssFn(mergeCssUncached(...styles)))

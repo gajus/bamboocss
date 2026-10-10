@@ -142,3 +142,39 @@ describe('the per-chunk split of a sheet whose order statement a minifier remove
     expect(cascadeOrder(chunk + css).width).toEqual(authored)
   })
 })
+
+/**
+ * The layers the utilities sit among. Preflight is in `reset` and global styles in `base`, both
+ * declared before `utilities`, which is what lets every utility override them. Layers rank by when
+ * the document first declares them, statement or block, so that holds only while the first sheet
+ * the document parses declares them in that order.
+ */
+const LAYERED =
+  `@layer reset,base,tokens,utilities;` +
+  `@layer reset{*{margin:0}}` +
+  `@layer base{body{color:#000}}` +
+  `@layer utilities{@layer s010-c0-p4000;@layer s010-c0-p4000{.m_4px{margin:4px}.c_red{color:red}}}` +
+  `:root{--made-with-bamboo:x}`
+
+describe('the per-chunk split and the layers around the utilities', () => {
+  test.each([
+    ['declared by a statement', LAYERED],
+    // What LightningCSS leaves: a statement only for a layer with no block, and the order of the blocks.
+    ['folded into the blocks', LAYERED.replace('@layer reset,base,tokens,utilities;', '@layer reset;')],
+  ])(
+    'a utility moved to a route sheet still beats preflight and global styles, whichever sheet is parsed first (%s)',
+    (_, sheet) => {
+      const ownership = new Map([
+        ['m_4px', 'assets/route.js'],
+        ['c_red', 'assets/route.js'],
+      ])
+      const { css, chunks } = splitStaticCss(sheet, session(), ownership)
+      const chunk = chunks.get('assets/route.js')!
+
+      for (const sheets of [css + chunk, chunk + css]) {
+        expect(cascadeOrder(sheets).margin?.at(-1), 'over preflight').toBe('.m_4px')
+        expect(cascadeOrder(sheets).color?.at(-1), 'over global styles').toBe('.c_red')
+      }
+    },
+  )
+})

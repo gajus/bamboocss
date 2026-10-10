@@ -40,7 +40,9 @@ describe('splitting the sheet per chunk', () => {
 
     const a = chunks.get('assets/route-a.js')!
     expect(a).toContain('@layer utilities{')
-    expect(a, 'the order statement comes first in the chunk sheet').toMatch(/^@layer utilities\{@layer u0,u1,u2;/)
+    expect(a, 'the layer order, then the sublayer order, come first in the chunk sheet').toMatch(
+      /^@layer reset,base,tokens,utilities;\s*@layer utilities\{@layer u0,u1,u2;/,
+    )
     expect(a).toContain('@layer u0{.route-a_only{color:blue}}')
     expect(a, 'its member of the split rule, alone').toContain('@layer u2{.route-a_hover:hover{opacity:1}}')
     expect(a).not.toContain('shared')
@@ -73,7 +75,29 @@ describe('splitting the sheet per chunk', () => {
 
     expect(css).not.toContain('@layer u1{')
     expect(css, 'the entry still places the sublayer that left it').toContain('@layer utilities{@layer u0,u1,u2;')
-    expect(chunks.get('b')).toMatch(/^@layer utilities\{@layer u0,u1,u2;/)
+    expect(chunks.get('b')).toMatch(/^@layer reset,base,tokens,utilities;\s*@layer utilities\{@layer u0,u1,u2;/)
+  })
+
+  test('opens a chunk sheet with the layers around the utilities, rebuilt where a minifier folded them', () => {
+    // LightningCSS keeps a statement only for a layer with no block; the rest is the block order.
+    const folded = sheet.replace('@layer reset, base, tokens, utilities;', '@layer reset;@layer base{a{color:inherit}}')
+    const { chunks } = splitStaticCss(folded, createStaticCompilationSession(), ownership)
+
+    expect(chunks.get('assets/route-a.js')).toMatch(/^@layer reset,base,utilities;\s*@layer utilities\{/)
+  })
+
+  test('declares no layer order in a chunk sheet when the utilities are the only layer', () => {
+    const alone = sheet.replace('@layer reset, base, tokens, utilities;', '')
+    const { chunks } = splitStaticCss(alone, createStaticCompilationSession(), ownership)
+
+    expect(chunks.get('assets/route-a.js')).toMatch(/^@layer utilities\{/)
+  })
+
+  test('leaves the entry’s own layer order as it was', () => {
+    const { css } = splitStaticCss(sheet, createStaticCompilationSession(), ownership)
+
+    expect(css).toMatch(/^@layer reset, base, tokens, utilities;@layer utilities\{/)
+    expect(css.match(/@layer reset/g)).toHaveLength(1)
   })
 
   test('keeps a statement that still carries the order, once', () => {

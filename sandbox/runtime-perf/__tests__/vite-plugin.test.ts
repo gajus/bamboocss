@@ -4158,7 +4158,7 @@ describe('a project with no generated output yet', () => {
  * where Vite's plumbing reads it: the manifest lists it under the chunk, and the preload helper
  * fetches it before the chunk runs. An atom two routes share, or one the entry reaches, stays
  * in the entry sheet, so nothing is downloaded twice. Precedence is unaffected because it lives
- * in the cascade sublayers, and every chunk sheet repeats the sublayer order statement.
+ * in the cascade layers and sublayers, and every chunk sheet repeats the order of both.
  */
 describe.sequential('per-route stylesheets', () => {
   const html = join(cwd, '__split-index.html')
@@ -4184,6 +4184,8 @@ describe.sequential('per-route stylesheets', () => {
       routeA,
       `import { css } from '../styled-system/css'\n` +
         `export const onlyA = css({ width: '[811.1px]', _hover: { width: '[811.2px]' } })\n` +
+        // The global styles set `margin` on `*`, in a layer the utilities have to stay above.
+        `export const spacedA = css({ margin: '[815.5px]' })\n` +
         `export const shared = css({ gap: '[812.2px]' })\n`,
     )
     writeFileSync(
@@ -4245,8 +4247,8 @@ describe.sequential('per-route stylesheets', () => {
     expect(cssA, 'its conditional atom too, under its sublayer and selector').toContain('811.2px')
     expect(cssA, 'nothing shared').not.toContain('812.2px')
     expect(cssA, 'no sentinel: it is not a sheet the late pass should prune again').not.toContain('--made-with-bamboo')
-    expect(cssA, 'the sublayer order statement comes first').toMatch(
-      /^\s*@layer utilities\s*\{\s*@layer s\d+-c\d+-p\d+(?:\s*,\s*s\d+-c\d+-p\d+)*\s*;/,
+    expect(cssA, 'the layer order, then the sublayer order, come first').toMatch(
+      /^\s*@layer reset,base,tokens,utilities;\s*@layer utilities\s*\{\s*@layer s\d+-c\d+-p\d+(?:\s*,\s*s\d+-c\d+-p\d+)*\s*;/,
     )
     const cssB = source(sheetB!)
     expect(cssB, 'a breakpoint atom keeps its query').toMatch(/@media[^{]*\{[^}]*813\.3px/)
@@ -4256,6 +4258,14 @@ describe.sequential('per-route stylesheets', () => {
     // the document parses first, `lg` has to come out on top.
     for (const sheets of [entryCss + cssB, cssB + entryCss]) {
       expect(cascadeOrder(sheets).height?.at(-1), 'the higher breakpoint wins across sheets').toContain('lg\\:h_')
+    }
+    // Route a's margin left with it, and the global `*` margin is in the entry. Whichever sheet
+    // the document parses first, the utility has to come out on top.
+    expect(entryCss).not.toContain('815.5px')
+    for (const sheets of [entryCss + cssA, cssA + entryCss]) {
+      expect(cascadeOrder(sheets).margin?.at(-1), 'a utility beats the global styles across sheets').toContain(
+        '815\\.5px',
+      )
     }
 
     const chunkA = chunkOf('__split-route-a')

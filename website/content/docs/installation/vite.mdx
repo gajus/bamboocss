@@ -242,9 +242,10 @@ utility two chunks use, one the entry or its static imports reach, or one `stati
 sheet, so nothing is ever downloaded twice and a route that is the only user of a style downloads that style with the
 route.
 
-The split is safe because precedence does not depend on where a rule sits: it lives in the
-[cascade sublayers](/docs/concepts/cascade-layers#sublayers-of-utilities), and every chunk sheet opens with the same
-sublayer order statement as the entry sheet, so whichever the document parses first establishes the same order.
+The split is safe because precedence does not depend on where a rule sits: it lives in the cascade layers and the
+[sublayers of utilities](/docs/concepts/cascade-layers#sublayers-of-utilities), and every chunk sheet opens with the
+same layer order and sublayer order as the entry sheet, so whichever the document parses first establishes the same
+order. A chunk sheet that loads first still ranks every utility above preflight and global styles.
 
 Builds only, and only where Vite's `build.cssCodeSplit` is on, which it is unless you turned it off or are building a
 library. A framework that copies a server build's stylesheets into the client build by the names its chunks recorded, as

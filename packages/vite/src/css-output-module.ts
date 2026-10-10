@@ -551,10 +551,11 @@ const containerFor = (root: postcss.Root, chain: ReadonlyArray<{ name: string; p
  * any media or container query. A rule with several selectors is split per selector, since a
  * merged rule's members can belong to different chunks. Whatever nothing owns stays.
  *
- * Each chunk sheet opens with the entry's sublayer order statement, so whichever sheet the
- * document happens to parse first establishes the same order. That is what makes the split
- * safe at all: precedence lives in the sublayers, not in where a rule sits. Where a minifier
- * removed the statement, it is rebuilt from the order of the blocks, in the entry too.
+ * Each chunk sheet opens with the entry's layer order and its sublayer order statement, so
+ * whichever sheet the document happens to parse first establishes the same order. That is what
+ * makes the split safe at all: precedence lives in the layers and sublayers, not in where a rule
+ * sits. Where a minifier removed a statement, it is rebuilt from the order of the blocks — the
+ * sublayers' in the entry too, since the entry no longer holds every block that placed them.
  */
 export const splitStaticCss = (
   css: string,
@@ -587,6 +588,17 @@ export const splitStaticCss = (
       parent = parent.parent as postcss.Node | undefined
     }
     return false
+  }
+
+  /**
+   * The layers the utilities sit among, in the order the browser gives them: first appearance,
+   * statement or block. Read before anything moves, while every block is still in place.
+   * LightningCSS leaves a statement only for a layer with no block, and the rest as block order.
+   */
+  const layers = new Set<string>()
+  for (const node of root.nodes) {
+    if (node.type !== 'atrule' || (node as postcss.AtRule).name !== 'layer') continue
+    for (const name of (node as postcss.AtRule).params.split(',')) if (name.trim()) layers.add(name.trim())
   }
 
   let order: postcss.AtRule | undefined
@@ -719,6 +731,11 @@ export const splitStaticCss = (
       )
       utilities?.prepend(order.clone())
     }
+    // And before the utilities, the layers around them. A chunk sheet the document parses before
+    // the entry — a server can render its link first, a cache can deliver it first — would
+    // otherwise declare `utilities` first, below the reset, base and tokens the entry declares
+    // after it, and preflight and global styles would beat every utility on the page.
+    if (layers.size > 1) chunkRoot.prepend(postcss.atRule({ name: 'layer', params: [...layers].join(',') }))
     chunks.set(chunk, chunkRoot.toString())
   }
 

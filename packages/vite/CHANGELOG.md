@@ -1,5 +1,34 @@
 # @bamboocss/vite
 
+## 1.56.6
+
+### Patch Changes
+
+- 6e442c6: Keep every utility above preflight and global styles when a per-route stylesheet loads before the entry
+  stylesheet.
+  - Layers rank by when the document first declares them. A route sheet held only the `utilities` layer, so when a
+    server rendered its link first, or a cache delivered it first, `utilities` was declared before `reset`, `base` and
+    `tokens` and ranked below them: the global `* { margin: 0 }` beat every margin utility on the page.
+  - Each route sheet now opens with the entry sheet's layer order, `@layer reset,base,tokens,utilities;` (35 bytes),
+    rebuilt from the order of the blocks where LightningCSS, Vite 8's default CSS minifier, folded the statement away.
+    The entry sheet is unchanged.
+
+- 3a4df49: Fail the build on a nested key that is neither a property nor a condition, instead of compiling it to a class
+  no rule matches.
+  - `css({ _hovr: { color: 'red.300' } })` compiled to `_hovr:c_red.300`, while the stylesheet dropped the key and wrote
+    the `color` with no condition at all, so the element went unstyled and nothing said so. The call is now reported
+    where it is written, with what the key was probably meant to be:
+    ``css() — unknown-condition: `_hovr` is not a condition; did you mean `_hover`?``.
+  - A selector written without `&` is reported the same way, with the key it needs: `svg` → `'& svg'`, `has: { svg: … }`
+    → `'&:has(svg)'`, `:hover` → `'&:hover'`.
+  - In a recipe, the declaration holding the key reports it, and so does any call compiling the variant it is in.
+  - @bamboocss/config@1.56.6
+  - @bamboocss/core@1.56.6
+  - @bamboocss/logger@1.56.6
+  - @bamboocss/node@1.56.6
+  - @bamboocss/shared@1.56.6
+  - @bamboocss/types@1.56.6
+
 ## 1.56.5
 
 ### Patch Changes

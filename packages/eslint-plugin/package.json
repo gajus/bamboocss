@@ -1,6 +1,6 @@
 {
   "name": "@bamboocss/eslint-plugin",
-  "version": "1.56.6",
+  "version": "1.56.7",
   "description": "ESLint plugin for Bamboo CSS",
   "homepage": "https://bamboocss.com",
   "license": "MIT",

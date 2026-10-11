@@ -153,6 +153,12 @@ export interface StaticCompilationSession {
    */
   classNamesOf?: (environment: string, moduleId: string) => readonly string[] | undefined
   /**
+   * The files whose compiled calls named `className`, for a report of a class with no rule.
+   *
+   * Installed by the compiler, which owns the transform artifacts.
+   */
+  compiledIn?: (className: string) => readonly string[]
+  /**
    * Finalize the deferred sheets if `environment` completes the run, rewriting `bundle` too.
    *
    * Installed by the compiler, which owns the reachability projection. Reached from the early

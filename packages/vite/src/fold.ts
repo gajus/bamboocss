@@ -58,6 +58,11 @@ export interface FoldedCall {
    * which `className` alone does not carry.
    */
   classNames: string[]
+  /**
+   * Of `classNames`, those a `cx()` passed through as written — `cx('external', css(…))` — which
+   * are somebody else's to give a rule, not Bamboo's.
+   */
+  literalClassNames?: string[]
   /** The literal written in place of the call, for a `value` fold. */
   value?: string
   start: number
@@ -292,6 +297,8 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     className?: string
     /** Every class literal emitted, when that is more than `className` — see FoldedCall. */
     classNames?: string[]
+    /** Of `classNames`, the ones passed through as written — see FoldedCall. */
+    literalClassNames?: string[]
     /** A finite runtime recipe lookup, intentionally unallocated until semantic `cx()`. */
     styleMap?: DynamicStyleMap
     /** Local name of the generated map helper, when the import was aliased. */
@@ -611,6 +618,9 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     const constantCandidates: Candidate[] = []
     let supported = true
     let holdsFailure = false
+    /** The classes among the arguments written as strings, passed through as they are. */
+    const literalClasses = () =>
+      parts.flatMap((part) => (part.kind === 'class' && !part.candidate ? part.value.split(' ') : [])).filter(Boolean)
 
     const take = (arg: FoldCxArgument): boolean => {
       const candidate = byRange.get(`${arg.span.start}:${arg.span.end}`)
@@ -731,6 +741,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
           ...compiled.classNames,
           ...parts.filter((part) => part.kind === 'class').flatMap((part) => part.value.split(' ')),
         ].filter(Boolean),
+        literalClassNames: literalClasses(),
         insert: compiled.usesHelper ? dynamicCandidate.insert : undefined,
         foreign: styleParts.flatMap((part) => part.candidate.foreign ?? []),
       })
@@ -752,6 +763,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
         replacement: JSON.stringify(className),
         className,
         classNames: className.split(' ').filter(Boolean),
+        literalClassNames: literalClasses(),
       })
       continue
     }
@@ -786,6 +798,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       replacement: JSON.stringify(classParts.join(' ')),
       className: classParts.join(' '),
       classNames: classParts.flatMap((part) => part.split(' ')).filter(Boolean),
+      literalClassNames: literalClasses(),
       styleSet: merged,
       foreign: matched.flatMap((candidate) => candidate.foreign ?? []),
     })
@@ -890,6 +903,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
         kind: candidate.outputKind ?? 'class',
         className: candidate.className ?? '',
         classNames: (candidate.classNames ?? [candidate.className ?? '']).filter(Boolean),
+        ...(candidate.literalClassNames?.length && { literalClassNames: candidate.literalClassNames }),
         start,
         end,
       })

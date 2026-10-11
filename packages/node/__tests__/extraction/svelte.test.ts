@@ -2,6 +2,21 @@ import { describe, expect, test } from 'vitest'
 import { svelteToTsx } from '@bamboocss/plugin-svelte'
 import { parseAndExtract } from './fixture'
 
+describe('a svelte `{@const}`', () => {
+  // A declaration, so it was walked as markup, and its initializer came out as `;(color)` — the
+  // property key — while Svelte's compiled output still called `css` and got a class.
+  test('yields the call it is initialized with', () => {
+    const result = parseAndExtract(
+      svelteToTsx(
+        `<script>\n  import { css } from 'styled-system/css'\n  export let items = []\n</script>\n` +
+          `{#each items as item}\n  {@const cls = css({ color: 'red.300' })}\n  <p class={cls}>{item}</p>\n{/each}\n`,
+      ),
+    )
+
+    expect(result.css).toContain('color: var(--colors-red-300)')
+  })
+})
+
 describe('extract svelte templates', () => {
   test('template with svelte-specific syntax + Typescript usage', () => {
     const code = `

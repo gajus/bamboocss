@@ -88,6 +88,25 @@ bamboocss: 2 call(s) could not be compiled.
     18: css() — unknown-condition: `has` is not a condition; did you mean `'&:has(svg)'`?
 ```
 
+### A compiled class with no rule
+
+Reported by the Vite compiler as it writes the stylesheet
+
+The compiler and the stylesheet pass read a module separately: the compiler reads what Vite hands it, the stylesheet
+pass reads the source — and a single-file component through a conversion of it. A class the compiler emitted for a call
+the stylesheet pass never saw has no rule, and an element carrying it renders unstyled. The build names the class and
+the file whose call produced it:
+
+```text
+bamboocss: 1 compiled class(es) still named by live output have no rule in the candidate stylesheet. Elements carrying them would render unstyled.
+
+  c_red.300
+      (NOT extracted, though src/Card.svelte compiled a call to it; no rule in the sheet)
+```
+
+The two reading a file differently is a Bamboo bug to report with the file. Until it is fixed, moving the call into the
+component's `<script>` works around it. A class passed through `cx()` as written is somebody else's and is not checked.
+
 ### A class name the build and the browser would spell differently
 
 `ERR_BAMBOO_NAMING_DISAGREEMENT`

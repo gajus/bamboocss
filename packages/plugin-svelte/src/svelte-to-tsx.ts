@@ -81,6 +81,17 @@ export const svelteToTsx = (code: string) => {
     const record = node as SvelteNode
     for (const [key, value] of Object.entries(record)) {
       if (SKIPPED_KEYS.has(key) || !value || typeof value !== 'object') continue
+      // `{@const cls = css({ … })}` is a declaration, so it was walked as markup, and reading its
+      // initializer that way gave `;(color)` — the property key — instead of the call. Its
+      // initializers are what the template evaluates. The names are not declared: they repeat
+      // across blocks, and only the calls are wanted.
+      if (key === 'declaration' && record.type === 'ConstTag') {
+        for (const declarator of ((value as SvelteNode).declarations as SvelteNode[] | undefined) ?? []) {
+          const init = declarator.init as SvelteNode | null | undefined
+          if (init && typeof init.start === 'number') expressions.push(`;(${code.slice(init.start, init.end)})`)
+        }
+        continue
+      }
       if (EXPRESSION_KEYS.has(key) && typeof (value as SvelteNode).start === 'number') {
         const expression = value as SvelteNode
         expressions.push(`;(${code.slice(expression.start, expression.end)})`)

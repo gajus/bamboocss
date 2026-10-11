@@ -397,7 +397,7 @@ describe('compiler', () => {
       expect(result).toMatchObject({
         meta: {
           'bamboocss:transform': {
-            version: 4,
+            version: 5,
             moduleId: id,
             file: id,
             classNames: ['c_red.300'],

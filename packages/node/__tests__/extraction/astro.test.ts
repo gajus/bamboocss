@@ -32,6 +32,44 @@ const tone = 'green.600'
 </style>
 `
 
+describe('a client `<script>`', () => {
+  // Astro bundles it as a module of its own and Vite compiles it, so its calls have to reach the
+  // stylesheet too. Astro's TSX holds it only inside an arrow function, where its imports bind
+  // nothing, and its calls went unseen: their classes shipped with no rule.
+  test('with its own import, on a page with no frontmatter', () => {
+    const result = parseAndExtract(
+      astroToTsx(
+        `<button id="b">x</button>\n<script>\n  import { css } from '../styled-system/css'\n` +
+          `  document.getElementById('b')!.className = css({ color: 'red.300' })\n</script>\n`,
+        'index.astro',
+      ),
+    )
+
+    expect(result.css).toContain('color: var(--colors-red-300)')
+  })
+
+  test('beside a frontmatter importing the same thing, and declaring the same names', () => {
+    const result = parseAndExtract(
+      astroToTsx(
+        `---\nimport { css } from '../styled-system/css'\nconst tone = css({ color: 'blue.300' })\n---\n` +
+          `<h1 class={tone}>Hi</h1>\n` +
+          `<script>\n  import { css } from '../styled-system/css'\n  const tone = css({ color: 'red.300' })\n` +
+          `  document.body.className = tone\n</script>\n`,
+        'index.astro',
+      ),
+    )
+
+    expect(result.css).toContain('color: var(--colors-blue-300)')
+    expect(result.css).toContain('color: var(--colors-red-300)')
+  })
+
+  test('an inline script, which Astro leaves as written, is not read as one', () => {
+    const tsx = astroToTsx(`<script is:inline>window.x = 1</script>\n`, 'index.astro')
+
+    expect(tsx).not.toMatch(/^\{\nwindow\.x/m)
+  })
+})
+
 describe('extract astro components', () => {
   test('frontmatter, attribute expressions and template expressions', () => {
     expect(parseAndExtract(astroToTsx(COMPONENT)).json.map((item) => [item.name, item.data])).toEqual([

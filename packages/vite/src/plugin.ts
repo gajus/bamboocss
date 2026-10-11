@@ -98,7 +98,7 @@ const SFC_JSX_QUERY = /[?&](?:lang\.tsx|lang=tsx|lang\.jsx|lang=jsx)(?:&|$)/i
 const SFC_SCRIPT_TAG = /<script[\s>/]/i
 const NODE_MODULES = /node_modules/
 const TRANSFORM_META_KEY = 'bamboocss:transform'
-const TRANSFORM_ARTIFACT_VERSION = 4 as const
+const TRANSFORM_ARTIFACT_VERSION = 5 as const
 
 /**
  * Queries that make Vite serve something other than the module's own source.
@@ -320,6 +320,19 @@ export const describeRefusal = (refusal: FoldRefusal, root: string) => {
   return `${helper} uses ${statement} at ${at}, which the compiler does not run`
 }
 
+/** Classes only ever passed through a `cx()` as written in a module's folded calls. */
+const literalOnly = (folded: FoldResult['folded']) => {
+  const literal = new Set<string>()
+  const named = new Set<string>()
+  for (const entry of folded) {
+    const passed = new Set(entry.literalClassNames ?? [])
+    for (const className of entry.classNames.flatMap((names) => names.split(/\s+/))) {
+      if (className) (passed.has(className) ? literal : named).add(className)
+    }
+  }
+  return [...literal].filter((className) => !named.has(className)).sort()
+}
+
 const formatSkipped = (id: string, skipped: SkippedCall[], root: string) => {
   const counts = new Map<string, number>()
   for (const entry of skipped) {
@@ -403,6 +416,8 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     survivors: Array<Omit<Survivor, 'file'>>
     transformedFile: boolean
     classNames: string[]
+    /** Of `classNames`, the ones only ever passed through a `cx()` as written: not Bamboo's. */
+    literalClassNames: string[]
     dependencies: string[]
     signature?: { input: string; output: string; path: string }
   }
@@ -426,6 +441,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       artifact.survivors.map(({ line, name, reason, detail }) => [line, name, reason, detail ?? null]),
       artifact.transformedFile,
       [...artifact.classNames],
+      [...artifact.literalClassNames],
       [...artifact.dependencies],
       artifact.signature ? [artifact.signature.input, artifact.signature.output, artifact.signature.path] : null,
     ])
@@ -444,6 +460,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       skipped: artifact.skipped.map(([reason, count]) => [reason, count] as [SkipReason, number]),
       survivors: artifact.survivors.map((survivor) => ({ ...survivor })),
       classNames: [...artifact.classNames],
+      literalClassNames: [...artifact.literalClassNames],
       dependencies: [...artifact.dependencies],
       ...(artifact.signature ? { signature: { ...artifact.signature } } : {}),
     }
@@ -474,6 +491,12 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     if (!isNonNegativeInteger(value.folded) || typeof value.transformedFile !== 'boolean') return false
     if (typeof value.integrity !== 'string' || !/^[\w-]{43}$/.test(value.integrity)) return false
     if (!Array.isArray(value.classNames) || !value.classNames.every((entry) => typeof entry === 'string')) return false
+    if (
+      !Array.isArray(value.literalClassNames) ||
+      !value.literalClassNames.every((entry) => typeof entry === 'string')
+    ) {
+      return false
+    }
     if (!Array.isArray(value.dependencies) || !value.dependencies.every((entry) => typeof entry === 'string'))
       return false
     if (
@@ -993,7 +1016,32 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
   }
 
   /**
-   * Snapshot which reported classes Bamboo actually extracted for this JavaScript generation.
+   * The classes the compiler named itself in `states` that extraction never produced.
+   *
+   * Each needs a rule as much as any other, and its call was never seen by the pass that writes
+   * rules: a single-file component's template the compiler reads compiled while the stylesheet
+   * reads a conversion of its source, and the conversion missed the call — a Svelte `{@const}`,
+   * an Astro client `<script>`. Those classes shipped with no rule and no error. Literal classes
+   * a `cx()` passes through are somebody else's, and stay out.
+   */
+  const compiledButNotExtracted = (states: Iterable<EnvironmentTransformState>, extracted: ReadonlySet<string>) => {
+    const unextracted = new Set<string>()
+    for (const state of states) {
+      for (const artifact of state.transformArtifactsByModule.values()) {
+        const literal = new Set(artifact.literalClassNames)
+        for (const entry of artifact.classNames) {
+          for (const className of entry.split(/\s+/)) {
+            if (className && !literal.has(className) && !extracted.has(bare(className))) unextracted.add(className)
+          }
+        }
+      }
+    }
+    return unextracted
+  }
+
+  /**
+   * Snapshot which reported classes Bamboo owns for this JavaScript generation: those it
+   * extracted, and those its compiler named without extraction having seen the call.
    *
    * Fold artifacts also report literal classes passed through helpers such as `cx('external',
    * css(...))`. Intersecting with the extraction inventory keeps those useful reachability facts
@@ -1006,6 +1054,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       const extractedClass = extracted.get(bare(className))
       if (extractedClass !== undefined) owned.add(extractedClass)
     }
+    for (const className of compiledButNotExtracted([state], new Set(extracted.keys()))) owned.add(className)
     return owned
   }
 
@@ -1043,7 +1092,11 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
 
   const currentRequiredClasses = () => {
     const prunable = new Set([...staticSession.prunableClasses].map(bare))
-    return new Set([...staticSession.usedClasses].filter((className) => prunable.has(bare(className))))
+    const required = new Set([...staticSession.usedClasses].filter((className) => prunable.has(bare(className))))
+    for (const className of compiledButNotExtracted(transformStateByEnvironment.values(), prunable)) {
+      required.add(className)
+    }
+    return required
   }
 
   /** Derive loss history from the stylesheet outputs which are still observable. */
@@ -1310,6 +1363,19 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
 
   // What each module's compiled calls emit, for the split: chunk membership is the bundler's,
   // the class strings are the compiler's, and the output hook has to join the two.
+  // Which modules named a class, for a report of one with no rule. Walked only then.
+  staticSession.compiledIn = (className) => {
+    const files = new Set<string>()
+    for (const state of transformStateByEnvironment.values()) {
+      for (const artifact of state.transformArtifactsByModule.values()) {
+        if (!artifact.classNames.some((entry) => entry.split(/\s+/).includes(className))) continue
+        const path = relative(root, artifact.file)
+        files.add(path && !path.startsWith('..') && !isAbsolute(path) ? path : artifact.file)
+      }
+    }
+    return [...files].sort()
+  }
+
   staticSession.classNamesOf = (environment, moduleId) =>
     transformStateByEnvironment.get(environment)?.transformArtifactsByModule.get(moduleId)?.classNames
 
@@ -2480,6 +2546,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
         survivors: [{ line: 1, name: 'compiler', reason: 'compile-failed' }],
         transformedFile: false,
         classNames: [],
+        literalClassNames: [],
         dependencies: previousDependencies,
       }
       commitTransformArtifact(state, failedArtifact)
@@ -2540,6 +2607,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       survivors: survivorsHere,
       transformedFile: result.folded.some((entry) => entry.kind === 'class' || entry.kind === 'slots'),
       classNames: [...new Set(result.folded.flatMap((entry) => entry.classNames))],
+      literalClassNames: literalOnly(result.folded),
       dependencies: [...result.dependencies],
       ...(result.dependencies.length
         ? { signature: { input: (inputDigest ??= digest(code)), output: digest(result.code), path: filePath } }

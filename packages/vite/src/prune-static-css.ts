@@ -171,7 +171,12 @@ export const pruneStaticCss = (
       if (/\s/.test(className)) return `  ${className}\n      (malformed key: a class name cannot contain whitespace)`
 
       const normalized = bare(className)
-      const extracted = prunable.has(normalized) ? 'in the extracted atoms' : 'NOT extracted'
+      const compiledIn = prunable.has(normalized) ? [] : (session.compiledIn?.(className) ?? [])
+      const extracted = prunable.has(normalized)
+        ? 'in the extracted atoms'
+        : compiledIn.length
+          ? `NOT extracted, though ${compiledIn.join(', ')} compiled a call to it`
+          : 'NOT extracted'
       const near = [...present].filter(
         (candidate) => candidate !== className && candidate.replaceAll('\\', '') === normalized,
       )
@@ -198,15 +203,26 @@ export const pruneStaticCss = (
      * outputs, and only that one can be a compiler bug worth reporting.
      */
     const everyOrphanExtracted = orphaned.every((className) => prunable.has(bare(className)))
-    const guidance = everyOrphanExtracted
-      ? `Extraction saw every one of these calls, but rule generation produced no declarations for them — the ` +
-        `shape of a value nothing resolves, such as a \`mixin\` naming a composition the theme does not define. ` +
-        `Check the class name's property and value against the theme, and look for a \`🎋 warn [utility]\` line ` +
-        `above naming the same value. Set \`unresolvedToken: 'error'\` to fail fast at the exact call next time.`
-      : `The current source generation no longer provides every rule required by the JavaScript outputs still on ` +
-        `disk. Bamboo refused to replace the prior stylesheet. Finish rebuilding every output which retains an ` +
-        `older generation, then rebuild the stylesheet. If every output is already current, report this as a ` +
-        `compiler bug with the block above.`
+    // The compiler named the class in this generation, and the pass that writes rules never saw
+    // the call: the two read the file differently. A single-file component is where that
+    // happens — the compiler reads the framework's compiled output, the stylesheet pass its own
+    // conversion of the source.
+    const anyCompiledUnseen = orphaned.some(
+      (className) => !prunable.has(bare(className)) && (session.compiledIn?.(className).length ?? 0) > 0,
+    )
+    const guidance = anyCompiledUnseen
+      ? `The compiler compiled the calls naming these classes, but the stylesheet pass never saw them, so no rule ` +
+        `was written: the two read those files differently. This is a Bamboo bug — report it with the file. Until ` +
+        `then, moving the call into the component's \`<script>\` is the way around it.`
+      : everyOrphanExtracted
+        ? `Extraction saw every one of these calls, but rule generation produced no declarations for them — the ` +
+          `shape of a value nothing resolves, such as a \`mixin\` naming a composition the theme does not define. ` +
+          `Check the class name's property and value against the theme, and look for a \`🎋 warn [utility]\` line ` +
+          `above naming the same value. Set \`unresolvedToken: 'error'\` to fail fast at the exact call next time.`
+        : `The current source generation no longer provides every rule required by the JavaScript outputs still on ` +
+          `disk. Bamboo refused to replace the prior stylesheet. Finish rebuilding every output which retains an ` +
+          `older generation, then rebuild the stylesheet. If every output is already current, report this as a ` +
+          `compiler bug with the block above.`
 
     throw new Error(
       `bamboocss: ${orphaned.length} compiled class(es) still named by live output have no rule in the candidate ` +

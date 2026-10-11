@@ -794,7 +794,7 @@ describe.sequential('vite plugin, real rebuild', () => {
       expect(transformCalls, 'the Bamboo-compiled entry took Rollup’s cached transform path').toBe(1)
       expect(error?.message).toContain('cached transform metadata')
       expect(error?.message).toContain(JSON.stringify(staleEntry))
-      expect(error?.message).toContain('version 1; expected schema version 4')
+      expect(error?.message).toContain('version 1; expected schema version 5')
       expect(error?.message).toContain('cached JavaScript may still name CSS classes whose rules would be dropped')
       expect(error?.message).toContain('Restart Vite to invalidate its in-memory transform cache')
     } finally {
@@ -825,7 +825,7 @@ describe.sequential('vite plugin, real rebuild', () => {
           throw new Error('test fixture could not observe Bamboo transform metadata')
         }
         expect(artifact).toMatchObject({
-          version: 4,
+          version: 5,
           classNames: [`w_[${width}]`],
           integrity: expect.any(String),
         })
@@ -909,7 +909,7 @@ describe.sequential('vite plugin, real rebuild', () => {
       expect(transformCalls, 'the altered Bamboo entry took Rollup’s cached transform path').toBe(1)
       expect(error?.message).toContain('cached transform metadata')
       expect(error?.message).toContain(JSON.stringify(integrityEntry))
-      expect(error?.message).toContain('schema version 4 integrity check')
+      expect(error?.message).toContain('schema version 5 integrity check')
       expect(error?.message).toContain('cached JavaScript may still name CSS classes whose rules would be dropped')
       expect(error?.message).toContain('Restart Vite to invalidate its in-memory transform cache')
     } finally {
@@ -950,7 +950,7 @@ describe.sequential('vite plugin, real rebuild', () => {
           throw new Error('test fixture could not observe Bamboo transform metadata')
         }
         expect(artifact).toMatchObject({
-          version: 4,
+          version: 5,
           classNames: [`w_[${width}]`],
           integrity: expect.any(String),
         })
@@ -4445,5 +4445,71 @@ describe.sequential('composed mixins', () => {
     // base colour the variant replaced.
     expect(css).not.toContain('.mixin_cardA')
     expect(css).not.toContain('.c_green')
+  }, 60_000)
+})
+
+/**
+ * A class the compiler names has to have a rule, whether or not extraction saw the call.
+ *
+ * The two read a module separately: the compiler reads what Vite hands it, the stylesheet pass
+ * reads the source through its parser hooks — for a single-file component, a conversion of it.
+ * A call the conversion missed shipped as a class with no rule, unstyled and with no error: a
+ * Svelte `{@const}`, an Astro client `<script>`. A parser hook that hides part of a call stands
+ * in for any such conversion here, so the check holds whatever framework disagrees next.
+ */
+describe.sequential('a class the stylesheet pass never saw', () => {
+  const html = join(cwd, '__unseen-index.html')
+  const entry = join(cwd, 'src/__unseen-entry.tsx')
+  const configPath = join(cwd, '__unseen.bamboo.config.ts')
+
+  beforeEach(() => {
+    writeFileSync(html, `<script type="module" src="/src/__unseen-entry.tsx"></script>`)
+    writeFileSync(
+      entry,
+      `import 'virtual:bamboo.css'\n` +
+        `import { css } from '../styled-system/css'\n` +
+        `document.body.className = css({ color: 'red600', width: '[817.7px]' })\n`,
+    )
+  })
+
+  afterEach(() => {
+    for (const file of [html, entry, configPath]) rmSync(file, { force: true })
+  })
+
+  const buildWith = (hidden: boolean) => {
+    writeFileSync(
+      configPath,
+      `import base from './bamboo.config'\n` +
+        `export default {\n` +
+        `  ...base,\n` +
+        `  include: ['./src/__unseen-entry.tsx'],\n` +
+        (hidden
+          ? `  plugins: [{ name: 'hide-a-call', hooks: { 'parser:before': ({ filePath, content }) =>\n` +
+            `    filePath.endsWith('__unseen-entry.tsx') ? content.replace("width: '[817.7px]'", '') : undefined } }],\n`
+          : '') +
+        `}\n`,
+    )
+    return build({
+      root: cwd,
+      logLevel: 'silent',
+      css: { postcss: { plugins: [] } },
+      plugins: [bamboocss({ cwd, configPath, reportSummary: false })],
+      build: { write: false, minify: false, rollupOptions: { input: html } },
+    })
+  }
+
+  test('fails the build, naming the file whose call produced it', async () => {
+    await expect(buildWith(true)).rejects.toThrow(
+      /w_\[817\.7px\]\n\s+\(NOT extracted, though src\/__unseen-entry\.tsx compiled a call to it; no rule in the sheet\)/,
+    )
+  }, 60_000)
+
+  test('builds when the stylesheet pass sees every call', async () => {
+    const result = (await buildWith(false)) as Rollup.RollupOutput
+    const sheet = result.output.find(
+      (item): item is Rollup.OutputAsset => item.type === 'asset' && item.fileName.endsWith('.css'),
+    )
+
+    expect(String(sheet?.source)).toContain('817.7px')
   }, 60_000)
 })

@@ -213,6 +213,12 @@ export interface FoldAnalysis {
     dependencies: string[]
   }>
   dependencies: string[]
+  /**
+   * Bamboo bindings a `<script setup>` compiled for a separate render function exposes to its
+   * template, as `__returned__` getters: where the getter reads the binding, what that becomes
+   * once nothing reads it, and every `$setup.<name>` the module reads.
+   */
+  vueExposures: Array<{ name: string; span: FoldSpan; replacement: string; reads: FoldSpan[] }>
   errors: string[]
 }
 

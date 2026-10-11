@@ -12,8 +12,9 @@ use oxc_allocator::Allocator;
 use oxc_ast::{
     AstKind,
     ast::{
-        Argument, BindingPattern, Expression, ImportDeclarationSpecifier, ModuleExportName,
-        ObjectPropertyKind, PropertyKind, Statement, TSModuleReference,
+        Argument, BindingPattern, Expression, IdentifierReference, ImportDeclarationSpecifier,
+        ModuleExportName, ObjectPropertyKind, PropertyKind, Statement, StaticMemberExpression,
+        TSModuleReference,
     },
 };
 use oxc_parser::Parser;
@@ -346,13 +347,23 @@ fn classify_callee(
         .reference_id
         .get()
         .and_then(|reference| scoping.get_reference(reference).symbol_id())?;
-    let binding = bindings.get(&symbol)?;
     let members = callee_members(callee).unwrap_or_default();
+    classify_binding(symbol, &members, bindings, entrypoints)
+}
+
+/// A call of `symbol`, through `members`, classified by what the binding imports.
+fn classify_binding(
+    symbol: SymbolId,
+    members: &[String],
+    bindings: &HashMap<SymbolId, BambooBinding>,
+    entrypoints: &FoldEntrypoints<'_>,
+) -> Option<(String, String, Option<String>)> {
+    let binding = bindings.get(&symbol)?;
     let (imported, rest): (String, &[String]) = if binding.namespace {
         let first = members.first()?.clone();
         (first, &members[1..])
     } else {
-        (binding.imported.clone(), &members[..])
+        (binding.imported.clone(), members)
     };
     let property = rest.first().cloned();
     let kind = match binding.kind {
@@ -437,6 +448,210 @@ fn not_imported_call(
     None
 }
 
+/// How Vue's compiled templates reach a `<script setup>` import, read as the binding it is.
+///
+/// A template calls `css` through `unref(css)(…)` when it is inlined into `setup()`, which
+/// production builds do, and through `$setup.css(…)` when it is compiled into a render function
+/// of its own, which the dev server does. Neither names `css` as the callee, so neither call was
+/// compiled: the first failed the build as a read of the binding, the second threw when rendered.
+struct VueTemplate {
+    /// Local names of `unref` imported from `vue`.
+    unref: HashSet<SymbolId>,
+    /// What `setup()` exposes to a separately compiled template, by name.
+    exposed: HashMap<String, SymbolId>,
+    exposures: Vec<FoldVueExposure>,
+}
+
+impl VueTemplate {
+    fn new(facts: &ModuleFacts<'_>, utf16: &Utf16, watched: &dyn Fn(SymbolId) -> bool) -> Self {
+        let semantic = facts.semantic;
+        let scoping = semantic.scoping();
+        let resolve = |identifier: &IdentifierReference<'_>| {
+            identifier
+                .reference_id
+                .get()
+                .and_then(|reference| scoping.get_reference(reference).symbol_id())
+        };
+
+        let mut unref = HashSet::new();
+        let mut compiled_by_vue = false;
+        for statement in &facts.program.body {
+            let Statement::ImportDeclaration(declaration) = statement else {
+                continue;
+            };
+            if declaration.source.value != "vue" {
+                continue;
+            }
+            compiled_by_vue = true;
+            for specifier in declaration.specifiers.iter().flatten() {
+                if let ImportDeclarationSpecifier::ImportSpecifier(named) = specifier
+                    && named.imported.name() == "unref"
+                    && let Some(symbol) = named.local.symbol_id.get()
+                {
+                    unref.insert(symbol);
+                }
+            }
+        }
+
+        // A module Vue compiled imports its runtime from `vue`; every other module stops here,
+        // before walking its nodes for what only Vue writes.
+        let mut exposed = HashMap::new();
+        let mut exposures = Vec::new();
+        if !compiled_by_vue {
+            return Self {
+                unref,
+                exposed,
+                exposures,
+            };
+        }
+        // `const __returned__ = { get css() { return css } }`, or `{ css }` from an older Vue.
+        for node in semantic.nodes().iter() {
+            let AstKind::VariableDeclarator(declarator) = node.kind() else {
+                continue;
+            };
+            if declarator
+                .id
+                .get_binding_identifier()
+                .is_none_or(|id| id.name != "__returned__")
+            {
+                continue;
+            }
+            let Some(Expression::ObjectExpression(object)) = declarator.init.as_ref().map(unwrap)
+            else {
+                continue;
+            };
+            for property in &object.properties {
+                let ObjectPropertyKind::ObjectProperty(property) = property else {
+                    continue;
+                };
+                if property.computed {
+                    continue;
+                }
+                let Some(name) = property.key.static_name() else {
+                    continue;
+                };
+                let (read, span, replacement) = match (property.kind, unwrap(&property.value)) {
+                    (PropertyKind::Get, Expression::FunctionExpression(getter)) => {
+                        let Some(body) = &getter.body else {
+                            continue;
+                        };
+                        let [Statement::ReturnStatement(statement)] = body.statements.as_slice()
+                        else {
+                            continue;
+                        };
+                        let Some(Expression::Identifier(read)) =
+                            statement.argument.as_ref().map(unwrap)
+                        else {
+                            continue;
+                        };
+                        (&**read, read.span, "undefined".to_string())
+                    }
+                    (PropertyKind::Init, Expression::Identifier(read)) if property.shorthand => {
+                        (&**read, property.span, format!("{name}: undefined"))
+                    }
+                    (PropertyKind::Init, Expression::Identifier(read)) => {
+                        (&**read, read.span, "undefined".to_string())
+                    }
+                    _ => continue,
+                };
+                let Some(symbol) = resolve(read) else {
+                    continue;
+                };
+                if !watched(symbol) {
+                    continue;
+                }
+                exposed.insert(name.to_string(), symbol);
+                exposures.push(FoldVueExposure {
+                    name: name.to_string(),
+                    span: utf16.span(span),
+                    replacement,
+                    reads: Vec::new(),
+                });
+            }
+        }
+        if !exposures.is_empty() {
+            for node in semantic.nodes().iter() {
+                let AstKind::StaticMemberExpression(member) = node.kind() else {
+                    continue;
+                };
+                let Some(name) = setup_read(member, semantic) else {
+                    continue;
+                };
+                if let Some(exposure) = exposures.iter_mut().find(|exposure| exposure.name == name)
+                {
+                    exposure.reads.push(utf16.span(member.span));
+                }
+            }
+        }
+        Self {
+            unref,
+            exposed,
+            exposures,
+        }
+    }
+
+    /// The binding, and the member path under it, that a callee written either of Vue's two
+    /// ways stands for.
+    fn callee(
+        &self,
+        callee: &Expression<'_>,
+        semantic: &Semantic<'_>,
+    ) -> Option<(SymbolId, Vec<String>)> {
+        let scoping = semantic.scoping();
+        match unwrap(callee) {
+            Expression::StaticMemberExpression(member) => {
+                if let Some(name) = setup_read(member, semantic) {
+                    return self.exposed.get(name).map(|symbol| (*symbol, Vec::new()));
+                }
+                let (symbol, mut members) = self.callee(&member.object, semantic)?;
+                members.push(member.property.name.to_string());
+                Some((symbol, members))
+            }
+            Expression::CallExpression(call) if call.arguments.len() == 1 => {
+                let Expression::Identifier(function) = unwrap(&call.callee) else {
+                    return None;
+                };
+                let function = function
+                    .reference_id
+                    .get()
+                    .and_then(|reference| scoping.get_reference(reference).symbol_id())?;
+                if !self.unref.contains(&function) {
+                    return None;
+                }
+                let argument = call.arguments[0].as_expression()?;
+                let symbol = root_identifier(argument)?
+                    .reference_id
+                    .get()
+                    .and_then(|reference| scoping.get_reference(reference).symbol_id())?;
+                Some((symbol, callee_members(argument)?))
+            }
+            _ => None,
+        }
+    }
+}
+
+/// The name a render function reads off its `$setup` parameter: `$setup.css` gives `css`.
+fn setup_read<'a>(
+    member: &'a StaticMemberExpression<'a>,
+    semantic: &Semantic<'_>,
+) -> Option<&'a str> {
+    let Expression::Identifier(object) = unwrap(&member.object) else {
+        return None;
+    };
+    if object.name != "$setup" {
+        return None;
+    }
+    let symbol = object
+        .reference_id
+        .get()
+        .and_then(|reference| semantic.scoping().get_reference(reference).symbol_id())?;
+    matches!(
+        semantic.symbol_declaration(symbol).kind(),
+        AstKind::FormalParameter(_)
+    )
+    .then(|| member.property.name.as_str())
+}
+
 pub(crate) fn analyze_module(
     project: &ProjectEvaluator<'_>,
     filename: &str,
@@ -488,6 +703,7 @@ fn empty_analysis(errors: Vec<String>) -> FoldAnalysis {
         local_exports: Vec::new(),
         imported_recipes: Vec::new(),
         dependencies: Vec::new(),
+        vue_exposures: Vec::new(),
         errors,
     }
 }
@@ -624,6 +840,10 @@ fn analyze_facts<'a>(
         }))
         .collect();
 
+    let vue = VueTemplate::new(facts, &utf16, &|symbol| {
+        bindings.contains_key(&symbol) || imported_recipe_symbols.contains_key(&symbol)
+    });
+
     let mut calls = Vec::new();
     let mut split_calls = Vec::new();
 
@@ -667,19 +887,30 @@ fn analyze_facts<'a>(
             continue;
         }
 
+        // `unref(css)(…)` and `$setup.css(…)`: a call of `css`, spelled the way a compiled Vue
+        // template spells it.
+        let vue_target = vue.callee(&call.callee, semantic);
+
         // A recipe invocation of a local or imported inline recipe: `badge(...)`, and the
         // `badge.raw(...)` spelling of the same binding, which is reported rather than folded.
         let callee_root = match unwrap(&call.callee) {
+            _ if vue_target.is_some() => None,
             Expression::Identifier(identifier) => Some(&**identifier),
             _ if is_raw_callee(&call.callee) => root_identifier(&call.callee),
             _ => None,
         };
-        if let Some(root) = callee_root {
-            let symbol = root
-                .reference_id
-                .get()
-                .and_then(|reference| scoping.get_reference(reference).symbol_id());
-            let recipe_name = symbol.and_then(|symbol| {
+        let recipe_symbol = match &vue_target {
+            Some((symbol, members)) => (members.is_empty()
+                || members.iter().map(String::as_str).eq(["raw"]))
+            .then_some(*symbol),
+            None => callee_root.and_then(|root| {
+                root.reference_id
+                    .get()
+                    .and_then(|reference| scoping.get_reference(reference).symbol_id())
+            }),
+        };
+        {
+            let recipe_name = recipe_symbol.and_then(|symbol| {
                 definition_symbols
                     .get(&symbol)
                     .cloned()
@@ -713,25 +944,35 @@ fn analyze_facts<'a>(
             }
             // A call of a name a module-scope recipe owns, reached through a nested binding:
             // somebody else's function, not the recipe.
-            if definition_names.contains(root.name.as_str())
-                || imported_recipes
-                    .iter()
-                    .any(|recipe| recipe.local == root.name.as_str())
+            if let Some(root) = callee_root
+                && (definition_names.contains(root.name.as_str())
+                    || imported_recipes
+                        .iter()
+                        .any(|recipe| recipe.local == root.name.as_str()))
             {
                 continue;
             }
         }
 
-        let classified = classify_callee(&call.callee, scoping, &bindings, entrypoints);
+        let classified = match &vue_target {
+            Some((symbol, members)) => classify_binding(*symbol, members, &bindings, entrypoints),
+            None => classify_callee(&call.callee, scoping, &bindings, entrypoints),
+        };
+        let raw = match &vue_target {
+            Some((_, members)) => members.last().is_some_and(|member| member == "raw"),
+            None => is_raw_callee(&call.callee),
+        };
         let Some((kind, name, property)) = classified else {
-            if let Some((kind, name)) = not_imported_call(
-                &call.callee,
-                scoping,
-                &bindings,
-                &module_names,
-                &foreign_names,
-                entrypoints,
-            ) {
+            if vue_target.is_none()
+                && let Some((kind, name)) = not_imported_call(
+                    &call.callee,
+                    scoping,
+                    &bindings,
+                    &module_names,
+                    &foreign_names,
+                    entrypoints,
+                )
+            {
                 calls.push(FoldCall {
                     name,
                     kind,
@@ -862,7 +1103,7 @@ fn analyze_facts<'a>(
             slot,
             slot_end,
             shadowed_helpers: Vec::new(),
-            raw: is_raw_callee(&call.callee),
+            raw,
             not_imported: false,
             callee_property: property,
             data,
@@ -1033,6 +1274,7 @@ fn analyze_facts<'a>(
         references,
         runtime_shapes,
         local_exports,
+        vue_exposures: vue.exposures,
         imported_recipes: imported_recipes
             .into_iter()
             .map(|recipe| FoldImportedRecipe {

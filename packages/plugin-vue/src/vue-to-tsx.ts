@@ -27,7 +27,7 @@ const NodeTypes = {
 
 interface TemplateNode {
   type: number
-  props?: Array<{ type: number; name?: string; exp?: { type: number; content: string } }>
+  props?: Array<{ type: number; name?: string; arg?: unknown; exp?: { type: number; content: string } }>
   children?: TemplateNode[]
   content?: { type: number; content: string }
   branches?: TemplateNode[]
@@ -39,6 +39,13 @@ interface TemplateNode {
  * neither can hold a style call.
  */
 const NOT_AN_EXPRESSION = new Set(['for', 'slot'])
+
+/**
+ * A handler Vue reads as a function rather than as statements: its compiler's own test, `fnExpRE`
+ * in `@vue/compiler-core`'s `vOn`.
+ */
+const FUNCTION_EXPRESSION =
+  /^\s*(?:async\s*)?(?:\([^)]*?\)|[\w$]+)\s*(?::[^=]+)?=>|^\s*(?:async\s+)?function(?:\s+[\w$]+)?\s*\(/
 
 /**
  * A `.vue` file as TypeScript the extractor can parse.
@@ -84,6 +91,13 @@ export const vueToTsx = (code: string) => {
     for (const prop of node.props ?? []) {
       if (prop.type !== NodeTypes.DIRECTIVE || !prop.exp || prop.exp.type !== NodeTypes.SIMPLE_EXPRESSION) continue
       if (prop.name && NOT_AN_EXPRESSION.has(prop.name)) continue
+      // `@click="open = false; emit('close')"` is statements, which Vue compiles into the body of
+      // a handler. Written as an expression it is a syntax error, and it failed extraction of the
+      // whole file — every style call in it included. Written the way Vue compiles it, it parses.
+      if (prop.name === 'on' && prop.arg && !FUNCTION_EXPRESSION.test(prop.exp.content)) {
+        expressions.push(`($event) => {\n${prop.exp.content}\n}`)
+        continue
+      }
       expressions.push(prop.exp.content)
     }
 

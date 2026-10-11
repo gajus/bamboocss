@@ -184,6 +184,23 @@ pub struct FoldRuntimeShape {
     pub span: FoldSpan,
 }
 
+/// What a `<script setup>` compiled for a separate render function exposes to its template.
+///
+/// The dev server compiles a template into a render function of its own, which reads setup
+/// bindings off its `$setup` parameter, and `setup()` returns them as getters:
+/// `__returned__ = { get css() { return css } }`. Once every `$setup.css` the template reads is
+/// compiled, the getter is the one thing still holding the import.
+#[napi(object)]
+pub struct FoldVueExposure {
+    pub name: String,
+    /// The read of the binding inside the getter, or the shorthand property.
+    pub span: FoldSpan,
+    /// What the span becomes once nothing reads it: `undefined`, or `css: undefined`.
+    pub replacement: String,
+    /// Every `$setup.<name>` the module reads.
+    pub reads: Vec<FoldSpan>,
+}
+
 /// `export { local as exported }` with no `from`.
 #[napi(object)]
 pub struct FoldLocalExport {
@@ -207,6 +224,8 @@ pub struct FoldAnalysis {
     pub imported_recipes: Vec<FoldImportedRecipe>,
     /// Other modules whose values reached a call's data.
     pub dependencies: Vec<String>,
+    /// Bamboo bindings a `<script setup>` exposes to a separately compiled template.
+    pub vue_exposures: Vec<FoldVueExposure>,
     pub errors: Vec<String>,
 }
 

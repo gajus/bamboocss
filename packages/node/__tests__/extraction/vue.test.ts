@@ -441,3 +441,42 @@ describe('extract Vue templates', () => {
     ])
   })
 })
+
+/**
+ * A Vue template's expressions, read for their style calls.
+ *
+ * An event handler may be statements, `@click="open = false; emit('close')"`, which Vue compiles
+ * into a handler's body. Written out as an expression they were a syntax error, and extraction of
+ * the whole file failed with them: every style call in it, the script's included.
+ */
+const component = (handler: string) => `<script setup lang="ts">
+import { css } from 'styled-system/css'
+const color = css({ color: 'blue.300' })
+</script>
+<template>
+  <button :class="css({ color: 'red.300' })" @click="${handler}">{{ color }}</button>
+</template>`
+
+describe('a Vue template', () => {
+  test.each([
+    ['statements', 'a++; b++'],
+    ['an `if`', 'if (ok) go()'],
+    ['an assignment and a call', "open = false; emit('close')"],
+    ['statements on separate lines', 'a++\nb++'],
+    ['a method name', 'go'],
+    ['a call', 'go()'],
+    ['an arrow function', '() => go()'],
+    ['a function expression', 'function () { go() }'],
+  ])('with a handler of %s yields every style call', (_, handler) => {
+    const result = parseAndExtract(vueToTsx(component(handler)))
+
+    expect(result.css).toContain('color: var(--colors-red-300)')
+    expect(result.css).toContain('color: var(--colors-blue-300)')
+  })
+
+  test('with handlers bound as an object yields every style call', () => {
+    const result = parseAndExtract(vueToTsx(component('go').replace('@click="go"', 'v-on="{ click: go }"')))
+
+    expect(result.css).toContain('color: var(--colors-red-300)')
+  })
+})

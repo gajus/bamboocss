@@ -2,6 +2,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, test } from 'vitest'
 import { bamboocss } from '../src/plugin'
+import { compileVueSfc } from './fixture'
 
 /**
  * The compiler has no runtime styling fallback. These cases pin the diagnostics for every
@@ -13,10 +14,15 @@ const hookOf = <T>(hook: T | { handler: T } | undefined): T | undefined =>
   typeof hook === 'function' ? hook : (hook as { handler: T } | undefined)?.handler
 
 const run = async (code: string, file: string) => {
-  const plugin = bamboocss({ cwd, reportSummary: false }).find((p) => p.name === 'bamboocss:compiler')!
+  const plugins = bamboocss({ cwd, reportSummary: false })
+  const plugin = plugins.find((p) => p.name === 'bamboocss:compiler')!
+  // A single-file component's compiled script is the post-order compiler's, as in a real build.
+  const transformer = /\.(?:vue|svelte|astro)$/.test(file)
+    ? plugins.find((p) => p.name === 'bamboocss:compiler-sfc')!
+    : plugin
 
   await hookOf(plugin.buildStart)?.call({} as never, {} as never)
-  await hookOf(plugin.transform)?.call({ addWatchFile: () => {} } as never, code, join(cwd, file), {} as never)
+  await hookOf(transformer.transform)?.call({ addWatchFile: () => {} } as never, code, join(cwd, file), {} as never)
   // A real bundler calls buildEnd once. Cache that outcome so a test can match several parts of
   // one diagnostic without opening a second lifecycle after the failed generation rolled back.
   let finished = false
@@ -75,6 +81,17 @@ describe('strict compiler', () => {
     // values the build cannot know is not given for a typo.
     expect(end).toThrow(/^bamboocss: 2 call\(s\) could not be compiled\./)
     expect(end).not.toThrow(/— (dynamic|runtime-binding)|Make the values finite/)
+  }, 60_000)
+
+  // A `<script setup>` component as the dev server compiles it: the template's calls read off
+  // `$setup`, and every import of a JavaScript `<script setup>` returned to the template as a getter.
+  test('passes a Vue `<script setup>` component compiled for the dev server', async () => {
+    const source =
+      `<script setup>\nimport { css } from 'styled-system/css'\nconst local = css({ padding: '2' })\n</script>\n` +
+      `<template>\n  <div :class="[css({ color: 'red.300' }), local]" />\n</template>\n`
+    const end = await run(compileVueSfc(source, 'dev', join(cwd, 'src/strict-vue.vue')), 'src/strict-vue.vue')
+
+    expect(end).not.toThrow()
   }, 60_000)
 
   describe('a call the evaluator refused', () => {

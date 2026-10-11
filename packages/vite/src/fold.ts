@@ -833,7 +833,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
   /** Ranges the rewrite actually replaced. */
   const applied: Array<[number, number]> = []
 
-  if (candidates.length === 0 && recipeDefinitions.length === 0) {
+  if (candidates.length === 0 && recipeDefinitions.length === 0 && analysis.vueExposures.length === 0) {
     if (reportSurvivors) reportRuntimeBindings()
     return { code, map: null, folded, skipped, dependencies: [] }
   }
@@ -959,6 +959,18 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     magic.overwrite(start, end, 'undefined')
     applied.push([start, end])
     folded.push({ name, kind: 'definition', className: '', classNames: [], start, end })
+  }
+
+  // A `<script setup>` the dev server compiles exposes its imports to the template through
+  // `__returned__` getters, and the template reads them off `$setup`. Once every `$setup.css`
+  // the module reads has been compiled, `get css() { return css }` is the one thing still holding
+  // the import, so it is emptied as an erased recipe declaration is. One left uncompiled keeps
+  // it, and the getter's read is then reported as the binding it is.
+  for (const exposure of analysis.vueExposures) {
+    const compiled = exposure.reads.every((read) => applied.some(([from, to]) => read.start >= from && read.end <= to))
+    if (!compiled || collides(exposure.span.start, exposure.span.end)) continue
+    magic.overwrite(exposure.span.start, exposure.span.end, exposure.replacement)
+    applied.push([exposure.span.start, exposure.span.end])
   }
 
   /**

@@ -1,7 +1,9 @@
 import { createContext } from '@bamboocss/fixture'
 import { esc } from '@bamboocss/shared'
 import type { Config } from '@bamboocss/types'
-import { isAbsolute, join } from 'node:path'
+import { createRequire } from 'node:module'
+import { dirname, isAbsolute, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { foldSource, type FoldResult } from '../src/fold'
 import { createRuntimeCss } from '../src/runtime-css'
 import { createStaticStyleSetCompiler } from '../src/style-set'
@@ -100,3 +102,37 @@ export const selectorsFor = (className: string) =>
     .map((name) => `.${esc(name)}`)
 
 export const foldCode = (code: string, userConfig?: Config) => createFoldFixture(userConfig).fold(code).code
+
+/**
+ * A Vue single-file component compiled as `@vitejs/plugin-vue` compiles it: for `build`, the
+ * template inlined into `setup()`; for `dev`, a render function of its own beside the script.
+ */
+/** What these tests use of `@vue/compiler-sfc`, a dependency of `@bamboocss/plugin-vue`. */
+interface VueSfcCompiler {
+  parse(source: string, options: { filename: string }): { descriptor: { template: { content: string } | null } }
+  compileScript(descriptor: unknown, options: Record<string, unknown>): { content: string; bindings?: unknown }
+  compileTemplate(options: Record<string, unknown>): { code: string }
+}
+
+export const compileVueSfc = (source: string, mode: 'build' | 'dev', filename = '/app/src/Comp.vue') => {
+  const vue = createRequire(join(dirname(fileURLToPath(import.meta.url)), '../../plugin-vue/package.json'))(
+    '@vue/compiler-sfc',
+  ) as VueSfcCompiler
+  const { descriptor } = vue.parse(source, { filename })
+  const inline = mode === 'build'
+  const script = vue.compileScript(descriptor, {
+    id: 'comp',
+    inlineTemplate: inline,
+    isProd: inline,
+    genDefaultAs: '_sfc_main',
+  })
+  if (inline) return `${script.content}\nexport default _sfc_main\n`
+  const template = vue.compileTemplate({
+    source: descriptor.template!.content,
+    filename,
+    id: 'comp',
+    compilerOptions: { bindingMetadata: script.bindings },
+  })
+  const render = template.code.replace('export function render', 'function _sfc_render')
+  return `${script.content}\n${render}\n_sfc_main.render = _sfc_render\nexport default _sfc_main\n`
+}

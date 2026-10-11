@@ -1,5 +1,51 @@
 # @bamboocss/node
 
+## 1.56.7
+
+### Patch Changes
+
+- aa1571e: Fail the build when the compiler emits a class whose call the stylesheet pass never saw, instead of shipping
+  the class with no rule.
+  - The compiler reads a module as Vite hands it over; the stylesheet pass reads the source, and a single-file component
+    through a conversion of it. A call the conversion missed compiled to a class nothing styled, with no error. The
+    build now names the class and the file whose call produced it. Classes passed through `cx()` as written are not
+    Bamboo's and are not checked.
+  - Fixed the two conversions that missed calls: a Svelte `{@const cls = css({ … })}`, and an Astro client `<script>`,
+    which Astro bundles as a module of its own.
+
+- 7c4bfbc: Compile style values the build knows, instead of failing them as `dynamic` with nothing to say why.
+  - A default for an option or argument nobody passed: `o.display ?? 'block'`, `o.display || 'block'`,
+    `o.dense ? '2' : '4'`, or an `if (o.dense)` in a helper called as `box()`. `undefined` decides a choice as surely as
+    a value does.
+  - A property read off an object whose other properties the build cannot evaluate: `theme.radius` beside
+    `shadow: computeShadow()`, whether the object is local or imported, the property nested, destructured
+    (`const { radius } = theme`) or read with a literal key. A property a later spread or computed key may replace stays
+    unknown.
+  - A property read no longer carries its siblings' undecided values, which also wrote their rules into the stylesheet.
+
+- 3f084fb: Compile style calls in `<script setup>` templates, the shape the Vue guide shows.
+  - A production build compiles a template's `css({ … })` to `unref(css)({ … })`, which failed the build as a read of
+    the binding. The dev server compiles it to `$setup.css({ … })`, which was left uncompiled and threw when rendered.
+    Both now compile, for `css`, patterns and config recipes alike.
+  - In dev, `setup()` returns every import of a JavaScript `<script setup>` to its template as
+    `get css() { return css }`, which failed the build even when the template never called it. Once every `$setup.css`
+    the template reads is compiled, the getter returns `undefined` instead.
+  - An event handler of statements, `@click="open = false; emit('close')"`, no longer fails extraction of the whole
+    component.
+
+- Updated dependencies [aa1571e]
+- Updated dependencies [3f084fb]
+  - @bamboocss/plugin-svelte@1.56.7
+  - @bamboocss/plugin-vue@1.56.7
+  - @bamboocss/config@1.56.7
+  - @bamboocss/core@1.56.7
+  - @bamboocss/generator@1.56.7
+  - @bamboocss/logger@1.56.7
+  - @bamboocss/reporter@1.56.7
+  - @bamboocss/shared@1.56.7
+  - @bamboocss/token-dictionary@1.56.7
+  - @bamboocss/types@1.56.7
+
 ## 1.56.6
 
 ### Patch Changes

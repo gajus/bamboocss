@@ -1,5 +1,38 @@
 # @bamboocss/vite
 
+## 1.56.7
+
+### Patch Changes
+
+- aa1571e: Fail the build when the compiler emits a class whose call the stylesheet pass never saw, instead of shipping
+  the class with no rule.
+  - The compiler reads a module as Vite hands it over; the stylesheet pass reads the source, and a single-file component
+    through a conversion of it. A call the conversion missed compiled to a class nothing styled, with no error. The
+    build now names the class and the file whose call produced it. Classes passed through `cx()` as written are not
+    Bamboo's and are not checked.
+  - Fixed the two conversions that missed calls: a Svelte `{@const cls = css({ … })}`, and an Astro client `<script>`,
+    which Astro bundles as a module of its own.
+
+- 3f084fb: Compile style calls in `<script setup>` templates, the shape the Vue guide shows.
+  - A production build compiles a template's `css({ … })` to `unref(css)({ … })`, which failed the build as a read of
+    the binding. The dev server compiles it to `$setup.css({ … })`, which was left uncompiled and threw when rendered.
+    Both now compile, for `css`, patterns and config recipes alike.
+  - In dev, `setup()` returns every import of a JavaScript `<script setup>` to its template as
+    `get css() { return css }`, which failed the build even when the template never called it. Once every `$setup.css`
+    the template reads is compiled, the getter returns `undefined` instead.
+  - An event handler of statements, `@click="open = false; emit('close')"`, no longer fails extraction of the whole
+    component.
+
+- Updated dependencies [aa1571e]
+- Updated dependencies [7c4bfbc]
+- Updated dependencies [3f084fb]
+  - @bamboocss/node@1.56.7
+  - @bamboocss/config@1.56.7
+  - @bamboocss/core@1.56.7
+  - @bamboocss/logger@1.56.7
+  - @bamboocss/shared@1.56.7
+  - @bamboocss/types@1.56.7
+
 ## 1.56.6
 
 ### Patch Changes

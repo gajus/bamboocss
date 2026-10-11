@@ -448,12 +448,14 @@ fn jsx_data<'a>(
                         conditions: Vec::new(),
                         complete: true,
                         refusal: None,
+                        partial: None,
                     },
                     Some(JSXAttributeValue::StringLiteral(value)) => EvalResult {
                         value: Some(value.value.to_string().into()),
                         conditions: Vec::new(),
                         complete: true,
                         refusal: None,
+                        partial: None,
                     },
                     Some(JSXAttributeValue::ExpressionContainer(container)) => {
                         evaluator.evaluate_jsx_expression(&container.expression)

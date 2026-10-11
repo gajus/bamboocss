@@ -51,6 +51,63 @@ pub(crate) struct Refusal {
     pub column: u32,
 }
 
+/// What is still known of an object the evaluator could not wholly evaluate, property by
+/// property.
+///
+/// An object is incomplete as soon as one property is — a call the build cannot run, a spread of
+/// something unknown — and that says nothing about the others. Reading one of them,
+/// `theme.radius` beside `shadow: computeShadow()`, used to fail as if it were the unknown one.
+/// Recorded only for an incomplete object, so a complete one costs nothing.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct Partial {
+    /// A spread or computed key the evaluator could not resolve: it may have written any
+    /// property, so only those written after it are known.
+    open: bool,
+    /// While `open`: the properties written completely since the last such write.
+    settled: HashSet<String>,
+    /// Otherwise: the properties whose last write was not complete.
+    unsettled: HashSet<String>,
+    /// What is known of a property whose value is itself an incomplete object.
+    children: HashMap<String, Arc<Partial>>,
+}
+
+impl Partial {
+    /// Whether `property` holds exactly what the object says it holds, written or not.
+    fn knows(&self, property: &str) -> bool {
+        if self.open {
+            self.settled.contains(property)
+        } else {
+            !self.unsettled.contains(property)
+        }
+    }
+
+    fn write(&mut self, property: &str, complete: bool, child: Option<Arc<Partial>>) {
+        if complete {
+            self.unsettled.remove(property);
+            if self.open {
+                self.settled.insert(property.to_string());
+            }
+        } else {
+            self.unsettled.insert(property.to_string());
+            self.settled.remove(property);
+        }
+        match child {
+            Some(child) => {
+                self.children.insert(property.to_string(), child);
+            }
+            None => {
+                self.children.remove(property);
+            }
+        }
+    }
+
+    /// A write the evaluator cannot attribute to a property.
+    fn open(&mut self) {
+        self.open = true;
+        self.settled.clear();
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct EvalResult {
     pub value: Option<serde_json::Value>,
@@ -59,6 +116,8 @@ pub(crate) struct EvalResult {
     pub complete: bool,
     /// Why the value is not known, when the evaluator refused something along the way.
     pub refusal: Option<Arc<Refusal>>,
+    /// For an incomplete object, which of its properties are still known.
+    pub partial: Option<Arc<Partial>>,
 }
 
 impl EvalResult {
@@ -68,6 +127,7 @@ impl EvalResult {
             conditions: Vec::new(),
             complete: true,
             refusal: None,
+            partial: None,
         }
     }
 
@@ -77,6 +137,21 @@ impl EvalResult {
             conditions: Vec::new(),
             complete: false,
             refusal: None,
+            partial: None,
+        }
+    }
+
+    /// JavaScript's `undefined`, known as such: no value, and nothing unknown or undecided.
+    pub fn is_undefined(&self) -> bool {
+        self.value.is_none() && self.complete && self.conditions.is_empty()
+    }
+
+    /// Truthiness, when it is decided. `undefined` decides as surely as a value: falsy.
+    pub fn truthiness(&self) -> Option<bool> {
+        match &self.value {
+            Some(value) => Some(truthy(value)),
+            None if self.is_undefined() => Some(false),
+            None => None,
         }
     }
 
@@ -95,6 +170,7 @@ impl EvalResult {
             conditions: Vec::new(),
             complete: true,
             refusal: None,
+            partial: None,
         }
     }
 
@@ -1137,6 +1213,7 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
                     conditions,
                     complete,
                     refusal,
+                    partial: None,
                 }
             }
             Expression::ObjectExpression(object) => {
@@ -1144,11 +1221,18 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
                 let mut conditions = Vec::new();
                 let mut complete = true;
                 let mut refusal = None;
+                // Started by the first write that is not known; until then every property is.
+                let mut partial: Option<Partial> = None;
                 for property in &object.properties {
                     match property {
                         ObjectPropertyKind::ObjectProperty(property) => {
                             if property.method {
                                 complete = false;
+                                let known = partial.get_or_insert_default();
+                                match property.key.static_name().filter(|_| !property.computed) {
+                                    Some(name) => known.write(&name, false, None),
+                                    None => known.open(),
+                                }
                                 continue;
                             }
                             let key = if property.computed {
@@ -1162,10 +1246,20 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
                             };
                             let Some(key) = key else {
                                 complete = false;
+                                partial.get_or_insert_default().open();
                                 continue;
                             };
                             let value = self.evaluate(&property.value);
                             complete &= value.complete;
+                            if !value.complete {
+                                partial.get_or_insert_default().write(
+                                    &key,
+                                    false,
+                                    value.partial.clone(),
+                                );
+                            } else if let Some(known) = &mut partial {
+                                known.write(&key, true, None);
+                            }
                             refusal = refusal.or(value.refusal);
                             for condition in value.conditions {
                                 let mut fragment = serde_json::Map::new();
@@ -1182,9 +1276,19 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
                             refusal = refusal.or(value.refusal);
                             conditions.extend(value.conditions);
                             if let Some(serde_json::Value::Object(values)) = value.value {
+                                // A spread wholly known writes its properties as a literal would;
+                                // any other may have written anything.
+                                if !value.complete {
+                                    partial.get_or_insert_default().open();
+                                } else if let Some(known) = &mut partial {
+                                    for key in values.keys() {
+                                        known.write(key, true, None);
+                                    }
+                                }
                                 output.extend(values);
                             } else {
                                 complete = false;
+                                partial.get_or_insert_default().open();
                             }
                         }
                     }
@@ -1194,6 +1298,7 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
                     conditions,
                     complete,
                     refusal,
+                    partial: partial.filter(|_| !complete).map(Arc::new),
                 }
             }
             Expression::Identifier(identifier) => {
@@ -1235,8 +1340,8 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
             Expression::LogicalExpression(value) => self.evaluate_logical(value),
             Expression::ConditionalExpression(value) => {
                 let test = self.evaluate(&value.test);
-                if let Some(test) = test.value {
-                    return if truthy(&test) {
+                if let Some(truthy) = test.truthiness() {
+                    return if truthy {
                         self.evaluate(&value.consequent)
                     } else {
                         self.evaluate(&value.alternate)
@@ -1257,6 +1362,7 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
                     conditions,
                     complete: left.complete && right.complete,
                     refusal: test.refusal.or(left.refusal).or(right.refusal),
+                    partial: None,
                 }
             }
             Expression::CallExpression(call) => self.evaluate_call(call),
@@ -1597,6 +1703,7 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
             conditions: Vec::new(),
             complete,
             refusal: None,
+            partial: None,
         }
     }
 
@@ -1648,6 +1755,11 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
             return EvalResult::undefined();
         }
         let result = self.evaluate(argument);
+        if operator == UnaryOperator::LogicalNot
+            && let Some(truthy) = result.truthiness()
+        {
+            return EvalResult::known(!truthy);
+        }
         let Some(value) = result.value else {
             return EvalResult {
                 refusal: result.refusal,
@@ -1757,6 +1869,7 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
                 conditions: Vec::new(),
                 complete,
                 refusal,
+                partial: None,
             },
             None => EvalResult {
                 refusal,
@@ -1767,12 +1880,18 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
 
     fn evaluate_logical(&mut self, expression: &'a LogicalExpression<'a>) -> EvalResult {
         let left = self.evaluate(&expression.left);
-        if let Some(value) = &left.value {
-            let select_right = match expression.operator {
+        // `undefined` decides a choice as surely as a value does: it is falsy, and nullish.
+        // `o.display ?? 'block'` on an option nobody passed used to stay undecided.
+        let select_right = match &left.value {
+            Some(value) => Some(match expression.operator {
                 LogicalOperator::Or => !truthy(value),
                 LogicalOperator::And => truthy(value),
                 LogicalOperator::Coalesce => value.is_null(),
-            };
+            }),
+            None if left.is_undefined() => Some(expression.operator != LogicalOperator::And),
+            None => None,
+        };
+        if let Some(select_right) = select_right {
             return if select_right {
                 self.evaluate(&expression.right)
             } else {
@@ -1790,6 +1909,7 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
             conditions,
             complete: left.complete && right.complete,
             refusal: left.refusal.or(right.refusal),
+            partial: None,
         }
     }
 
@@ -1833,6 +1953,7 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
                             .iter()
                             .find_map(|argument| argument.refusal.clone())
                     }),
+                    partial: None,
                 };
             }
             receiver_refusal = array.refusal;
@@ -1938,6 +2059,7 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
                 conditions: Vec::new(),
                 complete,
                 refusal,
+                partial: None,
             };
         }
         EvalResult {
@@ -2135,6 +2257,7 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
                     conditions: Vec::new(),
                     complete,
                     refusal: values.iter().find_map(|value| value.refusal.clone()),
+                    partial: None,
                 },
             );
         }
@@ -2259,13 +2382,13 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
             }
             Statement::IfStatement(statement) => {
                 let test = self.evaluate(&statement.test);
-                let Some(test) = test.value else {
+                let Some(truthy) = test.truthiness() else {
                     return Some(EvalResult {
                         refusal: test.refusal,
                         ..EvalResult::unknown()
                     });
                 };
-                let selected = if truthy(&test) {
+                let selected = if truthy {
                     Some(&statement.consequent)
                 } else {
                     statement.alternate.as_ref()
@@ -2495,6 +2618,28 @@ fn is_nullish(result: &EvalResult) -> bool {
 
 fn member_value(mut result: EvalResult, property: &str) -> EvalResult {
     let object_was_known = result.value.is_some();
+    let partial = result.partial.take();
+    // An object's undecided values are recorded per property, as `{ property: value }`
+    // fragments, so a read of one property keeps its own and none of its siblings'. `theme.w`
+    // beside `px: dense ? '2' : '4'` used to carry `px`'s choices along: their rules were
+    // emitted, and the read was undecided although `w` is not.
+    if result.conditions.iter().any(serde_json::Value::is_object) {
+        result.conditions = std::mem::take(&mut result.conditions)
+            .into_iter()
+            .filter_map(|condition| match condition {
+                serde_json::Value::Object(mut fragment) => fragment.remove(property),
+                other => Some(other),
+            })
+            .collect();
+    }
+    if let Some(partial) = partial {
+        result.complete = partial.knows(property);
+        result.partial = partial.children.get(property).cloned();
+        // The reason belongs to a sibling the read does not reach.
+        if result.complete {
+            result.refusal = None;
+        }
+    }
     result.value = match result.value {
         Some(serde_json::Value::Object(object)) => object.get(property).cloned(),
         Some(serde_json::Value::Array(array)) => {

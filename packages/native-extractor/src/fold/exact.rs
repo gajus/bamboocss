@@ -10,8 +10,11 @@
 //! - every written property must reach the value (nothing dropped as unknown);
 //! - a spread must be an inline literal, or a value the evaluator fully resolved;
 //! - a computed key must evaluate; a method or accessor declines;
-//! - a choice (`?:`, `||`, `&&`, `??`, a comparison) must be *decided* at build time, which
-//!   for a short-circuit means its left operand is written right there, not reached by name;
+//! - a choice (`?:`, `||`, `&&`, `??`, a comparison) must be *decided* at build time: its
+//!   deciding operand written right there, or reached by a name whose value is itself exact —
+//!   and `undefined`, an option nobody passed, decides as surely as a value;
+//! - a property read off an object literal answers for that property alone: its siblings may be
+//!   unknown, but nothing written after it may replace it;
 //! - a value reached through a destructuring default is a fallback, not a value;
 //! - an unknown leaf anywhere declines.
 
@@ -19,7 +22,7 @@ use oxc_ast::{
     AstKind,
     ast::{
         ArrayExpressionElement, BindingPattern, Expression, LogicalOperator, ObjectPropertyKind,
-        PropertyKind,
+        PropertyKey, PropertyKind,
     },
 };
 use oxc_syntax::operator::BinaryOperator;
@@ -145,32 +148,35 @@ impl<'a> Exactness<'_, 'a, '_, '_> {
                 let test = self.evaluator.evaluate(&conditional.test);
                 // An undecided test collapses to both arms as conditions, which `exact_result`
                 // already refused; a decided one is exact only through its chosen arm.
-                let Some(value) = test.value else {
+                let Some(truthy) = test.truthiness().filter(|_| exact_result(&test)) else {
                     return false;
                 };
-                if !is_written_here(&conditional.test) && !self.value_is_stable(&conditional.test) {
+                if !self.decides(&conditional.test) {
                     return false;
                 }
-                if crate_truthy(&value) {
+                if truthy {
                     self.accounts(&conditional.consequent)
                 } else {
                     self.accounts(&conditional.alternate)
                 }
             }
             Expression::LogicalExpression(logical) => {
-                // The left has to be written here: a box reached through a name records the
-                // declaration rather than the value, and truthiness is what that changes.
-                if !is_written_here(&logical.left) {
+                if !self.decides(&logical.left) {
                     return false;
                 }
                 let left = self.evaluator.evaluate(&logical.left);
-                let Some(value) = left.value else {
+                if !exact_result(&left) {
                     return false;
-                };
-                let right_wins = match logical.operator {
-                    LogicalOperator::Or => !crate_truthy(&value),
-                    LogicalOperator::And => crate_truthy(&value),
-                    LogicalOperator::Coalesce => value.is_null(),
+                }
+                let right_wins = match &left.value {
+                    Some(value) => match logical.operator {
+                        LogicalOperator::Or => !crate_truthy(value),
+                        LogicalOperator::And => crate_truthy(value),
+                        LogicalOperator::Coalesce => value.is_null(),
+                    },
+                    // `undefined`: falsy, and nullish.
+                    None if left.is_undefined() => logical.operator != LogicalOperator::And,
+                    None => return false,
                 };
                 if right_wins {
                     self.accounts(&logical.right)
@@ -261,10 +267,14 @@ impl<'a> Exactness<'_, 'a, '_, '_> {
                 }
                 self.identifier_is_exact(identifier)
             }
-            Expression::StaticMemberExpression(member) => self.accounts(&member.object),
+            Expression::StaticMemberExpression(member) => self.member_read(inner, &member.object),
             Expression::ComputedMemberExpression(member) => {
-                self.accounts(&member.object)
-                    && exact_result(&self.evaluator.evaluate(&member.expression))
+                if literal_key(&member.expression).is_some() {
+                    self.member_read(inner, &member.object)
+                } else {
+                    self.accounts(&member.object)
+                        && exact_result(&self.evaluator.evaluate(&member.expression))
+                }
             }
             Expression::TemplateLiteral(template) => template
                 .expressions
@@ -274,12 +284,108 @@ impl<'a> Exactness<'_, 'a, '_, '_> {
         }
     }
 
-    /// A test reached by name is exact when the name is a `const` bound to something exact.
-    fn value_is_stable(&mut self, expression: &'a Expression<'a>) -> bool {
+    /// Whether the operand deciding a choice is known for what it is: written right there, or
+    /// reached by a name — a binding, or a property path off one — whose value is itself exact.
+    ///
+    /// A name used to be refused outright: a value reached through one recorded the declaration
+    /// rather than the value, and truthiness is what that changes. A binding written after its
+    /// declaration is refused now (`is_mutated`), as is a parameter, whose value is the caller's,
+    /// so a name the audit accounts for holds what its declaration says. `o.display ?? 'block'`
+    /// on a module's own options object no longer fails the compile.
+    fn decides(&mut self, expression: &'a Expression<'a>) -> bool {
         match unwrap(expression) {
-            Expression::Identifier(identifier) => self.identifier_is_exact(identifier),
-            _ => false,
+            Expression::Identifier(_) | Expression::StaticMemberExpression(_) => {
+                self.accounts(expression)
+            }
+            Expression::ComputedMemberExpression(member)
+                if literal_key(&member.expression).is_some() =>
+            {
+                self.accounts(expression)
+            }
+            _ => is_written_here(expression),
         }
+    }
+
+    /// A property read: exact through that property's own source, where the source can be
+    /// followed to it, and otherwise only if the whole receiver is.
+    fn member_read(&mut self, read: &'a Expression<'a>, receiver: &'a Expression<'a>) -> bool {
+        match self.property_source(read, Vec::new()) {
+            MemberSource::Property(value) => self.accounts(value),
+            // Another module's property: its evaluator answers for the property alone.
+            MemberSource::Imported => exact_result(&self.evaluator.evaluate(read)),
+            MemberSource::Receiver => self.accounts(receiver),
+        }
+    }
+
+    /// Where `receiver.path` comes from, as far as the source says: a binding to its initializer,
+    /// a destructured name to the property it takes, an object literal to the property's last
+    /// write.
+    fn property_source(
+        &mut self,
+        mut receiver: &'a Expression<'a>,
+        mut path: Vec<&'a str>,
+    ) -> MemberSource<'a> {
+        // Bindings that refer to each other cannot cycle in a module that runs, but the build
+        // reads modules without running them; this bounds the walk regardless.
+        for _ in 0..64 {
+            match unwrap(receiver) {
+                Expression::StaticMemberExpression(member) if !member.optional => {
+                    path.insert(0, member.property.name.as_str());
+                    receiver = &member.object;
+                }
+                Expression::ComputedMemberExpression(member) if !member.optional => {
+                    let Some(key) = literal_key(&member.expression) else {
+                        return MemberSource::Receiver;
+                    };
+                    path.insert(0, key);
+                    receiver = &member.object;
+                }
+                Expression::ObjectExpression(object) if !path.is_empty() => {
+                    let Some(value) = last_write(object, path.remove(0)) else {
+                        return MemberSource::Receiver;
+                    };
+                    receiver = value;
+                }
+                Expression::Identifier(identifier) if !path.is_empty() => {
+                    let semantic = self.evaluator.semantic();
+                    let scoping = semantic.scoping();
+                    let Some(symbol) = identifier
+                        .reference_id
+                        .get()
+                        .and_then(|reference| scoping.get_reference(reference).symbol_id())
+                    else {
+                        return MemberSource::Receiver;
+                    };
+                    // Written after its declaration, the binding is refused by the whole-receiver
+                    // check this falls back to.
+                    if self.evaluator.is_mutated(symbol) {
+                        return MemberSource::Receiver;
+                    }
+                    if self.evaluator.is_import(symbol) {
+                        return MemberSource::Imported;
+                    }
+                    let AstKind::VariableDeclarator(declarator) =
+                        semantic.symbol_declaration(symbol).kind()
+                    else {
+                        return MemberSource::Receiver;
+                    };
+                    let Some(init) = declarator.init.as_ref() else {
+                        return MemberSource::Receiver;
+                    };
+                    if !matches!(declarator.id, BindingPattern::BindingIdentifier(_)) {
+                        let Some(mut taken) = binding_path(&declarator.id, symbol) else {
+                            return MemberSource::Receiver;
+                        };
+                        taken.append(&mut path);
+                        path = taken;
+                    }
+                    receiver = init;
+                }
+                _ if path.is_empty() => return MemberSource::Property(receiver),
+                _ => return MemberSource::Receiver,
+            }
+        }
+        MemberSource::Receiver
     }
 
     /// An identifier is exact unless its value came from a destructuring default, or from a
@@ -309,12 +415,25 @@ impl<'a> Exactness<'_, 'a, '_, '_> {
         let declaration = semantic.symbol_declaration(symbol);
         match declaration.kind() {
             AstKind::VariableDeclarator(declarator) => {
-                // Destructured: the value is exact only when no default on the path to the
-                // name can supply it.
-                if !matches!(declarator.id, BindingPattern::BindingIdentifier(_))
-                    && pattern_default_reaches(&declarator.id, symbol)
-                {
-                    return false;
+                if !matches!(declarator.id, BindingPattern::BindingIdentifier(_)) {
+                    // Destructured: the value is exact only when no default on the path to the
+                    // name can supply it.
+                    if pattern_default_reaches(&declarator.id, symbol) {
+                        return false;
+                    }
+                    // And it is the property it takes, not the whole initializer: `{ w } = theme`
+                    // beside `px: compute()` is `w`.
+                    if let (Some(init), Some(path)) =
+                        (&declarator.init, binding_path(&declarator.id, symbol))
+                    {
+                        return match self.property_source(init, path) {
+                            MemberSource::Property(value) => self.accounts(value),
+                            MemberSource::Imported => {
+                                exact_result(&self.evaluator.evaluate_symbol(symbol))
+                            }
+                            MemberSource::Receiver => self.accounts(init),
+                        };
+                    }
                 }
                 match &declarator.init {
                     Some(init) => self.accounts(init),
@@ -343,6 +462,81 @@ impl<'a> Exactness<'_, 'a, '_, '_> {
                 exact_result(&self.evaluator.evaluate_symbol(symbol))
             }
         }
+    }
+}
+
+/// Where a property read's value comes from.
+enum MemberSource<'a> {
+    /// The expression the source writes for the property, followed through local bindings and
+    /// object literals, with nothing written after it in its literal able to replace it.
+    Property(&'a Expression<'a>),
+    /// A property of an imported binding.
+    Imported,
+    /// Anything else: the whole receiver has to be exact.
+    Receiver,
+}
+
+/// The value `object` writes for `name` last, unless something written after it — a spread, a
+/// computed key — may replace it, or it is an accessor or a method.
+fn last_write<'a>(
+    object: &'a oxc_ast::ast::ObjectExpression<'a>,
+    name: &str,
+) -> Option<&'a Expression<'a>> {
+    for property in object.properties.iter().rev() {
+        let ObjectPropertyKind::ObjectProperty(property) = property else {
+            return None;
+        };
+        if property.computed {
+            return None;
+        }
+        if property.key.static_name().is_some_and(|key| key == name) {
+            return (property.kind == PropertyKind::Init && !property.method)
+                .then_some(&property.value);
+        }
+    }
+    None
+}
+
+/// A property key written as a literal: `theme['w']`.
+fn literal_key<'a>(expression: &'a Expression<'a>) -> Option<&'a str> {
+    match unwrap(expression) {
+        Expression::StringLiteral(literal) => Some(literal.value.as_str()),
+        Expression::TemplateLiteral(template) if template.expressions.is_empty() => template
+            .quasis
+            .first()
+            .and_then(|quasi| quasi.value.cooked.as_ref())
+            .map(|cooked| cooked.as_str()),
+        _ => None,
+    }
+}
+
+/// The keys a destructuring pattern takes `symbol` through: `{ sizes: { w } }` gives `sizes`,
+/// `w`. None when the way there has a default, an array, a rest or a computed key.
+fn binding_path<'a>(
+    pattern: &'a BindingPattern<'a>,
+    symbol: oxc_syntax::symbol::SymbolId,
+) -> Option<Vec<&'a str>> {
+    match pattern {
+        BindingPattern::BindingIdentifier(identifier) => {
+            (identifier.symbol_id.get() == Some(symbol)).then(Vec::new)
+        }
+        BindingPattern::ObjectPattern(object) => {
+            let property = object
+                .properties
+                .iter()
+                .find(|property| binds(&property.value, symbol))?;
+            let key = match &property.key {
+                PropertyKey::StaticIdentifier(identifier) if !property.computed => {
+                    identifier.name.as_str()
+                }
+                PropertyKey::StringLiteral(literal) if !property.computed => literal.value.as_str(),
+                _ => return None,
+            };
+            let mut path = binding_path(&property.value, symbol)?;
+            path.insert(0, key);
+            Some(path)
+        }
+        _ => None,
     }
 }
 

@@ -1,5 +1,7 @@
 # @bamboocss/is-valid-prop
 
+## 1.57.1
+
 ## 1.57.0
 
 ### Patch Changes

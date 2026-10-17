@@ -1,5 +1,48 @@
 # @bamboocss/token-dictionary
 
+## 1.57.0
+
+### Patch Changes
+
+- 4ea912c: Every published package declares the Node.js it runs on, `engines: { node: ">=22.12.0" }`, so a package
+  manager and tooling can see it.
+  - No package said, and the floor was its dependencies': the PostCSS plugins the stylesheet is optimized with take no
+    release before 22, and Vite none before 22.12. Node 20 reached its end of life in April 2026.
+  - tsdown builds for the version `engines` names. Every package's `dist` is the same, byte for byte.
+
+- fc73dfd: A composite gradient token's numeric `placement`, which the docs allow, is an angle in degrees.
+  - `placement: 90` is `linear-gradient(90deg, …)`, and `conic-gradient(from 90deg, …)` for a conic gradient. It matched
+    no composite gradient, so the token reached the stylesheet as an object.
+  - A semantic gradient written that way was read as a map of conditions named `type`, `placement` and `stops`, under an
+    empty base value. It is one gradient, and one more for each condition it is given under.
+  - A radial gradient has no angle, and a number there is an error that says to place it with a shape and a position,
+    like `'circle at top'`. So is a `placement` that is not a finite number.
+
+- 67fae4d: Keep a semantic token's `description`, `deprecated` and `extensions` when its value is written as a string, a
+  number or a composite value. Wrapping the value as `{ base }` built a new token without them, so the description never
+  reached the spec, a deprecation never reached `isDeprecated` or the ESLint rule, and a plugin reading the extensions
+  found none — all of which a value written as a condition map kept.
+  - The token for each of a semantic token's conditions keeps `deprecated`, which cloning it dropped. So does a negative
+    spacing token: `spacing.-4` is deprecated when `spacing.4` is.
+  - A theme variant's `description` and `deprecated` reach its tokens, and the theme spec.
+  - A token's `extensions` are copied rather than written into, so a frozen object no longer throws, and the dictionary
+    sets the condition of a token it declares: an `extensions.condition` of the config's own changes nothing.
+
+- Updated dependencies [f55d8e7]
+- Updated dependencies [382e9d1]
+- Updated dependencies [4ea912c]
+- Updated dependencies [14569ac]
+- Updated dependencies [fc73dfd]
+- Updated dependencies [dd6c070]
+- Updated dependencies [0cb809f]
+- Updated dependencies [960ca70]
+- Updated dependencies [04f8720]
+- Updated dependencies [34c29c4]
+- Updated dependencies [cab6edf]
+  - @bamboocss/shared@1.57.0
+  - @bamboocss/types@1.57.0
+  - @bamboocss/logger@1.57.0
+
 ## 1.56.7
 
 ### Patch Changes

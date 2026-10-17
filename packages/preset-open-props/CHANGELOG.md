@@ -1,5 +1,23 @@
 # @bamboocss/preset-open-props
 
+## 1.57.0
+
+### Patch Changes
+
+- 4ea912c: Every published package declares the Node.js it runs on, `engines: { node: ">=22.12.0" }`, so a package
+  manager and tooling can see it.
+  - No package said, and the floor was its dependencies': the PostCSS plugins the stylesheet is optimized with take no
+    release before 22, and Vite none before 22.12. Node 20 reached its end of life in April 2026.
+  - tsdown builds for the version `engines` names. Every package's `dist` is the same, byte for byte.
+
+- Updated dependencies [382e9d1]
+- Updated dependencies [4ea912c]
+- Updated dependencies [14569ac]
+- Updated dependencies [fc73dfd]
+- Updated dependencies [04f8720]
+- Updated dependencies [34c29c4]
+  - @bamboocss/types@1.57.0
+
 ## 1.56.7
 
 ### Patch Changes

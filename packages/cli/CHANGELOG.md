@@ -1,5 +1,110 @@
 # @bamboocss/dev
 
+## 1.57.0
+
+### Minor Changes
+
+- f55d8e7: `bamboo analyze --unused`, `bamboo doctor` and `bamboo debug --zip`.
+  - `bamboo analyze --unused` lists the configured names no source uses — tokens, recipes, patterns and keyframes — one
+    to a line on stdout, or bare under `--scope`, which now takes `pattern` and `keyframe` too. A token or a keyframe is
+    listed when the build's own prune removes it, with every prune on whatever the config says: a name listed is one the
+    stylesheet already ships without, and one the prune keeps for a reader it cannot follow — a `token()` path built at
+    runtime, a theme, a `keepTokens` pattern — is not. A recipe or a pattern is listed when no source calls it and
+    `staticCss` does not emit it regardless.
+  - `bamboo doctor` checks a project as the build reads it, without writing anything: its config, the sources `include`
+    selects, and the generated `styled-system` against what `bamboo codegen` would write now. It exits 1, saying what to
+    fix, for a generated file missing, out of date or no longer generated, a source that cannot be extracted, or a call
+    to a pattern or recipe that does not exist. `--json` prints the report as JSON.
+  - `bamboo debug --zip` writes the debug files as one `<outdir>.zip`, to attach to a bug report.
+  - `--silent` quiets every command for a project whose config names a `logLevel`, which creating the context set again
+    over it. Under `bamboo analyze` it quiets the reporter too, which logs through the logger's ES module: another
+    instance than the CommonJS one the CLI holds.
+  - Where stdout is the output — `analyze --unused`, `doctor --json` — the log goes to stderr, and a reader that stops
+    reading, `| head -1`, ends the command rather than failing it.
+
+### Patch Changes
+
+- fce5d3a: A config edited while a build watches it — `bamboo --watch`, or a dev server — is read again as it was read
+  first, and the rebuild after it writes what it has to.
+  - The reload read the file alone, so the context it built had none of what the integration had added to it. The Vue,
+    Svelte and Astro parsers went, and every `.vue`, `.svelte` and `.astro` file's styles left the stylesheet at the
+    first edit to the config. So did the mark of a dev server's build, which `hash: 'auto'` reads, so every class name
+    the browser held changed. So did a `cwd` the integration was handed and a `config` it laid over the file's — the
+    flags `bamboo --watch` was run with among them: at the first edit, `--outdir`, `--hash`, `--minify` and the globs it
+    was handed went back to what the file says.
+  - A config is now read again the way it was prepared, every time it is read again: from where it was read first,
+    wherever the process has moved since, and with what was laid over it then. Under a dev server, a plugin's
+    `config:change` is handed the config as it reads after the edit, not the one the edit replaced.
+  - `clean` empties the output directory before a run that writes every artifact, and no longer before a rebuild that
+    writes only what an edit changed: with `clean` set, the first edit under a watch took most of `styled-system/` with
+    it.
+  - An edit to what every artifact is written from — `outExtension`, `outdir`, `emitTokensOnly`, `plugins` — rebuilds
+    every artifact, as a run from cold does: the output directory is emptied first under `clean`, and `codegen:prepare`
+    and `codegen:done` are told every artifact changed. The ones no option names, `helpers`, `cva` and `css/index` among
+    them, were left under the old extension or in the old directory, where the rest no longer found them. Without
+    `clean`, what the old extension or directory still holds stays where it is.
+  - `bamboo ship --watch --minify` keeps minifying after an edit to the config, and `bamboo codegen` without `--clean`
+    no longer sets aside a `clean: true` in the config.
+
+- 4ea912c: Every published package declares the Node.js it runs on, `engines: { node: ">=22.12.0" }`, so a package
+  manager and tooling can see it.
+  - No package said, and the floor was its dependencies': the PostCSS plugins the stylesheet is optimized with take no
+    release before 22, and Vite none before 22.12. Node 20 reached its end of life in April 2026.
+  - tsdown builds for the version `engines` names. Every package's `dist` is the same, byte for byte.
+
+- 49c7a7c: The published ES modules import Node's built-ins with the `node:` prefix, the only spelling Deno resolves.
+  - Seventeen source files imported `fs`, `path`, `child_process` or `worker_threads` bare, and the built `dist` kept
+    the specifier as written. So did the update notifier the CLI bundles.
+  - A lint rule keeps a bare built-in out of each package's source.
+
+- cab6edf: Refuse to build from an argument that names nothing, instead of emptying the stylesheet. `bamboo` reads its
+  argument as an `include` glob, so a mistyped or never-defined command — `bamboo codgen`, `bamboo doctor` — and any
+  glob or path matching nothing built a stylesheet from no files over the real one, and exited 0. It now fails and
+  leaves the stylesheet as it was. A word is answered as the command it most likely meant; a glob or path is reported as
+  matching nothing, and a directory, `bamboo src`, with the glob to write instead. While watching, only a word one slip
+  from a command is refused, since the files may be about to appear.
+
+  `bamboo <glob> --watch` now rebuilds when a file changes. The argument reached the watcher as a string where a list
+  was expected, so it watched a directory for each character of the glob.
+
+  `generate()` takes `{ requireFiles: true }` for the same refusal.
+
+- Updated dependencies [96d1679]
+- Updated dependencies [f55d8e7]
+- Updated dependencies [382e9d1]
+- Updated dependencies [fce5d3a]
+- Updated dependencies [4c0c5af]
+- Updated dependencies [4ea912c]
+- Updated dependencies [f184b7b]
+- Updated dependencies [14569ac]
+- Updated dependencies [faf921e]
+- Updated dependencies [fc73dfd]
+- Updated dependencies [dd6c070]
+- Updated dependencies [0cb809f]
+- Updated dependencies [960ca70]
+- Updated dependencies [61b3394]
+- Updated dependencies [611d1bc]
+- Updated dependencies [04f8720]
+- Updated dependencies [5730bb3]
+- Updated dependencies [a055085]
+- Updated dependencies [49c7a7c]
+- Updated dependencies [63336e0]
+- Updated dependencies [f46e9f6]
+- Updated dependencies [67fae4d]
+- Updated dependencies [00076f6]
+- Updated dependencies [77a276d]
+- Updated dependencies [8f65e42]
+- Updated dependencies [34c29c4]
+- Updated dependencies [cab6edf]
+- Updated dependencies [f9dbab9]
+  - @bamboocss/node@1.57.0
+  - @bamboocss/shared@1.57.0
+  - @bamboocss/types@1.57.0
+  - @bamboocss/logger@1.57.0
+  - @bamboocss/preset-bamboo@1.57.0
+  - @bamboocss/preset-base@1.57.0
+  - @bamboocss/token-dictionary@1.57.0
+
 ## 1.56.7
 
 ### Patch Changes

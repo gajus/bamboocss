@@ -1,5 +1,119 @@
 # @bamboocss/types
 
+## 1.57.0
+
+### Patch Changes
+
+- 382e9d1: Report the error a config throws, and where in its source the error came from, and bundle ES module configs
+  as ES modules.
+  - An error while loading `bamboo.config.ts` used to be replaced by `Please pass in filename to use require`, after the
+    config ran a second time. The real error is reported now, with the config's path, and the config runs once. Where
+    its stack says the error was created is read back through the bundle's source map to a file, line and column, and
+    when that is inside an installed package, so is the first place outside every installed package: the config's own
+    code, or a file it imports.
+  - A config is bundled as an ES module when its extension or `package.json` says it is one — `.mjs`/`.mts`, or
+    `.js`/`.ts` under `"type": "module"` — so top-level `await` works there. Its syntax is not read: a `.ts` file using
+    `import` with no `"type": "module"` is still bundled as CommonJS, where top-level `await` is not available.
+    Everything a config imports is still inlined into the bundle, under either format.
+  - An ES module config is imported from a temporary copy in the nearest `node_modules/.bamboo` (or the system's
+    temporary directory where there is no `node_modules`), and the copy is removed once the config has loaded. One left
+    behind by a process that was stopped mid-load is removed by a later load once it is an hour old. `require` and
+    `require.resolve` in the bundle resolve from the config, as they do in a CommonJS one. Two things resolve from the
+    copy instead: an `import()` whose specifier esbuild cannot read, and `import.meta.resolve`.
+  - `import.meta.url`, `import.meta.dirname` and `import.meta.filename` work in every config, as do `__dirname` and
+    `__filename`, and each file a config imports sees its own. In a CommonJS bundle `import.meta` used to be empty, so
+    `fileURLToPath(import.meta.url)` threw.
+  - A config, or a preset, that is something other than an object — a function, `null`, `undefined`, or a default export
+    that is `undefined` — is reported as not being one, a preset named by its package by its name. In 1.56.7 a function
+    preset was merged as one holding nothing, `null` and `undefined` presets failed with a `TypeError` naming no preset,
+    and a config whose default export was `null` or `undefined` loaded as an empty one. What a `preset:resolved` hook
+    returns is checked too, unless it is nothing, or `false`, which leaves the preset out as it did.
+  - A preset that is `false` — written so, a promise of it, or the default export of a module named in `presets` or
+    written there as `import()` — is left out before any `preset:resolved` hook runs, and is not in the resolved
+    `presets`. 1.56.7 handed it to the hooks as the preset, which their type does not allow, and kept it in the list. A
+    preset a hook leaves out is handed to no later plugin's hook either, nor kept in the resolved `presets`, where
+    1.56.7 handed that one `false` and kept it. Whatever else a hook returns that is not an object is refused as it is
+    returned, rather than handed to the next.
+  - What a promise a config or a preset exports rejects with is reported as the module's error, with its location. A
+    module written in `presets`, `import('./preset')`, is read as the module, as one a config exports is.
+  - A config the loader cannot write its defaults into — frozen, holding a key it writes as a getter, or inheriting one
+    read-only, or bundled to CommonJS and exporting `presets` — is copied first, so it loads with them. Where the loader
+    runs as an ES module — under the ESLint plugin, and under Vite wherever `@bamboocss/vite` is loaded as one, as Nuxt,
+    Astro and Storybook load it, or a Vite config Vite loads as an ES module does — such a config failed with a
+    `TypeError`. As CommonJS — under the CLI and the MCP server, and under Vite where its config is loaded as CommonJS —
+    the loader is not strict, and each default it could not write was dropped in silence: a config that cannot be
+    extended, such as a frozen one, loaded without whichever of `outdir`, `validation` and the default presets,
+    `@bamboocss/preset-base` and `@bamboocss/preset-bamboo`, it did not hold, as did one whose getter, or read-only
+    inherited key, read as nothing for one of them, and what those generate changes now that they have the defaults. Any
+    other kept what it held; now a preset it names by its package maps to the copy the loader bundles, and one it lists
+    twice is merged once. The copy holds every key the config has, its own and those it inherits, each as enumerable as
+    it was, and reads each only when the copy's key is read, as the config would: a getter's value, or what a proxy's
+    `get` answers for a key its `ownKeys` lists. One it lists with no descriptor hides none it inherits, and `for…in`
+    reads an inherited one of its name however enumerable, as V8 does where that one is an ordinary object's; with none
+    to inherit, it is read by name alone. A default written over one it inherits is its own, which `for…in` reads, as an
+    assignment makes it. A key only a proxy's `get` answers is not held, so one the merge reads by name, as it does
+    `preflight`, is lost where 1.56.7 read it. A key a class defines through a getter, such as `outdir`, is still left
+    out where the merge reads keys with `for…in`, as it always was. Any other config is read, and written into, as it
+    was. A `Proxy` refusing one of those writes, its trap returning false, and left holding nothing under the key now
+    fails the load naming the key under either build, where CommonJS went on without it; one left holding a value — what
+    its trap stored, wrapped or changed, or the config's own — loads with that, as CommonJS did, where as an ES module
+    it failed. A frozen token holding a `value` beside tokens nested in it still fails, as the merge writes a `DEFAULT`
+    into it, with an error that does not name the token. A preset is not copied for this, so a hook is handed the object
+    it exports.
+  - An ES module's default export, or a promise it exports, holding a `default` key beside keys of its own is kept
+    whole, where 1.56.7 read it as that key; one holding nothing but `default`, or nothing but getters beside it, is
+    read as its `default`, as it was. A CommonJS module's `default` is read, as it was, and so is that of a package
+    compiled from an ES module, `__esModule` beside its `default`.
+
+- 4ea912c: Every published package declares the Node.js it runs on, `engines: { node: ">=22.12.0" }`, so a package
+  manager and tooling can see it.
+  - No package said, and the floor was its dependencies': the PostCSS plugins the stylesheet is optimized with take no
+    release before 22, and Vite none before 22.12. Node 20 reached its end of life in April 2026.
+  - tsdown builds for the version `engines` names. Every package's `dist` is the same, byte for byte.
+
+- 14569ac: What source code hands Bamboo takes `undefined` for each key it may leave out, as a project with
+  `exactOptionalPropertyTypes` writes one when it passes a value on or leaves it out.
+  - Under that option `?:` alone does not take it, so a condition block written `_hover: active ? { … } : undefined`, a
+    utility with no css property behind it (`colorPalette`, `srOnly`, `truncate`, `boxSize`), a pattern's own props
+    (`grid({ columns })`, `divider({ orientation })`), a recipe's `base`, `variants` or `defaultVariants`, and a slot
+    recipe's record for any one slot were each rejected. So were a view transition's parts, and a recipe config's
+    `description`, `jsx` and `staticCss`.
+  - The rest of a config's own types, such as a pattern's config or `staticCss`, are as they were.
+  - Types only: no css a project emits changes.
+
+- fc73dfd: A composite gradient token's numeric `placement`, which the docs allow, is an angle in degrees.
+  - `placement: 90` is `linear-gradient(90deg, …)`, and `conic-gradient(from 90deg, …)` for a conic gradient. It matched
+    no composite gradient, so the token reached the stylesheet as an object.
+  - A semantic gradient written that way was read as a map of conditions named `type`, `placement` and `stops`, under an
+    empty base value. It is one gradient, and one more for each condition it is given under.
+  - A radial gradient has no angle, and a number there is an error that says to place it with a shape and a position,
+    like `'circle at top'`. So is a `placement` that is not a finite number.
+
+- 04f8720: A source `include` reaches through a symbolic link — a workspace package linked into `node_modules`, a folder
+  or file linked into `src`, or a project folder that is itself reached through one, as everything under `/tmp` is on
+  macOS — and Vite builds it.
+  - Vite names a module by where it really is, which is not the path the source glob found it at through the link. So a
+    module compiled under that name looked like no source at all: `vite build` refused its classes as "outside the CSS
+    extraction graph", though `include` named it, and in dev its edits never reached the stylesheet, nor did a file
+    added beside it.
+  - The glob now reports where it began and every folder and file it reached through a link, and each source is known by
+    where it really is too: a module Vite compiles, edits or adds under that name is the source it is, each way the
+    inventory spells it. A workspace package's folder is watched where it really lies — through a wildcard such as
+    `node_modules/@acme/*/src/**` as well — since Vite's watcher passes over `node_modules`.
+  - A file the glob reaches by two paths is still read by both, as before.
+  - A project with no such link pays nothing. One with a link pays about 0.17 µs for each module the compiler asks
+    about, and under a millisecond each time the glob runs.
+
+- 34c29c4: `@bamboocss/types` type-checks with `skipLibCheck: false`. `pattern.ts` and `composition.ts` keep their own
+  copies of `LiteralUnion`, `Primitive`, `Recursive` and `Token` — they are copied whole into every project's
+  `styled-system/types` — and a declaration file exports every declaration in it, so the index's `export type *` found
+  each of those names twice: four TS2308 in every project type-checking its dependencies. The index now names each from
+  the module it belongs to, and every name the package exported before, it still exports.
+
+  `Token` is the token type the package's source exports — with `type`, `deprecated` and `extensions` beside `value` and
+  `description`. In a project not checking its dependencies it had been `composition.ts`'s private two-field one, which
+  the index's `export type *` met first.
+
 ## 1.56.7
 
 ## 1.56.6

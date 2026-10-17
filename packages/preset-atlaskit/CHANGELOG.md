@@ -1,5 +1,37 @@
 # @bamboocss/preset-atlaskit
 
+## 1.57.0
+
+### Minor Changes
+
+- e77a8cb: **Twelve Atlassian token names are removed in this release.** It ships as a minor, so nothing in the version
+  signals it — the last item below is the warning.
+
+  The preset is regenerated from `@atlaskit/tokens` 20.6.0 and `@atlaskit/motion` 9.4.0, the current Atlassian Design
+  System.
+  - Its values were older than the `@atlaskit/tokens` 8.4.0 it named: the preset had last been generated from ~v7, and
+    262 semantic colours, 3 shadows and 3 core colours have since changed.
+  - Added: 71 semantic colours, 9 core colours, 7 spacing steps and `radii.xxlarge` (16px).
+  - Removed, as Atlassian removed them: `colors.chart.categorical.1` and `.3`, the semantic `chart.categorical.5`–`.7`,
+    `chart.danger`, `chart.warning`, `chart.success` and `chart.discovery`, and the deprecated `body.UNSAFE_small` font
+    size, line height and mixin. A style naming one no longer resolves.
+
+### Patch Changes
+
+- 4ea912c: Every published package declares the Node.js it runs on, `engines: { node: ">=22.12.0" }`, so a package
+  manager and tooling can see it.
+  - No package said, and the floor was its dependencies': the PostCSS plugins the stylesheet is optimized with take no
+    release before 22, and Vite none before 22.12. Node 20 reached its end of life in April 2026.
+  - tsdown builds for the version `engines` names. Every package's `dist` is the same, byte for byte.
+
+- Updated dependencies [382e9d1]
+- Updated dependencies [4ea912c]
+- Updated dependencies [14569ac]
+- Updated dependencies [fc73dfd]
+- Updated dependencies [04f8720]
+- Updated dependencies [34c29c4]
+  - @bamboocss/types@1.57.0
+
 ## 1.56.7
 
 ### Patch Changes

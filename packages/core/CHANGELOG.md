@@ -1,5 +1,110 @@
 # @bamboocss/core
 
+## 1.57.0
+
+### Patch Changes
+
+- 4ea912c: Every published package declares the Node.js it runs on, `engines: { node: ">=22.12.0" }`, so a package
+  manager and tooling can see it.
+  - No package said, and the floor was its dependencies': the PostCSS plugins the stylesheet is optimized with take no
+    release before 22, and Vite none before 22.12. Node 20 reached its end of life in April 2026.
+  - tsdown builds for the version `engines` names. Every package's `dist` is the same, byte for byte.
+
+- dd6c070: Read an important mark the way the stylesheet ends up holding it.
+  - Any whitespace inside a mark counts, not only CSS's: the build writes each run of it as one space, so `!` and
+    `important` with a no-break space between them reach the browser as an important declaration. Read as no mark, a
+    value from the config — which reaches the class name sanitized and the stylesheet as written — named a class for an
+    ordinary rule while the rule was written as an important one, and the element matched nothing. The class is now
+    named from the same value the mark is read from. NUL beside the mark, which the build removes from a value, counts
+    as whitespace too.
+  - A comment around the mark is not read, as it was not before, though CSS reads one as whitespace: telling a comment's
+    `/*` from one in a string or a `url()` is the tokenizer's job. Write the mark last: `red !important /* c */` is
+    written as an ordinary declaration, and `no-important` does not report it. A value holding a comment it never closes
+    is no CSS at all, and its rule is dropped whatever follows the `/*`.
+  - An escape hatch is only brackets that are the whole value: `[a] 1fr [b!]` is two line names around a track, and its
+    `!` is no mark. A fallback candidate that is an escape hatch holding the mark, `fallback([a!], b)`, marks the
+    declaration, as `[a!]` alone does.
+  - `no-important` reads a template literal as it cooks, as the build does, so `` `red\!` `` is reported and
+    `` `foo\\!` `` is not. Its suggested fix is written back escaped the way the literal reads: `"\"hi\" !"` became
+    `""hi""`, which does not parse, and `'a\\! !'` became `'a\!'`, a mark again. A carriage return in a template, a
+    control character and half a surrogate pair are written back as escapes.
+
+- 0cb809f: Only a trailing `!` or `!important` marks a declaration important. Any `!` in a value used to count, and was
+  cut out of the value as it was marked:
+  - `content: '"!"'` came out as `content: "" !important`, and `content: '"hello!"'` as `content: "hello" !important`.
+  - `fontFamily: '"Foo!Bar", sans-serif'` lost its `!` and became important.
+  - `<!--` in an SVG data URI became `<--`, which broke the image.
+
+  A value whose `!` is part of it now keeps it, in the declaration and in its class name. Marks that end a value are all
+  removed, so `red !important !important` no longer emits a doubled, invalid mark, and a mark ending a `fallback(...)`
+  candidate still marks every candidate. The `no-important` lint rule now reads the keyword in any case, as the build
+  does.
+
+- 960ca70: Read `! important`, with whitespace inside the mark, as an important mark. The browser treats
+  `color: 'red ! important'` as important either way, but the build wrote it as an ordinary declaration, so it was
+  ordered and composed as something it was not. It is now the same atom as `red !important`.
+
+  An escaped `\!` is not a mark either: `foo\!` is the identifier `foo!`, and `foo\!important` the identifier
+  `foo!important`. Stripping the `!` as a mark left a backslash, which escaped the space written after it.
+
+  The ESLint rule `no-important` names the mark it would remove, as it is written: the one the build reads, found where
+  the build finds it. `content: '"!important" !'` was reported as using `!important`, which is part of the string.
+
+- e8cca66: An `&` or a comma inside a quoted attribute value in a selector is the value's own character.
+  - Every `&` was taken for the parent, so `'&[data-label="a & b"]'` had the element's class written into the value it
+    matches against, and a comma split the selector in two at `'&[data-label="x,y"]'`. Each such rule matched nothing.
+    The same held for a theme or a condition such as `'[data-a="a &"] &'`, for the tokens written under it and for a
+    reset's scope.
+  - A key whose only `&` is quoted names no parent, and nests as a descendant, as a key with no `&` does.
+  - The parent is written as it is: `String.replace` read a `$&` or `$$` in it as a pattern. And a class ending in an
+    escaped `&` keeps it before a descendant: the first `& ` in the selector was dropped wherever it stood.
+  - A selector that quotes and escapes nothing — nearly every one — is read without walking it, and is no slower:
+    2.58–2.60 → 2.17–2.20 µs a rule, measured side by side.
+
+- c58eea4: `strictValues` takes keywords side by side or listed, as it takes one, and reports each raw value once.
+  - `objectPosition: 'center top'` and `transitionProperty: 'opacity, transform'` were raw css for their spaces and
+    commas, though no keyword can be written without them, and under `validation: 'error'` they failed the build. A list
+    the property does not take — a keyword misspelled, or token names side by side, which are not resolved — is raw as
+    it was.
+  - Under `warn`, a raw value is reported once. A client and a server build emit the stylesheet each, and a dev server
+    on every edit, and each repeated the whole list. A value written later is reported as one more, of all there are.
+    `validation: 'error'` still fails each build that holds one.
+
+- b38a97a: A theme's tokens under a selector condition such as `_dark` hold wherever the theme and the condition meet,
+  not only where the `data-bamboo-theme` attribute and the dark class share an element.
+  - `.dark &` was compounded onto the theme's root, `[data-bamboo-theme=pastel].dark`. A theme in a page that
+    `<html class="dark">` puts in dark mode kept its light values, and a dark panel inside the theme took the default
+    dark values instead of the theme's. The condition now meets the root above it, on it and inside it, in the
+    stylesheet and in the theme files `styled-system/themes` loads on demand.
+  - On the root of a theme nested inside, the outer theme's rule is no more specific than that root: the nested theme's
+    own dark values win there, and the outer theme's fill in what it leaves out. Two cases still resolve by the order
+    the themes are written in: a value the nested theme sets for every mode, on its root when that carries the dark
+    class, and a dark class on an element inside two nested themes.
+  - A condition with a combinator of its own, `.dark > &`, meets the theme from above only, and one with its `&` in the
+    middle, `.dark & .panel`, is written around the root as it stands.
+  - A theme loaded on demand holds its own variables alone: `theme-pastel.json` carried those of a theme named
+    `pastelDark` as well.
+  - A condition of the project's own whose name begins with `theme`, such as `themeDim`, had its tokens dropped from the
+    stylesheet with those of every theme `staticCss.themes` leaves out. They are written as any condition's are.
+
+- Updated dependencies [f55d8e7]
+- Updated dependencies [382e9d1]
+- Updated dependencies [4ea912c]
+- Updated dependencies [14569ac]
+- Updated dependencies [fc73dfd]
+- Updated dependencies [dd6c070]
+- Updated dependencies [0cb809f]
+- Updated dependencies [960ca70]
+- Updated dependencies [04f8720]
+- Updated dependencies [67fae4d]
+- Updated dependencies [34c29c4]
+- Updated dependencies [cab6edf]
+  - @bamboocss/shared@1.57.0
+  - @bamboocss/types@1.57.0
+  - @bamboocss/is-valid-prop@1.57.0
+  - @bamboocss/logger@1.57.0
+  - @bamboocss/token-dictionary@1.57.0
+
 ## 1.56.7
 
 ### Patch Changes

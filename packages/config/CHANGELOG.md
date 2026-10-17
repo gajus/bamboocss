@@ -1,5 +1,148 @@
 # @bamboocss/config
 
+## 1.57.0
+
+### Patch Changes
+
+- 382e9d1: Report the error a config throws, and where in its source the error came from, and bundle ES module configs
+  as ES modules.
+  - An error while loading `bamboo.config.ts` used to be replaced by `Please pass in filename to use require`, after the
+    config ran a second time. The real error is reported now, with the config's path, and the config runs once. Where
+    its stack says the error was created is read back through the bundle's source map to a file, line and column, and
+    when that is inside an installed package, so is the first place outside every installed package: the config's own
+    code, or a file it imports.
+  - A config is bundled as an ES module when its extension or `package.json` says it is one — `.mjs`/`.mts`, or
+    `.js`/`.ts` under `"type": "module"` — so top-level `await` works there. Its syntax is not read: a `.ts` file using
+    `import` with no `"type": "module"` is still bundled as CommonJS, where top-level `await` is not available.
+    Everything a config imports is still inlined into the bundle, under either format.
+  - An ES module config is imported from a temporary copy in the nearest `node_modules/.bamboo` (or the system's
+    temporary directory where there is no `node_modules`), and the copy is removed once the config has loaded. One left
+    behind by a process that was stopped mid-load is removed by a later load once it is an hour old. `require` and
+    `require.resolve` in the bundle resolve from the config, as they do in a CommonJS one. Two things resolve from the
+    copy instead: an `import()` whose specifier esbuild cannot read, and `import.meta.resolve`.
+  - `import.meta.url`, `import.meta.dirname` and `import.meta.filename` work in every config, as do `__dirname` and
+    `__filename`, and each file a config imports sees its own. In a CommonJS bundle `import.meta` used to be empty, so
+    `fileURLToPath(import.meta.url)` threw.
+  - A config, or a preset, that is something other than an object — a function, `null`, `undefined`, or a default export
+    that is `undefined` — is reported as not being one, a preset named by its package by its name. In 1.56.7 a function
+    preset was merged as one holding nothing, `null` and `undefined` presets failed with a `TypeError` naming no preset,
+    and a config whose default export was `null` or `undefined` loaded as an empty one. What a `preset:resolved` hook
+    returns is checked too, unless it is nothing, or `false`, which leaves the preset out as it did.
+  - A preset that is `false` — written so, a promise of it, or the default export of a module named in `presets` or
+    written there as `import()` — is left out before any `preset:resolved` hook runs, and is not in the resolved
+    `presets`. 1.56.7 handed it to the hooks as the preset, which their type does not allow, and kept it in the list. A
+    preset a hook leaves out is handed to no later plugin's hook either, nor kept in the resolved `presets`, where
+    1.56.7 handed that one `false` and kept it. Whatever else a hook returns that is not an object is refused as it is
+    returned, rather than handed to the next.
+  - What a promise a config or a preset exports rejects with is reported as the module's error, with its location. A
+    module written in `presets`, `import('./preset')`, is read as the module, as one a config exports is.
+  - A config the loader cannot write its defaults into — frozen, holding a key it writes as a getter, or inheriting one
+    read-only, or bundled to CommonJS and exporting `presets` — is copied first, so it loads with them. Where the loader
+    runs as an ES module — under the ESLint plugin, and under Vite wherever `@bamboocss/vite` is loaded as one, as Nuxt,
+    Astro and Storybook load it, or a Vite config Vite loads as an ES module does — such a config failed with a
+    `TypeError`. As CommonJS — under the CLI and the MCP server, and under Vite where its config is loaded as CommonJS —
+    the loader is not strict, and each default it could not write was dropped in silence: a config that cannot be
+    extended, such as a frozen one, loaded without whichever of `outdir`, `validation` and the default presets,
+    `@bamboocss/preset-base` and `@bamboocss/preset-bamboo`, it did not hold, as did one whose getter, or read-only
+    inherited key, read as nothing for one of them, and what those generate changes now that they have the defaults. Any
+    other kept what it held; now a preset it names by its package maps to the copy the loader bundles, and one it lists
+    twice is merged once. The copy holds every key the config has, its own and those it inherits, each as enumerable as
+    it was, and reads each only when the copy's key is read, as the config would: a getter's value, or what a proxy's
+    `get` answers for a key its `ownKeys` lists. One it lists with no descriptor hides none it inherits, and `for…in`
+    reads an inherited one of its name however enumerable, as V8 does where that one is an ordinary object's; with none
+    to inherit, it is read by name alone. A default written over one it inherits is its own, which `for…in` reads, as an
+    assignment makes it. A key only a proxy's `get` answers is not held, so one the merge reads by name, as it does
+    `preflight`, is lost where 1.56.7 read it. A key a class defines through a getter, such as `outdir`, is still left
+    out where the merge reads keys with `for…in`, as it always was. Any other config is read, and written into, as it
+    was. A `Proxy` refusing one of those writes, its trap returning false, and left holding nothing under the key now
+    fails the load naming the key under either build, where CommonJS went on without it; one left holding a value — what
+    its trap stored, wrapped or changed, or the config's own — loads with that, as CommonJS did, where as an ES module
+    it failed. A frozen token holding a `value` beside tokens nested in it still fails, as the merge writes a `DEFAULT`
+    into it, with an error that does not name the token. A preset is not copied for this, so a hook is handed the object
+    it exports.
+  - An ES module's default export, or a promise it exports, holding a `default` key beside keys of its own is kept
+    whole, where 1.56.7 read it as that key; one holding nothing but `default`, or nothing but getters beside it, is
+    read as its `default`, as it was. A CommonJS module's `default` is read, as it was, and so is that of a package
+    compiled from an ES module, `__esModule` beside its `default`.
+
+- fce5d3a: A config edited while a build watches it — `bamboo --watch`, or a dev server — is read again as it was read
+  first, and the rebuild after it writes what it has to.
+  - The reload read the file alone, so the context it built had none of what the integration had added to it. The Vue,
+    Svelte and Astro parsers went, and every `.vue`, `.svelte` and `.astro` file's styles left the stylesheet at the
+    first edit to the config. So did the mark of a dev server's build, which `hash: 'auto'` reads, so every class name
+    the browser held changed. So did a `cwd` the integration was handed and a `config` it laid over the file's — the
+    flags `bamboo --watch` was run with among them: at the first edit, `--outdir`, `--hash`, `--minify` and the globs it
+    was handed went back to what the file says.
+  - A config is now read again the way it was prepared, every time it is read again: from where it was read first,
+    wherever the process has moved since, and with what was laid over it then. Under a dev server, a plugin's
+    `config:change` is handed the config as it reads after the edit, not the one the edit replaced.
+  - `clean` empties the output directory before a run that writes every artifact, and no longer before a rebuild that
+    writes only what an edit changed: with `clean` set, the first edit under a watch took most of `styled-system/` with
+    it.
+  - An edit to what every artifact is written from — `outExtension`, `outdir`, `emitTokensOnly`, `plugins` — rebuilds
+    every artifact, as a run from cold does: the output directory is emptied first under `clean`, and `codegen:prepare`
+    and `codegen:done` are told every artifact changed. The ones no option names, `helpers`, `cva` and `css/index` among
+    them, were left under the old extension or in the old directory, where the rest no longer found them. Without
+    `clean`, what the old extension or directory still holds stays where it is.
+  - `bamboo ship --watch --minify` keeps minifying after an edit to the config, and `bamboo codegen` without `--clean`
+    no longer sets aside a `clean: true` in the config.
+
+- 4ea912c: Every published package declares the Node.js it runs on, `engines: { node: ">=22.12.0" }`, so a package
+  manager and tooling can see it.
+  - No package said, and the floor was its dependencies': the PostCSS plugins the stylesheet is optimized with take no
+    release before 22, and Vite none before 22.12. Node 20 reached its end of life in April 2026.
+  - tsdown builds for the version `engines` names. Every package's `dist` is the same, byte for byte.
+
+- 49c7a7c: The published ES modules import Node's built-ins with the `node:` prefix, the only spelling Deno resolves.
+  - Seventeen source files imported `fs`, `path`, `child_process` or `worker_threads` bare, and the built `dist` kept
+    the specifier as written. So did the update notifier the CLI bundles.
+  - A lint rule keeps a bare built-in out of each package's source.
+
+- 697185e: Refuse the config keys Panda has and bamboo does not, instead of ignoring them. A config migrated from
+  `panda.config.ts` kept `strictTokens`, `polyfill`, `jsxFramework`, `jsxFactory`, `jsxStyleProps`, `syntax`, `studio`,
+  a `jsx` entry in `importMap`, or a pattern's `jsx`, `jsxName` and `jsxElement`, and built clean even under
+  `validation: 'error'` — so `strictTokens: true` enforced nothing, and nothing said so. Each now fails the build with
+  the edit to make: `strictTokens: true` is `strictValues: true`, and the others are deleted.
+
+  The generated `WithEscapeHatch` type no longer mentions `strictTokens`, and no longer links to `strictValues`, a build
+  check that does not touch it; the type is applied only under `strictPropertyValues`.
+
+- 00076f6: Resolve tsconfig `paths` from referenced projects, for a solution-style `tsconfig.json` — `"files": []` and
+  `references`, as `create vite` lays a project out. The root declares no `paths`; they are in `tsconfig.app.json`.
+  - A config importing through an alias bundles. Each file esbuild reads under the root resolves its imports through the
+    aliases of the project including it — references of references included. The config beside the root, in none,
+    resolves through the `paths` of whichever project's patterns match and reach a file, or through the root's own
+    aliases when it declares any. Only aliases: no other option of those projects applies, nor a `baseUrl` alone, which
+    would put a directory ahead of every package. A package the config imports keeps resolving through its own tsconfig,
+    and any other root is left to esbuild, as before.
+  - A source importing through one resolves, so the value it imports reaches the stylesheet and the compiler. Sources
+    resolve through the first project including files where `include` points and declaring aliases, rather than through
+    the config file's project, which declares none when it sits beside the root or in `tsconfig.node.json`. With no such
+    project they resolve as before, and a root that compiles the sources itself is left as it was.
+  - `baseUrl`, and `paths` written without one, resolve against the directory of the tsconfig declaring them, as
+    TypeScript resolves them, rather than against the project root.
+  - A referenced tsconfig that does not parse — an `extends` naming a package that is not installed — is passed over
+    rather than failing the build. One that does not exist yet is a dependency of the config, and `--watch` now reloads
+    the config when a file it depends on appears, not only when one changes.
+
+- Updated dependencies [f55d8e7]
+- Updated dependencies [382e9d1]
+- Updated dependencies [4ea912c]
+- Updated dependencies [14569ac]
+- Updated dependencies [fc73dfd]
+- Updated dependencies [dd6c070]
+- Updated dependencies [0cb809f]
+- Updated dependencies [960ca70]
+- Updated dependencies [04f8720]
+- Updated dependencies [8f65e42]
+- Updated dependencies [34c29c4]
+- Updated dependencies [cab6edf]
+  - @bamboocss/shared@1.57.0
+  - @bamboocss/types@1.57.0
+  - @bamboocss/logger@1.57.0
+  - @bamboocss/preset-bamboo@1.57.0
+  - @bamboocss/preset-base@1.57.0
+
 ## 1.56.7
 
 ### Patch Changes

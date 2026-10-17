@@ -1,5 +1,56 @@
 # @bamboocss/reporter
 
+## 1.57.0
+
+### Minor Changes
+
+- 5730bb3: The MCP server's `get_usage_report` covers patterns, utilities and keyframes as well as tokens and recipes,
+  and the server keeps stdout to the protocol.
+  - `scope` takes `'pattern'`, `'utility'` and `'keyframe'`. Every pattern and keyframe the config defines is listed —
+    at a count of nothing when nothing uses it — with how often each is called or named, and in how many files; the
+    utilities are every style property written, a shorthand counted as the property it stands for. A keyframe counts as
+    named through an `animations` token too, by name or through `token()`. `analyze()` returns `getPatternReport`,
+    `getUtilityReport` and `getKeyframeReport` for the same.
+  - `bamboo analyze` and the token report count a value keyed by a condition — `{ base: 'red.300', md: 'blue.300' }`, or
+    by a selector such as `'&:hover'` — as a value of the property above it, so the tokens it names are used. One keyed
+    `base` was counted as a property named `base`, and one keyed by a condition was not counted as a token use at all. A
+    `cva()` or `sva()` config is read for its styles, as a config recipe is — compound variants included, and
+    `defaultVariants` no longer read as properties — and `sva()` is read at all; it was not.
+  - With a `logLevel` that logs, the first usage report printed `Analyzing N file(s)` onto stdout, which carries the
+    protocol, and corrupted the stream. Everything the server logs goes to stderr, where a client shows it.
+  - A server whose client had gone kept running: a write into a pipe without a reader failed, and the failure was logged
+    into the same pipe. It exits instead.
+  - The server reports the version installed rather than `1.0.0`.
+
+### Patch Changes
+
+- 4ea912c: Every published package declares the Node.js it runs on, `engines: { node: ">=22.12.0" }`, so a package
+  manager and tooling can see it.
+  - No package said, and the floor was its dependencies': the PostCSS plugins the stylesheet is optimized with take no
+    release before 22, and Vite none before 22.12. Node 20 reached its end of life in April 2026.
+  - tsdown builds for the version `engines` names. Every package's `dist` is the same, byte for byte.
+
+- Updated dependencies [f55d8e7]
+- Updated dependencies [382e9d1]
+- Updated dependencies [4ea912c]
+- Updated dependencies [14569ac]
+- Updated dependencies [fc73dfd]
+- Updated dependencies [dd6c070]
+- Updated dependencies [0cb809f]
+- Updated dependencies [960ca70]
+- Updated dependencies [04f8720]
+- Updated dependencies [697185e]
+- Updated dependencies [e8cca66]
+- Updated dependencies [c58eea4]
+- Updated dependencies [b38a97a]
+- Updated dependencies [34c29c4]
+- Updated dependencies [cab6edf]
+  - @bamboocss/shared@1.57.0
+  - @bamboocss/types@1.57.0
+  - @bamboocss/core@1.57.0
+  - @bamboocss/generator@1.57.0
+  - @bamboocss/logger@1.57.0
+
 ## 1.56.7
 
 ### Patch Changes

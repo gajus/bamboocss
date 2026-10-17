@@ -1,5 +1,179 @@
 # @bamboocss/eslint-plugin
 
+## 1.57.0
+
+### Minor Changes
+
+- 80c94d4: Add flat configs, `configs['flat/recommended']` and `configs['flat/all']`, for ESLint 9 and later.
+  `configs.recommended` and `configs.all` are `.eslintrc` configs, which flat config refuses with
+  `Key "parser": This appears to be in eslintrc format`; they are unchanged.
+
+  ```js
+  // eslint.config.js
+  import bamboo from '@bamboocss/eslint-plugin'
+
+  export default [bamboo.configs['flat/recommended']]
+  ```
+
+  - The flat configs name no parser and no `files`, so component files keep their own parser and ESLint lints no file it
+    did not before. In a file ESLint lints as another language, such as CSS or JSON, the rules stand aside.
+  - The plugin and its configs type-check as ESLint's `ESLint.Plugin` and `Linter.Config`, so an `eslint.config.ts`
+    using them compiles. With `meta.namespace`, `defineConfig` can extend `<name>/flat/recommended` for the plugin
+    registered under any name, and renames its rules to match.
+  - The CommonJS and ES module builds give the same plugin, so a config importing one beside a shared config requiring
+    the other no longer fails with `Cannot redefine plugin "bamboo"`.
+  - `@bamboocss/configPath` reads the config file it names, relative to ESLint's working directory, and says so when it
+    does not exist. It was only where the search for a `bamboo.config.*` began, so a file by another name was never
+    read.
+  - `@typescript-eslint/parser`, which the `.eslintrc` configs name, is an optional peer dependency, so a strict package
+    manager can resolve it.
+  - A linting guide documents the setup, the settings and the rules.
+
+- 2ec456e: Add `prefer-token`, in `all`: a value written out that a token of the property's category holds —
+  `padding: '1rem'` where `spacing.4` is `1rem` — with the token as the suggestion, each one when several hold it.
+  - Only a value a token holds is reported, so the suggestion is always a token: a value no token holds — `0` — is
+    nothing to report, and neither is a keyword or a name such as `currentColor` or `normal`, nor a value that already
+    is a token's name.
+  - The property is the one the value is for, however it is written: under a condition, per breakpoint, by its
+    shorthand, or under a selector. A recipe's variant selections — its call's argument, `defaultVariants`, a compound
+    variant's conditions — are left alone, since they name variants.
+  - A value is compared as CSS reads it: `#FFF` and `#ffffff` are `#fff`, and `.25rem` is `0.25rem`. A keyframe's or a
+    custom property's name keeps its case.
+
+- f184b7b: Add `no-unresolved-styles`, in `recommended`: the build's warnings about styles it could not read, reported
+  where they are written.
+
+  ```ts
+  // `color` will not reach the stylesheet because its value could not be evaluated at build time.
+  export const tone = (color: string) => css({ color })
+  ```
+
+  - The build's own extraction and the build's own words — what is lost and what to do — so it reports the styles the
+    build drops and none it reads, not a guess at what is dynamic, as `no-dynamic-styling` makes. Each loss names its
+    path, so several in one call can be told apart, and a recipe's says to set `className`, since a recipe the build
+    cannot fully read loses every style rather than the one.
+  - No report for a file `include` does not reach, for one under `outdir`, for a processor's code block, or for a file
+    the build reads rewritten — `.vue`, `.svelte`, `.astro`, or by a plugin's `parser:before` — whose positions are not
+    the file's. A file with no bamboo import is not sent to the extractor at all.
+  - The editor's unsaved text is read for the file being linted only: another file importing it reads what is on disk.
+  - Every rule reads one context per config, prepared as the build prepares it, where the generator rules read their
+    own: `include` is matched from the config's directory, so linting from a monorepo's root no longer reports
+    `file-not-included` on every file of a project in it, and imports through the tsconfig's aliases count as bamboo's.
+    A config the build cannot prepare — a tsconfig it cannot read — still answers the rules that read only the config,
+    and one that fails to load, mid-edit, is loaded again once it changes rather than remembered as broken.
+  - Nothing the plugin's worker logs reaches ESLint's output, where a line corrupted `--format json`.
+  - `@bamboocss/node` exports `explainUnresolvedStyle`, the parts the build's warning is made of — the warning is
+    unchanged — and makes `BambooContext.isGenerated` public.
+
+### Patch Changes
+
+- 4ea912c: Every published package declares the Node.js it runs on, `engines: { node: ">=22.12.0" }`, so a package
+  manager and tooling can see it.
+  - No package said, and the floor was its dependencies': the PostCSS plugins the stylesheet is optimized with take no
+    release before 22, and Vite none before 22.12. Node 20 reached its end of life in April 2026.
+  - tsdown builds for the version `engines` names. Every package's `dist` is the same, byte for byte.
+
+- dd6c070: Read an important mark the way the stylesheet ends up holding it.
+  - Any whitespace inside a mark counts, not only CSS's: the build writes each run of it as one space, so `!` and
+    `important` with a no-break space between them reach the browser as an important declaration. Read as no mark, a
+    value from the config — which reaches the class name sanitized and the stylesheet as written — named a class for an
+    ordinary rule while the rule was written as an important one, and the element matched nothing. The class is now
+    named from the same value the mark is read from. NUL beside the mark, which the build removes from a value, counts
+    as whitespace too.
+  - A comment around the mark is not read, as it was not before, though CSS reads one as whitespace: telling a comment's
+    `/*` from one in a string or a `url()` is the tokenizer's job. Write the mark last: `red !important /* c */` is
+    written as an ordinary declaration, and `no-important` does not report it. A value holding a comment it never closes
+    is no CSS at all, and its rule is dropped whatever follows the `/*`.
+  - An escape hatch is only brackets that are the whole value: `[a] 1fr [b!]` is two line names around a track, and its
+    `!` is no mark. A fallback candidate that is an escape hatch holding the mark, `fallback([a!], b)`, marks the
+    declaration, as `[a!]` alone does.
+  - `no-important` reads a template literal as it cooks, as the build does, so `` `red\!` `` is reported and
+    `` `foo\\!` `` is not. Its suggested fix is written back escaped the way the literal reads: `"\"hi\" !"` became
+    `""hi""`, which does not parse, and `'a\\! !'` became `'a\!'`, a mark again. A carriage return in a template, a
+    control character and half a surrogate pair are written back as escapes.
+
+- 0cb809f: Only a trailing `!` or `!important` marks a declaration important. Any `!` in a value used to count, and was
+  cut out of the value as it was marked:
+  - `content: '"!"'` came out as `content: "" !important`, and `content: '"hello!"'` as `content: "hello" !important`.
+  - `fontFamily: '"Foo!Bar", sans-serif'` lost its `!` and became important.
+  - `<!--` in an SVG data URI became `<--`, which broke the image.
+
+  A value whose `!` is part of it now keeps it, in the declaration and in its class name. Marks that end a value are all
+  removed, so `red !important !important` no longer emits a doubled, invalid mark, and a mark ending a `fallback(...)`
+  candidate still marks every candidate. The `no-important` lint rule now reads the keyword in any case, as the build
+  does.
+
+- 960ca70: Read `! important`, with whitespace inside the mark, as an important mark. The browser treats
+  `color: 'red ! important'` as important either way, but the build wrote it as an ordinary declaration, so it was
+  ordered and composed as something it was not. It is now the same atom as `red !important`.
+
+  An escaped `\!` is not a mark either: `foo\!` is the identifier `foo!`, and `foo\!important` the identifier
+  `foo!important`. Stripping the `!` as a mark left a backslash, which escaped the space written after it.
+
+  The ESLint rule `no-important` names the mark it would remove, as it is written: the one the build reads, found where
+  the build finds it. `content: '"!important" !'` was reported as using `!important`, which is part of the string.
+
+- 49c7a7c: The published ES modules import Node's built-ins with the `node:` prefix, the only spelling Deno resolves.
+  - Seventeen source files imported `fs`, `path`, `child_process` or `worker_threads` bare, and the built `dist` kept
+    the specifier as written. So did the update notifier the CLI bundles.
+  - A lint rule keeps a bare built-in out of each package's source.
+
+- 77a276d: Whether a file is a source is answered as the source glob reads `include` and `exclude`.
+  - A negated pattern in `include` — `['src/**/*.tsx', '!src/legacy/**']` — made every path a source wherever that was
+    asked without the glob. The Vite compiler took each module it was handed for one, `node_modules` included, a file
+    added anywhere in a dev session set off a scan of every source, and `bamboo --watch` rebuilt on any change. It now
+    passes over what it names and nothing else, as the glob does; so does a negated pattern in `exclude`, which the glob
+    reads without its `!`.
+  - A folder named in `exclude` — `src/legacy`, `**/legacy` — is passed over whole below where the glob begins, as the
+    glob passes over it; one named with a glob of its own, `src/legacy/*`, still passes over only what it matches. Its
+    files were still taken for sources, so the compiler built classes from them that the stylesheet was never built
+    from.
+  - What `exclude` names is passed over inside a hidden folder `include` reaches, and each pattern is matched as its own
+    walk spells a path — from `cwd`, or from the root for one written as an absolute path — so `**/*.tsx` no longer
+    makes a file outside the project a source. A `.d.ts` added under a `dependencies` glob no longer reloads the config,
+    since the glob that expands `dependencies` never reads it.
+  - The ESLint plugin reads `include` the same way. `bamboo/file-not-included` now reports a file in a hidden folder —
+    `.storybook/preview.tsx` — which the build's glob never enters, and the rules that check only what the build reads
+    (`no-unresolved-styles`, `require-recipe-class-name`, `no-unlayered-override`, `no-config-function-in-source`) pass
+    over it, as the build does.
+  - Asked of a module, the answer costs much what it did, measured side by side: 0.41–0.46 µs for a source against
+    0.37–0.41 µs, the same for a dependency, and 0.87–0.98 µs against 0.60–0.87 µs where `exclude` names a folder, which
+    is now looked for.
+
+- Updated dependencies [96d1679]
+- Updated dependencies [f55d8e7]
+- Updated dependencies [382e9d1]
+- Updated dependencies [fce5d3a]
+- Updated dependencies [4c0c5af]
+- Updated dependencies [4ea912c]
+- Updated dependencies [f184b7b]
+- Updated dependencies [14569ac]
+- Updated dependencies [faf921e]
+- Updated dependencies [dd6c070]
+- Updated dependencies [0cb809f]
+- Updated dependencies [960ca70]
+- Updated dependencies [61b3394]
+- Updated dependencies [611d1bc]
+- Updated dependencies [04f8720]
+- Updated dependencies [5730bb3]
+- Updated dependencies [a055085]
+- Updated dependencies [49c7a7c]
+- Updated dependencies [63336e0]
+- Updated dependencies [697185e]
+- Updated dependencies [e8cca66]
+- Updated dependencies [f46e9f6]
+- Updated dependencies [00076f6]
+- Updated dependencies [77a276d]
+- Updated dependencies [c58eea4]
+- Updated dependencies [b38a97a]
+- Updated dependencies [cab6edf]
+- Updated dependencies [f9dbab9]
+  - @bamboocss/node@1.57.0
+  - @bamboocss/shared@1.57.0
+  - @bamboocss/config@1.57.0
+  - @bamboocss/generator@1.57.0
+  - @bamboocss/logger@1.57.0
+
 ## 1.56.7
 
 ### Patch Changes

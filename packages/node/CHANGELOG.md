@@ -1,5 +1,440 @@
 # @bamboocss/node
 
+## 1.57.0
+
+### Minor Changes
+
+- f55d8e7: `bamboo analyze --unused`, `bamboo doctor` and `bamboo debug --zip`.
+  - `bamboo analyze --unused` lists the configured names no source uses — tokens, recipes, patterns and keyframes — one
+    to a line on stdout, or bare under `--scope`, which now takes `pattern` and `keyframe` too. A token or a keyframe is
+    listed when the build's own prune removes it, with every prune on whatever the config says: a name listed is one the
+    stylesheet already ships without, and one the prune keeps for a reader it cannot follow — a `token()` path built at
+    runtime, a theme, a `keepTokens` pattern — is not. A recipe or a pattern is listed when no source calls it and
+    `staticCss` does not emit it regardless.
+  - `bamboo doctor` checks a project as the build reads it, without writing anything: its config, the sources `include`
+    selects, and the generated `styled-system` against what `bamboo codegen` would write now. It exits 1, saying what to
+    fix, for a generated file missing, out of date or no longer generated, a source that cannot be extracted, or a call
+    to a pattern or recipe that does not exist. `--json` prints the report as JSON.
+  - `bamboo debug --zip` writes the debug files as one `<outdir>.zip`, to attach to a bug report.
+  - `--silent` quiets every command for a project whose config names a `logLevel`, which creating the context set again
+    over it. Under `bamboo analyze` it quiets the reporter too, which logs through the logger's ES module: another
+    instance than the CommonJS one the CLI holds.
+  - Where stdout is the output — `analyze --unused`, `doctor --json` — the log goes to stderr, and a reader that stops
+    reading, `| head -1`, ends the command rather than failing it.
+
+- 5730bb3: The MCP server's `get_usage_report` covers patterns, utilities and keyframes as well as tokens and recipes,
+  and the server keeps stdout to the protocol.
+  - `scope` takes `'pattern'`, `'utility'` and `'keyframe'`. Every pattern and keyframe the config defines is listed —
+    at a count of nothing when nothing uses it — with how often each is called or named, and in how many files; the
+    utilities are every style property written, a shorthand counted as the property it stands for. A keyframe counts as
+    named through an `animations` token too, by name or through `token()`. `analyze()` returns `getPatternReport`,
+    `getUtilityReport` and `getKeyframeReport` for the same.
+  - `bamboo analyze` and the token report count a value keyed by a condition — `{ base: 'red.300', md: 'blue.300' }`, or
+    by a selector such as `'&:hover'` — as a value of the property above it, so the tokens it names are used. One keyed
+    `base` was counted as a property named `base`, and one keyed by a condition was not counted as a token use at all. A
+    `cva()` or `sva()` config is read for its styles, as a config recipe is — compound variants included, and
+    `defaultVariants` no longer read as properties — and `sva()` is read at all; it was not.
+  - With a `logLevel` that logs, the first usage report printed `Analyzing N file(s)` onto stdout, which carries the
+    protocol, and corrupted the stream. Everything the server logs goes to stderr, where a client shows it.
+  - A server whose client had gone kept running: a write into a pipe without a reader failed, and the failure was logged
+    into the same pipe. It exits instead.
+  - The server reports the version installed rather than `1.0.0`.
+
+### Patch Changes
+
+- 96d1679: A `.astro` file is read with the compiler Astro 7 depends on, and two shapes of template that failed the
+  whole file under Astro 6's are read.
+  - Astro 7 depends on `@astrojs/compiler-rs` rather than `@astrojs/compiler`. With no `@astrojs/compiler` installed,
+    every `.astro` file was read as empty, without a word, and none of its classes had a rule. `@astrojs/compiler-rs`
+    reads the component now, as Astro's own build does, and `@astrojs/compiler` reads what it cannot, since Astro 6
+    takes some templates Astro 7 does not. With neither, Bamboo says so, and says why one that is installed failed to
+    load.
+  - With `@astrojs/compiler`, a regex holding a `}`, a `{`, a backtick or a quote in a template expression,
+    `{x.replace(/}/g, '')}`, ended the expression there. Several nodes side by side in an expression,
+    `{cond && ( <a /> <b /> )}`, which Astro allows, were each put in a fragment of their own. Either way the file did
+    not parse, and none of it was extracted. Such a component is converted again, with the regex's characters written as
+    escapes that match the same ones and the nodes in one fragment. One that converts today is converted as it was:
+    across 1,615 components, the 4 that change are the 4 that failed.
+
+- fce5d3a: A config edited while a build watches it — `bamboo --watch`, or a dev server — is read again as it was read
+  first, and the rebuild after it writes what it has to.
+  - The reload read the file alone, so the context it built had none of what the integration had added to it. The Vue,
+    Svelte and Astro parsers went, and every `.vue`, `.svelte` and `.astro` file's styles left the stylesheet at the
+    first edit to the config. So did the mark of a dev server's build, which `hash: 'auto'` reads, so every class name
+    the browser held changed. So did a `cwd` the integration was handed and a `config` it laid over the file's — the
+    flags `bamboo --watch` was run with among them: at the first edit, `--outdir`, `--hash`, `--minify` and the globs it
+    was handed went back to what the file says.
+  - A config is now read again the way it was prepared, every time it is read again: from where it was read first,
+    wherever the process has moved since, and with what was laid over it then. Under a dev server, a plugin's
+    `config:change` is handed the config as it reads after the edit, not the one the edit replaced.
+  - `clean` empties the output directory before a run that writes every artifact, and no longer before a rebuild that
+    writes only what an edit changed: with `clean` set, the first edit under a watch took most of `styled-system/` with
+    it.
+  - An edit to what every artifact is written from — `outExtension`, `outdir`, `emitTokensOnly`, `plugins` — rebuilds
+    every artifact, as a run from cold does: the output directory is emptied first under `clean`, and `codegen:prepare`
+    and `codegen:done` are told every artifact changed. The ones no option names, `helpers`, `cva` and `css/index` among
+    them, were left under the old extension or in the old directory, where the rest no longer found them. Without
+    `clean`, what the old extension or directory still holds stays where it is.
+  - `bamboo ship --watch --minify` keeps minifying after an edit to the config, and `bamboo codegen` without `--clean`
+    no longer sets aside a `clean: true` in the config.
+
+- 4c0c5af: A file added under an `include` outside the dev server's root reaches the stylesheet.
+  - Vite watches its root, and a file outside it only once something has loaded it, so an edit to a file the stylesheet
+    was built from was always seen. A file added there — a new component in a workspace package that `include` names as
+    `../ui/src/**` — had nothing watching its folder, and the stylesheet went on without it until the server restarted.
+  - The folders `include` and `dependencies` are globbed from are now handed to the dev server's watcher where they lie
+    outside its root, however the two are spelled: as each pass begins, so a config reload that moves them is followed,
+    and as a restarted server is configured. A folder not there yet is watched for, and one deleted and built again — a
+    package's `dist` — is watched again.
+  - `include: ['**/*.tsx']` beside a pattern with a folder of its own — `['**/*.tsx', '../shared/**']` — left `cwd` out
+    of the folders `bamboo --watch` watches, so a file added or edited under it went unseen. It is watched now.
+
+- 4ea912c: Every published package declares the Node.js it runs on, `engines: { node: ">=22.12.0" }`, so a package
+  manager and tooling can see it.
+  - No package said, and the floor was its dependencies': the PostCSS plugins the stylesheet is optimized with take no
+    release before 22, and Vite none before 22.12. Node 20 reached its end of life in April 2026.
+  - tsdown builds for the version `engines` names. Every package's `dist` is the same, byte for byte.
+
+- f184b7b: Add `no-unresolved-styles`, in `recommended`: the build's warnings about styles it could not read, reported
+  where they are written.
+
+  ```ts
+  // `color` will not reach the stylesheet because its value could not be evaluated at build time.
+  export const tone = (color: string) => css({ color })
+  ```
+
+  - The build's own extraction and the build's own words — what is lost and what to do — so it reports the styles the
+    build drops and none it reads, not a guess at what is dynamic, as `no-dynamic-styling` makes. Each loss names its
+    path, so several in one call can be told apart, and a recipe's says to set `className`, since a recipe the build
+    cannot fully read loses every style rather than the one.
+  - No report for a file `include` does not reach, for one under `outdir`, for a processor's code block, or for a file
+    the build reads rewritten — `.vue`, `.svelte`, `.astro`, or by a plugin's `parser:before` — whose positions are not
+    the file's. A file with no bamboo import is not sent to the extractor at all.
+  - The editor's unsaved text is read for the file being linted only: another file importing it reads what is on disk.
+  - Every rule reads one context per config, prepared as the build prepares it, where the generator rules read their
+    own: `include` is matched from the config's directory, so linting from a monorepo's root no longer reports
+    `file-not-included` on every file of a project in it, and imports through the tsconfig's aliases count as bamboo's.
+    A config the build cannot prepare — a tsconfig it cannot read — still answers the rules that read only the config,
+    and one that fails to load, mid-edit, is loaded again once it changes rather than remembered as broken.
+  - Nothing the plugin's worker logs reaches ESLint's output, where a line corrupted `--format json`.
+  - `@bamboocss/node` exports `explainUnresolvedStyle`, the parts the build's warning is made of — the warning is
+    unchanged — and makes `BambooContext.isGenerated` public.
+
+- faf921e: The source glob ends where a symbolic link leads back into a folder it is reading.
+  - `include` follows links, as it did — a workspace package, a folder linked into `src` — and a link to a folder the
+    walk was inside took it round that folder again, lap after lap until the system would resolve no deeper a chain of
+    links, some thirty: each file in it was returned, and extracted, once per lap. Two such links on the way doubled the
+    laps each time round, and the build hung at the glob with nothing to say why. A folder such a link leads into is now
+    read as empty, as `find -L` reads it, since it is being read already by the path that reached it first.
+  - A link that closes no loop is followed, and every path through it returned, as before. One to a folder above where
+    the walk began is followed too, for what else is in that folder, and so goes round once before the loop closes at
+    its next showing. A pattern that only a path round a loop could meet — `src/*/loop/**` through `src/a/loop` linked
+    to `src` — now matches nothing, where it met a lap's worth of copies of files the walk reaches anyway.
+  - Each pattern is walked from the folder it starts at, so where a loop closes, and so what a pattern matches, does not
+    depend on the others in `include`.
+  - Over 5,000 files the glob takes 7.1 ms, as `fast-glob` alone does in the same runs (7.0 ms), and 14.3–14.5 ms with a
+    hundred folders linked in a second time, against 14.3–14.5 ms: a link is told by the stat the walk makes of it
+    anyway, and only the folders above it are stat'd.
+
+- 61b3394: Read values in style expressions as JavaScript does, where the build used Rust's rules or guessed.
+  - A number written into a string uses an exponent where `String(number)` does: `` `${1e21}px` `` is `1e+21px` rather
+    than twenty-two digits, `0.000001` stays `0.000001` rather than `1e-6`, `2 ** 60` is `1152921504606847000`, and `-0`
+    is `0`.
+  - Bitwise operators wrap to 32 bits and take a shift count modulo 32: `(2 ** 32) | 0` is `0` rather than `2147483647`,
+    and `-1 >>> 0` is `4294967295` rather than `-1`. A shift by 32 or more panicked in a debug build of the native
+    extractor and took the process down with it.
+  - An array hole or `undefined` element read by index is no longer taken for `null`. The build holds all three as
+    `null`, and they convert differently, so `[, 2][0] - 1` compiled to `z-index: -1` where the runtime has `NaN`; it
+    now fails the compile as `dynamic`, as a template literal, a computed key or a destructuring or parameter default on
+    one does, wherever it was kept: in an object, another array, `Object.assign`, a rest parameter. Where the two agree,
+    a read of one still decides: `z[0] ?? 1`, `z[0] || 1` and `z[0] ? 1 : 2`. A `null` element is `null`, and an element
+    the build cannot evaluate decides nothing.
+  - A choice decided by an element read with a number, `sizes[0] ?? 'md'`, now compiles, as `sizes['0']` did.
+  - A property written as `undefined` replaces what was there, as at runtime: `{ ...defaults, size: undefined }` kept
+    the default, as did `Object.assign`, a spread of such an object and a JSX attribute `size={undefined}` after a
+    spread, and `'size' in` it was false. Any later write of a key drops the values an earlier one could not decide
+    between, which extraction used to write rules for, and keys removed leave the rest in the order they were written.
+    `Object.assign` also keeps a source's undecided values, as a spread does, rather than reading them as missing, and
+    `in` is known for an object whose keys are known though a value is not.
+  - A key a spread writes with a value it could not decide between, or could not evaluate, keeps nothing of what was
+    there: `{ a: 'p', ...{ a: c ? '' : 'y' } }` was read as `'p'`, so a choice on it wrote one arm's rules. The same
+    holds for a JSX attribute after a spread, and a key written after a spread the build could not choose a branch of
+    replaces it in every branch. `__proto__: base` in an object literal sets the prototype, so the object is no longer
+    read as holding only its own keys — `css()` walks inherited ones too — though a key it holds is still read as
+    written, and `__proto__: null`, or another value surely not an object, sets none. A rest pattern that takes a key
+    the build cannot name leaves the rest unknown rather than holding every key.
+  - `'a' in` an object decides a choice wherever `a` is surely there: held with a value the build could evaluate, or
+    written with one of several values after any spread the build could not read, as in `{ ...props, a: c ? 1 : 2 }`.
+    Where `a` may not be there it is unknown: a branch of a spread the build could not choose may hold it or not, and an
+    object read where a spread it could not read may have written over it may be another object.
+  - A value after a comma whose left side the build cannot evaluate, `(track(), styles)`, may have been changed by it,
+    so nothing is read from the value either. `'z' in { ...(track(), s) }` was answered from `s` as declared, and a
+    property read from such a value, or a rest pattern's object taken from it, compiled.
+  - `Object.assign` onto `null` or `undefined` throws, and is no longer read as an object: a rule was written for what
+    the call never returns. Nor is one onto one of several values, which may be either, `p.x ? null : undefined`
+    included.
+  - A call is given the elements of an array it spreads where the build knows how many there are, each as it knows it. A
+    spread of an unknown length was read as one argument, so a parameter after it was given what was written one place
+    on, or `undefined`, and a default stood in for it: now a parameter after such a spread is not known, however far
+    after it. `Object.assign` still writes the sources after one.
+  - An element of a rest parameter holding a value the call could not decide between is not known as a whole, where it
+    was read without what it could be: `(...xs) => xs[0]` given `{ color: c ? 'a' : 'b' }` compiled with no color. What
+    is known of it still is — its other keys, and that it holds `color` — and so are the rest's other elements and how
+    many there are. An `undefined` it is given is held as one, as an array literal holds it: `(...ys) => ys.join('-')`
+    given `undefined` and `'4'` compiles to `-4`, where the call failed the compile.
+  - `css.raw` of more than one style object was read as the first of them, so `css()` of it compiled without the others.
+    Extraction now writes the rules of each, and such a `css()` fails the compile as `dynamic`. What `css.raw` leaves
+    out at runtime — `undefined`, `null`, `false`, an object with nothing defined in it — is left out, so
+    `css.raw(style, undefined)` is still read as `style`; and `css.raw` of an array, which throws, is not known, where
+    the compile itself failed on it.
+  - An enum with a member the build cannot evaluate is still known by its other members: `E.A` beside `B = compute()`
+    compiles, and so does `'A' in` it. An enum exported from another module is read as one in the module itself is. A
+    numeric enum is known member by member and not as a whole: the reverse mapping from a value to its member's name is
+    not held, so a read through it, `Area[Area.main]`, is not known, where it dropped the property. Which keys it has is
+    known, the mapping's among them, which `in` took for absent: `'1' in E` is true, and `'B' in E` false. An enum
+    declared again with members of its own, another enum, is not known, where it was read as its first declaration, so a
+    member the other added was dropped. Merged with a namespace holding values it is known by its own members, and not
+    by the names the namespace exports, as it is merged with a `declare`d one; a namespace of types alone changes
+    nothing, declared before the enum or after it.
+  - A parameter's or a destructuring default no longer stands in for an argument that is one of several values:
+    `(x = 'green.300') => x` given `c ? 'red.300' : 'blue.300'` compiled to green, which the call never gives. As one of
+    them may be `undefined`, which a choice keeps no branch for, extraction writes the default's rules beside them where
+    the default is a literal, or an array or object of literals: one that reads a binding or calls anything is not run
+    for this, as what it runs could cut the whole call short.
+  - An array element holding values the build could not decide between is not known as a whole read by index, where it
+    was read as what it holds without them: `(sizes) => sizes[0]` given `[{ color: c ? 'a' : 'b' }]` compiled with no
+    color. What is known of it still is, as of a rest parameter's element. One read where any element, that one
+    included, holds a value the build could not decide between under a key that is its index is not known at all, as
+    what the array holds under that key may be another element's.
+  - An element read past the end of an array, or a key an object read off one surely lacks, is `undefined` whatever its
+    siblings could be: `(xs) => xs[2] ?? '7'` given `[c ? '1' : '2', '4']` failed the compile as `dynamic`.
+  - Converting an array holding an element the build could not decide between — `join`, `+`, a template literal — is not
+    known, where 1.56.7 wrote that element as `null`: `[c ? 'a' : 'b', 'x'].join('-')` compiled to `null-x`.
+  - `==` converts its operands as JavaScript does — `'0' == 0` is true — and `===` of two objects or arrays is not
+    known, as they are the same only as one object: both compared what the values hold, so `n == 0` given `'0'` was
+    false and `[1] === [1]` true. Two numbers are compared as numbers, where how each was held was compared too: a
+    length or a bitwise result never equalled a literal, so `xs.length === 2 ? a : b` compiled to `b`. Two strings are
+    known to be the same only where they hold no whitespace, which the build collapses as it reads a literal, and to
+    differ wherever they still do once each run of it is one space: `'a  b' === 'a b'` was true, and
+    `'a ' + ' b' === 'a  b'` false.
+  - A computed key and the left of `in` are converted as any value is, so one the build could not wholly read is not
+    known, where it read what that value converted to: `sizes[[c ? 'lg' : 'sm', 'x'].join('-')]` was `sizes['null-x']`,
+    a known `undefined`.
+  - `fallback()` of a value the build cannot evaluate is not known: it was read as `undefined`, so
+    `css({ height: fallback(p.h, '100vh') })` compiled with no height. It writes `null` and `undefined` as nothing, as
+    the runtime's `join` does, where `undefined` dropped the property and `null` was written as `null`.
+  - A choice is no longer made on a value the build only guessed: a property a spread it could not evaluate may have
+    written over, as in `const options = { dense: false, ...props }`, or anything worked out from one.
+    `options.dense ? '2' : '4'` compiled to `p_4` whatever the caller passed; the call fails the compile as `dynamic`
+    now. The same holds for `||`, `??`, `&&`, `!`, `?.` and an `if`, and unary `+`, `-`, `~` and `typeof` of such a
+    value are guesses too. A spread the build evaluated that writes nothing — `undefined`, `null`, `false` — or one of
+    several objects whose keys it can read off the source, `...(c ? { size } : {})`, leaves every other key as known as
+    it was. The object holding such a spread is known as a whole once each key a branch of it writes is written again,
+    `{ ...(c ? { color: 'blue.300' } : null), color: 'red.300' }`, which 1.56.7 failed as `dynamic`. An object or array
+    is truthy however much of it is known, and not `null`, but not one read where a spread may have written over it,
+    which may be `null` there.
+  - `token()` of a path the build only guessed, or could not wholly read, is not known: built from a default a spread
+    may write over, ``token(`colors.${o.tone}.300`)`` compiled to the default's variable whatever the caller passed, and
+    a path joined from a part not decided, `token(['colors', c, '500'].join('.'))`, to none.
+  - A method of an object is not taken from a property a later spread may write over: `options.color()` of
+    `{ color: () => 'red.300', ...props }` compiled to red whatever `props` held. The last property of its name is the
+    one called, one a key computed to the name writes included, where 1.56.7 called the first of
+    `{ color: …, [KEYS.color]: … }`. One before a spread is called where the build knows the spread writes no such name
+    — a literal, an import or what a call returns holding none, a choice of them, `c && { … }`, `null`, a binding
+    declared without a value — known as any value it reads is, so a write it cannot see, from another module, through an
+    alias or by a function given the object, is not seen there either; and one before a key the build computes to
+    another name, `[KEYS.size]`, ``[`size`]``, `[1]`, unless the key holds whitespace, each run of which the build
+    collapses. Past a spread or a key it cannot read, the call fails the compile as `dynamic`, where 1.56.7 called the
+    method before it.
+  - A module's `var` declared again with a value is written there, as an assignment is: `var tone = a; var tone = b` was
+    read as `a`, whether as a value, called or holding a method, and the call fails the compile as `dynamic` now —
+    naming the write where `tone` is read or called. A function's body still reads such a `var` in the order it runs,
+    but a helper or a method one holds is not called there, where the one declared first was.
+  - `join` writes a `null` element as nothing, as it does a hole: `[1, null, 2].join('-')` is `1--2`, not `1-null-2`.
+  - A property the prototype has is no longer read as `undefined`: `o.toString` and `[].map` are not known, and neither
+    is `'toString' in o`. A string read by index gives its character, unless a space comes at or before it, which may
+    have been any run of whitespace as the literal was written; for the same reason the length of a string holding a
+    space is not known.
+  - An array index is read only in its canonical form, so `z['01']` and `z['+1']` are `undefined`, as they are at
+    runtime, rather than `z[1]`; and `'length' in z` is true.
+  - Two strings compare as strings, so `'10' < '9'` is true, unless either holds whitespace, which the build collapses
+    as it reads a literal. A string converts to a number only where JavaScript agrees: trimmed of its whitespace
+    (U+FEFF, not U+0085) and never to `Infinity` from `'inf'`.
+
+- 611d1bc: A source file two links in `include` reach — a package linked twice, `src/shared` and `vendor/shared` — is
+  extracted once rather than once for each. The inventory still holds it under both, as the watcher and a bundler find
+  it, and the first of them is the one read: an atom sits at the rank of the earliest file that wrote it, so the
+  stylesheet is as it was.
+- 04f8720: A source `include` reaches through a symbolic link — a workspace package linked into `node_modules`, a folder
+  or file linked into `src`, or a project folder that is itself reached through one, as everything under `/tmp` is on
+  macOS — and Vite builds it.
+  - Vite names a module by where it really is, which is not the path the source glob found it at through the link. So a
+    module compiled under that name looked like no source at all: `vite build` refused its classes as "outside the CSS
+    extraction graph", though `include` named it, and in dev its edits never reached the stylesheet, nor did a file
+    added beside it.
+  - The glob now reports where it began and every folder and file it reached through a link, and each source is known by
+    where it really is too: a module Vite compiles, edits or adds under that name is the source it is, each way the
+    inventory spells it. A workspace package's folder is watched where it really lies — through a wildcard such as
+    `node_modules/@acme/*/src/**` as well — since Vite's watcher passes over `node_modules`.
+  - A file the glob reaches by two paths is still read by both, as before.
+  - A project with no such link pays nothing. One with a link pays about 0.17 µs for each module the compiler asks
+    about, and under a millisecond each time the glob runs.
+
+- a055085: An `.mdx` file in `include` reaches the stylesheet, and its `css()` calls are compiled.
+  - A document reached the parser as it was, and Markdown is not TSX: the first apostrophe in its prose failed the file,
+    and every style in it left the stylesheet. One that parsed anyway — JSX and nothing else — had the `css()` in a code
+    example read as a call, when to MDX it is a string.
+  - What MDX runs is now read, where it stands: imports and exports, each JSX tag and `{expression}`. Prose, code
+    blocks, inline code, link definitions and frontmatter are not, and nor is math that holds LaTeX, as `remark-math`
+    reads it. An import among an element's children, which MDX hoists, binds as it does there, and a tag or an
+    expression running across a blockquote's lines is read without the blockquote's `>`. Over 852 real documents it
+    keeps exactly the characters MDX's own tokenizer reads as code.
+  - The Vite compiler took no `.mdx` module, so a page kept its `css()` calls, which throw when they run. It now
+    compiles the module MDX's plugin produces, as it compiles a Vue or Svelte component's.
+  - A project that converts its MDX in a `parser:before` hook of its own keeps it: the built-in conversion runs after,
+    and only on a file nothing before it rewrote.
+  - Reading a file that is not MDX costs ~27 ns more for the extra hook (95–97 → 122–126 ns per file); a document is
+    converted at ~62 MB/s.
+
+- 49c7a7c: The published ES modules import Node's built-ins with the `node:` prefix, the only spelling Deno resolves.
+  - Seventeen source files imported `fs`, `path`, `child_process` or `worker_threads` bare, and the built `dist` kept
+    the specifier as written. So did the update notifier the CLI bundles.
+  - A lint rule keeps a bare built-in out of each package's source.
+
+- 63336e0: Evaluate `+` in style values the way the source does at runtime. Two numbers now add, so
+  `const base = 10; css({ zIndex: base + 1 })` compiles to `z-index: 11` instead of `101`, and `` `${2 + 3}px` `` to
+  `5px` instead of `23px`. A string operand still concatenates, as it does in JavaScript, so `'10' + 1` is still `101`,
+  and `null + 1` is `1` rather than `null1`.
+
+  The class and its rule always agreed with each other, so nothing reported it; both disagreed with the source.
+
+  An array converted to a string also writes a `null` or `undefined` element, and a hole, as nothing, as `join` does:
+  `` `${[1, null, 2]}` `` is `1,,2`, where it was `1,null,2`.
+
+- f46e9f6: Refuse a style helper's recursion the build cannot see the end of, instead of crashing. A recursive helper
+  called on a value the build cannot read — `css(nest(props.depth))` — never reached its base case, and following it
+  overflowed the native stack: the process exited with a segfault, taking the dev server with it, and printed nothing.
+
+  A helper called again while it runs, with arguments the build cannot tell apart from those it is already running with
+  — `d - 1` is as unknown as `d` — is now refused at once, and the error names the helper and where it is: the first to
+  run of those that repeat, not one that recursed to reach them. A recursion whose arguments change is still followed,
+  so `nest(3)` compiles, up to 64 nested calls and 10,000 calls in all; past either, the whole call is refused, and the
+  error names the recursion: past the depth, the helper most of the calls running are of, not a small one each level
+  calls, and past the number of calls the one making the most of them, not a deeper one it was reached from or a small
+  one each of its calls makes. A refused recursion gives nothing: none of the levels it went through reaches the
+  stylesheet.
+
+  A helper called again through another module while it runs was already not followed; the error now says so, and names
+  it as it is declared, instead of reporting the call as dynamic with no reason, and as within a module none of the
+  levels it went through reaches the stylesheet. That holds through a barrel the helpers are imported from, re-exporting
+  them by name, with `export *`, or importing them and exporting them again, and any reason a call was refused is no
+  longer lost through an `export *` barrel.
+
+  A helper a barrel exports by name is the one called, over one an `export *` there would give, as in JavaScript: the
+  build took the first in the barrel's order, so `export * from './base'` before `export { tone } from './custom'`
+  compiled `base`'s `tone`. An `export *` gives what JavaScript's does, for a helper or a value: nothing as `default`,
+  nothing through `export type *`, and only its name through `export * as legacy from './base'`, which the build read as
+  `export * from './base'`, compiling `base`'s `tone` over the one `custom` exports; written anywhere in the barrel, it
+  answers for its name before any `export *` does. A name a barrel declares itself — destructured, a class, a namespace
+  or an `export import` — is its own, where the build took a star member's, but not one TypeScript erases, `declare`d or
+  a function's overload signature: an exported function's overloads call the function they describe, where the build
+  refused them.
+
+- 00076f6: Resolve tsconfig `paths` from referenced projects, for a solution-style `tsconfig.json` — `"files": []` and
+  `references`, as `create vite` lays a project out. The root declares no `paths`; they are in `tsconfig.app.json`.
+  - A config importing through an alias bundles. Each file esbuild reads under the root resolves its imports through the
+    aliases of the project including it — references of references included. The config beside the root, in none,
+    resolves through the `paths` of whichever project's patterns match and reach a file, or through the root's own
+    aliases when it declares any. Only aliases: no other option of those projects applies, nor a `baseUrl` alone, which
+    would put a directory ahead of every package. A package the config imports keeps resolving through its own tsconfig,
+    and any other root is left to esbuild, as before.
+  - A source importing through one resolves, so the value it imports reaches the stylesheet and the compiler. Sources
+    resolve through the first project including files where `include` points and declaring aliases, rather than through
+    the config file's project, which declares none when it sits beside the root or in `tsconfig.node.json`. With no such
+    project they resolve as before, and a root that compiles the sources itself is left as it was.
+  - `baseUrl`, and `paths` written without one, resolve against the directory of the tsconfig declaring them, as
+    TypeScript resolves them, rather than against the project root.
+  - A referenced tsconfig that does not parse — an `extends` naming a package that is not installed — is passed over
+    rather than failing the build. One that does not exist yet is a dependency of the config, and `--watch` now reloads
+    the config when a file it depends on appears, not only when one changes.
+
+- 77a276d: Whether a file is a source is answered as the source glob reads `include` and `exclude`.
+  - A negated pattern in `include` — `['src/**/*.tsx', '!src/legacy/**']` — made every path a source wherever that was
+    asked without the glob. The Vite compiler took each module it was handed for one, `node_modules` included, a file
+    added anywhere in a dev session set off a scan of every source, and `bamboo --watch` rebuilt on any change. It now
+    passes over what it names and nothing else, as the glob does; so does a negated pattern in `exclude`, which the glob
+    reads without its `!`.
+  - A folder named in `exclude` — `src/legacy`, `**/legacy` — is passed over whole below where the glob begins, as the
+    glob passes over it; one named with a glob of its own, `src/legacy/*`, still passes over only what it matches. Its
+    files were still taken for sources, so the compiler built classes from them that the stylesheet was never built
+    from.
+  - What `exclude` names is passed over inside a hidden folder `include` reaches, and each pattern is matched as its own
+    walk spells a path — from `cwd`, or from the root for one written as an absolute path — so `**/*.tsx` no longer
+    makes a file outside the project a source. A `.d.ts` added under a `dependencies` glob no longer reloads the config,
+    since the glob that expands `dependencies` never reads it.
+  - The ESLint plugin reads `include` the same way. `bamboo/file-not-included` now reports a file in a hidden folder —
+    `.storybook/preview.tsx` — which the build's glob never enters, and the rules that check only what the build reads
+    (`no-unresolved-styles`, `require-recipe-class-name`, `no-unlayered-override`, `no-config-function-in-source`) pass
+    over it, as the build does.
+  - Asked of a module, the answer costs much what it did, measured side by side: 0.41–0.46 µs for a source against
+    0.37–0.41 µs, the same for a dependency, and 0.87–0.98 µs against 0.60–0.87 µs where `exclude` names a folder, which
+    is now looked for.
+
+- cab6edf: Refuse to build from an argument that names nothing, instead of emptying the stylesheet. `bamboo` reads its
+  argument as an `include` glob, so a mistyped or never-defined command — `bamboo codgen`, `bamboo doctor` — and any
+  glob or path matching nothing built a stylesheet from no files over the real one, and exited 0. It now fails and
+  leaves the stylesheet as it was. A word is answered as the command it most likely meant; a glob or path is reported as
+  matching nothing, and a directory, `bamboo src`, with the glob to write instead. While watching, only a word one slip
+  from a command is refused, since the files may be about to appear.
+
+  `bamboo <glob> --watch` now rebuilds when a file changes. The argument reached the watcher as a string where a list
+  was expected, so it watched a directory for each character of the glob.
+
+  `generate()` takes `{ requireFiles: true }` for the same refusal.
+
+- f9dbab9: `vite build --watch` reads the config again only when a file it was read from has changed, as the dev server
+  does.
+  - It used to bundle and evaluate the config on every rebuild. An ES module config is imported fresh each time, and
+    Node never releases a module it has imported, so each rebuild left one more copy of the config, and every preset
+    inlined into it, in memory until the build stopped.
+  - The files checked are the config, everything it imports, its `dependencies` and the tsconfig files it resolves
+    through. The `dependencies` globs are matched again on each rebuild, so a file added to one is read with the next
+    rebuild something else starts — a build watches the files its config read, not the folders a glob would find a new
+    one in — at the cost of matching them: a pattern over the whole project walks it, `node_modules` and all, each time.
+  - A file the config reads without listing it in `dependencies`, and a preset named by its package, are read again only
+    when the config is, as on the dev server.
+
+- Updated dependencies [f55d8e7]
+- Updated dependencies [382e9d1]
+- Updated dependencies [fce5d3a]
+- Updated dependencies [4ea912c]
+- Updated dependencies [14569ac]
+- Updated dependencies [fc73dfd]
+- Updated dependencies [dd6c070]
+- Updated dependencies [0cb809f]
+- Updated dependencies [960ca70]
+- Updated dependencies [04f8720]
+- Updated dependencies [5730bb3]
+- Updated dependencies [49c7a7c]
+- Updated dependencies [697185e]
+- Updated dependencies [e8cca66]
+- Updated dependencies [67fae4d]
+- Updated dependencies [00076f6]
+- Updated dependencies [c58eea4]
+- Updated dependencies [b38a97a]
+- Updated dependencies [34c29c4]
+- Updated dependencies [cab6edf]
+  - @bamboocss/shared@1.57.0
+  - @bamboocss/config@1.57.0
+  - @bamboocss/types@1.57.0
+  - @bamboocss/core@1.57.0
+  - @bamboocss/generator@1.57.0
+  - @bamboocss/logger@1.57.0
+  - @bamboocss/plugin-svelte@1.57.0
+  - @bamboocss/plugin-vue@1.57.0
+  - @bamboocss/reporter@1.57.0
+  - @bamboocss/token-dictionary@1.57.0
+
 ## 1.56.7
 
 ### Patch Changes

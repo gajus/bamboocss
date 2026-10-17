@@ -1,5 +1,93 @@
 # @bamboocss/generator
 
+## 1.57.0
+
+### Patch Changes
+
+- 4ea912c: Every published package declares the Node.js it runs on, `engines: { node: ">=22.12.0" }`, so a package
+  manager and tooling can see it.
+  - No package said, and the floor was its dependencies': the PostCSS plugins the stylesheet is optimized with take no
+    release before 22, and Vite none before 22.12. Node 20 reached its end of life in April 2026.
+  - tsdown builds for the version `engines` names. Every package's `dist` is the same, byte for byte.
+
+- 14569ac: What source code hands Bamboo takes `undefined` for each key it may leave out, as a project with
+  `exactOptionalPropertyTypes` writes one when it passes a value on or leaves it out.
+  - Under that option `?:` alone does not take it, so a condition block written `_hover: active ? { … } : undefined`, a
+    utility with no css property behind it (`colorPalette`, `srOnly`, `truncate`, `boxSize`), a pattern's own props
+    (`grid({ columns })`, `divider({ orientation })`), a recipe's `base`, `variants` or `defaultVariants`, and a slot
+    recipe's record for any one slot were each rejected. So were a view transition's parts, and a recipe config's
+    `description`, `jsx` and `staticCss`.
+  - The rest of a config's own types, such as a pattern's config or `staticCss`, are as they were.
+  - Types only: no css a project emits changes.
+
+- 697185e: Refuse the config keys Panda has and bamboo does not, instead of ignoring them. A config migrated from
+  `panda.config.ts` kept `strictTokens`, `polyfill`, `jsxFramework`, `jsxFactory`, `jsxStyleProps`, `syntax`, `studio`,
+  a `jsx` entry in `importMap`, or a pattern's `jsx`, `jsxName` and `jsxElement`, and built clean even under
+  `validation: 'error'` — so `strictTokens: true` enforced nothing, and nothing said so. Each now fails the build with
+  the edit to make: `strictTokens: true` is `strictValues: true`, and the others are deleted.
+
+  The generated `WithEscapeHatch` type no longer mentions `strictTokens`, and no longer links to `strictValues`, a build
+  check that does not touch it; the type is applied only under `strictPropertyValues`.
+
+- e8cca66: An `&` or a comma inside a quoted attribute value in a selector is the value's own character.
+  - Every `&` was taken for the parent, so `'&[data-label="a & b"]'` had the element's class written into the value it
+    matches against, and a comma split the selector in two at `'&[data-label="x,y"]'`. Each such rule matched nothing.
+    The same held for a theme or a condition such as `'[data-a="a &"] &'`, for the tokens written under it and for a
+    reset's scope.
+  - A key whose only `&` is quoted names no parent, and nests as a descendant, as a key with no `&` does.
+  - The parent is written as it is: `String.replace` read a `$&` or `$$` in it as a pattern. And a class ending in an
+    escaped `&` keeps it before a descendant: the first `& ` in the selector was dropped wherever it stood.
+  - A selector that quotes and escapes nothing — nearly every one — is read without walking it, and is no slower:
+    2.58–2.60 → 2.17–2.20 µs a rule, measured side by side.
+
+- c58eea4: `strictValues` takes keywords side by side or listed, as it takes one, and reports each raw value once.
+  - `objectPosition: 'center top'` and `transitionProperty: 'opacity, transform'` were raw css for their spaces and
+    commas, though no keyword can be written without them, and under `validation: 'error'` they failed the build. A list
+    the property does not take — a keyword misspelled, or token names side by side, which are not resolved — is raw as
+    it was.
+  - Under `warn`, a raw value is reported once. A client and a server build emit the stylesheet each, and a dev server
+    on every edit, and each repeated the whole list. A value written later is reported as one more, of all there are.
+    `validation: 'error'` still fails each build that holds one.
+
+- b38a97a: A theme's tokens under a selector condition such as `_dark` hold wherever the theme and the condition meet,
+  not only where the `data-bamboo-theme` attribute and the dark class share an element.
+  - `.dark &` was compounded onto the theme's root, `[data-bamboo-theme=pastel].dark`. A theme in a page that
+    `<html class="dark">` puts in dark mode kept its light values, and a dark panel inside the theme took the default
+    dark values instead of the theme's. The condition now meets the root above it, on it and inside it, in the
+    stylesheet and in the theme files `styled-system/themes` loads on demand.
+  - On the root of a theme nested inside, the outer theme's rule is no more specific than that root: the nested theme's
+    own dark values win there, and the outer theme's fill in what it leaves out. Two cases still resolve by the order
+    the themes are written in: a value the nested theme sets for every mode, on its root when that carries the dark
+    class, and a dark class on an element inside two nested themes.
+  - A condition with a combinator of its own, `.dark > &`, meets the theme from above only, and one with its `&` in the
+    middle, `.dark & .panel`, is written around the root as it stands.
+  - A theme loaded on demand holds its own variables alone: `theme-pastel.json` carried those of a theme named
+    `pastelDark` as well.
+  - A condition of the project's own whose name begins with `theme`, such as `themeDim`, had its tokens dropped from the
+    stylesheet with those of every theme `staticCss.themes` leaves out. They are written as any condition's are.
+
+- Updated dependencies [f55d8e7]
+- Updated dependencies [382e9d1]
+- Updated dependencies [4ea912c]
+- Updated dependencies [14569ac]
+- Updated dependencies [fc73dfd]
+- Updated dependencies [dd6c070]
+- Updated dependencies [0cb809f]
+- Updated dependencies [960ca70]
+- Updated dependencies [04f8720]
+- Updated dependencies [e8cca66]
+- Updated dependencies [67fae4d]
+- Updated dependencies [c58eea4]
+- Updated dependencies [b38a97a]
+- Updated dependencies [34c29c4]
+- Updated dependencies [cab6edf]
+  - @bamboocss/shared@1.57.0
+  - @bamboocss/types@1.57.0
+  - @bamboocss/core@1.57.0
+  - @bamboocss/is-valid-prop@1.57.0
+  - @bamboocss/logger@1.57.0
+  - @bamboocss/token-dictionary@1.57.0
+
 ## 1.56.7
 
 ### Patch Changes

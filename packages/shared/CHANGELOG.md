@@ -1,5 +1,85 @@
 # @bamboocss/shared
 
+## 1.57.0
+
+### Patch Changes
+
+- f55d8e7: `bamboo analyze --unused`, `bamboo doctor` and `bamboo debug --zip`.
+  - `bamboo analyze --unused` lists the configured names no source uses — tokens, recipes, patterns and keyframes — one
+    to a line on stdout, or bare under `--scope`, which now takes `pattern` and `keyframe` too. A token or a keyframe is
+    listed when the build's own prune removes it, with every prune on whatever the config says: a name listed is one the
+    stylesheet already ships without, and one the prune keeps for a reader it cannot follow — a `token()` path built at
+    runtime, a theme, a `keepTokens` pattern — is not. A recipe or a pattern is listed when no source calls it and
+    `staticCss` does not emit it regardless.
+  - `bamboo doctor` checks a project as the build reads it, without writing anything: its config, the sources `include`
+    selects, and the generated `styled-system` against what `bamboo codegen` would write now. It exits 1, saying what to
+    fix, for a generated file missing, out of date or no longer generated, a source that cannot be extracted, or a call
+    to a pattern or recipe that does not exist. `--json` prints the report as JSON.
+  - `bamboo debug --zip` writes the debug files as one `<outdir>.zip`, to attach to a bug report.
+  - `--silent` quiets every command for a project whose config names a `logLevel`, which creating the context set again
+    over it. Under `bamboo analyze` it quiets the reporter too, which logs through the logger's ES module: another
+    instance than the CommonJS one the CLI holds.
+  - Where stdout is the output — `analyze --unused`, `doctor --json` — the log goes to stderr, and a reader that stops
+    reading, `| head -1`, ends the command rather than failing it.
+
+- 4ea912c: Every published package declares the Node.js it runs on, `engines: { node: ">=22.12.0" }`, so a package
+  manager and tooling can see it.
+  - No package said, and the floor was its dependencies': the PostCSS plugins the stylesheet is optimized with take no
+    release before 22, and Vite none before 22.12. Node 20 reached its end of life in April 2026.
+  - tsdown builds for the version `engines` names. Every package's `dist` is the same, byte for byte.
+
+- dd6c070: Read an important mark the way the stylesheet ends up holding it.
+  - Any whitespace inside a mark counts, not only CSS's: the build writes each run of it as one space, so `!` and
+    `important` with a no-break space between them reach the browser as an important declaration. Read as no mark, a
+    value from the config — which reaches the class name sanitized and the stylesheet as written — named a class for an
+    ordinary rule while the rule was written as an important one, and the element matched nothing. The class is now
+    named from the same value the mark is read from. NUL beside the mark, which the build removes from a value, counts
+    as whitespace too.
+  - A comment around the mark is not read, as it was not before, though CSS reads one as whitespace: telling a comment's
+    `/*` from one in a string or a `url()` is the tokenizer's job. Write the mark last: `red !important /* c */` is
+    written as an ordinary declaration, and `no-important` does not report it. A value holding a comment it never closes
+    is no CSS at all, and its rule is dropped whatever follows the `/*`.
+  - An escape hatch is only brackets that are the whole value: `[a] 1fr [b!]` is two line names around a track, and its
+    `!` is no mark. A fallback candidate that is an escape hatch holding the mark, `fallback([a!], b)`, marks the
+    declaration, as `[a!]` alone does.
+  - `no-important` reads a template literal as it cooks, as the build does, so `` `red\!` `` is reported and
+    `` `foo\\!` `` is not. Its suggested fix is written back escaped the way the literal reads: `"\"hi\" !"` became
+    `""hi""`, which does not parse, and `'a\\! !'` became `'a\!'`, a mark again. A carriage return in a template, a
+    control character and half a surrogate pair are written back as escapes.
+
+- 0cb809f: Only a trailing `!` or `!important` marks a declaration important. Any `!` in a value used to count, and was
+  cut out of the value as it was marked:
+  - `content: '"!"'` came out as `content: "" !important`, and `content: '"hello!"'` as `content: "hello" !important`.
+  - `fontFamily: '"Foo!Bar", sans-serif'` lost its `!` and became important.
+  - `<!--` in an SVG data URI became `<--`, which broke the image.
+
+  A value whose `!` is part of it now keeps it, in the declaration and in its class name. Marks that end a value are all
+  removed, so `red !important !important` no longer emits a doubled, invalid mark, and a mark ending a `fallback(...)`
+  candidate still marks every candidate. The `no-important` lint rule now reads the keyword in any case, as the build
+  does.
+
+- 960ca70: Read `! important`, with whitespace inside the mark, as an important mark. The browser treats
+  `color: 'red ! important'` as important either way, but the build wrote it as an ordinary declaration, so it was
+  ordered and composed as something it was not. It is now the same atom as `red !important`.
+
+  An escaped `\!` is not a mark either: `foo\!` is the identifier `foo!`, and `foo\!important` the identifier
+  `foo!important`. Stripping the `!` as a mark left a backslash, which escaped the space written after it.
+
+  The ESLint rule `no-important` names the mark it would remove, as it is written: the one the build reads, found where
+  the build finds it. `content: '"!important" !'` was reported as using `!important`, which is part of the string.
+
+- cab6edf: Refuse to build from an argument that names nothing, instead of emptying the stylesheet. `bamboo` reads its
+  argument as an `include` glob, so a mistyped or never-defined command — `bamboo codgen`, `bamboo doctor` — and any
+  glob or path matching nothing built a stylesheet from no files over the real one, and exited 0. It now fails and
+  leaves the stylesheet as it was. A word is answered as the command it most likely meant; a glob or path is reported as
+  matching nothing, and a directory, `bamboo src`, with the glob to write instead. While watching, only a word one slip
+  from a command is refused, since the files may be about to appear.
+
+  `bamboo <glob> --watch` now rebuilds when a file changes. The argument reached the watcher as a string where a list
+  was expected, so it watched a directory for each character of the glob.
+
+  `generate()` takes `{ requireFiles: true }` for the same refusal.
+
 ## 1.56.7
 
 ## 1.56.6

@@ -1,5 +1,50 @@
 # @bamboocss/vite
 
+## 1.57.4
+
+### Patch Changes
+
+- c1e56af: Name a server environment's copy of the stylesheet after the sheet an environment writing its assets wrote,
+  so a server bundle linking it through `virtual:bamboo.css?url` links a file that exists. Vite discards the server's
+  copy, and it was named after its own pruned bytes: built before the client, the server pruned against itself alone,
+  and every server-rendered page linked a stylesheet no environment wrote.
+  - The copy takes the name and bytes of the sheet last written under the same original name, a browser environment's
+    first. A sheet counts once its output is written: one another plugin rejected names nothing.
+  - When the server's output is written first, its links to the copy move to the sheet the client writes after it, and
+    in a watch they move again each time that sheet is written under a new name. A link the process never could move is
+    named in a warning as it exits; a copy imported only for its effect, which nothing links, is not.
+  - The copy is no longer split per chunk or held for the run to finish, and nothing written changes otherwise.
+
+- 062c63a: Read which classes a stylesheet pruned off the outputs on disk whenever the check for them runs, so a rebuild
+  is no longer refused for a class the sheet holds. When the environment completing a run finalized the sheet in its
+  output and another plugin then rejected that output, the record the check read still held the sheet's provisional
+  losses — only that output being written rebuilt it — and the environment's next rebuild failed naming a class the
+  finalized sheet on disk holds. The rebuild after that passed.
+- 6ba3c85: Fail a server environment that emits a stylesheet of its own when it newly uses a class the browser's
+  stylesheet pruned, as one emitting none fails. Its own sheet keeps the rule, but its pages link the browser
+  environment's, so an in-memory run, a run that builds environments one at a time without announcing them, or a watch
+  rebuild of that environment passed with the page unstyled until the browser's environment built again. A browser
+  environment is still not refused for what its own last sheet pruned, and neither is a server environment linking its
+  own copy through `virtual:bamboo.css?url`. The guard reads each environment's `consumer`, so a second environment
+  serving a sheet of its own to the browser sets `consumer: 'client'`.
+- 6dec6e2: In a watch, prune a stylesheet written while another environment is replacing its output again from source
+  once that output is written, so a rebuild of several environments writes what a full build of the same sources would.
+  An edit to a module only the server imports rebuilds the client too, and the client's sheet was pruned against the
+  server's previous output and written as final: a class new to the extraction shipped with no rule, usually with no
+  error, and one extracted before and pruned failed the server's rebuild though the client's could keep it.
+  - A sheet is pruned again as each environment it waits for settles — its output written, or its replacement failed —
+    so an output another plugin rejects, which no hook reports, holds nothing back.
+  - Where the guard stands aside for a sheet about to be pruned again, it has that sheet pruned again with its own
+    environment's output once that is written, whatever becomes of the sibling's. A sheet whose output pass pruned it
+    with no sibling replacing is final, and the guard reads what it lost, in place of what the sheet before it lost.
+  - A full build, and the first build of a watch, are unchanged.
+  - @bamboocss/config@1.57.4
+  - @bamboocss/core@1.57.4
+  - @bamboocss/logger@1.57.4
+  - @bamboocss/node@1.57.4
+  - @bamboocss/shared@1.57.4
+  - @bamboocss/types@1.57.4
+
 ## 1.57.3
 
 ### Patch Changes

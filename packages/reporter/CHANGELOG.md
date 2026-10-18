@@ -1,5 +1,15 @@
 # @bamboocss/reporter
 
+## 1.57.2
+
+### Patch Changes
+
+- @bamboocss/core@1.57.2
+- @bamboocss/generator@1.57.2
+- @bamboocss/logger@1.57.2
+- @bamboocss/shared@1.57.2
+- @bamboocss/types@1.57.2
+
 ## 1.57.1
 
 ### Patch Changes

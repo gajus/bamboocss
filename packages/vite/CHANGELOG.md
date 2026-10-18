@@ -1,5 +1,39 @@
 # @bamboocss/vite
 
+## 1.57.3
+
+### Patch Changes
+
+- b96f112: Read an element off an array with the choices it carries, and none of its siblings'. This changes the
+  stylesheet: rules only a sibling's choices gave are no longer written.
+  - An array held the values its elements could not decide between with no index, so a read of any one carried them all.
+    `tones[0]` from `['red.300', c ? 'blue.300' : 'green.300']` wrote rules for `blue.300` and `green.300` as well, and
+    `sizes[1]` beside an undecided `sizes[0]` wrote that one's rules too. A read of an undecided element writes its own
+    values' rules, as before.
+  - A decided element read off such an array is known where it was refused: wrapped in an object and given to a rest
+    parameter, placed in an array literal, or beside a sibling holding a key that is its index.
+  - The compiler follows a read at a literal index, `sizes[1]`, to the element the array literal places there, with no
+    spread at or before it to move it, so a choice in a sibling no longer refuses it.
+  - An array handed on under another name — passed to a function, aliased, or with a method called on it, directly or
+    through the object holding it — is read as before: every element carries all of the array's choices, and the
+    compiler leaves its reads to the runtime. A `reverse()` or a write through the other name is not seen, so an index
+    is no promise of which element it reads.
+
+- e44039d: On Vite 6, a build that sets `rollupOptions.output` finalizes the stylesheet it deferred. Vite 6 builds the
+  outputs it writes from `rollupOptions.output` before Bamboo's `options` hook runs, so the finalizer installed there
+  was never on the output written: in a run that builds the client before SSR, the client's sheet, deferred until SSR
+  completed, was never finalized, and a class only the server reaches shipped with no rule while the build passed, with
+  only a warning at exit. An environment whose output carries no finalizer now completes as one with no
+  `rollupOptions.output` does. 1.56.7 had the same gap.
+- Updated dependencies [b96f112]
+- Updated dependencies [280c7e0]
+  - @bamboocss/node@1.57.3
+  - @bamboocss/config@1.57.3
+  - @bamboocss/core@1.57.3
+  - @bamboocss/logger@1.57.3
+  - @bamboocss/shared@1.57.3
+  - @bamboocss/types@1.57.3
+
 ## 1.57.2
 
 ### Patch Changes

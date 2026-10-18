@@ -1,5 +1,7 @@
 # @bamboocss/is-valid-prop
 
+## 1.57.3
+
 ## 1.57.2
 
 ## 1.57.1

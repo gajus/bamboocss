@@ -1,5 +1,22 @@
 # @bamboocss/node
 
+## 1.57.6
+
+### Patch Changes
+
+- Updated dependencies [a55dffb]
+- Updated dependencies [4f49c5f]
+  - @bamboocss/generator@1.57.6
+  - @bamboocss/token-dictionary@1.57.6
+  - @bamboocss/types@1.57.6
+  - @bamboocss/reporter@1.57.6
+  - @bamboocss/core@1.57.6
+  - @bamboocss/config@1.57.6
+  - @bamboocss/logger@1.57.6
+  - @bamboocss/plugin-svelte@1.57.6
+  - @bamboocss/plugin-vue@1.57.6
+  - @bamboocss/shared@1.57.6
+
 ## 1.57.5
 
 ### Patch Changes

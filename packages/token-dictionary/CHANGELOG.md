@@ -1,5 +1,19 @@
 # @bamboocss/token-dictionary
 
+## 1.57.6
+
+### Patch Changes
+
+- 4f49c5f: A gradient token's numeric stop `position` is a percentage along the gradient, as in Panda 2: `position: 100`
+  is its end, `100%`, where it was `100px` — a hundred pixels in, the rest filled with the last color, on anything
+  wider. This changes the css of a composite gradient token that places its stops with numbers.
+  - A string `position` is written as it is, so a stop meant in pixels is `position: '100px'`.
+
+- Updated dependencies [4f49c5f]
+  - @bamboocss/types@1.57.6
+  - @bamboocss/logger@1.57.6
+  - @bamboocss/shared@1.57.6
+
 ## 1.57.5
 
 ### Patch Changes

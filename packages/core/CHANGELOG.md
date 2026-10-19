@@ -1,5 +1,16 @@
 # @bamboocss/core
 
+## 1.57.6
+
+### Patch Changes
+
+- Updated dependencies [4f49c5f]
+  - @bamboocss/token-dictionary@1.57.6
+  - @bamboocss/types@1.57.6
+  - @bamboocss/logger@1.57.6
+  - @bamboocss/is-valid-prop@1.57.6
+  - @bamboocss/shared@1.57.6
+
 ## 1.57.5
 
 ### Patch Changes

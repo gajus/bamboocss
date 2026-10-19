@@ -1,5 +1,47 @@
 # @bamboocss/types
 
+## 1.58.0
+
+### Minor Changes
+
+- cd1fdd2: Add `keyframes()`, which Panda 2 added: write a `@keyframes` block where it is used and get its name back to
+  animate with. Imported from `styled-system/css`. See the new Keyframes page.
+
+  ```ts
+  const fadeIn = keyframes({ from: { opacity: 0 }, to: { opacity: 1 } })
+
+  css({ animation: `${fadeIn} 0.2s ease-out` })
+  ```
+
+  - The name is a hash of the stops, `kf_feVUdh`, so the same stops anywhere in the project are one block. It hashes
+    them in the order they were written, as a stop written twice, `from` and `0%`, is resolved by which comes later. The
+    class `prefix` goes first, `app-kf_feVUdh`.
+  - The compiler replaces the call with the name, which is computed once and written on the block, so a style object
+    reading the call, in the same module or through an import, animates the block the stylesheet holds. Stops it cannot
+    read whole fail the build, and are reported in the editor by `no-unresolved-styles`.
+  - A stop's declarations resolve as in `css()`, tokens included, and the block lands in the `tokens` layer beside the
+    theme keyframes. It is written while the call exists, whether or not the stylesheet names it, since an inline
+    `style` can.
+
+- 43123c5: Add `SystemStyleObjectWith` and `SystemStyleObjectWithout`, as Panda 2 has them: a style object with some
+  properties alone, or with every property but some, in every condition and selector too. For styles a caller may add to
+  yours, typed on the helper that returns them:
+  `(placement: SystemStyleObjectWith<'margin' | 'width'>) => ({ ...base, ...placement })`, whose result a call site
+  passes to `css()`. Either is a `SystemStyleObject`.
+
+### Patch Changes
+
+- 4224373: Add the mask utilities Panda 2 added: fade an edge with `maskBottomFrom: '40%'`, both sides with `maskXFrom`,
+  or stack linear, radial and conic layers with `maskLinearFrom`, `maskRadialFrom` and `maskConicFrom`, each with `To`,
+  `FromColor` and `ToColor`. The helpers compose one layered `mask-image` through variables registered with `@property`,
+  which the stylesheet keeps only where a rule reads them. See the new Masks page.
+  - A conic stop takes an angle or a percentage of the turn, `maskConicFrom: '45deg'`. Panda types it as a length, which
+    a conic stop never takes, so an angle fell back to the initial value and a length emptied the mask.
+  - This changes the css of the mask properties that had no utility of their own: `maskPosition`, `maskRepeat`,
+    `maskClip` and `maskOrigin` are written `-webkit-` first, as `mask`, `maskImage` and `maskSize` were, and each of
+    them, with `maskMode` and `maskType`, takes a short class name, `msk-p_center` for `mask-position_center`.
+    `maskComposite` is written through the variables the helpers read, so whichever class comes last it holds.
+
 ## 1.57.6
 
 ### Patch Changes

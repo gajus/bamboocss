@@ -1,5 +1,23 @@
 # @bamboocss/eslint-plugin
 
+## 1.58.0
+
+### Patch Changes
+
+- 9fad12e: Add `defineConditions`, the config helper for conditions Panda 2 added:
+  `conditions: defineConditions({ … })`, typed as a config's `conditions` are.
+  - `no-config-function-in-source` reports `defineConditions` in source files, and the other config helpers it did not
+    know: `defineGlobalFontface`, `definePlugin`, `defineThemeVariant` and `defineThemeContract`.
+
+- Updated dependencies [cd1fdd2]
+- Updated dependencies [98f89b1]
+- Updated dependencies [43123c5]
+  - @bamboocss/generator@1.58.0
+  - @bamboocss/node@1.58.0
+  - @bamboocss/config@1.58.0
+  - @bamboocss/logger@1.58.0
+  - @bamboocss/shared@1.58.0
+
 ## 1.57.6
 
 ### Patch Changes

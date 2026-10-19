@@ -1,5 +1,14 @@
 # @bamboocss/plugin-vue
 
+## 1.58.0
+
+### Patch Changes
+
+- Updated dependencies [cd1fdd2]
+- Updated dependencies [4224373]
+- Updated dependencies [43123c5]
+  - @bamboocss/types@1.58.0
+
 ## 1.57.6
 
 ### Patch Changes

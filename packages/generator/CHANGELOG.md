@@ -1,5 +1,52 @@
 # @bamboocss/generator
 
+## 1.58.0
+
+### Minor Changes
+
+- cd1fdd2: Add `keyframes()`, which Panda 2 added: write a `@keyframes` block where it is used and get its name back to
+  animate with. Imported from `styled-system/css`. See the new Keyframes page.
+
+  ```ts
+  const fadeIn = keyframes({ from: { opacity: 0 }, to: { opacity: 1 } })
+
+  css({ animation: `${fadeIn} 0.2s ease-out` })
+  ```
+
+  - The name is a hash of the stops, `kf_feVUdh`, so the same stops anywhere in the project are one block. It hashes
+    them in the order they were written, as a stop written twice, `from` and `0%`, is resolved by which comes later. The
+    class `prefix` goes first, `app-kf_feVUdh`.
+  - The compiler replaces the call with the name, which is computed once and written on the block, so a style object
+    reading the call, in the same module or through an import, animates the block the stylesheet holds. Stops it cannot
+    read whole fail the build, and are reported in the editor by `no-unresolved-styles`.
+  - A stop's declarations resolve as in `css()`, tokens included, and the block lands in the `tokens` layer beside the
+    theme keyframes. It is written while the call exists, whether or not the stylesheet names it, since an inline
+    `style` can.
+
+- 43123c5: Add `SystemStyleObjectWith` and `SystemStyleObjectWithout`, as Panda 2 has them: a style object with some
+  properties alone, or with every property but some, in every condition and selector too. For styles a caller may add to
+  yours, typed on the helper that returns them:
+  `(placement: SystemStyleObjectWith<'margin' | 'width'>) => ({ ...base, ...placement })`, whose result a call site
+  passes to `css()`. Either is a `SystemStyleObject`.
+
+### Patch Changes
+
+- 98f89b1: A responsive or conditional recipe selection, `button({ size: { base: 'sm', md: 'lg' } })`, fails the build,
+  saying to write the condition inside the variant's styles. It compiled into the selection lookup, where the object
+  matched no variant, so the element rendered without one and nothing reported it.
+  - A config recipe's variant props no longer take a conditional value, which the generated types allowed for a recipe
+    without compound variants.
+
+- Updated dependencies [cd1fdd2]
+- Updated dependencies [4224373]
+- Updated dependencies [43123c5]
+  - @bamboocss/core@1.58.0
+  - @bamboocss/types@1.58.0
+  - @bamboocss/logger@1.58.0
+  - @bamboocss/token-dictionary@1.58.0
+  - @bamboocss/is-valid-prop@1.58.0
+  - @bamboocss/shared@1.58.0
+
 ## 1.57.6
 
 ### Patch Changes

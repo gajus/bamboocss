@@ -1,5 +1,34 @@
 # @bamboocss/preset-base
 
+## 1.58.0
+
+### Minor Changes
+
+- 4224373: Add the mask utilities Panda 2 added: fade an edge with `maskBottomFrom: '40%'`, both sides with `maskXFrom`,
+  or stack linear, radial and conic layers with `maskLinearFrom`, `maskRadialFrom` and `maskConicFrom`, each with `To`,
+  `FromColor` and `ToColor`. The helpers compose one layered `mask-image` through variables registered with `@property`,
+  which the stylesheet keeps only where a rule reads them. See the new Masks page.
+  - A conic stop takes an angle or a percentage of the turn, `maskConicFrom: '45deg'`. Panda types it as a length, which
+    a conic stop never takes, so an angle fell back to the initial value and a length emptied the mask.
+  - This changes the css of the mask properties that had no utility of their own: `maskPosition`, `maskRepeat`,
+    `maskClip` and `maskOrigin` are written `-webkit-` first, as `mask`, `maskImage` and `maskSize` were, and each of
+    them, with `maskMode` and `maskType`, takes a short class name, `msk-p_center` for `mask-position_center`.
+    `maskComposite` is written through the variables the helpers read, so whichever class comes last it holds.
+
+- 821db85: Add the conditions Panda 2 added: `_pointerFine`, `_pointerCoarse` and `_pointerNone` for the primary
+  pointer, `_anyPointerFine`, `_anyPointerCoarse` and `_anyPointerNone` for any pointer, `_userValid` and `_userInvalid`
+  for a field validated once the user has interacted with it, and `_inert` for an inert subtree. Each also matches a
+  `data-*` attribute where it is a selector, as the other state conditions do.
+
+### Patch Changes
+
+- 4ab51fe: `textWrap` takes every keyword the property does, `pretty` and `stable` among them, rather than only `wrap`,
+  `balance` and `nowrap`. Those three compile as they did.
+- Updated dependencies [cd1fdd2]
+- Updated dependencies [4224373]
+- Updated dependencies [43123c5]
+  - @bamboocss/types@1.58.0
+
 ## 1.57.6
 
 ### Patch Changes

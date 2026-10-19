@@ -1,5 +1,41 @@
 # @bamboocss/dev
 
+## 1.58.0
+
+### Minor Changes
+
+- 9fad12e: Add `defineConditions`, the config helper for conditions Panda 2 added:
+  `conditions: defineConditions({ … })`, typed as a config's `conditions` are.
+  - `no-config-function-in-source` reports `defineConditions` in source files, and the other config helpers it did not
+    know: `defineGlobalFontface`, `definePlugin`, `defineThemeVariant` and `defineThemeContract`.
+
+- e16aa7d: Add `typographyPreset()`, an opt-in `prose` recipe for Markdown and CMS HTML, ported from Panda's typography
+  preset. List it after the default presets: `presets: [...defaultPresets, typographyPreset()]`, both from
+  `@bamboocss/dev/presets`. Nothing changes unless it is listed and `prose()` is called.
+  - Five sizes, each one font size on the root with everything inside a ratio of it, and colors from `prose.*` semantic
+    tokens built on the `neutral` palette, light and dark.
+  - Each element is styled under a key of its own, so `cx(prose(), css({ '& h2': … }))` overrides that heading alone.
+  - Every value outside the theme is written as `[value]`, so it builds under `strictValues`.
+  - With `notProse`, the rule for the first child keeps its combinator outside `:where()`, where Panda's matched
+    nothing.
+  - `sizes.prose` stays 65 characters.
+
+### Patch Changes
+
+- Updated dependencies [cd1fdd2]
+- Updated dependencies [4224373]
+- Updated dependencies [821db85]
+- Updated dependencies [43123c5]
+- Updated dependencies [4ab51fe]
+- Updated dependencies [e16aa7d]
+  - @bamboocss/node@1.58.0
+  - @bamboocss/types@1.58.0
+  - @bamboocss/preset-base@1.58.0
+  - @bamboocss/preset-bamboo@1.58.0
+  - @bamboocss/logger@1.58.0
+  - @bamboocss/token-dictionary@1.58.0
+  - @bamboocss/shared@1.58.0
+
 ## 1.57.6
 
 ### Patch Changes

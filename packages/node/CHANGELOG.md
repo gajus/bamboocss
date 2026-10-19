@@ -1,5 +1,47 @@
 # @bamboocss/node
 
+## 1.58.2
+
+### Patch Changes
+
+- fb1f988: `bamboo analyze` and the MCP server's `get_usage_report` agree with `analyze --unused`. Counted from source
+  alone, a token read only through a semantic token, another token's value, a mixin or `global.css` was reported unused,
+  and one written only in a config recipe nothing calls was reported used. Keyframes reached through a semantic
+  animation token or a mixin showed `usedCount: 0`, so an agent reading the report could delete keyframes the build
+  still needed.
+  - The token table counts a token as used exactly when the build keeps it, and lists a category nothing names directly.
+  - Each pattern and keyframe entry says whether it is `unused`, and the MCP report lists the build's verdict under
+    `unused`, for the kinds asked.
+  - `--outfile` writes the same verdict beside the report.
+
+- 0338a3f: `--watch` follows what the config is built from as it changes. `codegen`, `cssgen` and `ship` watched the
+  files the config imported when the watch started, so after an edit that swapped in a preset or imported one more
+  module, editing that file did nothing until the process restarted. The watch now re-arms on what each reloaded config
+  imports, also when the reload resolves to the same config, as moving tokens into an imported module does, and when it
+  fails to load, so fixing the module that broke it reloads. The Vite dev server was not affected: it restarts when the
+  config changes.
+  - A reload whose build then fails is followed by what it reloaded, so fixing the preset it added rebuilds.
+  - A load that fails is followed by what it read, a preset named by path included, and by the config's imports through
+    tsconfig `paths`.
+  - A `dependencies` pattern is watched as a pattern, so a file that starts to match it is seen.
+
+- Updated dependencies [a046afc]
+- Updated dependencies [9f1b8c6]
+- Updated dependencies [354a80f]
+- Updated dependencies [5a44371]
+- Updated dependencies [fb1f988]
+- Updated dependencies [0338a3f]
+  - @bamboocss/core@1.58.2
+  - @bamboocss/config@1.58.2
+  - @bamboocss/generator@1.58.2
+  - @bamboocss/token-dictionary@1.58.2
+  - @bamboocss/types@1.58.2
+  - @bamboocss/reporter@1.58.2
+  - @bamboocss/logger@1.58.2
+  - @bamboocss/plugin-svelte@1.58.2
+  - @bamboocss/plugin-vue@1.58.2
+  - @bamboocss/shared@1.58.2
+
 ## 1.58.1
 
 ### Patch Changes

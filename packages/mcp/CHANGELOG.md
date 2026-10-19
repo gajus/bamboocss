@@ -1,5 +1,35 @@
 # @bamboocss/mcp
 
+## 1.58.2
+
+### Patch Changes
+
+- a8ba5bb: The MCP server picks up config changes without a restart. It loaded the config once, when the client started
+  it, so a token or a recipe added during an agent's session never reached `get_tokens` or `get_recipes`. Each call now
+  checks the config, the files it imports, a preset swapped in by the last edit among them, and the files its
+  `dependencies` match, and reloads when any has changed.
+  - A config that fails to load fails the call with its error, rather than the previous config answering.
+  - `get_recipes` and `get_patterns` take any name and say which ones exist when it is not one of them. Their filters
+    were enums of the names the server started with, which rejected a recipe added since.
+
+- fb1f988: `bamboo analyze` and the MCP server's `get_usage_report` agree with `analyze --unused`. Counted from source
+  alone, a token read only through a semantic token, another token's value, a mixin or `global.css` was reported unused,
+  and one written only in a config recipe nothing calls was reported used. Keyframes reached through a semantic
+  animation token or a mixin showed `usedCount: 0`, so an agent reading the report could delete keyframes the build
+  still needed.
+  - The token table counts a token as used exactly when the build keeps it, and lists a category nothing names directly.
+  - Each pattern and keyframe entry says whether it is `unused`, and the MCP report lists the build's verdict under
+    `unused`, for the kinds asked.
+  - `--outfile` writes the same verdict beside the report.
+
+- Updated dependencies [5a44371]
+- Updated dependencies [fb1f988]
+- Updated dependencies [0338a3f]
+  - @bamboocss/token-dictionary@1.58.2
+  - @bamboocss/types@1.58.2
+  - @bamboocss/node@1.58.2
+  - @bamboocss/logger@1.58.2
+
 ## 1.58.1
 
 ### Patch Changes

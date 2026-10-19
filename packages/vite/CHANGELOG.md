@@ -1,5 +1,22 @@
 # @bamboocss/vite
 
+## 1.58.2
+
+### Patch Changes
+
+- Updated dependencies [a046afc]
+- Updated dependencies [9f1b8c6]
+- Updated dependencies [354a80f]
+- Updated dependencies [5a44371]
+- Updated dependencies [fb1f988]
+- Updated dependencies [0338a3f]
+  - @bamboocss/core@1.58.2
+  - @bamboocss/config@1.58.2
+  - @bamboocss/types@1.58.2
+  - @bamboocss/node@1.58.2
+  - @bamboocss/logger@1.58.2
+  - @bamboocss/shared@1.58.2
+
 ## 1.58.1
 
 ### Patch Changes

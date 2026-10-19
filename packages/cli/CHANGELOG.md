@@ -1,5 +1,18 @@
 # @bamboocss/dev
 
+## 1.58.1
+
+### Patch Changes
+
+- Updated dependencies [f6480a6]
+  - @bamboocss/node@1.58.1
+  - @bamboocss/logger@1.58.1
+  - @bamboocss/preset-bamboo@1.58.1
+  - @bamboocss/preset-base@1.58.1
+  - @bamboocss/shared@1.58.1
+  - @bamboocss/token-dictionary@1.58.1
+  - @bamboocss/types@1.58.1
+
 ## 1.58.0
 
 ### Minor Changes

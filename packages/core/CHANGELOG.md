@@ -1,5 +1,21 @@
 # @bamboocss/core
 
+## 1.58.1
+
+### Patch Changes
+
+- f6480a6: `bamboo init` prints the Vite setup as its next steps: add `bamboocss()` to the Vite config, import
+  `virtual:bamboo.css` once, and add `"prepare": "bamboo codegen"`. It printed Panda's instead, a stylesheet of your own
+  holding `@layer reset, base, tokens, recipes, utilities;`, which the virtual stylesheet declares itself, without
+  `recipes`.
+  - On a project that already has a config, it says the config was left as it is and how to replace it,
+    `npx bamboo init --force`, where it suggested `npm run bamboo --watch`.
+  - @bamboocss/is-valid-prop@1.58.1
+  - @bamboocss/logger@1.58.1
+  - @bamboocss/shared@1.58.1
+  - @bamboocss/token-dictionary@1.58.1
+  - @bamboocss/types@1.58.1
+
 ## 1.58.0
 
 ### Minor Changes

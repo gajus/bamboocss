@@ -1,5 +1,43 @@
 # @bamboocss/vite
 
+## 1.58.4
+
+### Patch Changes
+
+- 34bebe6: A style value holding the retired `token(path, fallback)` form, or a curly reference, fails the Vite compile
+  in the build's own words. `css({ color: 'token(colors.brand, #fff)' })` failed as a bare `css() — dynamic`, with
+  advice to make its values finite and statically analyzable, for a value written as a literal, while `bamboo cssgen`
+  named the form and what to write instead. The compiler's line for the call now says the same:
+  `` `token(colors.brand, #fff)` in the value `token(colors.brand, #fff)` uses the retired `token(path, fallback)` form. Write `token(colors.brand)` instead. ``
+  - The paragraph explaining code the compiler will not run follows only a call the evaluator refused, which it was
+    written for. It followed any `dynamic` call with a reason, a `keyframes()` whose stops come from a parameter
+    included.
+
+- 50b8fed: `token(path) ?? '#fff'` compiles under Vite. It is how the docs say to write a path that may name no token,
+  now the fallback argument is retired, and the Vite compiler refused it: in a style whatever the token, as a `dynamic`
+  call, since it did not accept a choice decided by a call, and standing alone where the path named none, as
+  `unresolved-token`. A `token()` or `token.value()` call is a lookup in the table the build holds, so a choice is now
+  decided by what it returns, as `bamboo cssgen` already did: `css({ color: token('colors.brand') ?? '#fff' })` compiles
+  to `color: #fff` where `colors.brand` names no token, and to its variable where it does.
+  - A call naming no token whose result is tested or defaulted — the left of `??`, `||` or `&&`, a condition, the
+    operand of `!` or `typeof`, a side of an equality — compiles to the `undefined` it returns, standing alone as well.
+    One whose result is used as it is still fails, with the path it was probably meant to be.
+  - A `token.value()` of a number inside a style failed the compile as `unresolved-token` though the style compiled
+    around it, `css({ zIndex: token.value('zIndex.modal') })`. It goes with the style now.
+
+- f535866: A `token.value()` of a number compiles under Vite, to the number. Standing alone it failed the build as
+  `token() — unresolved-token`, a token that exists, because the compiler wrote string literals only. The default
+  preset's `zIndex` tokens are numbers, so `<Dialog zIndex={token.value('zIndex.modal')} />` could not be built. Now
+  `token.value('zIndex.modal')` compiles to `1400` and `token.value('zIndex.hide')` to `(-1)`, the numbers the runtime
+  returns. A negative one is parenthesized, so a method called on it or a `**` after it reads as it did.
+- Updated dependencies [50b8fed]
+  - @bamboocss/node@1.58.4
+  - @bamboocss/config@1.58.4
+  - @bamboocss/core@1.58.4
+  - @bamboocss/logger@1.58.4
+  - @bamboocss/shared@1.58.4
+  - @bamboocss/types@1.58.4
+
 ## 1.58.3
 
 ### Patch Changes

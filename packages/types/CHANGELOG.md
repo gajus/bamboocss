@@ -1,5 +1,7 @@
 # @bamboocss/types
 
+## 1.58.4
+
 ## 1.58.3
 
 ### Patch Changes

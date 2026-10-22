@@ -1,5 +1,45 @@
 # @bamboocss/eslint-plugin
 
+## 1.59.0
+
+### Minor Changes
+
+- 33a8b8c: `prefer-longhand-properties` and `prefer-shorthand-properties` fix what they report: `--fix` writes `bg` as
+  `background`, or the reverse, where they offered the rename only as an editor suggestion. The two spellings are one
+  property to the build, so a fix changes no class and no CSS.
+  - `{ bg }` is written out as `background: bg`, so it keeps reading the variable `bg`; the suggestion renamed it into
+    reading one called `background`.
+  - A key is reported but not fixed where another key in the same object sets the same property, as in
+    `{ bg: 'red.100', background: 'blue.100' }`: renamed, it would be a duplicate key, and which one was meant is the
+    author's to say.
+  - Of several shorthands, `prefer-shorthand-properties` writes the shortest: `px` for `paddingInline`, which the config
+    lists after `paddingX`. Its message named every shorthand in doubled backticks.
+  - Neither rule reports a key that is not a style any more: a recipe's variant (the argument it is called with,
+    `defaultVariants`, a compound variant's conditions), a property a pattern declares, a computed key, a key being
+    destructured, or a JSX attribute. `button({ rounded: true })` was reported as `borderRadius`.
+  - The `all` config no longer turns on `prefer-shorthand-properties`. It is the opposite of
+    `prefer-longhand-properties`, and with both on, `--fix` would rename every such key back and forth; turn it on
+    yourself if you prefer shorthands, and turn `prefer-longhand-properties` off.
+
+### Patch Changes
+
+- f6a1b07: `no-hardcoded-color` reads a property's condition object.
+  `css({ color: { base: 'red.500', _hover: '#dc2626' } })` reported nothing, so the recommended config let through any
+  colour given per breakpoint or state that way; only the other spelling, `_hover: { color: '#dc2626' }`, was read.
+  - A value is judged as the same value written plain, however deep the conditions nest, in `css()`, `cva` and `sva`
+    styles alike. A quoted key, `'color': '#ef4444'`, is read like any other.
+  - A variant being chosen is no longer reported: the argument a recipe is called with, `defaultVariants` and a compound
+    variant's conditions name a variant, and `button({ color: 'loud' })` was reported as a hardcoded colour.
+  - Nor is a computed key, which was read as the name of its variable: with `const color = 'padding'`,
+    `css({ [color]: '4' })` was reported.
+
+- Updated dependencies [5306951]
+  - @bamboocss/generator@1.59.0
+  - @bamboocss/node@1.59.0
+  - @bamboocss/config@1.59.0
+  - @bamboocss/logger@1.59.0
+  - @bamboocss/shared@1.59.0
+
 ## 1.58.4
 
 ### Patch Changes

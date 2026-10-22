@@ -1,6 +1,6 @@
 {
   "name": "@bamboocss/vite",
-  "version": "1.58.4",
+  "version": "1.59.0",
   "description": "Vite integration for Bamboo CSS",
   "homepage": "https://bamboocss.com",
   "license": "MIT",

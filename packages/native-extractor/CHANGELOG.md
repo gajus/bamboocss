@@ -1,5 +1,7 @@
 # @bamboocss/native-extractor
 
+## 1.59.0
+
 ## 1.58.4
 
 ## 1.58.3

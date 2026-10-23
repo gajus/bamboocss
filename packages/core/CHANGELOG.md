@@ -1,5 +1,57 @@
 # @bamboocss/core
 
+## 1.60.0
+
+### Minor Changes
+
+- f57c834: Class names are hashed in production by default. `hash` now defaults to
+  `{ className: 'auto', cssVar: false }`: the Vite dev server keeps the readable names it always had, and production
+  builds and CLI output write the short hashed ones. CSS variables stay readable, since hand-written CSS refers to them
+  by name.
+
+  1.42.0 kept readable names as the default because the gzipped stylesheet is about 4% smaller with them. A server
+  render pays more than that. A class holding any of `& " ' < >` — a selector condition, a quoted value — sends the
+  whole attribute through React's escaper, and every readable name is long. The css-in-js benchmark's Bamboo lane, built
+  before and after with no `hash` set, as % of plain React (run to run, about ±5%):
+
+  |                | render, readable | render, hashed | render + encode, readable | render + encode, hashed |
+  | -------------- | ---------------- | -------------- | ------------------------- | ----------------------- |
+  | product-grid   | 65%              | 103%           | 63%                       | 93%                     |
+  | tabs           | 39%              | 84%            | 39%                       | 83%                     |
+  | multifile-shop | 64%              | 100%           | 62%                       | 92%                     |
+
+  Product-grid's markup for 400 tiles goes from 1.09 MB to 0.50 MB. The compiler's own cost does not move: `vite/fold`
+  with class names hashed reads −5% to +4% against readable, as its controls do.
+
+  What still reads readable class names from production output has to change or opt out:
+  - **Markup written by hand.** An HTML page, or a class `staticCss` emits for a name assembled at runtime, cannot name
+    a hashed class. Set `hash: false` to keep class names readable in production. A build that hashes the classes
+    `staticCss` emits now warns about it.
+  - **Tests and selectors against a production build.** E2E selectors, snapshots of production markup and stylesheet
+    overrides that name atoms see hashed names. Select by role or a `data-*` attribute instead.
+
+  `hash: 'auto'` also merges like `hash: true` now. It was left a scalar, so an app's `'auto'` lost to a preset that set
+  either `className` or `cssVar`.
+
+### Patch Changes
+
+- 653bdd2: A literal underscore in a style value or a selector condition is spelled `\_` in its class name, as Tailwind
+  spells one in an arbitrary value. A class name spells a space `_`, so `fontFamily: 'My Font'` and
+  `fontFamily: 'My_Font'` were both `ff_My_Font`: one class carrying both declarations, the later winning on every
+  element that asked for either. Hashed names collided the same way, since a hashed name is a hash of the readable one.
+  They are now `ff_My_Font` and `ff_My\_Font`.
+
+  A backslash is doubled only before a space, an underscore or another backslash, where it could be read as the start of
+  `\_`. A CSS escape such as `var(--spacing-0\.5)` or `content: "\f101"` keeps its name, and no class in the
+  documentation site's stylesheet or the css-in-js benchmark lane's is renamed.
+
+- Updated dependencies [653bdd2]
+  - @bamboocss/shared@1.60.0
+  - @bamboocss/token-dictionary@1.60.0
+  - @bamboocss/is-valid-prop@1.60.0
+  - @bamboocss/logger@1.60.0
+  - @bamboocss/types@1.60.0
+
 ## 1.59.0
 
 ### Patch Changes

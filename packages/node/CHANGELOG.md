@@ -1,5 +1,24 @@
 # @bamboocss/node
 
+## 1.60.1
+
+### Patch Changes
+
+- 9a032f9: The Vite plugin writes `styled-system/` again when a build finds it gone. Having generated it once, a set of
+  plugin instances wrote it only after a config change, so a process running several builds with the same plugins and
+  cleaning the output between them — a script timing cold builds, a test runner — failed every build after the first on
+  `Could not load styled-system/css`.
+  - @bamboocss/config@1.60.1
+  - @bamboocss/core@1.60.1
+  - @bamboocss/generator@1.60.1
+  - @bamboocss/logger@1.60.1
+  - @bamboocss/plugin-svelte@1.60.1
+  - @bamboocss/plugin-vue@1.60.1
+  - @bamboocss/reporter@1.60.1
+  - @bamboocss/shared@1.60.1
+  - @bamboocss/token-dictionary@1.60.1
+  - @bamboocss/types@1.60.1
+
 ## 1.60.0
 
 ### Patch Changes

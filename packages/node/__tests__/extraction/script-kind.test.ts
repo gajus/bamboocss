@@ -1,4 +1,7 @@
 import { createContext } from '@bamboocss/fixture'
+import { pluginSvelte } from '@bamboocss/plugin-svelte'
+import { pluginVue } from '@bamboocss/plugin-vue'
+import type { BambooPlugin } from '@bamboocss/types'
 import { describe, expect, test } from 'vitest'
 
 /**
@@ -13,8 +16,8 @@ import { describe, expect, test } from 'vitest'
  * pins. It surfaced from the other end: an accounting pass over `.ts` files reported no token
  * calls at all in files that plainly had them.
  */
-const parse = (file: string, code: string) => {
-  const ctx = createContext()
+const parse = (file: string, code: string, plugins: BambooPlugin[] = []) => {
+  const ctx = createContext({ plugins })
   ctx.project.addSourceFile(file, code)
 
   const result = ctx.parseFile(file)
@@ -92,6 +95,52 @@ describe('everything else still parses as tsx', () => {
     ['.vue', 'app/src/a.vue'],
   ])('%s', (_label, file) => {
     const { css, parseErrors } = parse(file, jsx)
+
+    expect(parseErrors).toBe(0)
+    expect(css).toEqual([{ color: 'red.300' }])
+  })
+})
+
+/**
+ * A Vue or Svelte component arrives rewritten by its plugin, under an extension that names no
+ * syntax, and is read as tsx for the JSX a `lang="tsx"` script holds. The TypeScript in one can hold
+ * what tsx cannot, and the whole file failed to parse. Failing as tsx, it is read as TypeScript.
+ *
+ * Not Astro: its compiler rejects these in frontmatter and in a `<script>` itself, as Astro's build
+ * does, and the TSX its older one converts to holds the template as JSX.
+ */
+describe('a component whose TypeScript tsx cannot read', () => {
+  test.each([
+    ['.vue', 'app/src/a.vue'],
+    ['.svelte', 'app/src/a.svelte'],
+  ])('%s, as its plugin rewrote it', (_label, file) => {
+    for (const code of [withGenericArrow, withTypeAssertion]) {
+      const { css, parseErrors } = parse(file, code)
+
+      expect(parseErrors).toBe(0)
+      expect(css).toEqual([{ color: 'red.300' }])
+    }
+  })
+
+  const script = `import { css } from 'styled-system/css'
+const flag = <boolean>true
+const pick = <T>(list: T[]) => list[0]`
+
+  test.each([
+    [
+      'a Vue component',
+      'app/src/a.vue',
+      `<script setup lang="ts">\n${script}\n</script>\n<template><p :class="css({ color: 'red.300' })">{{ pick([flag]) }}</p></template>\n`,
+      pluginVue(),
+    ],
+    [
+      'a Svelte component',
+      'app/src/a.svelte',
+      `<script lang="ts">\n${script}\n</script>\n<p class={css({ color: 'red.300' })}>{pick([flag])}</p>\n`,
+      pluginSvelte(),
+    ],
+  ])('%s, from its source', (_label, file, code, plugin) => {
+    const { css, parseErrors } = parse(file, code, [plugin])
 
     expect(parseErrors).toBe(0)
     expect(css).toEqual([{ color: 'red.300' }])

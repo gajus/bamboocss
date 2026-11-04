@@ -13,9 +13,8 @@ use oxc_ast::{
         JSXAttributeValue, JSXElementName, Statement,
     },
 };
-use oxc_parser::Parser;
 use oxc_semantic::{AstNodes, NodeId, Scoping, SemanticBuilder};
-use oxc_span::{GetSpan, SourceType};
+use oxc_span::GetSpan;
 use oxc_syntax::{operator::UnaryOperator, symbol::SymbolId};
 
 mod cache;
@@ -128,10 +127,6 @@ struct CallBinding {
     imported_name: String,
     module: String,
     supported: bool,
-}
-
-fn source_type(filename: &str) -> Result<SourceType> {
-    Ok(evaluator::source_type_for(filename))
 }
 
 fn callee_symbol_and_members(
@@ -806,7 +801,7 @@ fn analyze_source<'sources>(
     capture_jsx: bool,
 ) -> Result<NativeAnalysis> {
     let allocator = Allocator::default();
-    let parsed = Parser::new(&allocator, source, source_type(filename)?).parse();
+    let parsed = evaluator::parse_source(&allocator, source, filename);
     let errors: Vec<_> = parsed.diagnostics.iter().map(ToString::to_string).collect();
     // Scope diagnostics — a name declared twice, say — are the type checker's business, not
     // extraction's. A Svelte component's module and instance scripts can both declare one type,
@@ -1074,7 +1069,7 @@ pub fn account_tokens(
     };
     Ok(token_accounting::account(
         &source,
-        source_type(&filename)?,
+        &filename,
         &is_entrypoint,
     ))
 }

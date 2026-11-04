@@ -17,7 +17,7 @@ use oxc_ast::{
         JSXExpression, LogicalExpression, ModuleExportName, ObjectPropertyKind, Statement,
     },
 };
-use oxc_parser::Parser;
+use oxc_parser::{Parser, ParserReturn};
 use oxc_semantic::{AstNodes, NodeId, Scoping, Semantic, SemanticBuilder};
 use oxc_span::{GetSpan, SourceType, Span};
 use oxc_syntax::{
@@ -652,7 +652,6 @@ impl ExportFrame {
 
 pub(crate) struct ProjectEvaluator<'a> {
     sources: HashMap<String, &'a str>,
-    source_types: HashMap<String, SourceType>,
     entrypoints: &'a [NativeEntrypoint],
     cwd: PathBuf,
     base_url: Option<PathBuf>,
@@ -688,10 +687,8 @@ impl<'a> ProjectEvaluator<'a> {
         options: Option<&NativeProjectOptions>,
     ) -> Self {
         let mut source_map = HashMap::new();
-        let mut source_types = HashMap::new();
         for (filename, source) in sources {
             let normalized = normalize_path(filename);
-            source_types.insert(normalized.clone(), source_type_for(filename));
             source_map.insert(normalized, source);
         }
         let cwd = options
@@ -732,7 +729,6 @@ impl<'a> ProjectEvaluator<'a> {
             call_count: Cell::new(0),
             abandoned: RefCell::new(None),
             sources: source_map,
-            source_types,
             entrypoints,
             cwd,
             base_url,
@@ -1307,13 +1303,8 @@ impl<'a> ProjectEvaluator<'a> {
         let Some(source) = self.source(filename) else {
             return EvalResult::unknown();
         };
-        let source_type = self
-            .source_types
-            .get(filename)
-            .copied()
-            .unwrap_or_else(|| source_type_for(filename));
         let allocator = Allocator::default();
-        let parsed = Parser::new(&allocator, source.as_str(), source_type).parse();
+        let parsed = parse_source(&allocator, source.as_str(), filename);
         if !parsed.diagnostics.is_empty() {
             return EvalResult::unknown();
         }
@@ -1557,13 +1548,8 @@ impl<'a> ProjectEvaluator<'a> {
         let Some(source) = self.source(filename) else {
             return EvalResult::unknown();
         };
-        let source_type = self
-            .source_types
-            .get(filename)
-            .copied()
-            .unwrap_or_else(|| source_type_for(filename));
         let allocator = Allocator::default();
-        let parsed = Parser::new(&allocator, source.as_str(), source_type).parse();
+        let parsed = parse_source(&allocator, source.as_str(), filename);
         if !parsed.diagnostics.is_empty() {
             return EvalResult::unknown();
         }
@@ -5797,6 +5783,32 @@ pub(crate) fn source_type_for(filename: &str) -> SourceType {
         Ok(source_type) if source_type.is_javascript() => source_type.with_jsx(true),
         Ok(source_type) => source_type,
         Err(_) => SourceType::tsx(),
+    }
+}
+
+/// `source` parsed as `filename` names it.
+///
+/// A file whose extension names no syntax, as a `.vue` or `.svelte` component arrives rewritten by
+/// its plugin, is read as TSX, which takes the JSX of a `lang="tsx"` script. The TypeScript of any
+/// other can hold what TSX cannot: `<T>(list: T[]) => list[0]` and `<boolean>value` read as JSX
+/// there, and the whole file failed to parse. So one that fails as TSX is read as TypeScript, and
+/// that kept only where it parses.
+pub(crate) fn parse_source<'a>(
+    allocator: &'a Allocator,
+    source: &'a str,
+    filename: &str,
+) -> ParserReturn<'a> {
+    let parsed = Parser::new(allocator, source, source_type_for(filename)).parse();
+    if (parsed.diagnostics.is_empty() && !parsed.panicked)
+        || SourceType::from_path(filename).is_ok()
+    {
+        return parsed;
+    }
+    let typescript = Parser::new(allocator, source, SourceType::ts()).parse();
+    if typescript.diagnostics.is_empty() && !typescript.panicked {
+        typescript
+    } else {
+        parsed
     }
 }
 

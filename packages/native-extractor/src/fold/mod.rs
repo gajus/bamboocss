@@ -17,7 +17,6 @@ use oxc_ast::{
         PropertyKind, Statement, StaticMemberExpression, TSModuleReference,
     },
 };
-use oxc_parser::Parser;
 use oxc_semantic::{Scoping, Semantic, SemanticBuilder};
 use oxc_span::{GetSpan, Span};
 use oxc_syntax::symbol::SymbolId;
@@ -688,8 +687,7 @@ pub(crate) fn analyze_module(
     capture_references: bool,
 ) -> FoldAnalysis {
     let allocator = Allocator::default();
-    let source_type = crate::evaluator::source_type_for(filename);
-    let parsed = Parser::new(&allocator, source, source_type).parse();
+    let parsed = crate::evaluator::parse_source(&allocator, source, filename);
     let errors: Vec<String> = parsed.diagnostics.iter().map(ToString::to_string).collect();
     if parsed.panicked {
         return empty_analysis(errors);
@@ -2027,8 +2025,7 @@ fn module_recipes_uncached(
     (|| {
         let text = project.module_text(filename)?;
         let allocator = Allocator::default();
-        let source_type = crate::evaluator::source_type_for(filename);
-        let parsed = Parser::new(&allocator, &text, source_type).parse();
+        let parsed = crate::evaluator::parse_source(&allocator, &text, filename);
         if parsed.panicked || !parsed.diagnostics.is_empty() {
             return None;
         }
@@ -2178,8 +2175,7 @@ fn exported_recipes(
     let recipes = module_recipes(project, filename, entrypoints, cache);
     let text = project.module_text(filename)?;
     let allocator = Allocator::default();
-    let source_type = crate::evaluator::source_type_for(filename);
-    let parsed = Parser::new(&allocator, &text, source_type).parse();
+    let parsed = crate::evaluator::parse_source(&allocator, &text, filename);
     if parsed.panicked {
         return None;
     }

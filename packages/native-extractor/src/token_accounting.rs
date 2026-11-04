@@ -19,7 +19,6 @@ use oxc_ast::{
     ast::{Argument, Expression, ImportDeclarationSpecifier, Statement, TSModuleReference},
 };
 use oxc_ast_visit::{Visit, walk};
-use oxc_parser::Parser;
 use oxc_semantic::{Scoping, Semantic, SemanticBuilder};
 use oxc_span::{GetSpan, Span};
 use oxc_syntax::symbol::SymbolId;
@@ -76,11 +75,11 @@ enum Binding {
 
 pub(crate) fn account(
     source: &str,
-    source_type: oxc_span::SourceType,
+    filename: &str,
     is_entrypoint: &dyn Fn(&str) -> bool,
 ) -> NativeTokenAccounting {
     let allocator = Allocator::default();
-    let parsed = Parser::new(&allocator, source, source_type).parse();
+    let parsed = crate::evaluator::parse_source(&allocator, source, filename);
     if !parsed.diagnostics.is_empty() || parsed.panicked {
         return NativeTokenAccounting {
             paths: Vec::new(),

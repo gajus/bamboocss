@@ -69,6 +69,34 @@ export default defineConfig({
 })
 ```
 
+### Nesting
+
+Inside a selector, a key is a nested selector, a condition or a property. A nested selector needs no `&`:
+
+```ts filename="bamboo.config.ts"
+export default defineConfig({
+  global: {
+    css: {
+      '.prose': {
+        color: 'gray.700',
+        // `.prose p`: a key holding styles is a selector, even one named like a property
+        p: { marginBottom: '4' },
+        // `.prose a:is(:hover, [data-hover])`
+        a: { _hover: { color: 'blue.600' } },
+        // a property holding conditions is that property
+        fontSize: { base: 'md', md: 'lg' },
+      },
+      // at the top, a breakpoint wraps the selectors inside it
+      md: { body: { fontSize: 'lg' } },
+    },
+  },
+})
+```
+
+A condition that applies to an element, such as `_dark` or `_hover`, goes inside the selector it applies to:
+`body: { _dark: { … } }`. At the top there is no element for it to apply to, so it is reported, as are a misspelled
+condition, a selector function written without `&:` (`has` for `'&:has(…)'`) and a declaration outside any selector.
+
 ### Theming patterns
 
 You can set variables on `:root`, a `.dark` class, or via media queries.

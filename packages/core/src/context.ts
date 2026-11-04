@@ -1,6 +1,6 @@
 import { isCssProperty } from '@bamboocss/is-valid-prop'
 import { logger } from '@bamboocss/logger'
-import { compact, createPatternFns, flatten, isBoolean, isString, memo } from '@bamboocss/shared'
+import { BambooError, compact, createPatternFns, flatten, isBoolean, isString, memo } from '@bamboocss/shared'
 import { TokenDictionary } from '@bamboocss/token-dictionary'
 import type {
   CascadeLayers,
@@ -29,7 +29,7 @@ import { Mixins } from './mixins'
 import { PathEngine } from './path'
 import { Patterns } from './patterns'
 import { Recipes } from './recipes'
-import { transformStyles } from './serialize'
+import { findGlobalCssMistakes, transformStyles } from './serialize'
 import { StaticCss } from './static-css'
 import { StyleDecoder } from './style-decoder'
 import { StyleEncoder } from './style-encoder'
@@ -153,6 +153,9 @@ export class Context {
     this.registerAnimationName(theme)
     this.registerFontFamily(config.global?.fontface)
     this.registerPositionTryFallbacks(config.global?.positionTry)
+
+    // Relies on this.conditions, and this.isValidProperty once the compositions are among them
+    this.checkGlobalCss(config)
 
     this.recipes.save(this.baseSheetContext)
 
@@ -370,6 +373,27 @@ export class Context {
   setupProperties = (): void => {
     this.properties = new Set(['css', ...this.utility.keys(), ...this.conditions.keys()])
     this.isValidProperty = memo((key: string) => this.properties.has(key) || isCssProperty(key))
+  }
+
+  /**
+   * Report what in `global.css` cannot mean what it says, the way the config's own validation
+   * reports: a warning, a failure under `validation: 'error'`, and nothing under `'off'`.
+   *
+   * Here rather than beside the rest of that validation because telling a selector from a
+   * condition or a property takes the conditions and utilities this context builds. Once per
+   * context, because the styles are the config's, and every sheet serializes the same ones.
+   * @see findGlobalCssMistakes
+   */
+  private checkGlobalCss = (config: UserConfig): void => {
+    const css = config.global?.css
+    if (!css || config.validation === 'off') return
+
+    const mistakes = findGlobalCssMistakes(this, css)
+    if (!mistakes.length) return
+
+    const errors = `⚠️ Invalid config:\n${mistakes.map((mistake) => `- [global.css] ${mistake}`).join('\n')}\n`
+    if (config.validation === 'error') throw new BambooError('CONFIG_ERROR', errors)
+    logger.warn('config', errors)
   }
 
   get baseSheetContext() {

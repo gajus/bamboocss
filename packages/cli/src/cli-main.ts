@@ -267,7 +267,7 @@ export async function main() {
 
   cli
     .command(
-      'cssgen [globOrType]',
+      'cssgen [...globsOrType]',
       'Generate the css from files, or generate the css from the specified type which can be: preflight, tokens, static, global, keyframes',
     )
     .option('--silent', "Don't print any logs")
@@ -281,7 +281,7 @@ export async function main() {
     .option('--cwd <cwd>', 'Current working directory', { default: cwd })
     .option('--cpu-prof', 'Generates a `.cpuprofile` to help debug performance issues')
     .option('--logfile <file>', 'Outputs logs to a file')
-    .action(async (maybeGlob?: string, flags: CssGenCommandFlags = {}) => {
+    .action(async (globsOrType: string[], flags: CssGenCommandFlags = {}) => {
       const { silent, config: configPath, outfile, watch, poll, splitting, ...rest } = flags
 
       const cwd = resolve(flags.cwd ?? '')
@@ -293,10 +293,18 @@ export async function main() {
       }
 
       const cssArtifact = ['preflight', 'tokens', 'static', 'global', 'keyframes'].find(
-        (type) => type === maybeGlob,
+        (type) => type === globsOrType[0],
       ) as CssArtifactType | undefined
+      if (cssArtifact && globsOrType.length > 1) {
+        throw new BambooError(
+          'INVALID_ARGUMENT',
+          `\`cssgen ${cssArtifact}\` writes that part of the css alone, and takes no globs: ${globsOrType.slice(1).join(', ')}.`,
+        )
+      }
 
-      const glob = cssArtifact ? undefined : maybeGlob
+      // Every word, as the main command takes them: one glob read the first file of a list the shell
+      // expanded, or of several written out, and dropped the rest without a word.
+      const globs = cssArtifact ? [] : globsOrType
 
       if (silent) {
         logger.level = 'silent'
@@ -304,7 +312,7 @@ export async function main() {
 
       const overrideConfig = {
         ...rest,
-        ...(glob ? { include: [glob] } : undefined),
+        ...(globs.length ? { include: globs } : undefined),
       }
 
       let ctx = await loadConfigAndCreateContext({
@@ -392,7 +400,9 @@ export async function main() {
         logger.level = 'silent'
       }
 
-      const config = compact({ include: files.length ? files : undefined, ...rest, cwd })
+      // One `-e` is a string, several an array: `cac` makes a list only of a flag given twice.
+      const exclude = rest.exclude == null ? undefined : [rest.exclude].flat().map(String)
+      const config = compact({ include: files.length ? files : undefined, ...rest, exclude, cwd })
       await generate(silenced(config, silent), configPath, { requireFiles: files.length > 0 })
 
       stopProfiling()
@@ -426,14 +436,14 @@ export async function main() {
     })
 
   cli
-    .command('analyze [glob]', 'Analyze design token usage in glob')
+    .command('analyze [...globs]', 'Analyze design token usage in globs')
     .option('--outfile [filepath]', 'Output analyze report in JSON')
     .option('--silent', "Don't print any logs")
     .option('--scope <type>', 'Select analysis scope: token or recipe, and with --unused pattern or keyframe')
     .option('--unused', 'List only the configured names no source uses, one per line')
     .option('-c, --config <path>', 'Path to bamboo config file')
     .option('--cwd <cwd>', 'Current working directory', { default: cwd })
-    .action(async (maybeGlob?: string, flags: AnalyzeCommandFlags = {}) => {
+    .action(async (globs: string[], flags: AnalyzeCommandFlags = {}) => {
       const { silent, config: configPath } = flags
       const scope = flags.scope?.replace(/s$/, '')
       if (scope != null && !['token', 'recipe', 'pattern', 'keyframe'].includes(scope)) {
@@ -460,7 +470,7 @@ export async function main() {
 
       const ctx = await loadConfigAndCreateContext({
         cwd,
-        config: silenced(compact({ include: maybeGlob ? [maybeGlob] : undefined }), silent),
+        config: silenced(compact({ include: globs.length ? globs : undefined }), silent),
         configPath,
       })
 
@@ -528,7 +538,7 @@ export async function main() {
     })
 
   cli
-    .command('debug [glob]', 'Debug design token extraction & css generated from files in glob')
+    .command('debug [...globs]', 'Debug design token extraction & css generated from files in globs')
     .option('--silent', "Don't print any logs")
     .option('--dry', 'Output debug files in stdout without writing to disk')
     .option('--outdir [dir]', "Output directory for debug files, default to './styled-system/debug'")
@@ -538,7 +548,7 @@ export async function main() {
     .option('--cwd <cwd>', 'Current working directory', { default: cwd })
     .option('--cpu-prof', 'Generates a `.cpuprofile` to help debug performance issues')
     .option('--logfile <file>', 'Outputs logs to a file')
-    .action(async (maybeGlob?: string, flags: DebugCommandFlags = {}) => {
+    .action(async (globs: string[], flags: DebugCommandFlags = {}) => {
       const { silent, dry = false, outdir: outdirFlag, config: configPath } = flags ?? {}
       if (dry && flags.zip) throw new BambooError('INVALID_FLAG', '--zip writes an archive, and --dry writes nothing.')
 
@@ -556,7 +566,7 @@ export async function main() {
 
       const ctx = await loadConfigAndCreateContext({
         cwd,
-        config: silenced(maybeGlob ? { include: [maybeGlob] } : undefined, silent),
+        config: silenced(globs.length ? { include: globs } : undefined, silent),
         configPath,
       })
 
@@ -570,7 +580,7 @@ export async function main() {
     })
 
   cli
-    .command('ship [glob]', 'Ship extract result from files in glob')
+    .command('ship [...globs]', 'Ship extract result from files in globs')
     .option('--silent', "Don't print any logs")
     .option(
       '--o, --outfile [file]',
@@ -581,7 +591,7 @@ export async function main() {
     .option('--cwd <cwd>', 'Current working directory', { default: cwd })
     .option('-w, --watch', 'Watch files and rebuild')
     .option('-p, --poll', 'Use polling instead of filesystem events when watching')
-    .action(async (maybeGlob?: string, flags: ShipCommandFlags = {}) => {
+    .action(async (globs: string[], flags: ShipCommandFlags = {}) => {
       const { silent, outfile: outfileFlag, minify, config: configPath, watch, poll } = flags
 
       const cwd = resolve(flags.cwd!)
@@ -593,7 +603,7 @@ export async function main() {
       // Laid over the config, rather than set on the context, so a config read again keeps it.
       let ctx = await loadConfigAndCreateContext({
         cwd,
-        config: silenced(compact({ include: maybeGlob ? [maybeGlob] : undefined, minify }), silent),
+        config: silenced(compact({ include: globs.length ? globs : undefined, minify }), silent),
         configPath,
       })
 

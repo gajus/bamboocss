@@ -85,7 +85,8 @@ export interface MainCommandFlags extends Pick<Config, 'cwd' | 'poll' | 'watch'>
   cwd: string
   preflight?: boolean
   silent?: boolean
-  exclude?: string[]
+  /** A string for one `-e`, a list for several: `cac` makes a list only of a flag given twice. */
+  exclude?: string | string[]
   hash?: boolean
   emitTokensOnly?: boolean
   cpuProf?: boolean

@@ -105,15 +105,17 @@ bamboo cssgen
 # Generate CSS for specific type
 bamboo cssgen tokens
 
-# Generate CSS for specific glob
+# Generate CSS for specific globs
 bamboo cssgen "src/**/*.css"
+bamboo cssgen "src/**/*.tsx" "app/**/*.tsx"
 
 # Generate CSS files split into separate files per layer
 bamboo cssgen --splitting
 ```
 
 When using the `cssgen` command, you can pass a `{type}` argument to generate only a specific type of CSS. The supported
-types are: `preflight`, `tokens`, `static`, `global`, `keyframes`.
+types are: `preflight`, `tokens`, `static`, `global`, `keyframes`. A type takes no globs beside it. Every other argument
+is a glob, as for `analyze`, `debug` and `ship`, so a list the shell expanded is read whole.
 
 ### CSS Splitting
 
@@ -194,8 +196,8 @@ pnpm bamboo analyze
 # analyze a specific file
 pnpm bamboo analyze src/components/Button.tsx
 
-# analyze a specific glob
-pnpm bamboo analyze "src/components/**"
+# analyze specific globs
+pnpm bamboo analyze "src/components/**" "src/pages/**"
 
 # analyze only token usage
 pnpm bamboo analyze --scope token
@@ -227,7 +229,7 @@ beside the report, under `unused`.
 
 ## debug
 
-Debug design token extraction & CSS generated from files in glob.
+Debug design token extraction & CSS generated from files in globs.
 
 More details in [Debugging](/docs/guides/debugging) docs.
 
@@ -274,14 +276,14 @@ pnpm bamboo doctor --json
 
 ## ship
 
-Ship extract result from files in glob.
+Ship extract result from files in globs.
 
 By default it will extract from the entire project depending on your include and exclude options from your config file.
 
 ```bash
 pnpm bamboo ship
-# You can also analyze a specific file or folder
-# using the optional glob argument
+# You can also ship specific files or folders
+# using the optional glob arguments
 pnpm bamboo ship src/components/Button.tsx
 pnpm bamboo ship "./src/components/**"
 ```

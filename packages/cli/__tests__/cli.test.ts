@@ -163,6 +163,76 @@ describe('CLI', () => {
     }
   })
 
+  /**
+   * Every word a command is given is a glob, as the main command reads them. The shell expands
+   * `src/*.tsx` into a word per file, and `cssgen`, `analyze`, `debug` and `ship` each took one,
+   * built from the first and dropped the rest without a word. And one `-e` is one exclusion: `cac`
+   * hands a flag given once over as a string, and a string excluded nothing.
+   */
+  describe('globs on the command line', () => {
+    const cwd = mkdtempSync(path.join(tmpdir(), 'bamboo-cli-globs-'))
+    const run = (args: string) => runCommand(`node ${binPath} ${args} --cwd="${cwd}"`, { cwd })
+    const colors = (css: string) => [...new Set(css.match(/color: ?(red|blue)/g))].map((m) => m.replace(' ', '')).sort()
+
+    beforeAll(() => {
+      writeFileSync(
+        path.join(cwd, 'bamboo.config.ts'),
+        `export default { preflight: false, include: ['src/**/*.tsx'], outdir: 'styled-system' }\n`,
+      )
+      mkdirSync(path.join(cwd, 'src'))
+      writeFileSync(
+        path.join(cwd, 'src/a.tsx'),
+        `import { css } from '../styled-system/css'\nexport const a = css({ color: 'red' })\n`,
+      )
+      writeFileSync(
+        path.join(cwd, 'src/b.tsx'),
+        `import { css } from '../styled-system/css'\nexport const b = css({ color: 'blue' })\n`,
+      )
+      run('codegen --silent')
+    }, 120_000)
+
+    afterAll(async () => {
+      await fs.rm(cwd, { force: true, recursive: true })
+    })
+
+    test('cssgen builds from each', async () => {
+      run('cssgen src/a.tsx src/b.tsx -o out.css --silent')
+      expect(colors(await fs.readFile(path.join(cwd, 'out.css'), 'utf8'))).toEqual(['color:blue', 'color:red'])
+    })
+
+    test('cssgen takes none beside a type', () => {
+      expect(run('cssgen tokens src/a.tsx')).toContain(
+        '`cssgen tokens` writes that part of the css alone, and takes no globs',
+      )
+    })
+
+    test('analyze, debug and ship read each', async () => {
+      expect(run('analyze src/a.tsx src/b.tsx')).toContain('Analyzing 2 file(s)')
+
+      const debug = run('debug src/a.tsx src/b.tsx --dry')
+      expect(debug).toContain(path.join(cwd, 'src/a.tsx').replaceAll('\\', '/'))
+      expect(debug).toContain(path.join(cwd, 'src/b.tsx').replaceAll('\\', '/'))
+
+      run('ship src/a.tsx src/b.tsx --outfile build.json --silent')
+      const shipped = await fs.readFile(path.join(cwd, 'build.json'), 'utf8')
+      expect(shipped).toContain('red')
+      expect(shipped).toContain('blue')
+    }, 120_000)
+
+    test('the main command leaves out what one -e names, and nothing without one', async () => {
+      run('src/a.tsx src/b.tsx -e src/a.tsx --silent')
+      expect(colors(await fs.readFile(path.join(cwd, 'styled-system/styles.css'), 'utf8'))).toEqual(['color:blue'])
+
+      // `cac` lists a flag on every parse once one is declared a list, as `[undefined]`: no `-e`
+      // must exclude nothing, whatever else is passed.
+      run('src/a.tsx src/b.tsx --minify --silent')
+      expect(colors(await fs.readFile(path.join(cwd, 'styled-system/styles.css'), 'utf8'))).toEqual([
+        'color:blue',
+        'color:red',
+      ])
+    }, 120_000)
+  })
+
   test('cssgen', async () => {
     const cmd = `node ${binPath} cssgen --cwd="${testsCwd}"`
 

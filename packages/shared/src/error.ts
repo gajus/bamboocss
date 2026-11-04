@@ -26,6 +26,7 @@ export type BambooErrorCode =
   | 'INVALID_DECLARATION'
   | 'UNKNOWN_COMMAND'
   | 'INVALID_FLAG'
+  | 'INVALID_ARGUMENT'
 
 export class BambooError extends Error {
   readonly code: string

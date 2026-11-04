@@ -51,6 +51,9 @@ const globApart = (
  * link back into a folder it was reading took it round again, lap after lap, until the system would
  * resolve no longer a chain of links: each file returned some thirty times. Two such links on the
  * way doubled the laps each time round, and the build hung at the glob, with nothing to say why.
+ *
+ * Each real folder is entered once now, so a link to one the walk reads already is read as empty,
+ * as a loop's is: the folder is found where the walk reached it otherwise.
  */
 describe('the source glob, round a loop', () => {
   const cycle = files(join(root, 'cycle'), ['src/a/app.tsx', 'x.css'])
@@ -86,23 +89,19 @@ describe('the source glob, round a loop', () => {
     }))
   }, 60_000)
 
-  test('ends at a link back into a folder it is reading, with every path short of the loop', () => {
-    expect(results.cycle).toEqual([path(cycle, 'src/a/app.tsx'), path(cycle, 'src/alias/app.tsx')])
+  // `src/alias` leads to `src/a`, read already: one folder, found by its own path.
+  test('ends at a link back into a folder it is reading, and at one to a folder it read', () => {
+    expect(results.cycle).toEqual([path(cycle, 'src/a/app.tsx')])
   })
 
   // Where a path it returns may really be elsewhere: where the walk began, and each link it went
-  // through — not one it read as empty, which is really a folder above it.
-  test('reports where it began and each link it went through', () => {
-    expect(reported.cycle!.sort()).toEqual([path(cycle, 'src'), path(cycle, 'src/alias')])
+  // through — not one it read as empty, which leads to a folder found by another path.
+  test('reports where it began and no link it read as empty', () => {
+    expect(reported.cycle!.sort()).toEqual([path(cycle, 'src')])
   })
 
   test('ends at two links into one another', () => {
-    expect(results.mutual).toEqual([
-      path(mutual, 'src/a/a.tsx'),
-      path(mutual, 'src/a/to-b/b.tsx'),
-      path(mutual, 'src/b/b.tsx'),
-      path(mutual, 'src/b/to-a/a.tsx'),
-    ])
+    expect(results.mutual).toEqual([path(mutual, 'src/a/a.tsx'), path(mutual, 'src/b/b.tsx')])
   })
 
   // Closed where a real one's is, not a lap later.
@@ -110,9 +109,10 @@ describe('the source glob, round a loop', () => {
     expect(results.linked).toEqual([path(linked, 'src/a/app.tsx')])
   })
 
-  // Above where the walk began, so the loop closes a lap later, on the link's second showing.
+  // Above where the walk began, so the walk goes through the link, and finds there only the folder it
+  // began at, read already.
   test('ends at a link to a folder above the one it began at', () => {
-    expect(results.above).toEqual([path(above, 'src/app.tsx'), path(above, 'src/up/src/app.tsx')])
+    expect(results.above).toEqual([path(above, 'src/app.tsx')])
   })
 
   // Through the link that closes the loop, which is not followed: a pattern only a path round it
@@ -123,7 +123,7 @@ describe('the source glob, round a loop', () => {
 
   // Begun inside the loop, a walk goes round it once from there.
   test('goes round once from a walk begun inside the loop', () => {
-    expect(results.fromLoop).toEqual([path(cycle, 'src/a/loop/a/app.tsx'), path(cycle, 'src/a/loop/alias/app.tsx')])
+    expect(results.fromLoop).toEqual([path(cycle, 'src/a/loop/a/app.tsx')])
   })
 
   // Each pattern is walked from its own folder: one that reads the folder another begins at, and
@@ -131,18 +131,18 @@ describe('the source glob, round a loop', () => {
   // `fast-glob` begin a single walk for both at `.`.
   test('matches for each pattern what it matches alone', () => {
     expect(results.beside).toEqual([...new Set([...results.shallow!, ...results.fromLoop!])].sort())
-    expect(results.beside).toHaveLength(4)
+    expect(results.beside).toHaveLength(2)
     expect(results.merged).toEqual([...results.fromLoop!, path(cycle, 'x.css')])
   })
 })
 
 /**
- * No loop, so every path is the one `fast-glob` gives: a folder only a link reaches, two links to
- * one folder, a link to nothing, and a link inside a linked folder to a sibling whose name begins
- * with that folder's — no loop, though a check by prefix would take it for one and lose what is in
- * it.
+ * No loop, so every path is one `fast-glob` gives: a folder only a link reaches, a link to nothing,
+ * and a link inside a linked folder to a sibling whose name begins with that folder's — no loop,
+ * though a check by prefix would take it for one and lose what is in it. Of two links to one folder,
+ * the first: the folder is entered once.
  */
-test('the source glob returns what fast-glob does wherever no link loops', () => {
+test('the source glob returns what fast-glob does, a folder two links reach by the first', () => {
   const cwd = files(join(root, 'acyclic'), ['src/app.tsx'])
   files(root, ['packages/ui/button.tsx', 'packages/ui-theme/theme.tsx'])
   symlinkSync(join(root, 'packages/ui'), join(cwd, 'src/ui'), link)
@@ -150,11 +150,64 @@ test('the source glob returns what fast-glob does wherever no link loops', () =>
   symlinkSync(join(root, 'packages/ui-theme'), join(root, 'packages/ui/theme'), link)
   symlinkSync(join(cwd, 'src/missing'), join(cwd, 'src/gone'), link)
   const include = ['src/**/*.tsx']
+  const linked: string[] = []
 
-  const result = nodeRuntime.fs.glob({ cwd, include })
+  const result = nodeRuntime.fs.glob({ cwd, include, linked })
 
-  expect(result).toEqual(glob.sync(include, { absolute: true, cwd, ignore: globIgnore(undefined) }).sort())
+  const fastGlob = glob.sync(include, { absolute: true, cwd, ignore: globIgnore(undefined) }).sort()
+  expect(result).toEqual(fastGlob.filter((file) => !file.includes('/src/ui-again/')))
   expect(result).toContain(path(cwd, 'src/ui/theme/theme.tsx'))
+  expect(linked.sort()).toEqual([path(cwd, 'src'), path(cwd, 'src/ui'), path(cwd, 'src/ui/theme')])
+})
+
+/**
+ * A pnpm workspace, each package's `node_modules` linking its siblings. Through `../**` the walk
+ * went down every sequence of links — 109,600 paths to these 8 files, and a minute — and returned a
+ * package's files under each. Each real folder is entered once, and first by its own path.
+ */
+test('the source glob enters each package of a workspace once, whatever links them', () => {
+  const workspace = join(root, 'workspace')
+  const names = Array.from({ length: 8 }, (_, index) => `p${index}`)
+  for (const name of names) {
+    files(workspace, [`packages/${name}/src/index.ts`])
+    mkdirSync(join(workspace, 'packages', name, 'node_modules/@ws'), { recursive: true })
+    for (const other of names) {
+      if (other !== name) {
+        symlinkSync(
+          join(workspace, 'packages', other),
+          join(workspace, 'packages', name, 'node_modules/@ws', other),
+          link,
+        )
+      }
+    }
+  }
+  const cwd = join(workspace, 'packages/p0')
+
+  const { files: found, linked } = globApart({ workspace: { cwd, include: ['../**/src/*.ts'] } })
+
+  expect(found.workspace).toEqual(names.map((name) => path(workspace, 'packages', name, 'src/index.ts')))
+  expect(linked.workspace).toEqual([path(workspace, 'packages')])
+}, 60_000)
+
+// Entered means entered: a folder the walk passes over, as `exclude` has it, is still reached
+// through a link that `include` names.
+test('the source glob follows a link into a folder it passes over', () => {
+  const cwd = files(join(root, 'passed-over'), ['src/app.tsx', 'src/vendor/lib/lib.tsx'])
+  symlinkSync(join(cwd, 'src/vendor/lib'), join(cwd, 'src/shared'), link)
+
+  expect(nodeRuntime.fs.glob({ cwd, include: ['src/**/*.tsx'], exclude: ['src/vendor/**'] })).toEqual([
+    path(cwd, 'src/app.tsx'),
+    path(cwd, 'src/shared/lib.tsx'),
+  ])
+})
+
+// Plain folders first, so a file the walk reaches directly is found where it really is, though a
+// link to its folder comes earlier and nearer the top.
+test('the source glob finds a folder by its own path before a link to it', () => {
+  const cwd = files(join(root, 'own-path'), ['src/zone/deep/card.tsx'])
+  symlinkSync(join(cwd, 'src/zone/deep'), join(cwd, 'src/alias'), link)
+
+  expect(nodeRuntime.fs.glob({ cwd, include: ['src/**/*.tsx'] })).toEqual([path(cwd, 'src/zone/deep/card.tsx')])
 })
 
 // Where a returned path may really be elsewhere, as a bundler names it: a link to a file as much as

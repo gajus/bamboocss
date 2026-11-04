@@ -9,12 +9,13 @@ import { globIgnore, nodeRuntime } from '../src/node-runtime'
  * The source glob, which every inventory scan runs: once per build, and in dev for each file added
  * or removed.
  *
- * Its walk is watched for a link back into a folder it is reading, which is where it ends. Every
- * folder read passes through that watch, which is the cost with no link in the tree; a link adds
- * the folders above it, stat'd once each. Patterns `fast-glob` would walk once from `.` are walked
- * each from its own folder, so the last pair measures that. `fast-glob` alone is the control — the
- * same walk, unwatched, which is also what the glob was before — so a reading that moves it moved
- * the machine.
+ * Its walk enters each real folder once: the plain folders first, then each link it set aside,
+ * read as empty where its folder was entered already and walked otherwise, through the folders
+ * above it. Every folder read passes through that bookkeeping, which is the cost with no link in
+ * the tree; a link adds its real path, resolved once, and the folders above it read again where it
+ * leads somewhere new. Patterns `fast-glob` would walk once from `.` are walked each from its own
+ * folder, so the last pair measures that. `fast-glob` alone is the control — the same walk,
+ * following every link — so a reading that moves it moved the machine.
  */
 const root = realpathSync(mkdtempSync(join(tmpdir(), 'bamboo-glob-bench-')))
 afterAll(() => rmSync(root, { force: true, recursive: true }))

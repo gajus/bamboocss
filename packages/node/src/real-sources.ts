@@ -6,8 +6,9 @@ const slashed = (path: string) => path.replaceAll('\\', '/')
  * The files, each real one once: under the first of the paths the glob reached it by.
  *
  * Two links in `include` to one folder — `src/shared` and `vendor/shared`, a package linked twice —
- * and the inventory holds each of its files under both, as it holds any file two paths reach,
- * which is how the watcher and a bundler naming a module have to find it. Extracted, each was
+ * and the inventory holds each of its files under both, as two patterns walked apart each find it,
+ * which is how the watcher and a bundler naming a module have to find it. One walk enters a folder
+ * once, so a single pattern finds it by one path. Extracted, each was
  * read twice for the same styles. The first of them in the inventory's order is the one kept: an
  * atom sits at the rank of the earliest file that wrote it, which is that one, so the stylesheet's
  * order is as it was.

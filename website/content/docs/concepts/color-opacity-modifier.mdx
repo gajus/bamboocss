@@ -39,6 +39,20 @@ This will generate:
   browser.
 - You can use any of the color tokens, and any of the opacity tokens.
 
+Inside a value, such as a shadow or a token's own value, write the color in `token()`: `token(colors.red.300/40)`. A
+color written out works the same way, and stands for itself without an opacity:
+
+```ts
+semanticTokens: {
+  shadows: {
+    // 0 0 0 1px color-mix(in srgb, #000 64%, transparent)
+    ring: { value: '0 0 0 1px token(#000/64)' },
+    // 0 0 0 1px color-mix(in srgb, rgb(0 0 0) 64%, transparent)
+    soft: { value: '0 0 0 1px token(rgb(0 0 0)/64)' },
+  },
+}
+```
+
 ---
 
 The `utilities` transform function also receives a `utils` object that contains the `colorMix` function, so you can also

@@ -6,7 +6,15 @@ import type { TokenTransformer } from './dictionary'
 import { isCompositeBorder, isCompositeGradient, isCompositeShadow } from './is-composite'
 import { svgToDataUri } from './mini-svg-uri'
 import type { Token } from './token'
-import { expandReferences, getReferences, hasReference, referenceOf, replaceReference } from './utils'
+import {
+  expandReferences,
+  getReferences,
+  hasReference,
+  isLiteralColor,
+  opacitySlash,
+  referenceOf,
+  replaceReference,
+} from './utils'
 
 function toUnit(v: string | number) {
   return isCssUnit(v) || hasReference(v.toString()) ? v : `${v}px`
@@ -187,7 +195,7 @@ const transformColorMix: TokenTransformer = {
     return expandReferences(token.value, (path) => {
       // The slash that matched can sit anywhere in the value — `rgb(from token(colors.red) r g b / 50%)` —
       // and only a reference carrying one is a mix. The rest are resolved later.
-      if (!path.includes('/')) return referenceOf(path)
+      if (opacitySlash(path) === -1) return referenceOf(path)
 
       const tokenFn = (tokenPath: string) => {
         const token = dict.getByName(tokenPath)
@@ -236,11 +244,13 @@ export const addConditionalCssVariables: TokenTransformer = {
     const refs = getReferences(token.value)
     if (!refs.length) return token.value
 
-    const modifier = refs.some((ref) => ref.includes('/'))
+    const modifier = refs.some((ref) => opacitySlash(ref) !== -1)
 
+    // A colour written out stands for itself, as `expandReferenceInValue` has it: `token(#000)`
+    // was `var(--\#000)`, a variable nothing declares.
     if (!modifier) {
       refs.forEach((ref) => {
-        const variable = dictionary.formatCssVar(ref.split('.'), { prefix, hash }).ref
+        const variable = isLiteralColor(ref) ? ref : dictionary.formatCssVar(ref.split('.'), { prefix, hash }).ref
         token.value = replaceReference(token.value, ref, variable)
       })
     } else {
@@ -251,7 +261,9 @@ export const addConditionalCssVariables: TokenTransformer = {
 
       token.value = expandReferences(token.value, (path) => {
         // One reference with a modifier sends the whole value here, and the others are plain.
-        if (!path.includes('/')) return dictionary.formatCssVar(path.split('.'), { prefix, hash }).ref
+        if (opacitySlash(path) === -1) {
+          return isLiteralColor(path) ? path : dictionary.formatCssVar(path.split('.'), { prefix, hash }).ref
+        }
 
         const mix = dictionary.colorMix(path, tokenFn)
         if (mix.invalid) {

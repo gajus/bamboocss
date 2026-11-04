@@ -854,4 +854,30 @@ describe('strictValues', () => {
     expect(() => validate('unknown')).toThrow(/is not a setting/)
     expect(() => validate('yes')).toThrow(/is not a setting/)
   })
+
+  // `token(#000/64)` resolves to `color-mix(in srgb, #000 64%, transparent)`, and was reported as a
+  // missing token `#000`, which fails a config under `validation: 'error'`. A colour written out is
+  // no reference; one to a token that is not there still is.
+  test('takes a colour written out inside token() for no token', () => {
+    const config: Partial<UserConfig> = {
+      theme: {
+        tokens: { colors: { pink: { value: '#ff00ff' } } },
+        semanticTokens: {
+          shadows: {
+            hex: { value: '0 0 0 1px token(#000/64)' },
+            functional: { value: '0 0 0 1px token(rgb(0 0 0)/64)' },
+            withAlpha: { value: '0 0 0 1px token(rgb(0 0 0 / 50%)/64)' },
+            mixed: { value: '0 0 0 1px token(colors.pink/30)' },
+            missing: { value: '0 0 0 1px token(colors.nope/30)' },
+          },
+        },
+      },
+    }
+
+    expect(() => validateConfig({ ...config, validation: 'error' })).toThrowErrorMatchingInlineSnapshot(`
+      [Error: ⚠️ Invalid config:
+      - [tokens] Missing token: \`colors.nope\` used in \`theme.semanticTokens.shadows.missing\`
+      ]
+    `)
+  })
 })

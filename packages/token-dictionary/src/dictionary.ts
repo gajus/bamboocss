@@ -32,9 +32,11 @@ import {
   findCurlyReference,
   findFallbackReference,
   getReferences,
+  isLiteralColor,
   isToken,
   mapToJson,
   opacityPercent,
+  opacitySlash,
   referenceOf,
 } from './utils'
 import { expandTokenReferences, tokenReferencePaths } from './expand-token-references'
@@ -451,7 +453,9 @@ export class TokenDictionary {
   colorMix = (value: string, tokenFn: (path: string) => string) => {
     if (!value || typeof value !== 'string') return { invalid: true, value }
 
-    const [colorPath, rawOpacity] = value.split('/')
+    const slash = opacitySlash(value)
+    const colorPath = slash === -1 ? value : value.slice(0, slash)
+    const rawOpacity = slash === -1 ? '' : value.slice(slash + 1)
 
     if (!colorPath || !rawOpacity) {
       return { invalid: true, value: colorPath }
@@ -491,7 +495,7 @@ export class TokenDictionary {
     return expandTokenReferences(value, (path) => {
       if (!path) return
 
-      if (path.includes('/')) {
+      if (opacitySlash(path) !== -1) {
         const mix = this.colorMix(path, this.view.getVar.bind(this.view))
         if (mix.invalid) {
           throw new BambooError('INVALID_TOKEN', 'Invalid color mix at ' + path + ': ' + mix.value)
@@ -516,8 +520,10 @@ export class TokenDictionary {
    * `color-mix(in srgb, colors.nope 50%, transparent)`.
    */
   resolvesReference(path: string) {
-    const slash = path.indexOf('/')
-    return Boolean(this.view.getVar(slash === -1 ? path : path.slice(0, slash)))
+    const slash = opacitySlash(path)
+    const color = slash === -1 ? path : path.slice(0, slash)
+    // A colour written out stands for itself: `token(#000/64)` is `color-mix(in srgb, #000 64%, …)`.
+    return isLiteralColor(color) || Boolean(this.view.getVar(color))
   }
 
   /**
@@ -527,7 +533,7 @@ export class TokenDictionary {
    */
   isValidReference(path: string) {
     if (!this.resolvesReference(path)) return false
-    return !path.includes('/') || !this.colorMix(path, this.view.getVar.bind(this.view)).invalid
+    return opacitySlash(path) === -1 || !this.colorMix(path, this.view.getVar.bind(this.view)).invalid
   }
 
   /**

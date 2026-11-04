@@ -138,3 +138,49 @@ test('only the references carrying a modifier are mixed', () => {
     '0 0 0 1px var(--colors-bg), 0 0 0 3px color-mix(in srgb, var(--colors-red) 50%, transparent)',
   )
 })
+
+/**
+ * A colour written out inside `token()` stands for itself, and given an opacity is mixed as a
+ * token's colour is. `token(#000/64)` already was; `token(rgb(0 0 0)/64)` was left in the css as
+ * written, since its parentheses kept it from reading as a reference, and `token(#000)` in a token's
+ * value became `var(--\#000)`, a variable nothing declares.
+ */
+test('color-mix of a colour written out', () => {
+  const values = {
+    hex: '0 0 0 1px token(#000/64)',
+    hexAlone: '0 0 0 1px token(#000)',
+    functional: '0 0 0 1px token(rgb(0 0 0)/64)',
+    functionalAlone: '0 0 0 1px token(rgb(0 0 0))',
+    // The colour's own slash is inside its parentheses, and the opacity's outside them.
+    functionalWithAlpha: '0 0 0 1px token(rgb(0 0 0 / 50%)/64)',
+    beside: 'token(colors.pink/30) token(oklch(0.5 0.1 200)/50)',
+  }
+  const dictionary = new TokenDictionary({
+    tokens: { colors: { pink: { value: '#ff00ff' } } },
+    semanticTokens: {
+      shadows: Object.fromEntries(Object.entries(values).map(([name, value]) => [name, { value }])),
+    },
+  })
+  dictionary.init()
+
+  const resolved = Object.fromEntries(
+    Object.keys(values).map((name) => [name, dictionary.getByName(`shadows.${name}`)?.value]),
+  )
+  expect(resolved).toMatchInlineSnapshot(`
+    {
+      "beside": "color-mix(in srgb, var(--colors-pink) 30%, transparent) color-mix(in srgb, oklch(0.5 0.1 200) 50%, transparent)",
+      "functional": "0 0 0 1px color-mix(in srgb, rgb(0 0 0) 64%, transparent)",
+      "functionalAlone": "0 0 0 1px rgb(0 0 0)",
+      "functionalWithAlpha": "0 0 0 1px color-mix(in srgb, rgb(0 0 0 / 50%) 64%, transparent)",
+      "hex": "0 0 0 1px color-mix(in srgb, #000 64%, transparent)",
+      "hexAlone": "0 0 0 1px #000",
+    }
+  `)
+
+  // In a style value, as the build expands one, and none of them a token that is missing.
+  for (const value of Object.values(values)) {
+    expect(dictionary.expandReferenceInValue(value), value).not.toContain('token(')
+    expect(dictionary.unresolvedReferences(value), value).toEqual([])
+  }
+  expect(dictionary.unresolvedReferences('token(colors.nope/50)')).toEqual(['colors.nope/50'])
+})

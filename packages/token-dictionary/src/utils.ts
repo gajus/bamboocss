@@ -25,9 +25,31 @@ export const opacityPercent = (value: unknown) => `${Number((Number(value) * 100
  *
  * The comma exclusion keeps a fallback form — `token(spacing.4, 4)` — out of this pass
  * deliberately: only `expandTokenReferences` can resolve one, and matching it here would report a
- * reference where none is substitutable.
+ * reference where none is substitutable. One level of parentheses is let in, for a literal colour
+ * given an opacity: `token(rgb(0 0 0)/64)` was left in the css as written.
  */
-const REFERENCE_REGEX = /token\(([^(),]+)\)/g
+const REFERENCE_REGEX = /token\(((?:[^(),]|\([^()]*\))+)\)/g
+
+/**
+ * Where the opacity of a `token(colour/opacity)` path begins: its last `/` outside parentheses, or
+ * -1 for none. A slash inside them is the colour's own, `rgb(0 0 0 / 50%)`.
+ */
+export const opacitySlash = (path: string) => {
+  let depth = 0
+  for (let index = path.length - 1; index >= 0; index--) {
+    const character = path[index]
+    if (character === ')') depth++
+    else if (character === '(') depth--
+    else if (character === '/' && depth === 0) return index
+  }
+  return -1
+}
+
+/**
+ * Whether a `token()` path is a colour written out rather than a token: `#000`, `rgb(0 0 0)`. It
+ * stands for itself, and given an opacity is mixed like a token's colour, `token(#000/64)`.
+ */
+export const isLiteralColor = (path: string) => path.startsWith('#') || path.includes('(')
 
 /**
  * How a reference to `key` is spelled, for a caller building one rather than reading one.

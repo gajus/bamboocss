@@ -8,7 +8,14 @@ import { isObject, isString } from '@bamboocss/shared'
  * spelling only the dictionary understands is one this never checks — which is silence, not an
  * error, and exactly what a spelling change here is most likely to cause.
  */
-const REFERENCE_REGEX = /token\(([^(),]+)\)/g
+const REFERENCE_REGEX = /token\(((?:[^(),]|\([^()]*\))+)\)/g
+
+/**
+ * A colour written out rather than a token: `#000`, `rgb(0 0 0)`. As the dictionary's
+ * `isLiteralColor`, which this package does not depend on. `token(#000/64)` resolves to
+ * `color-mix(in srgb, #000 64%, transparent)`, and was reported as a missing token `#000`.
+ */
+const isLiteralColor = (path: string) => path.startsWith('#') || path.includes('(')
 
 export const isValidToken = (token: unknown) => isObject(token) && Object.hasOwnProperty.call(token, 'value')
 export const isTokenReference = (value: unknown) => typeof value === 'string' && getReferences(value).length > 0
@@ -36,10 +43,24 @@ export const findFallbackReference = (value: string) =>
 export const formatPath = (path: string) => path
 export const SEP = '.'
 
+/** A `token()` path without the opacity a colour can be given: its last `/` outside parentheses. */
+const opacityFree = (path: string) => {
+  let depth = 0
+  for (let index = path.length - 1; index >= 0; index--) {
+    const character = path[index]
+    if (character === ')') depth++
+    else if (character === '(') depth--
+    else if (character === '/' && depth === 0) return path.slice(0, index)
+  }
+  return path
+}
+
 export function getReferences(value: string) {
   if (typeof value !== 'string') return []
 
-  return [...value.matchAll(REFERENCE_REGEX)].map((match) => match[1]!.trim().split('/')[0]!).filter(Boolean)
+  return [...value.matchAll(REFERENCE_REGEX)]
+    .map((match) => opacityFree(match[1]!.trim()))
+    .filter((path) => path && !isLiteralColor(path))
 }
 
 export const serializeTokenValue = (value: any): string => {

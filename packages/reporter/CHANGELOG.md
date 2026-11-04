@@ -1,5 +1,17 @@
 # @bamboocss/reporter
 
+## 1.60.2
+
+### Patch Changes
+
+- Updated dependencies [6bc9293]
+- Updated dependencies [ee37e92]
+  - @bamboocss/generator@1.60.2
+  - @bamboocss/shared@1.60.2
+  - @bamboocss/core@1.60.2
+  - @bamboocss/logger@1.60.2
+  - @bamboocss/types@1.60.2
+
 ## 1.60.1
 
 ### Patch Changes

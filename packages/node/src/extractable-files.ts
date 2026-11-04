@@ -47,6 +47,7 @@ const EXTENSIONS = ['.ts', '.tsx', '.d.ts', '.mts', '.cts', '.js', '.jsx', '.mjs
 /** What a `.js`-family specifier may actually name, source first. */
 const EMITTED: ReadonlyArray<readonly [string, readonly string[]]> = [
   ['.js', ['.ts', '.tsx', '.d.ts', '.js', '.jsx']],
+  ['.jsx', ['.tsx', '.ts', '.d.ts', '.jsx', '.js']],
   ['.mjs', ['.mts', '.d.mts', '.mjs']],
   ['.cjs', ['.cts', '.d.cts', '.cjs']],
 ]

@@ -5867,6 +5867,8 @@ fn path_candidates(base: &Path) -> Vec<PathBuf> {
     let text = base.to_string_lossy();
     let emitted = [
         (".js", &[".ts", ".tsx", ".js", ".jsx", ".d.ts"][..]),
+        // As TypeScript reads one: `./card.jsx` names `card.tsx` first.
+        (".jsx", &[".tsx", ".ts", ".jsx", ".js", ".d.ts"][..]),
         (".mjs", &[".mts", ".mjs", ".d.mts"][..]),
         (".cjs", &[".cts", ".cjs", ".d.cts"][..]),
     ];
@@ -5880,7 +5882,10 @@ fn path_candidates(base: &Path) -> Vec<PathBuf> {
                 replacement
             )));
         }
-    } else if base.extension().is_none() {
+    } else if !has_module_extension(base) {
+        // Spelled without its extension, or with a dot that is no module's extension:
+        // `./card.styles` names `card.styles.ts`, as TypeScript and Vite read it, and was looked
+        // for as written alone, so every value imported from it was unknown.
         for extension in EXTENSIONS {
             output.push(PathBuf::from(format!("{text}.{extension}")));
         }
@@ -5891,6 +5896,14 @@ fn path_candidates(base: &Path) -> Vec<PathBuf> {
         output.push(base.join("index.d.ts"));
     }
     output
+}
+
+/// Whether a specifier names its file in full, extension and all: `./theme.ts`, `./data.json`.
+/// The `.js` family is told apart before this, as a spelling of the source it was emitted from.
+fn has_module_extension(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| matches!(extension, "ts" | "tsx" | "mts" | "cts" | "json"))
 }
 
 fn is_javascript_whitespace(character: char) -> bool {

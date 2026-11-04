@@ -381,6 +381,45 @@ describe('native extraction analysis', () => {
     expect(analysis.pendingCandidates).toContain('/project/missing.js')
   })
 
+  // A dot in a name is not an extension: `./card.styles` is `card.styles.ts`, read as written
+  // alone before, so the import was unknown and the call was refused as dynamic.
+  test('resolves a dotted file name, and a `.jsx` specifier to its `.tsx` source', () => {
+    const [, , app] = analyzeMany(
+      [
+        { filename: '/project/card.styles.ts', source: `export const card = { color: 'red' }` },
+        { filename: '/project/button.tsx', source: `export const button = { padding: '2' }` },
+        {
+          filename: '/project/app.ts',
+          source: `import { css } from 'styled-system/css'
+            import { card } from './card.styles'
+            import { button } from './button.jsx'
+            css({ ...card, ...button })`,
+        },
+      ],
+      entrypoints,
+      { cwd: '/project', paths: [], tokens: [], jsx: false },
+    )
+
+    expect(app.calls).toMatchObject([{ arguments: [{ color: 'red', padding: '2' }], complete: true }])
+    expect(app.dependencies).toEqual(['/project/button.tsx', '/project/card.styles.ts'])
+  })
+
+  test('tracks the sources a dotted file name can resolve to before one exists', () => {
+    const [analysis] = analyzeMany(
+      [
+        {
+          filename: '/project/app.ts',
+          source: `import { css } from 'styled-system/css'\nimport { card } from './card.styles'\ncss(card)`,
+        },
+      ],
+      entrypoints,
+      { cwd: '/project', paths: [], tokens: [], jsx: false },
+    )
+
+    expect(analysis.pendingCandidates).toContain('/project/card.styles.ts')
+    expect(analysis.pendingCandidates).toContain('/project/card.styles/index.ts')
+  })
+
   test('resolves token values and captures JSX recipe props', () => {
     const tokenEntrypoints: NativeEntrypoint[] = [
       ...entrypoints,

@@ -42,6 +42,33 @@ export const cls = css(button, { background: 'blue.500' })
     for (const selector of selectorsFor(className)) expect(css).toContain(selector)
   })
 
+  // Both resolve as TypeScript and Vite resolve them. Neither did for the compiler, which refused
+  // the call as dynamic and failed the build.
+  test('a value imported from a dotted file name, or through a `.jsx` specifier, folds', () => {
+    const { fold, addFiles, getCss } = createFoldFixture()
+
+    addFiles({
+      'app/card.styles.ts': `export const card = { display: 'inline-flex' }\n`,
+      'app/button.tsx': `export const button = { padding: '4' }\n`,
+    })
+
+    const result = fold(
+      `import { css } from 'styled-system/css'
+import { card } from './card.styles'
+import { button } from './button.jsx'
+export const cls = css(card, button)
+`,
+      'app/use.tsx',
+    )
+
+    expect(result.folded).toHaveLength(1)
+    const className = result.folded[0]!.className
+    expect(className).toContain('d_inline-flex')
+    expect(className).toContain('p_4')
+    const css = getCss()
+    for (const selector of selectorsFor(className)) expect(css).toContain(selector)
+  })
+
   test('a plain exported object folds', () => {
     const { fold, addFiles } = createFoldFixture()
 

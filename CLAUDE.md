@@ -22,7 +22,7 @@ with workspace support.
   /types/          # Type definitions (config options live here)
   /native-extractor/ # Rust/Oxc extraction, static evaluation and the Vite fold analysis — the only engine
   /vite/           # Vite plugin, including the build-time fold
-  /plugin-*/       # vue and svelte are auto-injected; lightningcss is opt-in. Astro's hook is built into node
+  /plugin-*/       # vue, svelte and tsrx are auto-injected; lightningcss is opt-in. Astro's hook is built into node
   /preset-*/       # Design system presets (base, bamboo, atlaskit, open-props)
   /eslint-plugin/  # Lint rules
   /fixture/        # Shared test fixtures and utilities
@@ -253,6 +253,7 @@ Perf-sensitive code has Vitest benchmarks in `{packages,sandbox}/*/__tests__/**/
 | `node/source-glob`                              | the source glob every inventory scan runs                       |
 | `node/extractable-files`                        | which files a cold extraction pass parses (`selectExtractable`) |
 | `node/parse-file`                               | decoding one file's native analysis (`parseNativeFile`)         |
+| `node/tsrx-to-tsx`                              | `@tsrx/core` parse + text-edit lowering, per `.tsrx` file       |
 | `shared/split-props`, `shared/leaf-class`       | runtime helpers on the per-render path                          |
 | `vite/fold`                                     | native analysis per module, and the JS fold on top of it        |
 | `vite/output-pass`                              | the early output pass: pruning and naming a sheet, per output   |

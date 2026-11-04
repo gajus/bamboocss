@@ -82,7 +82,9 @@ bamboo/
     `token.value()` are evaluated in place
   - Reporting what it could not evaluate as losses rather than guessing
 - **Not here**: Vue and Svelte SFCs are not parsed natively. `@bamboocss/plugin-vue` / `@bamboocss/plugin-svelte`
-  convert them to TSX in the `parser:before` hook before the source reaches Rust
+  convert them to TSX in the `parser:before` hook before the source reaches Rust. TSRX (`.tsrx`) is the same
+  arrangement, built into `@bamboocss/node` (`tsrx-to-tsx.ts`, parsing with `@tsrx/core`), as is Astro
+  (`astro-to-tsx.ts`)
 
 #### `@bamboocss/generator` (packages/generator)
 
@@ -595,6 +597,9 @@ the source-compilation guide.
 - **React/Preact**: Standard JSX
 - **Vue**: `@bamboocss/plugin-vue` converts the SFC to TSX (`@vue/compiler-sfc`) in `parser:before`
 - **Svelte**: `@bamboocss/plugin-svelte` converts the component to TSX in `parser:before`
+- **TSRX**: `@bamboocss/plugin-tsrx` (auto-injected like Svelte and Vue) lowers `.tsrx` template syntax (`@{ }` bodies,
+  `@if`/`@for`/`@switch`/`@try`, `<style>`, shorthand attributes, expression tags) to TSX by text edits in
+  `parser:before`, parsing with the optional `@tsrx/core` peer
 - **Solid**: JSX with Solid-specific patterns
 
 ## Plugin System

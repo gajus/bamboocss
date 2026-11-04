@@ -1,3 +1,4 @@
+import { fixturePreset } from '@bamboocss/fixture'
 import { describe, expect, test } from 'vitest'
 import { createRuleProcessor } from './fixture'
 
@@ -102,5 +103,35 @@ describe('custom utility', () => {
         }
       }"
     `)
+  })
+})
+
+/**
+ * A `values` callback can find nothing to return: `theme('spacing')` finds nothing in a theme with
+ * no spacing tokens. The utility threw on its first use, and a callback returning `null` failed the
+ * whole config.
+ */
+describe('a values callback that returns nothing', () => {
+  test.each([
+    ['undefined', () => undefined],
+    ['null', () => null],
+    ['a category the theme lacks', (theme: (category: string) => unknown) => theme('spacing')],
+  ])('%s leaves the value as written', (_label, values) => {
+    const css = createRuleProcessor({
+      presets: [],
+      utilities: { space: { className: 'space', values, transform: (value: string) => ({ margin: value }) } },
+    } as never)
+      .css({ space: '4px' })
+      .toCss()
+
+    expect(css).toContain('margin: 4px')
+  })
+
+  test("preset-base's translateZ, in a theme with no spacing tokens", () => {
+    const css = createRuleProcessor({ presets: [], utilities: fixturePreset.utilities } as never)
+      .css({ translateZ: '4px' })
+      .toCss()
+
+    expect(css).toContain('--translate-z: 4px')
   })
 })

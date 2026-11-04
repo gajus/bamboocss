@@ -451,8 +451,11 @@ export class Utility {
       return value
     }
 
+    // A callback can find nothing to return, as `theme('spacing')` finds nothing in a theme with no
+    // spacing tokens. Indexed regardless, it threw on the first use of the utility, and preset-base's
+    // `translateZ` returns just that.
     if (isFunction(values)) {
-      return values(this.getTokenCategoryValues.bind(this))[value] || value
+      return values(this.getTokenCategoryValues.bind(this))?.[value] || value
     }
 
     if (values.type) {
@@ -569,7 +572,8 @@ export class Utility {
 
     const values = this.getPropertyValues(config, (key) => `type:Tokens["${key}"]`)
 
-    if (typeof values === 'object' && values.type) {
+    // `typeof null` is `'object'`: a callback returning `null` failed the whole config here.
+    if (values && typeof values === 'object' && values.type) {
       this.types.set(property, new Set([`type:${values.type}`]))
       return
     }

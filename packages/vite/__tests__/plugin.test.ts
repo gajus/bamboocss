@@ -3,10 +3,12 @@ import { isStaticCompilerActive } from '@bamboocss/node/static-compiler'
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve, win32 } from 'node:path'
+import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import { afterAll, describe, expect, test, vi } from 'vitest'
 import { VIRTUAL_CSS_ID } from '../src/css'
 import { bamboocss, compilerParsePath, describeRefusal, isGeneratedOutput, shouldTransform } from '../src/plugin'
+import { compileVueSfc } from './fixture'
 
 /**
  * The plugin wrapper, separate from the fold itself.
@@ -107,6 +109,46 @@ describe('plugin contract', () => {
         'function _createMdxContent(props) {}\nexport default function MDXContent() {}',
       ),
     ).toBe('/app/src/Doc.mdx.__bamboo__.tsx')
+  })
+
+  /**
+   * Compiled output holding a tag its markup did, in a string or a template: a JSON-LD script in
+   * `<svelte:head>`, an inline Astro script, a `<template>` element. It was skipped as a component
+   * not yet compiled, and its `css()` calls reached the browser, where they throw.
+   */
+  test('compiles a compiled component whose markup carries a script, a template or a style', () => {
+    const svelte = createRequire(join(dirname(fileURLToPath(import.meta.url)), '../../plugin-svelte/package.json'))(
+      'svelte/compiler',
+    ) as { compile(source: string, options: object): { js: { code: string } } }
+    const script = `<script>\nimport { css } from 'styled-system/css'\n</script>\n`
+    for (const markup of [
+      `<svelte:head><script type="application/ld+json">{ "@type": "Thing" }</script></svelte:head>`,
+      `{@html '<script type="application/ld+json">{}</' + 'script>'}`,
+      `<template id="row"><td>x</td></template>`,
+    ]) {
+      for (const generate of ['client', 'server']) {
+        const source = `${script}${markup}\n<p class={css({ color: 'red.300' })}>x</p>\n`
+        const { js } = svelte.compile(source, { filename: '/app/src/Card.svelte', generate })
+        expect(compilerParsePath('/app/src/Card.svelte', js.code), `${generate}: ${markup}`).toBe(
+          '/app/src/Card.svelte.__bamboo__.ts',
+        )
+      }
+    }
+
+    const astro = [
+      `import { createComponent as $$createComponent, render as $$render } from "astro/runtime/server/index.js";`,
+      `import { css } from 'styled-system/css';`,
+      'const $$Page = $$createComponent(($$result) => $$render`<script is:inline>window.x = 1</script>',
+      '<template><p></p></template><p class="${css({ color: "red.300" })}">x</p>`);',
+      'export default $$Page;',
+    ].join('\n')
+    expect(compilerParsePath('/app/src/Page.astro', astro)).toBe('/app/src/Page.astro.__bamboo__.ts')
+
+    const vue = compileVueSfc(
+      `<script setup lang="ts">import { css } from 'styled-system/css'\nconst html = '<style>p {}</style>'\n</script>\n<template><p :class="css({ color: 'red.300' })">{{ html }}</p></template>\n`,
+      'build',
+    )
+    expect(compilerParsePath('/app/src/Card.vue', vue)).toBe('/app/src/Card.vue.__bamboo__.ts')
   })
 
   test('SFC compilation runs after framework plugins', () => {

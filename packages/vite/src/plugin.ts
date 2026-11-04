@@ -261,11 +261,40 @@ export const compilerParsePath = (id: string, code: string): string | null => {
   if (SFC_SCRIPT_QUERY.test(normalizedQuery)) {
     return `${filePath}.__bamboo__.${SFC_JSX_QUERY.test(normalizedQuery) ? 'tsx' : 'ts'}`
   }
+  // A framework plugin's output opens as a module does. Its strings and templates can carry any
+  // tag the markup did — a JSON-LD `<script>` in `<svelte:head>`, an inline Astro script, a
+  // `<template>` element — so where a tag appears says nothing about it, and compiled code holding
+  // one was skipped as an uncompiled component: its `css()` calls reached the browser and threw.
+  if (COMPILED_OPENING.test(openingOf(code))) return `${filePath}.__bamboo__.ts`
   const trimmed = code.trimStart()
   if (/\.astro$/i.test(filePath) && (trimmed.startsWith('---') || trimmed.startsWith('<'))) return null
   if (SFC_SCRIPT_TAG.test(code) || /<(?:template|style)[\s>/]/i.test(code)) return null
   if (trimmed.startsWith('<')) return null
   return `${filePath}.__bamboo__.ts`
+}
+
+/** How a module opens: an import, an export or a declaration, as no component's markup can. */
+const COMPILED_OPENING = /^(?:(?:import|export|const|let|var|function|class)\b|async\s+function\b|['"]use strict['"])/
+
+/** `code` from its first token: past whitespace, a byte-order mark and any comments. */
+const openingOf = (code: string) => {
+  let index = 0
+  while (index < code.length) {
+    if (/\s/.test(code[index]!)) {
+      index++
+    } else if (code.startsWith('//', index)) {
+      const end = code.indexOf('\n', index)
+      if (end === -1) return ''
+      index = end + 1
+    } else if (code.startsWith('/*', index)) {
+      const end = code.indexOf('*/', index + 2)
+      if (end === -1) return ''
+      index = end + 2
+    } else {
+      break
+    }
+  }
+  return code.slice(index, index + 20)
 }
 
 /**

@@ -1,0 +1,9 @@
+# musl is linked statically by default, and a static C library cannot go into a cdylib: rustc
+# refuses to build one. Alpine's Node loads musl dynamically, so the binary does too.
+[target.'cfg(target_env = "musl")']
+rustflags = ["-C", "target-feature=-crt-static"]
+
+# The C runtime linked in, as a node-gyp addon links it, so the binary loads on a Windows where the
+# Visual C++ Redistributable is not installed. Without it, the binary needs `VCRUNTIME140.dll`.
+[target.'cfg(all(windows, target_env = "msvc"))']
+rustflags = ["-C", "target-feature=+crt-static"]

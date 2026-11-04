@@ -11,15 +11,17 @@ release before 22, and Vite none before 22.12.
 Bamboo extracts styles with a required Rust/Oxc native binary bundled in `@bamboocss/node`. Published packages include
 prebuilt binaries for these machines running the CLI, dev server, or production build:
 
-| Operating system | Architectures |
-| ---------------- | ------------- |
-| macOS            | arm64, x64    |
-| Linux with glibc | arm64, x64    |
-| Windows          | x64           |
+| Operating system         | Architectures |
+| ------------------------ | ------------- |
+| macOS                    | arm64, x64    |
+| Linux with glibc         | arm64, x64    |
+| Linux with musl (Alpine) | arm64, x64    |
+| Windows                  | arm64, x64    |
 
-Installing the published packages does not require Rust. Alpine Linux/musl and Windows arm64 have no bundled binary; use
-a supported build environment. There is no JavaScript or TypeScript extraction fallback. These requirements apply to
-build machines; browsers receive the compiled JavaScript and CSS.
+The glibc binaries need no glibc newer than 2.17, so they load on every distribution Node 22 runs on, RHEL 8 and Debian
+11 among them. Installing the published packages does not require Rust. Other architectures, such as 32-bit Arm, have no
+bundled binary, and there is no JavaScript or TypeScript extraction fallback. These requirements apply to build
+machines; browsers receive the compiled JavaScript and CSS.
 
 For a missing or unloadable binary, see
 [native extraction errors](/docs/concepts/build-diagnostics#native-extraction-is-unavailable).

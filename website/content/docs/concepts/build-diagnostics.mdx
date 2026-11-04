@@ -121,7 +121,7 @@ without matching CSS rules, so this check fails the build.
 
 Stylesheet extraction requires the Rust/Oxc binary bundled with `@bamboocss/node`. Check the
 [build platform requirements](/docs/installation/vite#build-platform-requirements) against the machine running Bamboo.
-Alpine Linux/musl and Windows arm64 do not have bundled binaries; use a supported build environment.
+An architecture other than arm64 and x64 has no bundled binary; use a supported build environment.
 
 On a supported platform, a load error can mean the installed package is incomplete or its binary cannot load. Reinstall
 from your lockfile on the build machine and inspect the original error in `cause`. In a Bamboo source checkout, build

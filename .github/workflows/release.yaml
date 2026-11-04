@@ -58,33 +58,62 @@ jobs:
             binary: darwin-arm64.node
           - runner: macos-15-intel
             binary: darwin-x64.node
+          # Built with cargo-zigbuild, so a binary does not need the runner's glibc: a gnu target
+          # names the release to link against, 2.17, where a runner's own made it 2.34. Each loads
+          # on the oldest system it is for. Node 22 needs glibc 2.28, which is RHEL 8's.
           - runner: ubuntu-24.04-arm
             binary: linux-arm64-gnu.node
+            target: aarch64-unknown-linux-gnu.2.17
+            image: registry.access.redhat.com/ubi8/nodejs-22-minimal
+          - runner: ubuntu-24.04-arm
+            binary: linux-arm64-musl.node
+            target: aarch64-unknown-linux-musl
+            image: node:22-alpine
           - runner: ubuntu-latest
             binary: linux-x64-gnu.node
+            target: x86_64-unknown-linux-gnu.2.17
+            image: registry.access.redhat.com/ubi8/nodejs-22-minimal
+          - runner: ubuntu-latest
+            binary: linux-x64-musl.node
+            target: x86_64-unknown-linux-musl
+            image: node:22-alpine
           - runner: windows-latest
             binary: win32-x64-msvc.node
+          - runner: windows-11-arm
+            binary: win32-arm64-msvc.node
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # Pinned, as the toolchain is: Zig's release decides what the binary is linked against.
+      - name: Install cargo-zigbuild
+        if: matrix.target
+        run: |
+          python3 -m venv "$RUNNER_TEMP/zig"
+          "$RUNNER_TEMP/zig/bin/pip" install ziglang==0.17.0 cargo-zigbuild==0.24.0
+          echo "$RUNNER_TEMP/zig/bin" >> "$GITHUB_PATH"
+
       - name: Build native extractor
         shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
         run: |
           cd packages/native-extractor
-          sh scripts/build.sh --release
+          sh scripts/build.sh --release ${TARGET:+--target "$TARGET"}
           mkdir -p prebuilds
           cp bamboo-native-extractor.node "prebuilds/${{ matrix.binary }}"
-          cd ../..
-          node - <<'NODE'
-          const { analyze } = require('./packages/native-extractor')
-          const result = analyze('smoke.ts', "import { css } from 'styled-system/css'; css({ color: 'red' })", [
-            { kind: 'css', modules: ['styled-system/css'], names: ['css'] },
-          ])
-          if (result.errors.length || result.calls.length !== 1) throw new Error('Native extractor smoke test failed')
-          NODE
+
+      - name: Load native extractor
+        if: ${{ !matrix.image }}
+        run: node packages/native-extractor/scripts/smoke.cjs packages/native-extractor/prebuilds/${{ matrix.binary }}
+
+      - name: Load native extractor on ${{ matrix.image }}
+        if: matrix.image
+        run: >-
+          docker run --rm -v "$PWD:/work:ro" -w /work ${{ matrix.image }} node
+          packages/native-extractor/scripts/smoke.cjs packages/native-extractor/prebuilds/${{ matrix.binary }}
 
       - name: Upload native binary
         uses: actions/upload-artifact@v4
@@ -129,7 +158,10 @@ jobs:
             darwin-arm64.node \
             darwin-x64.node \
             linux-arm64-gnu.node \
+            linux-arm64-musl.node \
             linux-x64-gnu.node \
+            linux-x64-musl.node \
+            win32-arm64-msvc.node \
             win32-x64-msvc.node
           do
             test -f "packages/node/dist/native/$binary"

@@ -1,6 +1,7 @@
 .*
 !.github
 !.changeset
+!.cargo
 !.gitignore
 !.ncurc.json
 !.oxfmtrc.json

@@ -14,6 +14,8 @@ import { tmpdir } from 'node:os'
 import { dirname, join, posix } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, test } from 'vitest'
+// The name the installed package looks up, for this host.
+import { nativeBinaryName } from '../../node/src/native-extractor'
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 const repositoryRoot = join(packageRoot, '../..')
@@ -47,16 +49,6 @@ let consumerFixture: string
 const packs = new Map<string, PackResult>()
 const packageDirectories = new Map<string, string>()
 const declarationEntries = new Map<string, string | undefined>()
-
-/** The prebuild directory's name for this host, as `create-context.ts` spells it. */
-const NATIVE_BINARIES: Record<string, string> = {
-  'darwin-arm64': 'darwin-arm64.node',
-  'darwin-x64': 'darwin-x64.node',
-  'linux-arm64': 'linux-arm64-gnu.node',
-  'linux-x64': 'linux-x64-gnu.node',
-  'win32-x64': 'win32-x64-msvc.node',
-}
-const nativeBinaryName = () => NATIVE_BINARIES[`${process.platform}-${process.arch}`]
 
 /**
  * Put this host's native binary where the published `@bamboocss/node` carries it.

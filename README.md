@@ -56,9 +56,9 @@ Plus design tokens with simultaneous themes, type-safe styles and autocomplete v
 
 ## Install
 
-Bamboo requires Vite and a supported build platform: macOS arm64/x64, glibc Linux arm64/x64, or Windows x64. Rust/Oxc
-extracts the styles through a bundled native binary; installing the published packages does not require Rust. See
-[platform requirements](https://bamboocss.com/docs/installation/vite#build-platform-requirements).
+Bamboo requires Vite and a supported build platform: macOS, Linux with glibc or musl, or Windows, each on arm64 or x64.
+Rust/Oxc extracts the styles through a bundled native binary; installing the published packages does not require Rust.
+See [platform requirements](https://bamboocss.com/docs/installation/vite#build-platform-requirements).
 
 Install the CLI and the Vite plugin, then scaffold the config:
 

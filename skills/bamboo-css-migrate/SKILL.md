@@ -26,8 +26,8 @@ Read the guide for detail.
 - **Vite only.** `@bamboocss/vite` is Bamboo's only build integration, and PostCSS does not emit Bamboo CSS. If the
   project builds with anything else (webpack, Next.js, Panda's PostCSS plugin outside Vite), say so and stop: there is
   no supported path short of moving the build to Vite.
-- **Node 22.12 or later**, on macOS, Linux with glibc, or Windows x64. Extraction is a bundled native binary with no
-  fallback; Alpine (musl) and Windows arm64 have none.
+- **Node 22.12 or later**, on macOS, Linux (glibc or musl) or Windows, each on arm64 or x64. Extraction is a bundled
+  native binary with no fallback; another architecture has none.
 - **Panda version.** Bamboo forked 1.x, and the guide is written for it. It notes the Panda 2 APIs that differ:
   `firstThatWorks()` is `fallback()`, and `keyframes()` names its block by the stops in the order written. Report any
   other 2.x-only API you find rather than guessing an equivalent.

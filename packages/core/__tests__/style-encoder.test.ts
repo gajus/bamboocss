@@ -415,12 +415,12 @@ describe('style encoder', () => {
           opacity: 0.4;
       }
 
-        .btn:is(:focus-visible, [data-focus-visible]) {
-          box-shadow: outline;
-      }
-
         .btn:is(:focus, [data-focus]) {
           z-index: 1;
+      }
+
+        .btn:is(:focus-visible, [data-focus-visible]) {
+          box-shadow: outline;
       }
 
         .btn:is(:hover, [data-hover]):is(:disabled, [disabled], [data-disabled], [aria-disabled=true]) {

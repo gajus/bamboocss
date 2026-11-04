@@ -35,6 +35,7 @@ export const cardRecipe = defineRecipe({
         },
         _dark: {
           _hover: { boxShadow: 'none' },
+          _active: { boxShadow: 'none' },
           boxShadow: 'none',
         },
       },

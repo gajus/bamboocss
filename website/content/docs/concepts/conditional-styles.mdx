@@ -58,6 +58,24 @@ Let's say you want to change the background color of a button when it's focused 
 </button>
 ```
 
+### When two conditions compete
+
+When two conditions set the same property and both apply, the more specific selector wins, as in CSS. Between two of
+equal specificity, the one requiring the stronger state wins, whichever you wrote last. From weakest to strongest, the
+states are `:link`, `:visited`, `:focus-within`, `:focus`, `:focus-visible`, `:hover` and `:active`:
+
+```jsx
+// While pressed, the background is red.800: `:active` is stronger than `:hover`.
+css({ _active: { bg: 'red.800' }, _hover: { bg: 'red.700' } })
+```
+
+- A selector list ranks as its strongest member: `&:is(:focus, :active)` ranks as `:active`.
+- Nested conditions rank by every state they require: `_hover: { _active }` beats `_hover: { _focus }`.
+- A state inside `:has()` belongs to another element, and one inside `:nth-child(… of …)` only filters what is counted,
+  so neither ranks the rule.
+- A condition requiring none of these states, such as `_dark`, `_disabled` or `&[data-open]`, ranks below every one that
+  does. To make one win, nest the state inside it: `_dark: { _hover: { … } }` is more specific than `_hover`.
+
 ### Built-in conditions
 
 Bamboo includes a set of common pseudo states that you can use to style your components:

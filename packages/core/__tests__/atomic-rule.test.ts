@@ -697,15 +697,15 @@ describe('atomic / with direct nesting', () => {
         }
 
         @layer s020-c5-p3000 {
-
-          .\\[\\&\\:focus\\,_\\&\\:hover\\]\\:bx-sh_none:focus,.\\[\\&\\:focus\\,_\\&\\:hover\\]\\:bx-sh_none:hover {
-            box-shadow: none;
+          :focus > .\\[\\:focus_\\>_\\&\\]\\:c_white {
+            color: var(--colors-white);
       }
         }
 
         @layer s020-c6-p3000 {
-          :focus > .\\[\\:focus_\\>_\\&\\]\\:c_white {
-            color: var(--colors-white);
+
+          .\\[\\&\\:focus\\,_\\&\\:hover\\]\\:bx-sh_none:focus,.\\[\\&\\:focus\\,_\\&\\:hover\\]\\:bx-sh_none:hover {
+            box-shadow: none;
       }
         }
 

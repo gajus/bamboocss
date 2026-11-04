@@ -1130,16 +1130,44 @@ describe('the bamboo config in dev', () => {
     return config
   }
 
+  /** As Vite spells the file a watcher event names, with `/` on Windows too. */
+  const spelled = (...segments: string[]) => join(...segments).replaceAll('\\', '/')
+
   test('is declared to Vite as a config file, with what it imports', async () => {
     const { configFileDependencies } = await resolvedConfig('serve')
 
-    expect(configFileDependencies).toContain(join(cwd, 'bamboo.config.ts'))
+    expect(configFileDependencies).toContain(spelled(cwd, 'bamboo.config.ts'))
     // The import graph, not only the entry: a preset edit has to restart the server too.
-    expect(configFileDependencies).toContain(join(cwd, 'preset.ts'))
+    expect(configFileDependencies).toContain(spelled(cwd, 'preset.ts'))
   })
 
   test('is not declared in a build, where nothing restarts', async () => {
     expect((await resolvedConfig('build')).configFileDependencies).toEqual([])
+  })
+
+  // A preset named by path is bundled on its own as the config loads, so it is in no import of the
+  // config's: an edit to it reached neither Vite's restart nor the plugin's watcher, which turns
+  // away a file no sheet was built from, and the server served the old preset.
+  test('declares a preset named by path once the config has loaded', async () => {
+    const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'bamboo-vite-named-preset-')))
+    onTestFinished(() => rmSync(root, { force: true, recursive: true }))
+    writeFileSync(
+      join(root, 'bamboo.config.ts'),
+      `export default { presets: ['./named-preset.ts'], include: [], outdir: 'styled-system', preflight: false }\n`,
+    )
+    writeFileSync(
+      join(root, 'named-preset.ts'),
+      `export default { theme: { tokens: { colors: { brand: { value: 'red' } } } } }\n`,
+    )
+    const plugin = bamboocssCss({ cwd: root, session: createStaticCompilationSession() })
+    const config = { command: 'serve', root, build: { sourcemap: false }, configFileDependencies: [] as string[] }
+
+    await hookOf(plugin.configResolved)?.call({} as never, config as never)
+    expect(config.configFileDependencies).toContain(spelled(root, 'bamboo.config.ts'))
+    expect(config.configFileDependencies, 'named, not imported').not.toContain(spelled(root, 'named-preset.ts'))
+
+    await hookOf(plugin.buildStart)!.call({ environment: { name: 'client' } } as never, {} as never)
+    expect(config.configFileDependencies).toContain(spelled(root, 'named-preset.ts'))
   })
 
   test('shares config dependency discovery across concurrent environment resolution', async () => {
@@ -1162,7 +1190,7 @@ describe('the bamboo config in dev', () => {
 
       expect(discover).toHaveBeenCalledTimes(1)
       expect(client.configFileDependencies).toEqual(ssr.configFileDependencies)
-      expect(client.configFileDependencies).toContain(join(cwd, 'bamboo.config.ts'))
+      expect(client.configFileDependencies).toContain(join(cwd, 'bamboo.config.ts').replaceAll('\\', '/'))
     } finally {
       discover.mockRestore()
     }

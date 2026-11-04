@@ -527,6 +527,13 @@ const within = (root: string, path: string) => {
  * `styles.css` and asking the project to import it means the build reads a file the same
  * process just wrote, which is a race on any watch rebuild.
  */
+/**
+ * A path as Vite spells the file a watcher event names, which is what it holds a config file
+ * against: with `/` on Windows too. Spelled with `\\` there, no edit to the config ever matched,
+ * and the dev server never restarted for one.
+ */
+const spelledAsVite = (path: string) => (sep === '\\' ? path.replaceAll('\\', '/') : path)
+
 export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
   const {
     configPath,
@@ -540,6 +547,8 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
   let builder: CompilationBuilder | undefined
   let server: ViteDevServer | undefined
   let command: 'build' | 'serve' = 'build'
+  /** A dev server's config files, on the resolved config: what Vite restarts for. */
+  let configFileDependencies: string[] | undefined
   /** The run's own `build` options, for a bundler with no per-environment config. */
   let ssrBuildOptions: { ssr?: boolean | string; ssrEmitAssets?: boolean } | undefined
 
@@ -653,6 +662,32 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
    * work wait instead; a fold is a few milliseconds and this is the one place correctness
    * depends on it.
    */
+  /**
+   * Every file the loaded config was read from, declared to Vite as a config file.
+   *
+   * `configResolved` declares the config's import graph, which is all there is to read before the
+   * config is loaded. A preset named by path — `presets: ['./preset.ts']` — is bundled on its own as
+   * the config loads, so its files are in no import of the config's, and an edit to one reached
+   * neither Vite's restart nor this plugin's watcher, which turns away a file no sheet was built
+   * from: the server served the old preset until it was restarted by hand. The loaded config knows
+   * them, so they are declared once it has loaded, and handed to the watcher, which reaches only
+   * its root of itself.
+   */
+  const declareConfigDependencies = (activeBuilder: CompilationBuilder) => {
+    const context = activeBuilder.context
+    if (!configFileDependencies || !context) return
+    const declared = new Set(configFileDependencies)
+    const added: string[] = []
+    for (const file of context.conf.dependencies) {
+      const path = spelledAsVite(resolve(context.config.cwd, file))
+      if (declared.has(path)) continue
+      declared.add(path)
+      configFileDependencies.push(path)
+      added.push(path)
+    }
+    if (added.length && server) server.watcher.add(added)
+  }
+
   const build = () =>
     host.runCssPass(async (activeBuilder) => {
       builder = activeBuilder
@@ -662,6 +697,7 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
       // only codegen. On the first pass it writes all of them; afterwards only what a config
       // change affected. `buildStart` below is what makes the first pass early enough to count.
       await activeBuilder.emit()
+      declareConfigDependencies(activeBuilder)
 
       activeBuilder.extract()
 
@@ -851,9 +887,10 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
       // environment accounting it sets up is what keeps a two-environment build from pruning
       // a stylesheet the second one still contributes to.
       if (config.command === 'serve') {
+        configFileDependencies = config.configFileDependencies
         try {
           const deps = await discoverConfigDependencies(config.root)
-          config.configFileDependencies.push(...deps)
+          config.configFileDependencies.push(...[...deps].map(spelledAsVite))
         } catch {
           // No config to watch. `load` reports that properly, with the message the CLI uses.
         }

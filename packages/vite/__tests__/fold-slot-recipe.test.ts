@@ -56,3 +56,40 @@ describe('config slot recipes', () => {
     expect(result.code).toContain('.raw')
   })
 })
+
+/**
+ * An `sva()` written without `slots` has the slots its styles name: the stylesheet works them out
+ * from `base`, `variants` and `compoundVariants`. The compiler took it for a `cva`, so neither the
+ * call nor a slot of it was compiled, and the call left in the bundle throws.
+ */
+describe('an inline sva() without slots', () => {
+  const source = `import { sva } from 'styled-system/css'
+const card = sva({
+  base: { root: { color: 'red' }, label: { fontSize: 'sm' } },
+  variants: { size: { lg: { label: { fontSize: 'lg' } } } },
+  compoundVariants: [{ size: 'lg', css: { icon: { width: '4' } } }],
+})
+export const whole = card({ size: 'lg' })
+export const root = card().root
+`
+
+  test('compiles with the slots its styles name, as one that names them does', () => {
+    const fixture = createFoldFixture()
+    const result = fixture.foldStyleSets(source)
+    const named = createFoldFixture().foldStyleSets(
+      source.replace('sva({\n', "sva({\n  slots: ['root', 'label', 'icon'],\n"),
+    )
+
+    expect(result.skipped).toHaveLength(0)
+    expect(result.code).not.toContain('card(')
+    expect(result.code.split('\n').filter((line) => line.startsWith('export const'))).toEqual(
+      named.code.split('\n').filter((line) => line.startsWith('export const')),
+    )
+    expect(result.code).toContain('export const whole = {"root":"c_red","label":"fs_lg","icon":"w_4"}')
+
+    const css = fixture.getStyleSetCss()
+    for (const className of ['c_red', 'fs_lg', 'w_4']) {
+      for (const selector of selectorsFor(className)) expect(css).toContain(selector)
+    }
+  })
+})

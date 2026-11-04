@@ -1,4 +1,5 @@
 import type { FoldAnalysis, FoldCall, FoldSelection } from '@bamboocss/native-extractor'
+import { inferSlots } from '@bamboocss/shared'
 import type { StaticStyleSetCompiler, StyleSetRecipeConfig } from './style-set'
 
 /**
@@ -61,6 +62,13 @@ export const collectRecipeConfigs = (analysis: Pick<FoldAnalysis, 'calls'>): Map
 
     const config = definition.data[0] as RecipeConfig | undefined
     if (!config || typeof config !== 'object') continue
+
+    // An `sva()` written without `slots` has the ones its styles name, as the stylesheet works them
+    // out. Without them it read as a `cva`, and neither its call nor a slot of it was compiled.
+    if (definition.kind === 'sva' && config.slots === undefined) {
+      configs.set(name, { config: { ...config, slots: inferSlots(config as never) } })
+      continue
+    }
 
     configs.set(name, { config })
   }

@@ -29,3 +29,40 @@ export const getSlotCompoundVariant = <T extends { css: any }>(compoundVariants:
     // unguarded turned a survivable config into a build crash.
     .filter((compoundVariant) => compoundVariant?.css?.[slotName])
     .map((compoundVariant) => ({ ...compoundVariant, css: compoundVariant.css[slotName] }))
+
+/**
+ * The slots a slot recipe's styles name, for one written without `slots`: the keys of `base`, of
+ * each variant value and of each compound variant's `css`. Shared by the stylesheet and the
+ * compiler, which have to agree on them: the stylesheet worked them out and the compiler took the
+ * recipe for a `cva`, so an `sva()` without `slots` was never compiled.
+ */
+export const inferSlots = (recipe: {
+  base?: Record<string, unknown> | undefined
+  variants?: Record<string, Record<string, Record<string, unknown> | undefined> | undefined> | undefined
+  compoundVariants?: Array<{ css?: Record<string, unknown> | undefined } | null | undefined> | undefined
+}): string[] => {
+  const slots = new Set<string>()
+  Object.keys(recipe.base ?? {}).forEach((name) => {
+    slots.add(name)
+  })
+
+  // `variants` nests one level deeper than `base` does: `{ size: { sm: { root: {…} } } }`.
+  // Reading the keys of `{ sm: … }` collects the variant *value* as a slot, so a recipe
+  // with a `size.sm` variant grew a phantom `sm` slot — and then had rules emitted for it.
+  Object.values(recipe.variants ?? {}).forEach((values) => {
+    Object.values(values ?? {}).forEach((slotStyles) => {
+      Object.keys(slotStyles ?? {}).forEach((name) => {
+        slots.add(name)
+      })
+    })
+  })
+
+  recipe.compoundVariants?.forEach((compoundVariant) => {
+    if (!compoundVariant) return
+    Object.keys(compoundVariant.css ?? {}).forEach((name) => {
+      slots.add(name)
+    })
+  })
+
+  return Array.from(slots)
+}

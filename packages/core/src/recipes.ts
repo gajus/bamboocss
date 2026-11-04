@@ -4,6 +4,7 @@ import {
   createRegex,
   dashCase,
   getSlotRecipes,
+  inferSlots,
   isObject,
   memo,
   splitProps,
@@ -773,32 +774,8 @@ export class Recipes {
     return recipeDiffs ? this.details.filter((recipe) => recipeDiffs.includes(recipe.dashName)) : this.details
   }
 
-  static inferSlots = (recipe: PartialBy<SlotRecipeDefinition, 'slots'>) => {
-    const slots = new Set<string>()
-    Object.keys(recipe.base ?? {}).forEach((name) => {
-      slots.add(name)
-    })
-
-    // `variants` nests one level deeper than `base` does: `{ size: { sm: { root: {…} } } }`.
-    // Reading the keys of `{ sm: … }` collects the variant *value* as a slot, so a recipe
-    // with a `size.sm` variant grew a phantom `sm` slot — and then had rules emitted for it.
-    Object.values(recipe.variants ?? {}).forEach((values) => {
-      Object.values(values ?? {}).forEach((slotStyles) => {
-        Object.keys(slotStyles ?? {}).forEach((name) => {
-          slots.add(name)
-        })
-      })
-    })
-
-    recipe.compoundVariants?.forEach((compoundVariant) => {
-      if (!compoundVariant) return
-      Object.keys(compoundVariant.css ?? {}).forEach((name) => {
-        slots.add(name)
-      })
-    })
-
-    return Array.from(slots)
-  }
+  /** @see inferSlots */
+  static inferSlots = (recipe: PartialBy<SlotRecipeDefinition, 'slots'>) => inferSlots(recipe as never)
 
   static isValidNode = (node: unknown): node is RecipeNode => {
     return isObject(node) && 'type' in node && node.type === 'recipe'

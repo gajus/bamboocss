@@ -243,7 +243,7 @@ Perf-sensitive code has Vitest benchmarks in `{packages,sandbox}/*/__tests__/**/
 | `generator/css-fn`                              | the generated runtime, cached path                              |
 | `generator/css-fn-miss`                         | the uncached path; kept in its own file so ordering can't lie   |
 | `generator/unresolved-tokens`                   | the unresolved-token check, per transform and per emitted sheet |
-| `native-extractor/analyze`                      | batched Rust parsing, analysis and compact result transfer      |
+| `native-extractor/analyze`                      | batched Rust parsing, analysis and transfer; a 1,000-call file  |
 | `node/source-glob`                              | the source glob every inventory scan runs                       |
 | `node/extractable-files`                        | which files a cold extraction pass parses (`selectExtractable`) |
 | `node/parse-file`                               | decoding one file's native analysis (`parseNativeFile`)         |

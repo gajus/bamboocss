@@ -24,6 +24,8 @@ use oxc_semantic::{Scoping, Semantic, SemanticBuilder};
 use oxc_span::{GetSpan, Span};
 use oxc_syntax::symbol::SymbolId;
 
+use crate::offsets::Positions;
+
 #[napi(object)]
 pub struct NativeTokenDecline {
     pub reason: String,
@@ -43,6 +45,7 @@ pub struct NativeTokenAccounting {
 
 pub(crate) struct Accountant<'s> {
     source: &'s str,
+    positions: Positions<'s>,
     /// Specifiers that name the tokens artifact, already resolved through tsconfig paths.
     is_entrypoint: &'s dyn Fn(&str) -> bool,
     paths: Vec<String>,
@@ -52,12 +55,12 @@ pub(crate) struct Accountant<'s> {
 
 impl<'s> Accountant<'s> {
     fn decline(&mut self, span: Span, reason: &str) {
-        let (line, _) = crate::line_and_column(self.source, span.start);
+        let (line, _) = self.positions.line_and_column(span.start);
         self.declined.push(NativeTokenDecline {
             reason: reason.to_string(),
             line,
-            start: crate::utf16_offset(self.source, span.start),
-            end: crate::utf16_offset(self.source, span.end),
+            start: self.positions.utf16(span.start),
+            end: self.positions.utf16(span.end),
         });
     }
 }
@@ -94,6 +97,7 @@ pub(crate) fn account(
 
     let mut accountant = Accountant {
         source,
+        positions: Positions::new(source),
         is_entrypoint,
         paths: Vec::new(),
         prefixes: Vec::new(),

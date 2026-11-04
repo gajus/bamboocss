@@ -24,6 +24,7 @@ use oxc_syntax::symbol::SymbolId;
 
 use crate::cache::SharedCache;
 use crate::evaluator::{EvalResult, FileEvaluator, ProjectEvaluator, Refusal};
+use crate::offsets::Utf16;
 use exact::{Exactness, exact_result, is_inert, is_inert_literal, unwrap};
 use model::*;
 
@@ -62,43 +63,7 @@ impl FoldEntrypoints<'_> {
     }
 }
 
-struct Utf16 {
-    /// Byte offset → UTF-16 offset, computed lazily for sources that are not pure ASCII.
-    ascii: bool,
-    prefix: Vec<u32>,
-}
-
 impl Utf16 {
-    fn new(source: &str) -> Self {
-        if source.is_ascii() {
-            return Self {
-                ascii: true,
-                prefix: Vec::new(),
-            };
-        }
-        let mut prefix = vec![0u32; source.len() + 1];
-        let mut units = 0u32;
-        for (index, character) in source.char_indices() {
-            for offset in 0..character.len_utf8() {
-                prefix[index + offset] = units;
-            }
-            units += character.len_utf16() as u32;
-        }
-        prefix[source.len()] = units;
-        Self {
-            ascii: false,
-            prefix,
-        }
-    }
-
-    fn at(&self, byte: u32) -> u32 {
-        if self.ascii {
-            byte
-        } else {
-            self.prefix[byte as usize]
-        }
-    }
-
     fn span(&self, span: Span) -> FoldSpan {
         FoldSpan {
             start: self.at(span.start),

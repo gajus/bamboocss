@@ -22,6 +22,7 @@ mod cache;
 mod evaluator;
 mod fold;
 mod names;
+mod offsets;
 mod token_accounting;
 
 pub use token_accounting::{NativeTokenAccounting, NativeTokenDecline};
@@ -131,37 +132,6 @@ struct CallBinding {
 
 fn source_type(filename: &str) -> Result<SourceType> {
     Ok(evaluator::source_type_for(filename))
-}
-
-pub(crate) fn utf16_offset(source: &str, byte: u32) -> u32 {
-    source[..byte as usize].encode_utf16().count() as u32
-}
-
-pub(crate) fn line_and_column(source: &str, start: u32) -> (u32, u32) {
-    let mut line_starts = vec![0];
-    let mut characters = source.char_indices().peekable();
-    while let Some((index, character)) = characters.next() {
-        match character {
-            '\r' => {
-                if characters.peek().is_some_and(|(_, next)| *next == '\n') {
-                    characters.next();
-                    line_starts.push(index + 2);
-                } else {
-                    line_starts.push(index + 1);
-                }
-            }
-            '\n' => line_starts.push(index + 1),
-            '\u{2028}' | '\u{2029}' => line_starts.push(index + character.len_utf8()),
-            _ => {}
-        }
-    }
-    let start = start as usize;
-    let line_index = line_starts.partition_point(|line_start| *line_start <= start) - 1;
-    let column = source[line_starts[line_index]..start]
-        .encode_utf16()
-        .count() as u32
-        + 1;
-    (line_index as u32 + 1, column)
 }
 
 fn callee_symbol_and_members(
@@ -850,6 +820,7 @@ fn analyze_source<'sources>(
     project.begin_file(filename);
     let mut evaluator = FileEvaluator::new(filename, project, &semantic, &parsed.program);
     let mut calls = Vec::new();
+    let positions = offsets::Positions::new(source);
 
     for node in semantic.nodes().iter() {
         let AstKind::CallExpression(expression) = node.kind() else {
@@ -910,7 +881,7 @@ fn analyze_source<'sources>(
             entrypoints,
         );
         let span = expression.span();
-        let (line, column) = line_and_column(source, span.start);
+        let (line, column) = positions.line_and_column(span.start);
         let kind = if !binding.supported && matches!(binding.kind.as_str(), "pattern" | "recipe") {
             "dead".to_string()
         } else {
@@ -924,10 +895,10 @@ fn analyze_source<'sources>(
             imported_name: binding.imported_name,
             kind,
             module: binding.module,
-            start: utf16_offset(source, span.start),
-            end: utf16_offset(source, span.end),
-            callee_start: utf16_offset(source, callee_span.start),
-            callee_end: utf16_offset(source, callee_span.end),
+            start: positions.utf16(span.start),
+            end: positions.utf16(span.end),
+            callee_start: positions.utf16(callee_span.start),
+            callee_end: positions.utf16(callee_span.end),
             line,
             column,
             arguments,
@@ -949,16 +920,16 @@ fn analyze_source<'sources>(
             let unresolved_keys = unresolved_jsx_keys(&element.attributes, &mut evaluator);
             let (arguments, complete) = jsx_data(&element.attributes, &mut evaluator);
             let span = element.span();
-            let (line, column) = line_and_column(source, span.start);
+            let (line, column) = positions.line_and_column(span.start);
             calls.push(NativeCall {
                 name: local,
                 imported_name: canonical,
                 kind: "jsx".to_string(),
                 module: String::new(),
-                start: utf16_offset(source, span.start),
-                end: utf16_offset(source, span.end),
-                callee_start: utf16_offset(source, span.start),
-                callee_end: utf16_offset(source, span.start),
+                start: positions.utf16(span.start),
+                end: positions.utf16(span.end),
+                callee_start: positions.utf16(span.start),
+                callee_end: positions.utf16(span.start),
                 line,
                 column,
                 arguments,

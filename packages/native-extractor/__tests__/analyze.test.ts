@@ -117,6 +117,42 @@ describe('native extraction analysis', () => {
     expect(result.calls[1]).toMatchObject({ line: 3, column: 1 })
   })
 
+  test('places each call as JavaScript reads the source, past every kind of line break', () => {
+    const source = [
+      `import { css } from 'styled-system/css'\r\n`,
+      `/* 😀 é */ css({ color: 'red' })\r`,
+      `css({ color: 'blue' })\u2029`,
+      `  /* 日本 */ css({ margin: 0 })\u2028`,
+      `css({ padding: 0 })\n`,
+      `x; css({ gap: 0 })`,
+    ].join('')
+    // UTF-16 offsets, as `indexOf` counts, and lines split where JavaScript ends one.
+    const expected = [...source.matchAll(/css\(\{/g)].map(({ index: start }) => {
+      const lines = source.slice(0, start).split(/\r\n|[\n\r\u2028\u2029]/)
+      return {
+        start,
+        end: source.indexOf(')', start) + 1,
+        calleeStart: start,
+        calleeEnd: start + 3,
+        line: lines.length,
+        column: lines.at(-1)!.length + 1,
+      }
+    })
+
+    const { calls } = analyze('source.ts', source, entrypoints)
+
+    expect(
+      calls.map(({ start, end, calleeStart, calleeEnd, line, column }) => ({
+        start,
+        end,
+        calleeStart,
+        calleeEnd,
+        line,
+        column,
+      })),
+    ).toEqual(expected)
+  })
+
   test('evaluates destructured constants and defaults as their selected values', () => {
     const result = analyze(
       'source.ts',

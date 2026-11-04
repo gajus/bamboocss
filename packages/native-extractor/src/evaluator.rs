@@ -27,6 +27,7 @@ use oxc_syntax::{
 
 use crate::{
     NativeEntrypoint, NativePathMapping, NativeProjectOptions, NativeToken, cache::SharedCache,
+    offsets::Positions,
 };
 
 /// How deeply helper calls may nest before the evaluator stops following them, so a recursion
@@ -1739,6 +1740,8 @@ pub(crate) struct FileEvaluator<'a, 'project, 'sources> {
     /// began, by its function, for one refused past the number of calls to be named for the one
     /// making them (`recursion_at`).
     made: ByAddress<Made>,
+    /// Where a refusal is, by line and column.
+    positions: Positions<'a>,
 }
 
 /// A helper call that is running, as `FileEvaluator::enter_call` compares the next one against.
@@ -2047,6 +2050,7 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
             callee: None,
             calls: Vec::new(),
             made: ByAddress::default(),
+            positions: Positions::new(semantic.source_text()),
         }
     }
 
@@ -2941,7 +2945,7 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
         excerpt: oxc_span::Span,
     ) -> Refusal {
         let source = self.semantic.source_text();
-        let (line, column) = crate::line_and_column(source, at.start);
+        let (line, column) = self.positions.line_and_column(at.start);
         Refusal {
             kind,
             subject,

@@ -42,6 +42,17 @@ describe('canonicalValue folds spellings that denote the same value', () => {
     expect(canonicalValue('-2px 5px 12px #FFFFFF')).toBe('-2px 5px 12px #fff')
     expect(canonicalValue('0 0 0 .5px #AABBCC')).toBe('0 0 0 0.5px #abc')
   })
+
+  // The decoder reads a value back with `Number()`, so the sheet named each of these as the
+  // number while the compiler named it as written, and the element got a class with no rule.
+  test('a number written as a string, as the number it reads as', () => {
+    expect(canonicalValue('1e3')).toBe('1000')
+    expect(canonicalValue('+2')).toBe('2')
+    expect(canonicalValue('-0')).toBe('0')
+    expect(canonicalValue('0x10')).toBe('16')
+    expect(canonicalValue('0.0000001')).toBe('1e-7')
+    expect(canonicalValue('13')).toBe('13')
+  })
 })
 
 /**
@@ -79,6 +90,12 @@ describe('canonicalValue leaves alone what it cannot fold safely', () => {
   test('a keyword is not a colour', () => {
     expect(canonicalValue('white')).toBe('white')
     expect(canonicalValue('transparent')).toBe('transparent')
+  })
+
+  test('what the decoder keeps a string: a leading zero, a unit, nothing', () => {
+    expect(canonicalValue('01')).toBe('01')
+    expect(canonicalValue('1e3px')).toBe('1e3px')
+    expect(canonicalValue('')).toBe('')
   })
 })
 

@@ -36,6 +36,8 @@ const cases: Array<{ name: string; styles: string }> = [
   { name: 'shorthand and longhand together', styles: `{ mx: '4', marginLeft: '2' }` },
   { name: 'longhand then shorthand', styles: `{ marginLeft: '2', mx: '4' }` },
   { name: 'numeric value', styles: `{ zIndex: 10, opacity: 0.4 }` },
+  // Read back as numbers on the way into the sheet, and named as written by the compiler.
+  { name: 'number written as a string', styles: `{ padding: '1e3', marginTop: '+2', top: '-0' }` },
   { name: 'negative value', styles: `{ marginTop: '-2' }` },
   { name: 'token reference', styles: `{ boxShadow: 'md' }` },
   { name: 'empty-ish value', styles: `{ color: 'red.300', display: undefined }` },

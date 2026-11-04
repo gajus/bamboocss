@@ -26,6 +26,9 @@ const OPAQUE = /["']|\burl\(/
 
 const HEX = /#([0-9a-fA-F]{3,8})\b/g
 
+/** An integer written with a leading zero, `01`, which the decoder keeps as a string. */
+const LEADING_ZERO = /^0\d+$/
+
 /**
  * A number with a decimal point, as its own token.
  *
@@ -74,5 +77,15 @@ export const canonicalValue = (value: string): string => {
 
   // Whitespace runs carry no meaning between CSS tokens, and a value written across two lines
   // in a style object arrives here with the newline in it.
-  return out.replace(/\s+/g, ' ').trim()
+  out = out.replace(/\s+/g, ' ').trim()
+
+  // A number written as a string is the number it reads as. The decoder reads a value back with
+  // `Number()` on the way into the sheet, so `'1e3'` was `p_1000` there while the compiler, which
+  // names the value as written, put `p_1e3` on the element: a class with no rule behind it.
+  // Folded here, under the decoder's own conditions, both name the number.
+  if (out !== '' && !LEADING_ZERO.test(out)) {
+    const number = Number(out)
+    if (!Number.isNaN(number)) return String(number)
+  }
+  return out
 }

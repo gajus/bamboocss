@@ -98,7 +98,25 @@ export interface EncoderScope {
    * whose styles they are.
    */
   recipe_origins?: Map<string, AtomOrigin>
+  /**
+   * The order this call wrote a property in under more than one condition: one entry per
+   * property, its atoms' hashes in written order, joined by `WRITTEN_ORDER_SEPARATOR`.
+   *
+   * What decides between two conditions the sorter ranks alike, `_dark` and `&[data-active]`,
+   * which the sheet otherwise orders by whichever it met first anywhere. @see writtenOrders
+   */
+  written_orders?: Set<string>
 }
+
+/** One call's atoms for one property it wrote under more than one condition, in written order. */
+export interface WrittenOrder {
+  /** The owner that wrote it, `undefined` for a pinned one: `extract:src/button.tsx`. */
+  owner?: string
+  hashes: string[]
+}
+
+/** Between the hashes of one written order. No hash holds it. */
+const WRITTEN_ORDER_SEPARATOR = '\u0001'
 
 interface InlineRecipeContribution {
   kind: 'cva' | 'sva'
@@ -160,6 +178,7 @@ const mergeScope = (target: EncoderScope, source: EncoderScope) => {
     const origins = (target.recipe_origins ??= new Map())
     if (!origins.has(name)) origins.set(name, origin)
   })
+  target.written_orders = mergeSet(target.written_orders, source.written_orders)
 }
 
 /** A key nothing may take away: encoded with no owner recording, so no owner can release it. */
@@ -1281,6 +1300,12 @@ export class StyleEncoder {
   private activeOrigin: AtomOrigin | null = null
   /** Whether `processAtomic` also interns a mixin's declarations. @see withMixinAtoms */
   private mixinAtoms = false
+  /** Whether `processAtomic` notes the order a call wrote its conditions in. @see withoutWrittenOrder */
+  private recordsWrittenOrder = true
+  /** Written orders from calls no owner was recording for, which nothing releases. */
+  private pinnedWrittenOrders = new Set<string>()
+  /** `writtenOrders()` until a pinned order or an owner changes. */
+  private writtenOrderList: WrittenOrder[] | undefined
 
   /** Stable owner rank shared by every ordered registry, including registries first touched later. */
   private ownerOrderRanks = new Map<string, OrderOwnerRank>()
@@ -1629,6 +1654,7 @@ export class StyleEncoder {
       const transitionPayloadPlan = this.planViewTransitionPayloads(owner, scope, previous)
       const recipeOwnerOrderPlan = this.planRecipeOwnerOrder(scope, previous)
       this.owners.set(owner, scope)
+      this.writtenOrderList = undefined
       this.retainScope(scope)
       if (previous) this.releaseScope(previous)
       orderPlan()
@@ -1998,6 +2024,7 @@ export class StyleEncoder {
       const transitionPayloadPlan = this.planViewTransitionPayloads(owner, empty, scope)
       const recipeOwnerOrderPlan = this.planRecipeOwnerOrder(empty, scope)
       this.owners.delete(owner)
+      this.writtenOrderList = undefined
       this.releaseScope(scope)
       orderPlan()
       transitionPayloadPlan()
@@ -2285,6 +2312,7 @@ export class StyleEncoder {
     this.ensureScopeOrderOwner(owner, previous)
     const orderPlan = this.planScopeOrder(owner, scope, previous)
     this.owners.set(owner, scope)
+    this.writtenOrderList = undefined
     this.retainScope(scope)
     this.releaseScope(previous)
     orderPlan()
@@ -2349,6 +2377,8 @@ export class StyleEncoder {
     set: Set<string>,
     obj: ResultItem['data'][number],
     baseEntry?: Partial<Omit<StyleEntry, 'prop' | 'value' | 'cond'>>,
+    /** Where to note each conditional declaration as `prop, condition, hash`, in written order. */
+    leaves?: string[],
   ) => {
     const isCondition = this.context.conditions.isCondition
     const traverseOptions = { separator: StyleEncoder.conditionSeparator }
@@ -2424,6 +2454,7 @@ export class StyleEncoder {
 
         const hashed = hashStyleEntry(Object.assign(baseEntry ?? {}, { prop, value, cond: resolvedCondition }))
         set.add(hashed)
+        if (leaves && resolvedCondition) leaves.push(prop, resolvedCondition, hashed)
 
         prevProp = prop
       },
@@ -2431,16 +2462,86 @@ export class StyleEncoder {
     )
   }
 
+  /**
+   * Run `fn` without noting written orders: for objects no one wrote, such as those `staticCss`
+   * generates from its config, whose condition order means nothing.
+   */
+  withoutWrittenOrder = <T>(fn: () => T): T => {
+    const previous = this.recordsWrittenOrder
+    this.recordsWrittenOrder = false
+    try {
+      return fn()
+    } finally {
+      this.recordsWrittenOrder = previous
+    }
+  }
+
+  /**
+   * Note, for each property one call wrote under more than one condition, the order it wrote
+   * them in. `leaves` is `prop, condition, hash` for each conditional declaration, in the order
+   * the call wrote them.
+   */
+  private noteWrittenOrder = (leaves: string[]) => {
+    // Most calls write each property under one condition at most, and have nothing to note: found
+    // without allocating, as the leaves are few.
+    let repeats = false
+    for (let index = 0; index < leaves.length && !repeats; index += 3) {
+      for (let other = index + 3; other < leaves.length; other += 3) {
+        if (leaves[other] === leaves[index] && leaves[other + 1] !== leaves[index + 1]) {
+          repeats = true
+          break
+        }
+      }
+    }
+    if (!repeats) return
+
+    const byProp = new Map<string, { conditions: Set<string>; hashes: string[] }>()
+    for (let index = 0; index < leaves.length; index += 3) {
+      const prop = leaves[index]!
+      let written = byProp.get(prop)
+      if (!written) byProp.set(prop, (written = { conditions: new Set(), hashes: [] }))
+      written.conditions.add(leaves[index + 1]!)
+      written.hashes.push(leaves[index + 2]!)
+    }
+
+    // Pinned when no owner records the call, as its atoms are. A scope without an owner is a
+    // caller's view of one call, which nothing keeps.
+    const owned = this.activeOwner !== null && this.activeScope !== null
+    const target = owned ? (this.activeScope!.written_orders ??= new Set()) : this.pinnedWrittenOrders
+    if (!owned) this.writtenOrderList = undefined
+    for (const { conditions, hashes } of byProp.values()) {
+      if (conditions.size > 1) target.add(hashes.join(WRITTEN_ORDER_SEPARATOR))
+    }
+  }
+
+  /**
+   * Every written order the encoder holds now: the pinned ones, and those of each owner as it
+   * was last read, with the owner that wrote it. A re-read owner's replace its last, and a
+   * released one's go with it.
+   */
+  writtenOrders = (): WrittenOrder[] => {
+    if (this.writtenOrderList) return this.writtenOrderList
+    const orders: WrittenOrder[] = []
+    for (const order of this.pinnedWrittenOrders) orders.push({ hashes: order.split(WRITTEN_ORDER_SEPARATOR) })
+    for (const [owner, scope] of this.owners) {
+      scope.written_orders?.forEach((order) => orders.push({ owner, hashes: order.split(WRITTEN_ORDER_SEPARATOR) }))
+    }
+    return (this.writtenOrderList = orders)
+  }
+
   processAtomic = (styles: StyleResultObject) => {
     // Hashed into a local set first, so this call's contribution stays separable from whatever
     // the encoder already holds. Insertion order into `atomic` is unchanged by the detour: a
     // hash already there does not move, and a new one still arrives in traversal order.
     const set = new Set<string>()
-    this.hashStyleObject(set, styles)
-    if (this.mixinAtoms) {
-      const expanded = this.context.mixins.expand(styles)
-      if (expanded !== styles) this.hashStyleObject(set, expanded)
-    }
+    // The written-out form is the one whose order is the call's: a mixin's declarations stand
+    // where it is applied. Expanded before either is hashed, which leaves the hashing order as
+    // it was, the call as written first.
+    const expanded = this.mixinAtoms ? this.context.mixins.expand(styles) : styles
+    const leaves = this.recordsWrittenOrder ? [] : undefined
+    this.hashStyleObject(set, styles, undefined, expanded === styles ? leaves : undefined)
+    if (expanded !== styles) this.hashStyleObject(set, expanded, undefined, leaves)
+    if (leaves && leaves.length > 3) this.noteWrittenOrder(leaves)
 
     const scope = this.activeScope
     const unowned = this.activeOwner === null

@@ -109,9 +109,11 @@ condition and its property's priority, and the layer opens with a statement fixi
 
 A name reads as its key. `s010` is the specificity of the rule's selector, `(0,1,0)`; `c2` is the rule's condition,
 numbered in the order Bamboo sorts conditions, the same number wherever that condition appears; `p3000` is the
-property's priority, shorthands before longhands. Every `!important` declaration goes into the one sublayer named
-`important`, because importance inverts layer order and one layer is the only place two important declarations still
-resolve by specificity and then source order.
+property's priority, shorthands before longhands. Two conditions that rank alike, such as `_dark` and `&[data-active]`,
+are ordered as style objects write them, and when objects write them in opposite orders their rules share one sublayer,
+named for both — `s020-c4c5-p3000` — where each rule is placed after the ones written before it. Every `!important`
+declaration goes into the one sublayer named `important`, because importance inverts layer order and one layer is the
+only place two important declarations still resolve by specificity and then source order.
 
 This fixes precedence between sublayers regardless of where their rules sit in the file. One flat layer carried
 precedence in its source order — shorthands before longhands, bare rules before conditional ones, each breakpoint in its

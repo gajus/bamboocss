@@ -358,18 +358,23 @@ export class StaticCss {
     // `processAtomic` rather than hashing straight into `encoder.atomic`, which is the same
     // work: it is what marks these as answering to config rather than to a file, so a file
     // that stops writing the same declaration cannot take the safelisted one with it.
-    results.css.forEach((css) => {
-      encoder.processAtomic(css)
-    })
-
-    results.recipes.forEach((result) => {
-      Object.entries(result).forEach(([name, value]) => {
-        encoder.processRecipe(name, value)
+    //
+    // Without noting the order conditions were written in: these objects are generated from the
+    // config, and the order of its `conditions` says nothing about which should win.
+    encoder.withoutWrittenOrder(() => {
+      results.css.forEach((css) => {
+        encoder.processAtomic(css)
       })
-    })
 
-    results.patterns.forEach((result) => {
-      encoder.processAtomic(result)
+      results.recipes.forEach((result) => {
+        Object.entries(result).forEach(([name, value]) => {
+          encoder.processRecipe(name, value)
+        })
+      })
+
+      results.patterns.forEach((result) => {
+        encoder.processAtomic(result)
+      })
     })
 
     if (atomizeRecipes) encoder.atomizeObservedRecipes()

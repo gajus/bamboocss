@@ -76,6 +76,18 @@ css({ _active: { bg: 'red.800' }, _hover: { bg: 'red.700' } })
 - A condition requiring none of these states, such as `_dark`, `_disabled` or `&[data-open]`, ranks below every one that
   does. To make one win, nest the state inside it: `_dark: { _hover: { … } }` is more specific than `_hover`.
 
+Between two conditions that rank alike, such as `_dark` and `&[data-active]`, the one written later wins, as it would in
+a stylesheet written by hand:
+
+```jsx
+// Dark and active at once, the color is red: `&[data-active]` comes later.
+css({ _dark: { color: 'white' }, '&[data-active]': { color: 'red' } })
+```
+
+Each style object keeps its own order for each property it writes, whatever other calls write. Only the same two
+declarations written in opposite orders, in two places, cannot both keep theirs. The build warns, the stylesheet keeps
+one order in every build, and nesting one condition inside the other settles it.
+
 ### Built-in conditions
 
 Bamboo includes a set of common pseudo states that you can use to style your components:

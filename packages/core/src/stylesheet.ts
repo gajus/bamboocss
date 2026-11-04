@@ -11,7 +11,7 @@ import type {
 } from '@bamboocss/types'
 import postcss, { CssSyntaxError } from 'postcss'
 import { stringifyCustomProperties } from './global-vars'
-import type { UtilitySublayerKey } from './layers'
+import type { UtilityAtom, UtilitySublayerKey } from './layers'
 import { optimizeCss, optimizeCssRoot } from './optimize'
 import sortMediaQueries from './plugins/sort-mq'
 import { serializeStyles } from './serialize'
@@ -189,6 +189,7 @@ export class Stylesheet {
     styles: Dict,
     conditions: ConditionDetails[] | undefined,
     priorityOf: (property: string) => number,
+    atom?: UtilityAtom,
   ) => {
     // The ordinary atom — one selector, perhaps a condition or two, then its declarations —
     // is one group, and can be written as it stands. Only an object that branches, or that
@@ -196,7 +197,7 @@ export class Stylesheet {
     // apart. This is where a sheet spends its time, so the walk below is the exception.
     const single = singleUtilityKey(styles, conditions, priorityOf)
     if (single) {
-      this.appendUtility(single, styles)
+      this.appendUtility(single, styles, atom)
       return
     }
 
@@ -244,12 +245,12 @@ export class Stylesheet {
 
     walk(styles, [], '', NO_SPECIFICITY, false)
 
-    for (const { key, styles: grouped } of groups.values()) this.appendUtility(key, grouped)
+    for (const { key, styles: grouped } of groups.values()) this.appendUtility(key, grouped, atom)
   }
 
-  private appendUtility = (key: UtilitySublayerKey, styles: Dict) => {
+  private appendUtility = (key: UtilitySublayerKey, styles: Dict, atom?: UtilityAtom) => {
     try {
-      this.layers.utilitySublayer(key).append(stringify(styles))
+      this.layers.appendUtility(key, stringify(styles), atom)
     } catch (error) {
       if (error instanceof CssSyntaxError) {
         logger.error('sheet:process', error.showSourceCode(true))
@@ -260,6 +261,7 @@ export class Stylesheet {
   }
 
   processDecoder = (decoder: StyleDecoder, { includeRecipes = true }: { includeRecipes?: boolean } = {}) => {
+    this.layers.noteWrittenOrders(decoder.writtenOrders)
     sortStyleRules([...decoder.atomic]).forEach((css) => {
       const layer = (css.layer as LayerName) ?? 'utilities'
       if (layer !== 'utilities') {
@@ -269,7 +271,11 @@ export class Stylesheet {
       // The sorter's last key is the property the atom was written as, resolved shorthand
       // and all; every declaration the atom emits inherits it, as it did in the flat layer.
       const priority = getPropertyPriority(css.entry.prop)
-      this.processUtility(css.result, css.conditions, () => priority)
+      this.processUtility(css.result, css.conditions, () => priority, {
+        hash: css.hash,
+        className: css.className,
+        value: css.entry.value,
+      })
     })
 
     if (includeRecipes)

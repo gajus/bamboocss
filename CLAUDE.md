@@ -443,12 +443,16 @@ Brief description of the change and its impact.
 1. Style objects → `packages/core/src/rule-processor.ts`
 2. CSS generation → `packages/core/src/stylesheet.ts`. Utilities are written into cascade sublayers keyed by
    specificity, condition and property priority (`packages/core/src/layers.ts`), so precedence between sublayers does
-   not depend on rule arrival order. Source order still breaks ties within a sublayer.
-   `packages/core/__tests__/cascade-oracle.test.ts` models the browser's cascade and pins the winner of every competing
-   pair in a corpus; a change to where rules are written has to leave that snapshot untouched. Rules enter the postcss
-   tree as strings, which strips their positions, so the dev server's source map for the stylesheet is read off the
-   served text (`cssSourceMap` in `packages/vite/src/css-output-module.ts`) against call sites the encoder recorded
-   under `recordOrigins` — on only when Vite's `css.devSourcemap` is.
+   not depend on rule arrival order. Source order still breaks ties within a sublayer. Conditions the sorter ranks alike
+   (`_dark`, `&[data-active]`) are ordered by the order each style object wrote them in, per property: the encoder notes
+   it per owner (`written_orders`), and sublayers that objects order both ways are merged into one whose rules are
+   placed to suit every object (`orderTiedSublayers`). A new path into `processAtomic` writes such orders unless it runs
+   under `withoutWrittenOrder`, as `staticCss` does. `packages/core/__tests__/cascade-oracle.test.ts` models the
+   browser's cascade and pins the winner of every competing pair in a corpus; a change to where rules are written has to
+   leave that snapshot untouched. Rules enter the postcss tree as strings, which strips their positions, so the dev
+   server's source map for the stylesheet is read off the served text (`cssSourceMap` in
+   `packages/vite/src/css-output-module.ts`) against call sites the encoder recorded under `recordOrigins` — on only
+   when Vite's `css.devSourcemap` is.
 3. Optimization → `packages/core/src/optimize.ts` dispatches; the PostCSS plugin order lives in
    `packages/core/src/plugins/optimize-postcss.ts`
    - LightningCSS path: `packages/plugin-lightningcss/src/optimize-lightningcss.ts`, reached through the `css:optimize`

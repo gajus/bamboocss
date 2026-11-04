@@ -414,11 +414,17 @@ export class Context {
     } satisfies Omit<StylesheetContext, 'layers'>
   }
 
+  /** Order conflicts already reported, so a dev server rebuilding its sheet says each once. */
+  private reportedOrderConflicts = new Set<string>()
+
   createSheet = (): Stylesheet => {
-    return new Stylesheet({
-      ...this.baseSheetContext,
-      layers: this.createLayers(this.config.layers as CascadeLayers),
-    })
+    const layers = this.createLayers(this.config.layers as CascadeLayers)
+    layers.reportConflict = (message) => {
+      if (this.reportedOrderConflicts.has(message)) return
+      this.reportedOrderConflicts.add(message)
+      logger.warn('sheet:order', message)
+    }
+    return new Stylesheet({ ...this.baseSheetContext, layers })
   }
 
   createRecipes = (theme: Theme): Recipes => {

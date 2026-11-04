@@ -25,7 +25,7 @@ import type {
 import type { Context } from './context'
 import { setDeclarations } from './merge-declarations'
 import { sortStyleRules } from './sort-style-rules'
-import { type EncoderScope, StyleEncoder } from './style-encoder'
+import { type EncoderScope, StyleEncoder, type WrittenOrder } from './style-encoder'
 
 import { Recipes } from './recipes'
 
@@ -558,8 +558,12 @@ export class StyleDecoder {
    * Collect and re-create all styles and recipes objects from the style encoder
    * So that we can just iterate over them and transform resulting CSS objects into CSS strings
    */
+  /** The written orders of the encoder last collected. @see StyleEncoder.writtenOrders */
+  writtenOrders: WrittenOrder[] = []
+
   collect = (encoder: StyleEncoder) => {
     this.forget(encoder)
+    this.writtenOrders = encoder.writtenOrders()
     this.collectAtomic(encoder)
     this.collectRecipe(encoder)
     this.collectRecipeBase(encoder)

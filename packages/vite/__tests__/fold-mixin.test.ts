@@ -27,6 +27,7 @@ const config = {
         hoverable: { value: { color: 'gray', _hover: { color: 'yellow' } } },
         layerCard: { value: { borderWidth: '1px', background: '#fafafa' } },
         textBody: { value: { fontSize: '16px' } },
+        loudBlue: { value: { color: 'blue !important' } },
       },
     },
   },
@@ -222,6 +223,42 @@ describe('a mixin composed with anything else', () => {
 })
 
 /** Nothing competes with a mixin that is the whole style set, so it keeps its one class. */
+describe('a mixin beside an important declaration', () => {
+  // A mixin is applied where it is written, as its declarations would be, and CSS does not
+  // let a declaration written later replace an important one in the same rule.
+  test('does not replace an important value written before it', () => {
+    expect(valueOf(compile(`export const A = css({ color: 'red !important', mixin: 'cardB' })`), 'color')).toBe('red')
+  })
+
+  test('nor with a condition of its own', () => {
+    const compiled = compile(`export const A = css({ color: 'red!', mixin: 'hoverable' })`)
+
+    expect(valueOf(compiled, 'color')).toBe('red')
+    expect(valueOf(compiled, 'color', { hover: true })).toBe('red')
+  })
+
+  test('nor in a recipe', () => {
+    const compiled = compile(
+      `const box = cva({ base: { color: 'blue !important', mixin: 'cardA' } })\nexport const A = box()`,
+    )
+
+    expect(valueOf(compiled, 'color')).toBe('blue')
+    expect(valueOf(compiled, 'letter-spacing')).toBe('0.1em')
+  })
+
+  test('keeps its own important value against a property written after it', () => {
+    expect(valueOf(compile(`export const A = css({ mixin: 'loudBlue', color: 'red' })`), 'color')).toBe('blue')
+  })
+
+  test('replaces an important value with one of its own', () => {
+    expect(valueOf(compile(`export const A = css({ color: 'red!', mixin: 'loudBlue' })`), 'color')).toBe('blue')
+  })
+
+  test('composing two style objects, the later one still wins', () => {
+    expect(valueOf(compile(`export const A = css({ color: 'red!' }, { mixin: 'cardB' })`), 'color')).toBe('blue')
+  })
+})
+
 describe('a mixin that is the whole style set', () => {
   test('keeps its class', () => {
     const compiled = compile(`export const A = css({ mixin: 'cardA' })`)

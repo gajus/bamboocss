@@ -98,6 +98,9 @@ css({ color: 'red.500', mixin: 'card' }) // gray, blue on hover
 css({ mixin: 'card', color: 'red.500' }) // red, blue on hover
 ```
 
+As in CSS, a declaration written later does not override an important one unless it is important too, so
+`css({ color: 'red.500!', mixin: 'card' })` stays red, on hover as well.
+
 The same holds wherever styles are combined: a recipe variant's mixin overrides the base, a compound variant's overrides
 the variants it matches, and `cx()` keeps what an earlier mixin sets that a later one does not.
 

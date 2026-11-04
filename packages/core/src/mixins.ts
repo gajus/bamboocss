@@ -1,5 +1,6 @@
-import { flatten, isObject, mergeProps, normalizeStyleObject } from '@bamboocss/shared'
+import { flatten, isObject, normalizeStyleObject } from '@bamboocss/shared'
 import type { Dict, Theme } from '@bamboocss/types'
+import { mergeDeclarations } from './merge-declarations'
 import type { Utility } from './utility'
 
 const MIXIN = 'mixin'
@@ -20,7 +21,9 @@ interface MixinsOptions {
  * recipe variant's mixin lost to the base and a mixin's `_hover` lost to any `color`.
  *
  * `expand` is the written-out form: the style object with each `mixin` replaced by the
- * declarations it names, merged in key order the way `css(a, b)` merges its arguments.
+ * declarations it names, merged in key order the way `css(a, b)` merges its arguments — except
+ * that, being declarations of one object, an important one is not replaced by a later one that
+ * is not: `{ color: 'red !important', mixin: 'body' }` keeps red. @see mergeDeclarations
  */
 export class Mixins {
   private definitions: Record<string, Dict>
@@ -81,6 +84,6 @@ export class Mixins {
 
   private merge = (pieces: Dict[]): Dict => {
     if (pieces.length === 1) return pieces[0]!
-    return mergeProps(...pieces.map((piece) => normalizeStyleObject(piece, this.options)))
+    return mergeDeclarations(...pieces.map((piece) => normalizeStyleObject(piece, this.options)))
   }
 }

@@ -23,6 +23,7 @@ import type {
   ViewTransitionResult,
 } from '@bamboocss/types'
 import type { Context } from './context'
+import { setDeclarations } from './merge-declarations'
 import { sortStyleRules } from './sort-style-rules'
 import { type EncoderScope, StyleEncoder } from './style-encoder'
 
@@ -366,6 +367,11 @@ export class StyleDecoder {
     // 1. `.class { line-height: 1.2; } .class:hover { box-shadow: outline; } .class { outline: none }`
     // instead of:
     // 2. `.class { line-height: 1.2; outline: none; } .class:hover { box-shadow: outline; }`
+    //
+    // The group is one rule's declarations, so they merge as CSS merges them: a later key
+    // writing what an earlier one did replaces it, unless the earlier is important and the
+    // later is not. `{ display: 'block !important', stack: true }`, with `stack` writing
+    // `display: flex`, keeps the block.
     const sorted = sortStyleRules(details)
     sorted.forEach((value) => {
       if (value.conditions) {
@@ -374,14 +380,14 @@ export class StyleDecoder {
         if (expanded) {
           for (const blockConditions of expanded) {
             const path = basePath.concat(blockConditions.flatMap((c) => this.resolveCondition(c)))
-            obj = deepSet(obj, path, value.result)
+            obj = setDeclarations(obj, path, value.result)
           }
         } else {
           const path = basePath.concat(value.conditions.flatMap((c) => this.resolveCondition(c)))
-          obj = deepSet(obj, path, value.result)
+          obj = setDeclarations(obj, path, value.result)
         }
       } else {
-        obj = deepSet(obj, basePath, value.result)
+        obj = setDeclarations(obj, basePath, value.result)
       }
     })
 

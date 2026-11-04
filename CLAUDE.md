@@ -101,6 +101,12 @@ is used only while every one of those still hashes the same (`witness`, memoized
 evaluation depends on has to go through `source()` or `record_read`, or the cache will not see it change.
 `packages/native-extractor/__tests__/cross-call-cache.test.ts` fails if validation or replay is removed.
 
+**A panic in Rust is an error in JavaScript, and the process lives on.** Every `#[napi]` export takes `catch_unwind`;
+one without it ends the dev server on a panic, and `packages/native-extractor/__tests__/panic.test.ts` fails. A panic
+while a call holds a process-wide cache's lock poisons it, so each of those caches is a `SharedCache`
+(`packages/native-extractor/src/cache.rs`), which empties itself and goes on instead of switching off for good. A stack
+overflow is not a panic: brackets nested a few thousand deep (6,000 on macOS) still end the process.
+
 **Killing a test run can leave half-built packages behind.** `packages/vite/__tests__/built-package-consumer.test.ts`
 runs `pnpm build` for any package whose `dist` lacks declarations, and a run stopped in the middle of that leaves a
 `dist` holding `index.cjs` and nothing else. Every later test that imports the package's ESM entry then fails with

@@ -22,6 +22,7 @@ use oxc_semantic::{Scoping, Semantic, SemanticBuilder};
 use oxc_span::{GetSpan, Span};
 use oxc_syntax::symbol::SymbolId;
 
+use crate::cache::SharedCache;
 use crate::evaluator::{EvalResult, FileEvaluator, ProjectEvaluator, Refusal};
 use exact::{Exactness, exact_result, is_inert, is_inert_literal, unwrap};
 use model::*;
@@ -2035,11 +2036,7 @@ fn module_recipes(
     // Across native calls too: every transform of a module importing from a barrel walks the
     // barrel's members for recipes, and without this parsed each of them every time.
     let global_key = (project.fingerprint(), key.clone());
-    let stored = MODULE_RECIPES_CACHE
-        .get_or_init(|| std::sync::Mutex::new(HashMap::new()))
-        .lock()
-        .ok()
-        .and_then(|cache| cache.get(&global_key).cloned());
+    let stored = MODULE_RECIPES_CACHE.get(&global_key);
     if let Some((result, witnesses)) = stored
         && project.witnesses_hold(&witnesses)
     {
@@ -2048,24 +2045,14 @@ fn module_recipes(
     }
     let (result, witnesses) =
         project.witnessed(|| module_recipes_uncached(project, filename, entrypoints).map(Arc::new));
-    if let Ok(mut global) = MODULE_RECIPES_CACHE
-        .get_or_init(|| std::sync::Mutex::new(HashMap::new()))
-        .lock()
-    {
-        if global.len() >= 50_000 {
-            global.clear();
-        }
-        global.insert(global_key, (result.clone(), witnesses));
-    }
+    MODULE_RECIPES_CACHE.insert(global_key, (result.clone(), witnesses));
     cache.insert(key, result.clone());
     result
 }
 
 /// One module's recipes, keyed by project fingerprint and path, with the files they read.
 type ModuleRecipesEntry = (Option<Arc<ModuleRecipes>>, Vec<(String, Option<u64>)>);
-static MODULE_RECIPES_CACHE: std::sync::OnceLock<
-    std::sync::Mutex<HashMap<(u64, String), ModuleRecipesEntry>>,
-> = std::sync::OnceLock::new();
+static MODULE_RECIPES_CACHE: SharedCache<(u64, String), ModuleRecipesEntry> = SharedCache::new();
 
 fn module_recipes_uncached(
     project: &ProjectEvaluator<'_>,
@@ -2170,9 +2157,19 @@ fn module_recipes_uncached(
 }
 
 type ExportedRecipesEntry = (Option<ExportedRecipes>, Vec<(String, Option<u64>)>);
-static EXPORTED_RECIPES_CACHE: std::sync::OnceLock<
-    std::sync::Mutex<HashMap<(u64, String), ExportedRecipesEntry>>,
-> = std::sync::OnceLock::new();
+static EXPORTED_RECIPES_CACHE: SharedCache<(u64, String), ExportedRecipesEntry> =
+    SharedCache::new();
+
+/// For `__poisonCaches` in `lib.rs`.
+pub(crate) fn poison_caches() {
+    MODULE_RECIPES_CACHE.poison();
+    EXPORTED_RECIPES_CACHE.poison();
+}
+
+/// For `__cacheHits` in `lib.rs`.
+pub(crate) fn cache_hits() -> u64 {
+    MODULE_RECIPES_CACHE.hits() + EXPORTED_RECIPES_CACHE.hits()
+}
 
 /// `exported_recipes` from a fresh walk, remembered across native calls while every file the
 /// walk read still holds what it held. Only the whole walk is stored: a nested one can be cut
@@ -2187,11 +2184,7 @@ fn exported_recipes_cached(
         project.fingerprint(),
         crate::evaluator::normalize_path(filename),
     );
-    let global = EXPORTED_RECIPES_CACHE.get_or_init(|| std::sync::Mutex::new(HashMap::new()));
-    let stored = global
-        .lock()
-        .ok()
-        .and_then(|cache| cache.get(&key).cloned());
+    let stored = EXPORTED_RECIPES_CACHE.get(&key);
     if let Some((result, witnesses)) = stored
         && project.witnesses_hold(&witnesses)
     {
@@ -2199,12 +2192,7 @@ fn exported_recipes_cached(
     }
     let (result, witnesses) = project
         .witnessed(|| exported_recipes(project, filename, entrypoints, cache, &mut HashSet::new()));
-    if let Ok(mut global) = global.lock() {
-        if global.len() >= 50_000 {
-            global.clear();
-        }
-        global.insert(key, (result.clone(), witnesses));
-    }
+    EXPORTED_RECIPES_CACHE.insert(key, (result.clone(), witnesses));
     result
 }
 

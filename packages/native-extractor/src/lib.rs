@@ -18,6 +18,7 @@ use oxc_semantic::{AstNodes, NodeId, Scoping, SemanticBuilder};
 use oxc_span::{GetSpan, SourceType};
 use oxc_syntax::{operator::UnaryOperator, symbol::SymbolId};
 
+mod cache;
 mod evaluator;
 mod fold;
 mod names;
@@ -981,12 +982,48 @@ fn analyze_source<'sources>(
     })
 }
 
-#[napi]
+// Every export catches a panic, `#[napi(catch_unwind)]`, and throws it in JavaScript as an error.
+// One unwinding into N-API instead ends the process, which is the dev server.
+
+/// Armed by `__panicNext`: the next call into an entry point panics as it starts.
+static PANIC_NEXT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+fn panic_if_asked() {
+    use std::sync::atomic::Ordering::Relaxed;
+    if PANIC_NEXT.load(Relaxed) && PANIC_NEXT.swap(false, Relaxed) {
+        // Without the panic hook, which would print a panic nobody needs to read about.
+        std::panic::resume_unwind(Box::new("a panic `__panicNext` asked for"));
+    }
+}
+
+/// For the tests, and not part of the API: the next call into `analyze`, `analyzeMany`,
+/// `accountTokens` or `compileModules` panics, as a bug in it would.
+#[napi(catch_unwind, js_name = "__panicNext")]
+pub fn panic_next() {
+    PANIC_NEXT.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// For the tests: poison the lock of every cache native calls share, as a panic caught while a
+/// call held one would.
+#[napi(catch_unwind, js_name = "__poisonCaches")]
+pub fn poison_caches() {
+    evaluator::poison_caches();
+    fold::poison_caches();
+}
+
+/// For the tests: how many lookups the caches native calls share have answered.
+#[napi(catch_unwind, js_name = "__cacheHits")]
+pub fn cache_hits() -> i64 {
+    (evaluator::cache_hits() + fold::cache_hits()) as i64
+}
+
+#[napi(catch_unwind)]
 pub fn analyze(
     filename: String,
     source: String,
     entrypoints: Vec<NativeEntrypoint>,
 ) -> Result<NativeAnalysis> {
+    panic_if_asked();
     let project = ProjectEvaluator::new(
         std::iter::once((filename.as_str(), source.as_str())),
         &entrypoints,
@@ -997,12 +1034,13 @@ pub fn analyze(
 
 /// Analyze a cold or incremental inventory in one N-API call. ASTs and expression graphs stay
 /// in Rust; only compact extraction records cross into JavaScript.
-#[napi]
+#[napi(catch_unwind)]
 pub fn analyze_many(
     sources: Vec<NativeSource>,
     entrypoints: Vec<NativeEntrypoint>,
     options: Option<NativeProjectOptions>,
 ) -> Result<Vec<NativeFileAnalysis>> {
+    panic_if_asked();
     let project = ProjectEvaluator::new(
         sources
             .iter()
@@ -1037,13 +1075,14 @@ pub fn analyze_many(
 ///
 /// `tokenModules` are the configured tokens entrypoints; `pathMappings` are the tsconfig
 /// `paths`, resolved so a specifier mapped onto the artifact counts as the artifact.
-#[napi]
+#[napi(catch_unwind)]
 pub fn account_tokens(
     filename: String,
     source: String,
     token_modules: Vec<String>,
     path_mappings: Option<Vec<NativePathMapping>>,
 ) -> Result<NativeTokenAccounting> {
+    panic_if_asked();
     let mappings = path_mappings.unwrap_or_default();
     let is_entrypoint = |specifier: &str| {
         if token_modules
@@ -1107,12 +1146,13 @@ pub struct NativeFoldOptions {
 ///
 /// `sources` are the modules to analyze; `auxiliary` are modules whose bytes differ from disk
 /// (a `parser:before` output, an unsaved buffer) and which a cross-module read must see as-is.
-#[napi]
+#[napi(catch_unwind)]
 pub fn compile_modules(
     sources: Vec<NativeSource>,
     auxiliary: Vec<NativeSource>,
     options: NativeFoldOptions,
 ) -> Result<Vec<fold::model::FoldAnalysis>> {
+    panic_if_asked();
     let entrypoints = vec![
         NativeEntrypoint {
             kind: "css".into(),

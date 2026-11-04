@@ -5,7 +5,7 @@ use std::{
     fs,
     hash::{Hash, Hasher},
     path::{Path, PathBuf},
-    sync::{Arc, Mutex, OnceLock},
+    sync::Arc,
 };
 
 use oxc_allocator::Allocator;
@@ -25,7 +25,9 @@ use oxc_syntax::{
     symbol::{SymbolFlags, SymbolId},
 };
 
-use crate::{NativeEntrypoint, NativePathMapping, NativeProjectOptions, NativeToken};
+use crate::{
+    NativeEntrypoint, NativePathMapping, NativeProjectOptions, NativeToken, cache::SharedCache,
+};
 
 /// How deeply helper calls may nest before the evaluator stops following them, so a recursion
 /// that does not end stops before the stack does. Real helpers nest a handful.
@@ -549,12 +551,22 @@ struct CallBudget {
 /// Project fingerprint, file, exported name.
 type ExportCacheKey = (u64, String, String);
 
-static EXPORT_CACHE: OnceLock<Mutex<HashMap<ExportCacheKey, CachedExport>>> = OnceLock::new();
-const EXPORT_CACHE_LIMIT: usize = 50_000;
+static EXPORT_CACHE: SharedCache<ExportCacheKey, CachedExport> = SharedCache::new();
 
 /// A file's content hash by path, valid while its modification time and size stand still.
 type FileStamp = (Option<std::time::SystemTime>, u64);
-static FILE_HASHES: OnceLock<Mutex<HashMap<String, (FileStamp, u64)>>> = OnceLock::new();
+static FILE_HASHES: SharedCache<String, (FileStamp, u64)> = SharedCache::new();
+
+/// For `__poisonCaches` in `lib.rs`.
+pub(crate) fn poison_caches() {
+    EXPORT_CACHE.poison();
+    FILE_HASHES.poison();
+}
+
+/// For `__cacheHits` in `lib.rs`.
+pub(crate) fn cache_hits() -> u64 {
+    EXPORT_CACHE.hits() + FILE_HASHES.hits()
+}
 
 fn content_hash(text: &str) -> u64 {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
@@ -944,19 +956,13 @@ impl<'a> ProjectEvaluator<'a> {
                 .map(|text| content_hash(&text));
         }
         let stamp = (metadata.modified().ok(), metadata.len());
-        let memo = FILE_HASHES.get_or_init(|| Mutex::new(HashMap::new()));
-        if let Some((known, hash)) = memo.lock().ok().and_then(|memo| memo.get(path).cloned())
+        if let Some((known, hash)) = FILE_HASHES.get(path)
             && known == stamp
         {
             return Some(hash);
         }
         let hash = content_hash(&fs::read_to_string(path).ok()?);
-        if let Ok(mut memo) = memo.lock() {
-            if memo.len() >= EXPORT_CACHE_LIMIT {
-                memo.clear();
-            }
-            memo.insert(path.to_string(), (stamp, hash));
-        }
+        FILE_HASHES.insert(path.to_string(), (stamp, hash));
         Some(hash)
     }
 
@@ -1222,11 +1228,7 @@ impl<'a> ProjectEvaluator<'a> {
             stack.insert(key.clone(), Site::Pending);
         }
         let cache_key = (self.fingerprint(), key.file.clone(), key.name.clone());
-        let cached = EXPORT_CACHE
-            .get_or_init(|| Mutex::new(HashMap::new()))
-            .lock()
-            .ok()
-            .and_then(|cache| cache.get(&cache_key).cloned());
+        let cached = EXPORT_CACHE.get(&cache_key);
         // Asked for deeper in, or further into the count, than it was evaluated, the same export
         // could have been refused: then it is evaluated here instead, and refused here.
         if let Some(entry) = cached
@@ -1266,23 +1268,15 @@ impl<'a> ProjectEvaluator<'a> {
                 .into_iter()
                 .map(|path| (path.clone(), self.witness(path)))
                 .collect();
-            if let Ok(mut cache) = EXPORT_CACHE
-                .get_or_init(|| Mutex::new(HashMap::new()))
-                .lock()
-            {
-                if cache.len() >= EXPORT_CACHE_LIMIT {
-                    cache.clear();
-                }
-                cache.insert(
-                    cache_key,
-                    CachedExport {
-                        result: result.clone(),
-                        reads,
-                        witnesses,
-                        budget,
-                    },
-                );
-            }
+            EXPORT_CACHE.insert(
+                cache_key,
+                CachedExport {
+                    result: result.clone(),
+                    reads,
+                    witnesses,
+                    budget,
+                },
+            );
         }
         result
     }

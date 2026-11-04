@@ -34,12 +34,12 @@
   },
   "scripts": {
     "mdn": "tsx scripts/prepare.ts",
-    "build": "tsdown src/index.ts --format=esm,cjs --dts",
+    "build": "tsx scripts/prepare.ts && tsdown src/index.ts --format=esm,cjs --dts",
     "build-fast": "tsdown --dts=false src/index.ts --format=esm,cjs",
     "dev": "tsdown --dts=false src/index.ts --watch --format=esm,cjs"
   },
   "devDependencies": {
-    "mdn-data": "^2.15.0"
+    "mdn-data": "2.27.1"
   },
   "engines": {
     "node": ">=22.12.0"

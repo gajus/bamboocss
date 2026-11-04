@@ -1,5 +1,7 @@
 import { createContext } from '@bamboocss/fixture'
+import { allCssProperties } from '@bamboocss/is-valid-prop'
 import { describe, expect, test } from 'vitest'
+import systemTypes from '../src/artifacts/generated/system-types.d.ts.json' with { type: 'json' }
 import { generateStyleProps } from '../src/artifacts/types/style-props'
 
 describe('generate property types', () => {
@@ -301,6 +303,20 @@ describe('generate property types', () => {
          */
       alignTracks?: ConditionalValue<CssProperties["alignTracks"] | AnyString> | undefined
        /**
+         * This feature is not Baseline because it does not work in some of the most widely-used browsers.
+         *
+         * **Syntax**: \`baseline | alphabetic | ideographic | middle | central | mathematical | text-before-edge | text-after-edge\`
+         *
+         * **Initial value**: \`baseline\`
+         *
+         * | Chrome | Firefox | Safari  |  Edge  | IE  |
+         * | :----: | :-----: | :-----: | :----: | :-: |
+         * | **1**  |   No    | **5.1** | **79** | No  |
+         *
+         * @see https://developer.mozilla.org/docs/Web/CSS/Reference/Properties/alignment-baseline
+         */
+      alignmentBaseline?: ConditionalValue<CssProperties["alignmentBaseline"] | AnyString> | undefined
+       /**
          * This feature is well established and works across many devices and browser versions. It’s been available across browsers since January 2020.
          *
          * **Syntax**: \`initial | inherit | unset | revert | revert-layer\`
@@ -539,6 +555,7 @@ describe('generate property types', () => {
          * @see https://developer.mozilla.org/docs/Web/CSS/Reference/Properties/animation-timing-function
          */
       animationTimingFunction?: ConditionalValue<UtilityValues["animationTimingFunction"] | CssVars | CssProperties["animationTimingFunction"] | AnyString> | undefined
+       animationTrigger?: ConditionalValue<string | number | AnyString> | undefined
        /**
          * This feature is well established and works across many devices and browser versions. It’s been available across browsers since March 2022.
          *
@@ -766,6 +783,17 @@ describe('generate property types', () => {
          * @see https://developer.mozilla.org/docs/Web/CSS/Reference/Properties/background-size
          */
       backgroundSize?: ConditionalValue<CssProperties["backgroundSize"] | AnyString> | undefined
+       /**
+         * **Syntax**: \`<length-percentage> | sub | super | baseline\`
+         *
+         * **Initial value**: \`0\`
+         *
+         * | Chrome | Firefox | Safari |  Edge  | IE  |
+         * | :----: | :-----: | :----: | :----: | :-: |
+         * | **1**  |   No    | **4**  | **79** | No  |
+         */
+      baselineShift?: ConditionalValue<CssProperties["baselineShift"] | AnyString> | undefined
+       baselineSource?: ConditionalValue<string | number | AnyString> | undefined
        /**
          * This feature is well established and works across many devices and browser versions. It’s been available across browsers since January 2020.
          *
@@ -1739,6 +1767,7 @@ describe('generate property types', () => {
       captionSide?: ConditionalValue<CssVars | CssProperties["captionSide"] | AnyString> | undefined
        /** **Syntax**: \`<'caret-color'> || <'caret-shape'>\` */
       caret?: ConditionalValue<CssProperties["caret"] | AnyString> | undefined
+       caretAnimation?: ConditionalValue<string | number | AnyString> | undefined
        /**
          * This feature is well established and works across many devices and browser versions. It’s been available across browsers since January 2020.
          *
@@ -1895,6 +1924,7 @@ describe('generate property types', () => {
          * @see https://developer.mozilla.org/docs/Web/CSS/Reference/Properties/column-gap
          */
       columnGap?: ConditionalValue<UtilityValues["columnGap"] | CssVars | CssProperties["columnGap"] | AnyString> | undefined
+       columnHeight?: ConditionalValue<string | number | AnyString> | undefined
        /**
          * This feature is well established and works across many devices and browser versions. It’s been available across browsers since March 2017.
          *
@@ -1983,6 +2013,7 @@ describe('generate property types', () => {
          * @see https://developer.mozilla.org/docs/Web/CSS/Reference/Properties/column-width
          */
       columnWidth?: ConditionalValue<CssProperties["columnWidth"] | AnyString> | undefined
+       columnWrap?: ConditionalValue<string | number | AnyString> | undefined
        /**
          * This feature is well established and works across many devices and browser versions. It’s been available across browsers since March 2017.
          *
@@ -2146,7 +2177,23 @@ describe('generate property types', () => {
          * @see https://developer.mozilla.org/docs/Web/CSS/Reference/Properties/content-visibility
          */
       contentVisibility?: ConditionalValue<CssVars | CssProperties["contentVisibility"] | AnyString> | undefined
+       cornerBlockEndShape?: ConditionalValue<string | number | AnyString> | undefined
+       cornerBlockStartShape?: ConditionalValue<string | number | AnyString> | undefined
+       cornerBottomShape?: ConditionalValue<string | number | AnyString> | undefined
+       cornerBottomLeftShape?: ConditionalValue<string | number | AnyString> | undefined
+       cornerBottomRightShape?: ConditionalValue<string | number | AnyString> | undefined
+       cornerEndEndShape?: ConditionalValue<string | number | AnyString> | undefined
+       cornerEndStartShape?: ConditionalValue<string | number | AnyString> | undefined
+       cornerInlineEndShape?: ConditionalValue<string | number | AnyString> | undefined
+       cornerInlineStartShape?: ConditionalValue<string | number | AnyString> | undefined
+       cornerLeftShape?: ConditionalValue<string | number | AnyString> | undefined
+       cornerRightShape?: ConditionalValue<string | number | AnyString> | undefined
        cornerShape?: ConditionalValue<CssProperties["cornerShape"] | AnyString> | undefined
+       cornerStartStartShape?: ConditionalValue<string | number | AnyString> | undefined
+       cornerStartEndShape?: ConditionalValue<string | number | AnyString> | undefined
+       cornerTopShape?: ConditionalValue<string | number | AnyString> | undefined
+       cornerTopLeftShape?: ConditionalValue<string | number | AnyString> | undefined
+       cornerTopRightShape?: ConditionalValue<string | number | AnyString> | undefined
        /**
          * This feature is well established and works across many devices and browser versions. It’s been available across browsers since July 2015.
          *
@@ -2287,6 +2334,7 @@ describe('generate property types', () => {
          * @see https://developer.mozilla.org/docs/Web/CSS/Reference/Properties/dominant-baseline
          */
       dominantBaseline?: ConditionalValue<CssProperties["dominantBaseline"] | AnyString> | undefined
+       dynamicRangeLimit?: ConditionalValue<string | number | AnyString> | undefined
        /**
          * This feature is well established and works across many devices and browser versions. It’s been available across browsers since July 2015.
          *
@@ -2883,6 +2931,16 @@ describe('generate property types', () => {
          */
       fontWeight?: ConditionalValue<UtilityValues["fontWeight"] | CssVars | CssProperties["fontWeight"] | AnyString> | undefined
        /**
+         * **Syntax**: \`normal | <percentage [0,∞]> | ultra-condensed | extra-condensed | condensed | semi-condensed | semi-expanded | expanded | extra-expanded | ultra-expanded\`
+         *
+         * **Initial value**: \`normal\`
+         *
+         * | Chrome | Firefox |  Safari  | Edge | IE  |
+         * | :----: | :-----: | :------: | :--: | :-: |
+         * |   No   |   No    | **18.4** |  No  | No  |
+         */
+      fontWidth?: ConditionalValue<CssProperties["fontWidth"] | AnyString> | undefined
+       /**
          * This feature is not Baseline because it does not work in some of the most widely-used browsers.
          *
          * **Syntax**: \`auto | none | preserve-parent-color\`
@@ -3376,6 +3434,10 @@ describe('generate property types', () => {
          * @see https://developer.mozilla.org/docs/Web/CSS/Reference/Properties/isolation
          */
       isolation?: ConditionalValue<CssVars | CssProperties["isolation"] | AnyString> | undefined
+       interactivity?: ConditionalValue<string | number | AnyString> | undefined
+       interestDelay?: ConditionalValue<string | number | AnyString> | undefined
+       interestDelayEnd?: ConditionalValue<string | number | AnyString> | undefined
+       interestDelayStart?: ConditionalValue<string | number | AnyString> | undefined
        /**
          * This feature is well established and works across many devices and browser versions. It’s been available across browsers since September 2015.
          *
@@ -4244,6 +4306,18 @@ describe('generate property types', () => {
          */
       objectPosition?: ConditionalValue<CssProperties["objectPosition"] | AnyString> | undefined
        /**
+         * **Syntax**: \`none | <basic-shape-rect>\`
+         *
+         * **Initial value**: \`none\`
+         *
+         * | Chrome  | Firefox | Safari |  Edge   | IE  |
+         * | :-----: | :-----: | :----: | :-----: | :-: |
+         * | **104** |   No    |   No   | **104** | No  |
+         *
+         * @see https://developer.mozilla.org/docs/Web/CSS/Reference/Properties/object-view-box
+         */
+      objectViewBox?: ConditionalValue<CssProperties["objectViewBox"] | AnyString> | undefined
+       /**
          * This feature is well established and works across many devices and browser versions. It’s been available across browsers since September 2022.
          *
          * **Syntax**: \`[ <'offset-position'>? [ <'offset-path'> [ <'offset-distance'> || <'offset-rotate'> ]? ]? ]! [ / <'offset-anchor'> ]?\`
@@ -5043,6 +5117,8 @@ describe('generate property types', () => {
          * @see https://developer.mozilla.org/docs/Web/CSS/Reference/Properties/r
          */
       r?: ConditionalValue<CssProperties["r"] | AnyString> | undefined
+       readingFlow?: ConditionalValue<string | number | AnyString> | undefined
+       readingOrder?: ConditionalValue<string | number | AnyString> | undefined
        /**
          * This feature is not Baseline because it does not work in some of the most widely-used browsers.
          *
@@ -5120,6 +5196,18 @@ describe('generate property types', () => {
          */
       rubyMerge?: ConditionalValue<CssProperties["rubyMerge"] | AnyString> | undefined
        /**
+         * **Syntax**: \`auto | none\`
+         *
+         * **Initial value**: \`auto\`
+         *
+         * | Chrome | Firefox |  Safari  | Edge | IE  |
+         * | :----: | :-----: | :------: | :--: | :-: |
+         * |   No   |   No    | **18.2** |  No  | No  |
+         *
+         * @see https://developer.mozilla.org/docs/Web/CSS/Reference/Properties/ruby-overhang
+         */
+      rubyOverhang?: ConditionalValue<CssProperties["rubyOverhang"] | AnyString> | undefined
+       /**
          * Since December 2024, this feature works across the latest devices and browser versions. This feature might not work in older devices or browsers.
          *
          * **Syntax**: \`[ alternate || [ over | under ] ] | inter-character\`
@@ -5190,6 +5278,16 @@ describe('generate property types', () => {
          * @see https://developer.mozilla.org/docs/Web/CSS/Reference/Properties/scroll-behavior
          */
       scrollBehavior?: ConditionalValue<CssVars | CssProperties["scrollBehavior"] | AnyString> | undefined
+       /**
+         * **Syntax**: \`none | nearest\`
+         *
+         * **Initial value**: \`none\`
+         *
+         * | Chrome  | Firefox | Safari |  Edge   | IE  |
+         * | :-----: | :-----: | :----: | :-----: | :-: |
+         * | **133** |   No    |   No   | **133** | No  |
+         */
+      scrollInitialTarget?: ConditionalValue<CssProperties["scrollInitialTarget"] | AnyString> | undefined
        /**
          * This feature is well established and works across many devices and browser versions. It’s been available across browsers since July 2021.
          *
@@ -5343,6 +5441,7 @@ describe('generate property types', () => {
          * @see https://developer.mozilla.org/docs/Web/CSS/Reference/Properties/scroll-margin-top
          */
       scrollMarginTop?: ConditionalValue<UtilityValues["scrollMarginTop"] | CssVars | CssProperties["scrollMarginTop"] | AnyString> | undefined
+       scrollMarkerGroup?: ConditionalValue<string | number | AnyString> | undefined
        /**
          * This feature is well established and works across many devices and browser versions. It’s been available across browsers since April 2021.
          *
@@ -5540,6 +5639,7 @@ describe('generate property types', () => {
       scrollSnapType?: ConditionalValue<UtilityValues["scrollSnapType"] | CssVars | CssProperties["scrollSnapType"] | AnyString> | undefined
        scrollSnapTypeX?: ConditionalValue<CssProperties["scrollSnapTypeX"] | AnyString> | undefined
        scrollSnapTypeY?: ConditionalValue<CssProperties["scrollSnapTypeY"] | AnyString> | undefined
+       scrollTargetGroup?: ConditionalValue<string | number | AnyString> | undefined
        /**
          * This feature is not Baseline because it does not work in some of the most widely-used browsers.
          *
@@ -5679,6 +5779,18 @@ describe('generate property types', () => {
          */
       shapeRendering?: ConditionalValue<CssProperties["shapeRendering"] | AnyString> | undefined
        /**
+         * **Syntax**: \`normal | spell-out || digits || [ literal-punctuation | no-punctuation ]\`
+         *
+         * **Initial value**: \`auto\`
+         *
+         * | Chrome | Firefox |  Safari  | Edge | IE  |
+         * | :----: | :-----: | :------: | :--: | :-: |
+         * |   No   |   No    | **11.1** |  No  | No  |
+         *
+         * @see https://developer.mozilla.org/docs/Web/CSS/Reference/Properties/speak-as
+         */
+      speakAs?: ConditionalValue<CssProperties["speakAs"] | AnyString> | undefined
+       /**
          * This feature is well established and works across many devices and browser versions. It’s been available across browsers since April 2017.
          *
          * **Syntax**: \`<'color'>\`
@@ -5718,6 +5830,16 @@ describe('generate property types', () => {
          * @see https://developer.mozilla.org/docs/Web/CSS/Reference/Properties/stroke
          */
       stroke?: ConditionalValue<UtilityValues["stroke"] | CssVars | CssProperties["stroke"] | AnyString> | undefined
+       /**
+         * **Syntax**: \`<color>\`
+         *
+         * **Initial value**: \`transparent\`
+         *
+         * | Chrome | Firefox |  Safari  | Edge | IE  |
+         * | :----: | :-----: | :------: | :--: | :-: |
+         * |   No   |   No    | **11.1** |  No  | No  |
+         */
+      strokeColor?: ConditionalValue<CssProperties["strokeColor"] | AnyString> | undefined
        /**
          * This feature is well established and works across many devices and browser versions. It’s been available across browsers since April 2017.
          *
@@ -5888,6 +6010,20 @@ describe('generate property types', () => {
          */
       textAnchor?: ConditionalValue<CssProperties["textAnchor"] | AnyString> | undefined
        /**
+         * This feature is not Baseline because it does not work in some of the most widely-used browsers.
+         *
+         * **Syntax**: \`normal | <autospace> | auto\`
+         *
+         * **Initial value**: \`normal\`
+         *
+         * | Chrome  | Firefox |  Safari  |  Edge   | IE  |
+         * | :-----: | :-----: | :------: | :-----: | :-: |
+         * | **140** | **145** | **18.4** | **140** | No  |
+         *
+         * @see https://developer.mozilla.org/docs/Web/CSS/Reference/Properties/text-autospace
+         */
+      textAutospace?: ConditionalValue<CssProperties["textAutospace"] | AnyString> | undefined
+       /**
          * **Syntax**: \`normal | <'text-box-trim'> || <'text-box-edge'>\`
          *
          * **Initial value**: \`normal\`
@@ -5965,6 +6101,7 @@ describe('generate property types', () => {
          * @see https://developer.mozilla.org/docs/Web/CSS/Reference/Properties/text-decoration-color
          */
       textDecorationColor?: ConditionalValue<UtilityValues["textDecorationColor"] | CssVars | CssProperties["textDecorationColor"] | AnyString> | undefined
+       textDecorationInset?: ConditionalValue<string | number | AnyString> | undefined
        /**
          * This feature is well established and works across many devices and browser versions. It’s been available across browsers since January 2020.
          *
@@ -6308,6 +6445,15 @@ describe('generate property types', () => {
          * @see https://developer.mozilla.org/docs/Web/CSS/Reference/Properties/timeline-scope
          */
       timelineScope?: ConditionalValue<CssProperties["timelineScope"] | AnyString> | undefined
+       timelineTrigger?: ConditionalValue<string | number | AnyString> | undefined
+       timelineTriggerName?: ConditionalValue<string | number | AnyString> | undefined
+       timelineTriggerExitRange?: ConditionalValue<string | number | AnyString> | undefined
+       timelineTriggerExitRangeEnd?: ConditionalValue<string | number | AnyString> | undefined
+       timelineTriggerExitRangeStart?: ConditionalValue<string | number | AnyString> | undefined
+       timelineTriggerRange?: ConditionalValue<string | number | AnyString> | undefined
+       timelineTriggerRangeEnd?: ConditionalValue<string | number | AnyString> | undefined
+       timelineTriggerRangeStart?: ConditionalValue<string | number | AnyString> | undefined
+       timelineTriggerSource?: ConditionalValue<string | number | AnyString> | undefined
        /**
          * This feature is well established and works across many devices and browser versions. It’s been available across browsers since July 2015.
          *
@@ -6497,6 +6643,7 @@ describe('generate property types', () => {
          * @see https://developer.mozilla.org/docs/Web/CSS/Reference/Properties/translate
          */
       translate?: ConditionalValue<UtilityValues["translate"] | CssVars | CssProperties["translate"] | AnyString> | undefined
+       triggerScope?: ConditionalValue<string | number | AnyString> | undefined
        /**
          * This feature is well established and works across many devices and browser versions. It’s been available across browsers since July 2015.
          *
@@ -6608,6 +6755,18 @@ describe('generate property types', () => {
          * @see https://developer.mozilla.org/docs/Web/CSS/Reference/Properties/view-timeline-name
          */
       viewTimelineName?: ConditionalValue<CssProperties["viewTimelineName"] | AnyString> | undefined
+       /**
+         * **Syntax**: \`none | <custom-ident>+\`
+         *
+         * **Initial value**: \`none\`
+         *
+         * | Chrome  | Firefox |  Safari  |  Edge   | IE  |
+         * | :-----: | :-----: | :------: | :-----: | :-: |
+         * | **125** | **144** | **18.2** | **125** | No  |
+         *
+         * @see https://developer.mozilla.org/docs/Web/CSS/Reference/Properties/view-transition-class
+         */
+      viewTransitionClass?: ConditionalValue<CssProperties["viewTransitionClass"] | AnyString> | undefined
        /**
          * Since October 2025, this feature works across the latest devices and browser versions. This feature might not work in older devices or browsers.
          *
@@ -6787,30 +6946,6 @@ describe('generate property types', () => {
          * @see https://developer.mozilla.org/docs/Web/CSS/Reference/Properties/zoom
          */
       zoom?: ConditionalValue<CssProperties["zoom"] | AnyString> | undefined
-       /**
-         * This feature is not Baseline because it does not work in some of the most widely-used browsers.
-         *
-         * **Syntax**: \`baseline | alphabetic | ideographic | middle | central | mathematical | text-before-edge | text-after-edge\`
-         *
-         * **Initial value**: \`baseline\`
-         *
-         * | Chrome | Firefox | Safari  |  Edge  | IE  |
-         * | :----: | :-----: | :-----: | :----: | :-: |
-         * | **1**  |   No    | **5.1** | **79** | No  |
-         *
-         * @see https://developer.mozilla.org/docs/Web/CSS/Reference/Properties/alignment-baseline
-         */
-      alignmentBaseline?: ConditionalValue<CssProperties["alignmentBaseline"] | AnyString> | undefined
-       /**
-         * **Syntax**: \`<length-percentage> | sub | super | baseline\`
-         *
-         * **Initial value**: \`0\`
-         *
-         * | Chrome | Firefox | Safari |  Edge  | IE  |
-         * | :----: | :-----: | :----: | :----: | :-: |
-         * | **1**  |   No    | **4**  | **79** | No  |
-         */
-      baselineShift?: ConditionalValue<CssProperties["baselineShift"] | AnyString> | undefined
        colorInterpolation?: ConditionalValue<CssProperties["colorInterpolation"] | AnyString> | undefined
        colorRendering?: ConditionalValue<CssProperties["colorRendering"] | AnyString> | undefined
        glyphOrientationVertical?: ConditionalValue<CssProperties["glyphOrientationVertical"] | AnyString> | undefined
@@ -8196,5 +8331,70 @@ describe('generate property types', () => {
          */
       "
     `)
+  })
+})
+
+/**
+ * `SystemProperties` takes its members from the css properties `@bamboocss/is-valid-prop` lists,
+ * generated from mdn-data, and types each one by indexing `CssProperties`, which is csstype's. The
+ * two are released apart, and either can name a property the other does not have yet.
+ */
+describe('css properties in SystemProperties', () => {
+  const props = generateStyleProps(createContext())
+
+  test('has a member for every property the list names', () => {
+    const members = new Set([...props.matchAll(/^\s*(\w+)\?:/gm)].map(([, name]) => name))
+
+    expect(allCssProperties.filter((name) => name && !members.has(name))).toEqual([])
+  })
+
+  /**
+   * mdn-data lists `readingFlow` and the `corner-*-shape` longhands, and csstype does not type
+   * them. Indexed anyway, each is an error in a project with `skipLibCheck` off and an `any` in
+   * one with it on.
+   */
+  test('indexes CssProperties only with a name it declares', () => {
+    const declared = new Set(systemTypes.cssProperties)
+    const indexed = [...props.matchAll(/CssProperties\["(\w+)"\]/g)].map(([, name]) => name)
+
+    expect(indexed.length).toBeGreaterThan(500)
+    expect(indexed.filter((name) => !declared.has(name))).toEqual([])
+    expect(props).toContain('readingFlow?: ConditionalValue<string | number | AnyString> | undefined')
+  })
+
+  /**
+   * The other direction is the one that rejected `css({ textAutospace: 'normal' })`: csstype typed
+   * it, and the list, generated from an older mdn-data, did not name it. What is left are names css
+   * retired — `colorAdjust` for `printColorAdjust`, `insetArea` for `positionArea` — which csstype
+   * keeps and mdn-data dropped. Vendor spellings are left out of the list on purpose. A new name
+   * here is a property waiting on an mdn-data bump.
+   */
+  test('names every unprefixed property csstype declares, except the ones css retired', () => {
+    const listed = new Set(allCssProperties)
+    const unlisted = systemTypes.cssProperties.filter(
+      (name) => !/^(?:Webkit|Moz|ms|O|Khtml)[A-Z]/.test(name) && !listed.has(name),
+    )
+
+    expect(unlisted).toEqual([
+      'colorAdjust',
+      'insetArea',
+      'motion',
+      'motionDistance',
+      'motionPath',
+      'motionRotation',
+      'offsetBlock',
+      'offsetBlockEnd',
+      'offsetBlockStart',
+      'offsetInline',
+      'offsetInlineEnd',
+      'offsetInlineStart',
+      'offsetRotation',
+      'positionTryOptions',
+      'scrollSnapMargin',
+      'scrollSnapMarginBottom',
+      'scrollSnapMarginLeft',
+      'scrollSnapMarginRight',
+      'scrollSnapMarginTop',
+    ])
   })
 })

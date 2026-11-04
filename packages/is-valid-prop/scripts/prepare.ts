@@ -20,6 +20,8 @@ const run = () => {
   writeFileSync(
     outputPath,
     `
+  // Generated from mdn-data by \`scripts/prepare.ts\`, which this package's build runs. Change the
+  // script or the pinned mdn-data, not this file: CI fails when a build rewrites it.
   const userGeneratedStr = "";
   const userGenerated = userGeneratedStr.split(',');
   const cssPropertiesStr = "${Array.from(new Set(properties)).join(',')}";

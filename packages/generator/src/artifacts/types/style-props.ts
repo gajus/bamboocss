@@ -5,6 +5,10 @@ import outdent from 'outdent'
 
 import type { UserConfig } from '@bamboocss/types'
 import csstype from '../generated/csstype.d.ts.json' with { type: 'json' }
+import systemTypes from '../generated/system-types.d.ts.json' with { type: 'json' }
+
+/** The names `CssProperties["…"]` resolves for. See `packages/types/scripts/css-property-names.ts`. */
+const declaredCssProperties = new Set<string>(systemTypes.cssProperties)
 
 export function generateStyleProps(ctx: Context) {
   const props = new Set(allCssProperties.concat(ctx.utility.keys()).filter(Boolean))
@@ -35,8 +39,11 @@ export function generateStyleProps(ctx: Context) {
           const prop = ctx.utility.shorthands.get(key) ?? key
 
           const union = []
-          // `scaleX` isn't a valid css property, will fallback to `string | number`
-          const cssFallback = allCssProperties.includes(prop) ? `CssProperties["${prop}"]` : ''
+          // `scaleX` isn't a valid css property, will fallback to `string | number`. So does one
+          // csstype has not typed yet: mdn-data lists `readingFlow`, and `CssProperties["readingFlow"]`
+          // would not resolve. The build's grammar check still judges its values.
+          const cssFallback =
+            allCssProperties.includes(prop) && declaredCssProperties.has(prop) ? `CssProperties["${prop}"]` : ''
 
           /**
            * A utility's own values *extend* what the property accepts; they never replace it.

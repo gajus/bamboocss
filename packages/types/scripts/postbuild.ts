@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
+import { getCssPropertyNames } from './css-property-names'
 import { getCssTypesComments } from './save-csstype-comments'
 
 const fileMap = [
@@ -38,6 +39,11 @@ export async function main() {
     if (input.includes('csstype.d.ts')) {
       const comments = getCssTypesComments()
       result.comments = comments
+    }
+
+    // What `CssProperties["…"]` resolves for, which the generator asks before writing one.
+    if (input.includes('system-types.ts')) {
+      result.cssProperties = getCssPropertyNames()
     }
 
     // Trailing newline, so the formatter has nothing to add and a build leaves the

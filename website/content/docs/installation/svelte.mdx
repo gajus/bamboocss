@@ -11,7 +11,7 @@ than left as runtime calls.
 ### Install and initialize Bamboo
 
 ```bash
-pnpm install -D @bamboocss/dev @bamboocss/vite
+pnpm install -D @bamboocss/dev @bamboocss/vite @bamboocss/plugin-svelte
 pnpm bamboo init
 ```
 
@@ -20,10 +20,14 @@ them.
 
 ### Include Svelte sources
 
+Install and register `@bamboocss/plugin-svelte` explicitly to extract styles from `.svelte` source files.
+
 ```ts filename="bamboo.config.ts"
 import { defineConfig } from '@bamboocss/dev'
+import { pluginSvelte } from '@bamboocss/plugin-svelte'
 
 export default defineConfig({
+  plugins: [pluginSvelte()],
   include: ['./src/**/*.{js,svelte,ts}'],
   outdir: 'styled-system',
 })

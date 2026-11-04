@@ -1,7 +1,7 @@
 import { createContext, fixtureDefaults } from '@bamboocss/fixture'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { afterAll, expect, onTestFinished, test, vi } from 'vitest'
 import { Builder } from '../src/builder'
 import { BambooContext } from '../src/create-context'
@@ -194,7 +194,7 @@ test('an unknown generated entrypoint reports the native diagnostic', async () =
 })
 
 /**
- * Vue and Svelte files reach Rust as the output of their auto-injected `parser:before`
+ * Vue and Svelte files reach Rust as the output of their explicitly configured `parser:before`
  * plugins. That output used to be the raw template wrapped as JSX, which Oxc rejected on the
  * first `{#if}` or `{{ items[0] }}` — failing the whole build with `EXTRACT_FAILED`, while the
  * TypeScript parser the plugins were tested against recovered silently.
@@ -205,7 +205,9 @@ test('Vue and Svelte templates with block syntax extract through the native engi
   mkdirSync(join(cwd, 'src'))
   writeFileSync(
     join(cwd, 'bamboo.config.ts'),
-    `export default { preflight: false, include: ['src/**/*.{vue,svelte}'], outdir: 'styled-system' }\n`,
+    `import { pluginVue } from ${JSON.stringify(resolve(__dirname, '../../plugin-vue/src/index.ts'))}
+import { pluginSvelte } from ${JSON.stringify(resolve(__dirname, '../../plugin-svelte/src/index.ts'))}
+export default { plugins: [pluginVue(), pluginSvelte()], preflight: false, include: ['src/**/*.{vue,svelte}'], outdir: 'styled-system' }\n`,
   )
   writeFileSync(
     join(cwd, 'src/List.svelte'),

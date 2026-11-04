@@ -1,6 +1,8 @@
 import { defineConfig } from '@bamboocss/dev'
+import { pluginSvelte } from '@bamboocss/plugin-svelte'
 
 export default defineConfig({
+  plugins: [pluginSvelte()],
   preflight: true,
   include: ['./src/**/*.{js,svelte,ts}'],
   outdir: 'styled-system',

@@ -211,8 +211,8 @@ which pre-generates rules with no call site.
 
 #### `@bamboocss/plugin-*` (packages/plugin-lightningcss, plugin-vue, plugin-svelte)
 
-- **Purpose**: Optional plugins. `vue` and `svelte` are auto-injected for their file types; `lightningcss` is installed
-  and listed by the user.
+- **Purpose**: Optional plugins. `vue` and `svelte` require explicit installation and registration in `plugins`;
+  `lightningcss` is installed and listed by the user.
 
 #### `@bamboocss/fixture` (packages/fixture)
 

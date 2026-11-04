@@ -14,7 +14,7 @@ Everything below is exported from `@bamboocss/node`.
 ### Context
 
 - `loadConfigAndCreateContext({ cwd?, config?, configPath? })` – resolve the config file, merge presets and inline
-  overrides, auto-inject the built-in plugins (`vue`, `svelte`), and return a `BambooContext`.
+  overrides, auto-inject the built-in Astro and MDX plugins, and return a `BambooContext`.
 - `BambooContext` – the resolved config plus everything derived from it: tokens, utilities, conditions, recipes,
   patterns, the TypeScript 7 project used by the source compiler, the output engine and the diff engine. Stylesheet
   extraction runs through the Rust/Oxc native evaluator.
@@ -40,3 +40,19 @@ Each takes a `BambooContext`, and each backs the CLI command of the same name.
 - `setLogStream({ cwd, logfile })` – tee logs to a file.
 - `startProfiling(cwd, prefix, isWatching?)` – start a V8 CPU profile; the returned function stops it and writes
   `bamboo-{prefix}-{timestamp}.cpuprofile` into `cwd`.
+
+Vue and Svelte extraction requires installing `@bamboocss/plugin-vue` or `@bamboocss/plugin-svelte` and registering it
+in `bamboo.config.ts`:
+
+```ts
+import { defineConfig } from '@bamboocss/dev'
+import { pluginVue } from '@bamboocss/plugin-vue'
+
+export default defineConfig({
+  plugins: [pluginVue()],
+  include: ['./src/**/*.{ts,vue}'],
+})
+```
+
+For Svelte, import `pluginSvelte` from `@bamboocss/plugin-svelte` and use `plugins: [pluginSvelte()]` with `.svelte`
+files in `include`.

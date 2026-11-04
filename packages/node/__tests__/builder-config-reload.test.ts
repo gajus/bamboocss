@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { runInNewContext } from 'node:vm'
 import type { LoadConfigResult } from '@bamboocss/types'
 import { afterAll, expect, test, vi } from 'vitest'
@@ -16,7 +16,8 @@ afterAll(() => {
 })
 
 const config = (size: string, rest = '') =>
-  `export default { preflight: false, include: ['src/**/*.vue'], outdir: 'styled-system', ${rest}theme: { extend: { tokens: { sizes: { probe: { value: '${size}' } } } } } }\n`
+  `import { pluginVue } from ${JSON.stringify(resolve(__dirname, '../../plugin-vue/src/index.ts'))}
+export default { plugins: [pluginVue()], preflight: false, include: ['src/**/*.vue'], outdir: 'styled-system', ${rest}theme: { extend: { tokens: { sizes: { probe: { value: '${size}' } } } } } }\n`
 
 /** The config written again, with an mtime later than the last, as an editor's save leaves it. */
 const edit = (cwd: string, size: string, rest?: string) => {
@@ -55,7 +56,7 @@ const reload = async (ctx: BambooContext) => {
 /**
  * A config edited while a build watches it is read again as it was read first. The reload used to
  * read the file alone, and the context it built had none of what the integration had added: the
- * Vue, Svelte and Astro parsers — so a `.vue` file's styles left the sheet at the first edit — and
+ * automatic Astro and MDX parsers, the explicitly configured Vue parser, and
  * the mark of a dev server's build, which `hash: 'auto'` reads.
  */
 test('a config read again keeps what the integration added to it', async () => {

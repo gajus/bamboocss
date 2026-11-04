@@ -3,9 +3,8 @@ import { createRequire } from 'node:module'
 /**
  * Svelte's compiler, loaded the first time a `.svelte` file is actually parsed.
  *
- * Auto-injected into every project, so a static import would make every build pay to load a
- * compiler most projects never call — the reason `plugin-vue` loads its compiler lazily too.
- * `svelte` is an optional peer: a project with `.svelte` files already has it installed.
+ * Keep compiler loading lazy so registering the plugin only loads the compiler when a component
+ * is parsed. `svelte` is an optional peer supplied by projects that use `.svelte` files.
  */
 type SvelteParse = (source: string, options: { modern: true }) => SvelteRoot
 let parseSvelte: SvelteParse | undefined

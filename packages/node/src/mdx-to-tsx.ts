@@ -610,7 +610,7 @@ export const mdxToTsx = (input: string): string => {
 }
 
 /**
- * Built in, as the Vue, Svelte and Astro converters are. Last of the `parser:before` hooks, and
+ * Built in, as the Astro converter is. Last of the `parser:before` hooks, and
  * only for a file none before it made something of: a project that already converts its MDX
  * itself keeps its own.
  */

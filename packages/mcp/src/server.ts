@@ -240,6 +240,16 @@ export function createMcpServer(options: CreateMcpServerOptions) {
  * Unheard, that reached the handler `@bamboocss/node` installs for uncaught errors, which logged
  * it — into a pipe without a reader, failing again — and kept the process alive doing so. Losing
  * stderr alone is a client that stopped reading the log, which costs only the log.
+ *
+ * That needs a write, though, and a client that goes closes stdin first. Nothing listened for it,
+ * so a config keeping the event loop busy — a timer, a watcher of its own — kept the server running
+ * with no client, until something killed it. Stdin ending is the client gone, so the server leaves.
+ *
+ * And an uncaught error is the end of it, as Node would have it: the handler `@bamboocss/node`
+ * installs logs one and goes on, which suits a watch, but the logger here can be silenced — by
+ * `silent`, by the config's `logLevel` — and a server whose state an error left unknown went on
+ * answering, saying nothing. It is written to stderr, which a client shows as the server's log,
+ * and the server leaves, for the client to start another.
  */
 let guarded = false
 function guardStdio() {
@@ -260,6 +270,23 @@ function guardStdio() {
   process.stderr.on('error', (error: NodeJS.ErrnoException) => {
     if (!withoutReader(error)) throw error
   })
+
+  const leave = () => process.exit(0)
+  process.stdin.once('end', leave)
+  process.stdin.once('close', leave)
+
+  const fatal = (what: string) => (error: unknown) => {
+    try {
+      process.stderr.write(
+        `Bamboo CSS MCP server: ${what}: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n`,
+      )
+    } catch {
+      // No log to write to: the client is gone too.
+    }
+    process.exit(1)
+  }
+  process.on('uncaughtException', fatal('uncaught exception'))
+  process.on('unhandledRejection', fatal('unhandled rejection'))
 }
 
 export interface StartMcpServerOptions {

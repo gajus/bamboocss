@@ -27,11 +27,11 @@ afterAll(() => {
 })
 
 /** Start the server on a project logging at `info`, and initialize a session with it. */
-const serve = async () => {
+const serve = async ({ before = '', logLevel = 'info' } = {}) => {
   const cwd = mkdtempSync(join(tmpdir(), 'bamboo-mcp-stdio-'))
   directories.push(cwd)
   const files = {
-    'bamboo.config.ts': `export default { logLevel: 'info', preflight: false, include: ['src/**/*.tsx'], outdir: 'styled-system' }`,
+    'bamboo.config.ts': `${before}\nexport default { logLevel: '${logLevel}', preflight: false, include: ['src/**/*.tsx'], outdir: 'styled-system' }`,
     'src/app.tsx': `import { css } from '../styled-system/css'\nexport const a = css({ color: 'red.300' })\n`,
     // What `bin.js` does, from source rather than `dist`.
     'run.cts': `require(${JSON.stringify(join(root, 'src/cli.ts'))}).runMcpCli()\n`,
@@ -105,6 +105,28 @@ test('exits when its client has gone', { timeout: 60_000 }, async () => {
   send({ id: 2, method: 'tools/call', params: usageReport })
 
   expect(await within(exited, 10_000)).toBe(0)
+})
+
+// A config holding the event loop open — a timer, a watcher of its own — kept the server running once
+// its client had closed stdin: nothing listened for it, and it took a write to find the pipe gone.
+test('exits when stdin ends, though the config keeps the event loop busy', { timeout: 60_000 }, async () => {
+  const { child, exited } = await serve({ before: 'setInterval(() => {}, 1000)' })
+
+  child.stdin.end()
+
+  expect(await within(exited, 10_000)).toBe(0)
+})
+
+// The handler `@bamboocss/node` installs for an uncaught error logged it and went on, and the logger
+// here can be silent: a server in a state the error left unknown went on answering, saying nothing.
+test('leaves on an uncaught error, saying so on stderr though the logger is silent', { timeout: 60_000 }, async () => {
+  const { exited, output } = await serve({
+    before: "setTimeout(() => { throw new Error('the config broke') }, 200)",
+    logLevel: 'silent',
+  })
+
+  expect(await within(exited, 10_000)).toBe(1)
+  expect(output.stderr).toContain('uncaught exception: Error: the config broke')
 })
 
 // A client may stop reading the log and go on with the protocol.

@@ -335,6 +335,30 @@ Compilation and strict rejection are not options. A style-producing call that ca
 fails instead of retaining a runtime fallback. See [Source compilation](/docs/guides/source-transformation) for the
 accepted static and finite-dynamic shapes.
 
+### TSRX (`.tsrx`) files
+
+TSRX template syntax (`@{ }` bodies, `@if`/`@for`/`@switch`/`@try`, `<style>` blocks, `{attr}` shorthand, `<{expr}>`
+tags) is extracted by `@bamboocss/plugin-tsrx`. Install the plugin and its optional parser peer:
+
+```bash
+pnpm install -D @bamboocss/plugin-tsrx @tsrx/core
+```
+
+Register it in `bamboo.config.ts` and include your `.tsrx` files:
+
+```ts
+import { defineConfig } from '@bamboocss/dev'
+import { pluginTsrx } from '@bamboocss/plugin-tsrx'
+
+export default defineConfig({
+  include: ['src/**/*.{ts,tsx,tsrx}'],
+  plugins: [pluginTsrx()],
+})
+```
+
+In Vite's `plugins`, list the TSRX framework plugin (for example `octane()` or `@tsrx/vite-plugin-react`) **before**
+`bamboocss()`, so the compiler sees the TSX it compiles to rather than the raw file.
+
 ## Troubleshooting
 
 If your IDE does not autocomplete `styled-system` imports, add that directory to `include` in `tsconfig.json`. See

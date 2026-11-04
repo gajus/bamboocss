@@ -532,6 +532,9 @@ importers:
       '@bamboocss/native-extractor':
         specifier: workspace:*
         version: link:../native-extractor
+      '@bamboocss/plugin-tsrx':
+        specifier: workspace:*
+        version: link:../plugin-tsrx
       '@types/fs-extra':
         specifier: 11.0.4
         version: 11.0.4
@@ -566,6 +569,19 @@ importers:
       svelte:
         specifier: 5.45.4
         version: 5.45.4
+
+  packages/plugin-tsrx:
+    dependencies:
+      '@bamboocss/logger':
+        specifier: workspace:*
+        version: link:../logger
+      '@bamboocss/types':
+        specifier: workspace:*
+        version: link:../types
+    devDependencies:
+      '@tsrx/core':
+        specifier: 0.5.5
+        version: 0.5.5(@typescript-eslint/types@8.59.4)
 
   packages/plugin-vue:
     dependencies:
@@ -729,12 +745,18 @@ importers:
       '@bamboocss/native-extractor':
         specifier: workspace:*
         version: link:../native-extractor
+      '@bamboocss/plugin-tsrx':
+        specifier: workspace:*
+        version: link:../plugin-tsrx
       '@jridgewell/trace-mapping':
         specifier: ^0.3.31
         version: 0.3.31
       '@mdx-js/mdx':
         specifier: 3.1.1
         version: 3.1.1
+      '@tsrx/react':
+        specifier: 0.4.5
+        version: 0.4.5(@typescript-eslint/types@8.59.4)(react@19.2.0)
       vite:
         specifier: 7.2.6
         version: 7.2.6(@types/node@24.10.1)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0)
@@ -2592,6 +2614,10 @@ packages:
       '@emnapi/core': ^1.7.1 || ^2.0.0-alpha.4
       '@emnapi/runtime': ^1.7.1 || ^2.0.0-alpha.4
 
+  '@noble/hashes@2.4.0':
+    resolution: {integrity: sha512-X5XaVWZIBCT7HHZGm5I7ZQXDwLG+bGXuSrMQAW+7Zvl87h1kmc1ZB1VSRJcpUfoUrGQp4Fkoxm5kZ+Ms+aW+eA==}
+    engines: {node: '>= 20.19.0'}
+
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
     engines: {node: '>= 8'}
@@ -4437,6 +4463,11 @@ packages:
       typescript:
         optional: true
 
+  '@sveltejs/acorn-typescript@1.0.13':
+    resolution: {integrity: sha512-wgKggnhZVL9Bfx1OaKKTrYY9BFRk6C8UAkQNUcIv1+llzYrIqy+RZm5HPKzn0NpEBvTVhTqB4kQyllZywsRBRQ==}
+    peerDependencies:
+      acorn: ^8.9.0
+
   '@sveltejs/acorn-typescript@1.0.6':
     resolution: {integrity: sha512-4awhxtMh4cx9blePWl10HRHj8Iivtqj+2QdDCSMDzxG+XKa9+VCNupQuCuvzEhYPzZSrX+0gC+0lHA/0fFKKQQ==}
     peerDependencies:
@@ -4616,6 +4647,22 @@ packages:
 
   '@ts-morph/common@0.29.0':
     resolution: {integrity: sha512-35oUmphHbJvQ/+UTwFNme/t2p3FoKiGJ5auTjjpNTop2dyREspirjMy82PLSC1pnDJ8ah1GU98hwpVt64YXQsg==}
+
+  '@tsrx/core@0.5.5':
+    resolution: {integrity: sha512-22Eym4Dtxm1d4INJHT560WQC9cxKT/YWXKztM7utjzHLtVB8egSycFmFt3D9g01Tb6G4g7GiF5YpgCOexx15uA==}
+
+  '@tsrx/react-runtime@0.1.12':
+    resolution: {integrity: sha512-8KjuDpt8cYmJUvyyKuQh3Fin4UttyFH1X93WmowdJf00gqLuqmSC9Jzx6aqIhru3Tk+RhuLv6s8x3jO0LrkLLw==}
+    peerDependencies:
+      react: '>=18'
+
+  '@tsrx/react@0.4.5':
+    resolution: {integrity: sha512-erSR9o6aaVa8c+DxipyeFEBt1eXEphtKBgD9It/AqdTDZ0eiPcc333TT3ztqZcbEU5R5Qou2r2aUIswsL0YJMQ==}
+    peerDependencies:
+      react: '>=18'
+
+  '@tsrx/runtime@0.2.4':
+    resolution: {integrity: sha512-rLwKYml/Qbb1D9LtB+NE5bcJDs/SowSKaL+lMR0m6Mr61lKZNuK43IFK+jxFmLvRlG+7ico1kOszMyhA5rObNA==}
 
   '@tybys/wasm-util@0.10.1':
     resolution: {integrity: sha512-9tTaPJLSiejZKx+Bmog4uSubteqTvFrVrURwkmHixBo0G4seD0zUxp98E1DzUBJxLQ3NPwXrGKDiVjwx/DpPsg==}
@@ -5422,6 +5469,11 @@ packages:
 
   acorn@8.15.0:
     resolution: {integrity: sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==}
+    engines: {node: '>=0.4.0'}
+    hasBin: true
+
+  acorn@8.19.0:
+    resolution: {integrity: sha512-oJlA3XiRm7Cyk6qFD2Jn8ak9B7jSy0qy00ADO3+8dpT0LSjFihQYv4C02LFCSYJV3Q37xYwwRy5m+IpIiUzqWw==}
     engines: {node: '>=0.4.0'}
     hasBin: true
 
@@ -6539,6 +6591,14 @@ packages:
   esrap@2.2.1:
     resolution: {integrity: sha512-GiYWG34AN/4CUyaWAgunGt0Rxvr1PTMlGC0vvEov/uOQYWne2bpN03Um+k8jT+q3op33mKouP2zeJ6OlM+qeUg==}
 
+  esrap@2.4.0:
+    resolution: {integrity: sha512-CQPcneEHw/czj32uwQC52nYnax8H4SXt25FCM+LIwGZ49cMIxpOj3bP8wmzcI+Z0HIy5KkClaPhRLfCySzwHPA==}
+    peerDependencies:
+      '@typescript-eslint/types': ^8.2.0
+    peerDependenciesMeta:
+      '@typescript-eslint/types':
+        optional: true
+
   esrecurse@4.3.0:
     resolution: {integrity: sha512-KmfKL3b6G+RXvP8N1vr3Tq1kL/oCFgn2NYXEtqP8/L3pKapUA4G8cFVaoF3SU323CD4XypR/ffioHmkti6/Tag==}
     engines: {node: '>=4.0'}
@@ -6894,6 +6954,10 @@ packages:
 
   get-tsconfig@5.0.0-beta.5:
     resolution: {integrity: sha512-/6gFNr0N04nob252sTQxyFLi3eKFRqIg1I87YcqAMT1i6SQrSF6KujUEQrtrjMV0H/eejTCltLdDSTEMzHbnsQ==}
+    engines: {node: '>=20.20.0'}
+
+  get-tsconfig@5.0.0-beta.6:
+    resolution: {integrity: sha512-X6fBC0pmImC70gvX2zm56go9hx0MyoGVdG0tUCkg/D+Xnh5TJsOZ7iDbOdI3PvmtrDxnu1YdDufpK2QJX1Meqw==}
     engines: {node: '>=20.20.0'}
 
   giget@2.0.0:
@@ -12529,6 +12593,8 @@ snapshots:
       '@tybys/wasm-util': 0.10.4
     optional: true
 
+  '@noble/hashes@2.4.0': {}
+
   '@nodelib/fs.scandir@2.1.5':
     dependencies:
       '@nodelib/fs.stat': 2.0.5
@@ -14319,6 +14385,10 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  '@sveltejs/acorn-typescript@1.0.13(acorn@8.19.0)':
+    dependencies:
+      acorn: 8.19.0
+
   '@sveltejs/acorn-typescript@1.0.6(acorn@8.15.0)':
     dependencies:
       acorn: 8.15.0
@@ -14501,6 +14571,39 @@ snapshots:
       minimatch: 10.1.1
       path-browserify: 1.0.1
       tinyglobby: 0.2.15
+
+  '@tsrx/core@0.5.5(@typescript-eslint/types@8.59.4)':
+    dependencies:
+      '@jridgewell/sourcemap-codec': 1.5.5
+      '@noble/hashes': 2.4.0
+      '@sveltejs/acorn-typescript': 1.0.13(acorn@8.19.0)
+      '@tsrx/runtime': 0.2.4
+      '@types/estree': 1.0.8
+      '@types/estree-jsx': 1.0.5
+      acorn: 8.19.0
+      esrap: 2.4.0(@typescript-eslint/types@8.59.4)
+      get-tsconfig: 5.0.0-beta.6
+      magic-string: 0.30.21
+      zimmerframe: 1.1.4
+    transitivePeerDependencies:
+      - '@typescript-eslint/types'
+
+  '@tsrx/react-runtime@0.1.12(react@19.2.0)':
+    dependencies:
+      '@tsrx/runtime': 0.2.4
+      react: 19.2.0
+
+  '@tsrx/react@0.4.5(@typescript-eslint/types@8.59.4)(react@19.2.0)':
+    dependencies:
+      '@tsrx/core': 0.5.5(@typescript-eslint/types@8.59.4)
+      '@tsrx/react-runtime': 0.1.12(react@19.2.0)
+      esrap: 2.4.0(@typescript-eslint/types@8.59.4)
+      react: 19.2.0
+      zimmerframe: 1.1.4
+    transitivePeerDependencies:
+      - '@typescript-eslint/types'
+
+  '@tsrx/runtime@0.2.4': {}
 
   '@tybys/wasm-util@0.10.1':
     dependencies:
@@ -15712,11 +15815,21 @@ snapshots:
     dependencies:
       acorn: 8.15.0
 
+  acorn-import-attributes@1.9.5(acorn@8.19.0):
+    dependencies:
+      acorn: 8.19.0
+
   acorn-jsx@5.3.2(acorn@8.15.0):
     dependencies:
       acorn: 8.15.0
 
+  acorn-jsx@5.3.2(acorn@8.19.0):
+    dependencies:
+      acorn: 8.19.0
+
   acorn@8.15.0: {}
+
+  acorn@8.19.0: {}
 
   agent-base@7.1.4: {}
 
@@ -17084,6 +17197,12 @@ snapshots:
     dependencies:
       '@jridgewell/sourcemap-codec': 1.5.5
 
+  esrap@2.4.0(@typescript-eslint/types@8.59.4):
+    dependencies:
+      '@jridgewell/sourcemap-codec': 1.5.5
+    optionalDependencies:
+      '@typescript-eslint/types': 8.59.4
+
   esrecurse@4.3.0:
     dependencies:
       estraverse: 5.3.0
@@ -17451,6 +17570,10 @@ snapshots:
       resolve-pkg-maps: 1.0.0
 
   get-tsconfig@5.0.0-beta.5:
+    dependencies:
+      resolve-pkg-maps: 1.0.0
+
+  get-tsconfig@5.0.0-beta.6:
     dependencies:
       resolve-pkg-maps: 1.0.0
 

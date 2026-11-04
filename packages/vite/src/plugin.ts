@@ -2185,6 +2185,16 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     if (parsePath.includes('.__bamboo__.')) ctx.project.overlaySource(parsePath, code)
     const [analysis] = ctx.compileModules([{ filename: parsePath, source: code }], { references: reportSurvivors })
     if (!analysis) throw new Error(`bamboo: no analysis for ${parsePath}`)
+    if (analysis.errors.length && parsePath.endsWith('.tsrx.__bamboo__.tsx')) {
+      // The TSRX framework plugin was meant to have compiled this module already: Bamboo reads a
+      // `.tsrx` file through `@tsrx/core`, but the compiler only sees what the bundler hands it.
+      const filePath = parsePath.slice(0, -'.__bamboo__.tsx'.length)
+      throw new Error(
+        `bamboo: ${filePath} reached the compiler as raw TSRX, which it cannot parse.\n` +
+          `List the TSRX framework plugin (e.g. \`octane()\`, \`@tsrx/vite-plugin-react\`) before \`bamboocss()\` in \`plugins\` so the compiler sees compiled TSX.\n` +
+          analysis.errors.join('\n'),
+      )
+    }
     if (analysis.errors.length && analysis.calls.length === 0 && analysis.imports.length === 0) {
       throw new Error(`bamboo: could not parse ${parsePath}:\n${analysis.errors.join('\n')}`)
     }

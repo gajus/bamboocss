@@ -7,7 +7,7 @@ import { createFoldFixture, selectorsFor } from './fixture'
 /**
  * A `.tsrx` component, compiled as `@tsrx/vite-plugin-react` compiles it, and then by Bamboo.
  *
- * The stylesheet reads the `.tsrx` source itself, through the auto-injected TSRX plugin, while the
+ * The stylesheet reads the `.tsrx` source itself, through the explicitly configured TSRX plugin, while the
  * compiler folds what the framework's `enforce: 'pre'` plugin already turned into TSX under the
  * path the plugin gives it (`compilerParsePath`). A class the transform emits has a rule behind
  * it only when those two readings agree.

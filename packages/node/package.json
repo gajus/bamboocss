@@ -56,7 +56,6 @@
     "@bamboocss/generator": "workspace:*",
     "@bamboocss/logger": "workspace:*",
     "@bamboocss/plugin-svelte": "workspace:*",
-    "@bamboocss/plugin-tsrx": "workspace:*",
     "@bamboocss/plugin-vue": "workspace:*",
     "@bamboocss/reporter": "workspace:*",
     "@bamboocss/shared": "workspace:*",
@@ -81,6 +80,7 @@
     "@astrojs/compiler": "3.0.1",
     "@astrojs/compiler-rs": "0.5.1",
     "@bamboocss/native-extractor": "workspace:*",
+    "@bamboocss/plugin-tsrx": "workspace:*",
     "@types/fs-extra": "11.0.4",
     "@types/picomatch": "4.0.2",
     "boxen": "8.0.1"

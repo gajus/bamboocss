@@ -465,9 +465,6 @@ importers:
       '@bamboocss/plugin-svelte':
         specifier: workspace:*
         version: link:../plugin-svelte
-      '@bamboocss/plugin-tsrx':
-        specifier: workspace:*
-        version: link:../plugin-tsrx
       '@bamboocss/plugin-vue':
         specifier: workspace:*
         version: link:../plugin-vue
@@ -535,6 +532,9 @@ importers:
       '@bamboocss/native-extractor':
         specifier: workspace:*
         version: link:../native-extractor
+      '@bamboocss/plugin-tsrx':
+        specifier: workspace:*
+        version: link:../plugin-tsrx
       '@types/fs-extra':
         specifier: 11.0.4
         version: 11.0.4

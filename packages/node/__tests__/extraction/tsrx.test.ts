@@ -6,6 +6,7 @@ import { logger } from '@bamboocss/logger'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { loadConfigAndCreateContext } from '../../src/config'
 import { tsrxToTsx } from '@bamboocss/plugin-tsrx'
@@ -283,22 +284,32 @@ describe('a .tsrx file lowered to TSX', () => {
 })
 
 describe('extract tsrx components', () => {
-  /** Auto-injected, like Svelte and Vue: a `.tsrx` file in `include` just works. */
-  test('a .tsrx file extracts through the auto-injected plugin', async () => {
-    const cwd = mkdtempSync(join(tmpdir(), 'bamboo-tsrx-'))
-    try {
-      mkdirSync(join(cwd, 'src'))
-      writeFileSync(
-        join(cwd, 'bamboo.config.mjs'),
-        `export default { include: ['src/**/*.tsrx'], outdir: 'styled-system' }\n`,
-      )
-      writeFileSync(join(cwd, 'src/Card.tsrx'), COMPONENT)
-      const ctx = await loadConfigAndCreateContext({ cwd })
-      const result = parseFile(ctx, 'src/Card.tsrx')
-
-      expect(result.css.size).toBe(3)
-    } finally {
-      rmSync(cwd, { recursive: true, force: true })
-    }
-  }, 60_000)
+  test.each([true, false])(
+    'extracts templates only with explicit registration (configured: %s)',
+    async (configured) => {
+      const cwd = mkdtempSync(join(tmpdir(), 'bamboo-tsrx-'))
+      try {
+        mkdirSync(join(cwd, 'src'))
+        writeFileSync(
+          join(cwd, 'bamboo.config.mjs'),
+          (configured
+            ? `import { pluginTsrx } from ${JSON.stringify(fileURLToPath(new URL('../../../plugin-tsrx/src/index.ts', import.meta.url)))}\n`
+            : '') +
+            `export default { include: ['src/**/*.tsrx'], outdir: 'styled-system', plugins: [${configured ? 'pluginTsrx()' : ''}] }\n`,
+        )
+        writeFileSync(join(cwd, 'src/Card.tsrx'), COMPONENT)
+        const ctx = await loadConfigAndCreateContext({ cwd })
+        expect(ctx.config.plugins?.some((plugin) => plugin.name === '@bamboocss/plugin-tsrx')).toBe(configured)
+        if (configured) {
+          expect(parseFile(ctx, 'src/Card.tsrx').css.size).toBe(3)
+        } else {
+          expect(ctx.parseFile('src/Card.tsrx')).toBeUndefined()
+          expect(ctx.parseFailures.size).toBe(1)
+        }
+      } finally {
+        rmSync(cwd, { recursive: true, force: true })
+      }
+    },
+    60_000,
+  )
 })

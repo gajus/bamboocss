@@ -22,7 +22,7 @@ with workspace support.
   /types/          # Type definitions (config options live here)
   /native-extractor/ # Rust/Oxc extraction, static evaluation and the Vite fold analysis — the only engine
   /vite/           # Vite plugin, including the build-time fold
-  /plugin-*/       # vue, svelte and tsrx are auto-injected; lightningcss is opt-in. Astro's hook is built into node
+  /plugin-*/       # vue and svelte are auto-injected; tsrx and lightningcss are opt-in. Astro's hook is built into node
   /preset-*/       # Design system presets (base, bamboo, atlaskit, open-props)
   /eslint-plugin/  # Lint rules
   /fixture/        # Shared test fixtures and utilities

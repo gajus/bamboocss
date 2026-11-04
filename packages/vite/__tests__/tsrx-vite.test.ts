@@ -6,6 +6,7 @@ import { compile } from '@tsrx/react'
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { codegen, loadConfigAndCreateContext } from '@bamboocss/node'
 import { build, createServer, transformWithEsbuild, type Plugin, type Rollup } from 'vite'
 import { afterAll, beforeAll, describe, expect, test } from 'vitest'
@@ -43,7 +44,8 @@ beforeAll(async () => {
   root = realpathSync.native(mkdtempSync(join(tmpdir(), 'bamboo-tsrx-')))
   write(
     'bamboo.config.mjs',
-    `export default { include: ['src/**/*.{ts,tsrx}'], outdir: 'styled-system', preflight: false }\n`,
+    `import { pluginTsrx } from ${JSON.stringify(fileURLToPath(new URL('../../plugin-tsrx/src/index.ts', import.meta.url)))}\n` +
+      `export default { include: ['src/**/*.{ts,tsrx}'], outdir: 'styled-system', preflight: false, plugins: [pluginTsrx()] }\n`,
   )
   write(
     'src/Card.tsrx',

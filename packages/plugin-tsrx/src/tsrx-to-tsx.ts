@@ -43,8 +43,8 @@ export const loadTsrxParser = (require: NodeJS.Require = createRequire(import.me
 }
 
 /**
- * Loaded the first time a `.tsrx` file is actually parsed. Every build carries this hook, so a
- * static import would make every build pay to load a parser most projects never call — the
+ * Loaded the first time a `.tsrx` file is actually parsed. A static import would make every
+ * project configuring the plugin load its parser even if no `.tsrx` file is read — the
  * reason the Vue, Svelte and Astro plugins load theirs lazily too.
  */
 let parser: TsrxParser | null | undefined

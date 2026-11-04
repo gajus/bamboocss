@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest'
+import { describe, expect, expectTypeOf, test } from 'vitest'
 import { sva } from '../styled-system/css/sva'
 
 describe('sva', () => {
@@ -40,6 +40,13 @@ describe('sva', () => {
   test('refuses to resolve slot classes at runtime', () => {
     expect(() => button()).toThrow('was not compiled')
     expect(() => button({ visual: 'solid' })).toThrow('sva')
+  })
+
+  // Compiled, a slot recipe names a class for every slot, an empty one for a slot it gives no styles,
+  // as a config slot recipe's are typed. Typed `string | undefined`, every use of one took a `!`.
+  test('types every slot as a class string', () => {
+    expectTypeOf<ReturnType<typeof button>>().toEqualTypeOf<Record<'root' | 'icon', string>>()
+    expectTypeOf<ReturnType<typeof button>['icon']>().toEqualTypeOf<string>()
   })
 
   test('split variant props', () => {

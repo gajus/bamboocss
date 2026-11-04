@@ -129,9 +129,14 @@ type SlotRecord<S extends string, T> = { [K in S]?: T | undefined }
 
 export type SlotRecipeVariantRecord<S extends string> = Record<any, Record<any, SlotRecord<S, SystemStyleObject>>>
 
+/**
+ * A class string for every slot: compiled, a slot recipe names each, an empty one for a slot with no
+ * styles, as a config slot recipe's are typed. Typed as a slot's styles are, `string | undefined`,
+ * every use of one took a `!` or a fallback for an `undefined` that never comes.
+ */
 export type SlotRecipeVariantFn<S extends string, T extends RecipeVariantRecord> = (
   props?: RecipeSelection<T>,
-) => SlotRecord<S, string>
+) => Record<S, string>
 
 /**
  * A slot recipe as a compiled build allows it: call it, or split its variant props. See

@@ -209,10 +209,10 @@ which pre-generates rules with no call site.
 
 - **Purpose**: Lint rules (e.g. `no-dynamic-styling`, `no-config-function-in-source`, `require-literal-token-path`)
 
-#### `@bamboocss/plugin-*` (packages/plugin-lightningcss, plugin-vue, plugin-svelte)
+#### `@bamboocss/plugin-*` (packages/plugin-lightningcss, plugin-vue, plugin-svelte, plugin-astro, plugin-mdx)
 
-- **Purpose**: Optional plugins. `vue` and `svelte` require explicit installation and registration in `plugins`;
-  `lightningcss` is installed and listed by the user.
+- **Purpose**: Optional plugins. `vue`, `svelte`, `astro` and `mdx` require explicit installation and registration in
+  `plugins`; `lightningcss` is installed and listed by the user.
 
 #### `@bamboocss/fixture` (packages/fixture)
 

@@ -6,11 +6,11 @@ import { logger } from '@bamboocss/logger'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { type AstroCompiler, astroToTsx as convert, loadAstroCompiler } from '../../src/astro-to-tsx'
-import { loadConfigAndCreateContext } from '../../src/config'
-import { parseAndExtract, parseFile } from './fixture'
+import { type AstroCompiler, astroToTsx as convert, loadAstroCompiler } from '../src/astro-to-tsx'
+import { loadConfigAndCreateContext } from '@bamboocss/node'
+import { parseAndExtract, parseFile } from '../../node/__tests__/extraction/fixture'
 
 const require = createRequire(import.meta.url)
 
@@ -32,7 +32,7 @@ const reds = (tsx: string) =>
  *
  * The TypeScript parser read the raw file and recovered from the `---` fences and the template
  * well enough to find calls in it. Oxc rejects that text, so every Astro component failed its
- * build with `EXTRACT_FAILED` until the built-in hook handed it Astro's own TSX.
+ * build with `EXTRACT_FAILED` until the configured plugin handed it Astro's own TSX.
  */
 const COMPONENT = `---
 import { css } from '../styled-system/css'
@@ -235,14 +235,14 @@ describe('the compiler a `.astro` file is read with', () => {
 })
 
 describe('extract astro components', () => {
-  /** Built in: a `.astro` file in `include` just works. */
-  test('a .astro file extracts through the auto-injected plugin', async () => {
+  test('a .astro file extracts through the explicitly configured plugin', async () => {
     const cwd = mkdtempSync(join(tmpdir(), 'bamboo-astro-'))
     try {
       mkdirSync(join(cwd, 'src'))
       writeFileSync(
         join(cwd, 'bamboo.config.mjs'),
-        `export default { include: ['src/**/*.astro'], outdir: 'styled-system' }\n`,
+        `import { pluginAstro } from ${JSON.stringify(resolve(__dirname, '../src/index.ts'))}
+export default { plugins: [pluginAstro()], include: ['src/**/*.astro'], outdir: 'styled-system' }\n`,
       )
       writeFileSync(join(cwd, 'src/Page.astro'), COMPONENT)
       const ctx = await loadConfigAndCreateContext({ cwd })

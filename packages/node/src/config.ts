@@ -1,16 +1,8 @@
-import { loadConfig, mergeHooks } from '@bamboocss/config'
-import type { Config, BambooPlugin } from '@bamboocss/types'
-import { pluginAstro } from './astro-to-tsx'
+import { loadConfig } from '@bamboocss/config'
+import type { Config } from '@bamboocss/types'
 import { BambooContext } from './create-context'
 import { copyLaidOver, rememberConfigReload } from './config-reload'
 import { loadTsConfig, rememberTsConfigResolutionFiles } from './load-tsconfig'
-import { pluginMdx } from './mdx-to-tsx'
-
-const RESOLVED_HOOKS_NAME = '__resolved__'
-/** Built-in Astro support; Vue and Svelte are registered explicitly in user config. */
-function getAutoPlugins(): BambooPlugin[] {
-  return [pluginAstro()]
-}
 
 interface NodeConfigOptions {
   cwd?: string
@@ -49,16 +41,6 @@ async function prepareNodeConfig(
     conf.config.dev = true
   }
 
-  // Auto plugins run first, then the already-resolved user hooks run after — and MDX's after
-  // those, for a file none of them rewrote. @see pluginMdx
-  const autoPlugins = getAutoPlugins()
-  const mdx = pluginMdx()
-
-  // conf.hooks is already properly merged from the user's plugins by resolveConfig.
-  // Prepend auto-plugins before it — don't re-process user plugins to avoid double-execution.
-  conf.hooks = mergeHooks([...autoPlugins, { name: RESOLVED_HOOKS_NAME, hooks: conf.hooks }, mdx])
-  conf.config.plugins = [...autoPlugins, ...(conf.config.plugins ?? []), mdx]
-
   const tsconfigResolutionFiles: { value?: readonly string[] } = {}
   const tsConfResult = await loadTsConfig(conf, cwd, tsconfigResolutionFiles)
 
@@ -77,7 +59,7 @@ async function prepareNodeConfig(
 }
 
 /**
- * Load config and create context with auto-injected plugins.
+ * Load config and create context with the explicitly configured plugins.
  * Used by the CLI and PostCSS plugin.
  */
 export async function loadConfigAndCreateContext(options: NodeConfigOptions = {}) {

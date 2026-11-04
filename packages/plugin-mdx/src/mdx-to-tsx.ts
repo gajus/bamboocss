@@ -610,12 +610,11 @@ export const mdxToTsx = (input: string): string => {
 }
 
 /**
- * Built in, as the Astro converter is. Last of the `parser:before` hooks, and
- * only for a file none before it made something of: a project that already converts its MDX
- * itself keeps its own.
+ * Register after other `parser:before` hooks that convert MDX. A file a preceding hook
+ * rewrote keeps that output.
  */
 export const pluginMdx = (): BambooPlugin => ({
-  name: '@bamboocss/node:mdx',
+  name: '@bamboocss/plugin-mdx',
   hooks: {
     'parser:before': ({ filePath, content, original }) => {
       if (!MDX_FILE.test(filePath)) return

@@ -56,7 +56,7 @@ const reload = async (ctx: BambooContext) => {
 /**
  * A config edited while a build watches it is read again as it was read first. The reload used to
  * read the file alone, and the context it built had none of what the integration had added: the
- * automatic Astro and MDX parsers, the explicitly configured Vue parser, and
+ * explicitly configured parser hooks and
  * the mark of a dev server's build, which `hash: 'auto'` reads.
  */
 test('a config read again keeps what the integration added to it', async () => {

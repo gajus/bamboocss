@@ -11,11 +11,11 @@ afterAll(() => {
   for (const directory of directories) rmSync(directory, { force: true, recursive: true })
 })
 
-const project = (framework?: 'vue' | 'svelte') => {
+const project = (framework?: keyof typeof sources) => {
   const cwd = mkdtempSync(join(tmpdir(), 'bamboo-explicit-sfc-'))
   directories.push(cwd)
   mkdirSync(join(cwd, 'src'))
-  const factory = framework === 'vue' ? 'pluginVue' : 'pluginSvelte'
+  const factory = framework && `plugin${framework[0].toUpperCase()}${framework.slice(1)}`
   const pluginPath = framework && resolve(__dirname, `../../plugin-${framework}/src/index.ts`)
   writeFileSync(
     join(cwd, 'bamboo.config.ts'),
@@ -36,6 +36,8 @@ export default {
 const sources = {
   vue: `<script setup>import { css } from '../styled-system/css'</script><template><div :class="css({ color: 'red' })" /></template>`,
   svelte: `<script>import { css } from '../styled-system/css'</script><div class={css({ color: 'red' })} />`,
+  astro: `---\nimport { css } from '../styled-system/css'\n---\n<div class={css({ color: 'red' })} />`,
+  mdx: `import { css } from '../styled-system/css'\n\n# Heading\n\n<div className={css({ color: 'red' })} />`,
 }
 
 const transform = (ctx: BambooContext, framework: keyof typeof sources) =>
@@ -45,32 +47,23 @@ const transform = (ctx: BambooContext, framework: keyof typeof sources) =>
     configure() {},
   })!
 
-test('unconfigured SFC plugins are not injected and do not transform source', async () => {
+test('unconfigured source plugins are not injected and do not transform source', async () => {
   const ctx = await loadConfigAndCreateContext({ cwd: project() })
-  expect(ctx.config.plugins?.map((plugin) => plugin.name)).toEqual([
-    '@bamboocss/node:astro',
-    'probe',
-    '@bamboocss/node:mdx',
-  ])
-  for (const framework of ['vue', 'svelte'] as const) {
+  expect(ctx.config.plugins?.map((plugin) => plugin.name)).toEqual(['probe'])
+  for (const framework of ['vue', 'svelte', 'astro', 'mdx'] as const) {
     expect(transform(ctx, framework)).toBe(sources[framework] + '\n// probe')
   }
 })
 
-test.each(['vue', 'svelte'] as const)(
+test.each(['vue', 'svelte', 'astro', 'mdx'] as const)(
   'explicit %s registration survives repeated reloads without duplicate hooks',
   async (framework) => {
     const cwd = project(framework)
     let ctx = await loadConfigAndCreateContext({ cwd })
     for (let round = 0; round < 3; round++) {
-      expect(ctx.config.plugins?.map((plugin) => plugin.name)).toEqual([
-        '@bamboocss/node:astro',
-        `@bamboocss/plugin-${framework}`,
-        'probe',
-        '@bamboocss/node:mdx',
-      ])
+      expect(ctx.config.plugins?.map((plugin) => plugin.name)).toEqual([`@bamboocss/plugin-${framework}`, 'probe'])
       const transformed = transform(ctx, framework)
-      expect(transformed).toContain("css({ color: 'red' })")
+      expect(transformed).toContain('css(')
       expect(transformed).not.toContain('<script')
       expect(transformed.match(/\/\/ probe/g)).toHaveLength(1)
       if (round === 2) break

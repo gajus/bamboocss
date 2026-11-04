@@ -1,0 +1,28 @@
+# An evaluation is cached across native calls and used again only while every file it read still
+# holds what it held, so a read nothing records is one whose edit the cache never sees. The file
+# system is reached where a read is recorded, `source()` and the resolver, or where a recording is
+# checked, `witness`; each of those says so with `#[expect(clippy::disallowed_methods)]`.
+disallowed-methods = [
+  { path = "std::fs::canonicalize", reason = "read through source(), or record the read with record_read" },
+  { path = "std::fs::exists", reason = "read through source(), or record the read with record_read" },
+  { path = "std::fs::metadata", reason = "read through source(), or record the read with record_read" },
+  { path = "std::fs::read", reason = "read through source(), or record the read with record_read" },
+  { path = "std::fs::read_dir", reason = "read through source(), or record the read with record_read" },
+  { path = "std::fs::read_link", reason = "read through source(), or record the read with record_read" },
+  { path = "std::fs::read_to_string", reason = "read through source(), or record the read with record_read" },
+  { path = "std::fs::symlink_metadata", reason = "read through source(), or record the read with record_read" },
+  { path = "std::path::Path::canonicalize", reason = "read through source(), or record the read with record_read" },
+  { path = "std::path::Path::exists", reason = "read through source(), or record the read with record_read" },
+  { path = "std::path::Path::is_dir", reason = "read through source(), or record the read with record_read" },
+  { path = "std::path::Path::is_file", reason = "read through source(), or record the read with record_read" },
+  { path = "std::path::Path::is_symlink", reason = "read through source(), or record the read with record_read" },
+  { path = "std::path::Path::metadata", reason = "read through source(), or record the read with record_read" },
+  { path = "std::path::Path::read_dir", reason = "read through source(), or record the read with record_read" },
+  { path = "std::path::Path::read_link", reason = "read through source(), or record the read with record_read" },
+  { path = "std::path::Path::symlink_metadata", reason = "read through source(), or record the read with record_read" },
+  { path = "std::path::Path::try_exists", reason = "read through source(), or record the read with record_read" },
+]
+disallowed-types = [
+  { path = "std::fs::File", reason = "read through source(), or record the read with record_read" },
+  { path = "std::fs::OpenOptions", reason = "read through source(), or record the read with record_read" },
+]

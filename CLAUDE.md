@@ -99,6 +99,8 @@ walk and `module_recipes` keep process-wide entries holding the result, the read
 ledgers, and a content hash of every file the evaluation looked at — including candidates that did not exist. An entry
 is used only while every one of those still hashes the same (`witness`, memoized by mtime and size). Anything new an
 evaluation depends on has to go through `source()` or `record_read`, or the cache will not see it change.
+`packages/native-extractor/clippy.toml` makes reaching the file system anywhere else a clippy error, and each function
+that may reach it says how its reads are recorded, in an `#[expect(clippy::disallowed_methods)]`.
 `packages/native-extractor/__tests__/cross-call-cache.test.ts` fails if validation or replay is removed.
 
 **A panic in Rust is an error in JavaScript, and the process lives on.** Every `#[napi]` export takes `catch_unwind`;
@@ -160,6 +162,10 @@ pnpm --filter=./sandbox/<name> exec bamboo codegen --clean    # one sandbox
 (`.github/workflows/quality.yml`, "Format"). A green `pnpm check` therefore says nothing about whether the branch
 formats, and an unformatted changeset is enough to fail the build. Run `pnpm fmt` before committing, or
 `pnpm exec oxfmt <paths>` to fix in place.
+
+Nor does it run the native extractor's Rust checks, which are CI's "Rust" job. Before committing a change under
+`packages/native-extractor/src`, run them there:
+`cargo fmt --check && cargo clippy --locked --all-targets -- -D warnings && cargo test --locked`.
 
 🚨 **Nothing drives a real browser any more, and no check reads a computed style.** The browser-parity suite built the
 sandbox twice — folded and unfolded — and compared what Chromium computed. Mandatory compilation (`13ce729fc`) left no

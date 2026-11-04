@@ -900,6 +900,7 @@ impl<'a> ProjectEvaluator<'a> {
         self.source_unrecorded(&normalized)
     }
 
+    #[expect(clippy::disallowed_methods, reason = "`source()` records the read")]
     fn source_unrecorded(&self, normalized: &str) -> Option<StringSource<'a>> {
         if let Some(source) = self.sources.get(normalized) {
             return Some(StringSource::Borrowed(source));
@@ -946,6 +947,10 @@ impl<'a> ProjectEvaluator<'a> {
     /// A file on disk is re-read only when its modification time or size moved: validating a
     /// cached barrel lookup checks every member, and hashing each one's text on every transform
     /// cost a noticeable share of what the cache saved.
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "it reads what was recorded, to tell whether it changed"
+    )]
     fn witness(&self, path: &str) -> Option<u64> {
         if let Some(source) = self.sources.get(path) {
             return Some(content_hash(source));
@@ -982,6 +987,10 @@ impl<'a> ProjectEvaluator<'a> {
         }
     }
 
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "it records the `package.json` it finds, as a configuration file"
+    )]
     fn package_import_bases(&self, importer: &Path, specifier: &str) -> Vec<PathBuf> {
         let mut directory = importer.parent();
         while let Some(current) = directory {
@@ -1016,6 +1025,10 @@ impl<'a> ProjectEvaluator<'a> {
         Vec::new()
     }
 
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "it records the `package.json` it finds, as a configuration file"
+    )]
     fn package_bases(&self, importer: &Path, specifier: &str) -> Vec<PathBuf> {
         let segments = specifier.split('/').collect::<Vec<_>>();
         let package_segments = if specifier.starts_with('@') { 2 } else { 1 };
@@ -1086,6 +1099,10 @@ impl<'a> ProjectEvaluator<'a> {
         Vec::new()
     }
 
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "it records the file it resolves to, and each candidate ahead of it"
+    )]
     fn resolve(&self, importer: &str, specifier: &str) -> Option<String> {
         let mut bases = Vec::new();
         let importer_path = Path::new(importer);

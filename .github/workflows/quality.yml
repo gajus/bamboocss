@@ -246,3 +246,27 @@ jobs:
 
       - name: Run TypeScript type check
         run: pnpm typecheck
+
+  # The native extractor as Rust. The jobs above build it and call it from Node; nothing else runs
+  # rustfmt, clippy, or its unit tests, which hold a keyframes name and `JSON.stringify` to what the
+  # runtime computes. Clippy also keeps the file system to the reads the cross-call cache records,
+  # through `packages/native-extractor/clippy.toml`.
+  rust:
+    name: Rust
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: packages/native-extractor
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Run rustfmt
+        run: cargo fmt --check
+
+      - name: Run clippy
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Run unit tests
+        run: cargo test --locked

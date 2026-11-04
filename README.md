@@ -1,5 +1,5 @@
 <p align="center">
-  Bamboo is build-time, type-safe, zero-runtime CSS-in-JS
+  Bamboo is build-time, Rust/Oxc, type-safe, zero-runtime CSS-in-JS, with per-route CSS
 </p>
 
 ## Why Bamboo?

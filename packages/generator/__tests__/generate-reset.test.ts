@@ -274,6 +274,10 @@ describe('generate reset', () => {
           text-decoration: underline dotted;
       }
 
+        .pd-reset ::-webkit-search-decoration,.pd-reset ::-webkit-search-cancel-button {
+          -webkit-appearance: none;
+      }
+
         .pd-reset :-moz-focusring {
           outline: auto;
       }
@@ -332,10 +336,6 @@ describe('generate reset', () => {
 
         .pd-reset progress {
           vertical-align: baseline;
-      }
-
-        .pd-reset ::-webkit-search-decoration,.pd-reset ::-webkit-search-cancel-button {
-          -webkit-appearance: none;
       }
 
         .pd-reset :-moz-ui-invalid {

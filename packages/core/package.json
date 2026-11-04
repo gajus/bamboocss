@@ -35,7 +35,8 @@
   "scripts": {
     "build": "tsdown --dts",
     "build-fast": "tsdown --dts=false",
-    "dev": "pnpm build-fast --watch"
+    "dev": "pnpm build-fast --watch",
+    "shorthands": "tsx scripts/chrome-shorthands.ts"
   },
   "dependencies": {
     "@bamboocss/is-valid-prop": "workspace:^",

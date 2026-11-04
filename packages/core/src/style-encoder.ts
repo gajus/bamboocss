@@ -538,8 +538,10 @@ class ViewTransitionPayloadIndex {
  * separates, while still chaining every pair it does not.
  *
  * Property is taken verbatim rather than through `getPropertyPriority`. Two properties that
- * share a priority are still different declarations and cannot override one another, so
- * chaining them would be a constraint nothing asked for.
+ * share a priority are different declarations, so chaining them would be a constraint nothing
+ * asked for. One of them is never a longhand the other sets — `shorthand-priority.test.ts` holds
+ * the priorities to that — but two shorthands can overlap at one priority: `textWrap` and
+ * `whiteSpace` both set `textWrapMode`, and nothing here orders that pair.
  */
 const competitionGroup = (hash: string) => {
   const propertyEnd = hash.indexOf(StyleEncoder.separator)

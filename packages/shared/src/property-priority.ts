@@ -34,6 +34,8 @@ longHandLogical.add('scrollTimelineName')
 
 longHandLogical.add('timelineScope')
 
+shorthandsOfLonghands.add('timelineTrigger')
+
 shorthandsOfLonghands.add('viewTimeline')
 longHandLogical.add('viewTimelineAxis')
 longHandLogical.add('viewTimelineInset')
@@ -57,10 +59,15 @@ shorthandsOfLonghands.add('borderColor')
 shorthandsOfLonghands.add('borderStyle')
 shorthandsOfLonghands.add('borderWidth')
 shorthandsOfShorthands.add('borderBlock')
-longHandLogical.add('borderBlockColor')
-longHandLogical.add('borderBlockStyle')
-longHandLogical.add('borderBlockWidth')
+// Each sets the start and end side, as `borderInlineColor` and its siblings do below.
+shorthandsOfLonghands.add('borderBlockColor')
+shorthandsOfLonghands.add('borderBlockStyle')
+shorthandsOfLonghands.add('borderBlockWidth')
 shorthandsOfLonghands.add('borderBlockStart')
+shorthandsOfLonghands.add('WebkitBorderBefore') // alias for `borderBlockStart`
+shorthandsOfLonghands.add('WebkitBorderBeforeColor') // alias for `borderBlockStartColor`
+shorthandsOfLonghands.add('WebkitBorderBeforeStyle') // alias for `borderBlockStartStyle`
+shorthandsOfLonghands.add('WebkitBorderBeforeWidth') // alias for `borderBlockStartWidth`
 shorthandsOfLonghands.add('borderTop')
 longHandLogical.add('borderBlockStartColor')
 longHandPhysical.add('borderTopColor')
@@ -114,11 +121,23 @@ longHandPhysical.add('borderTopRightRadius')
 longHandPhysical.add('borderBottomLeftRadius')
 longHandPhysical.add('borderBottomRightRadius')
 
+// The `corner-*-shape` longhands, one per corner, rank by default.
+shorthandsOfShorthands.add('cornerShape')
+shorthandsOfLonghands.add('cornerTopShape')
+shorthandsOfLonghands.add('cornerRightShape')
+shorthandsOfLonghands.add('cornerBottomShape')
+shorthandsOfLonghands.add('cornerLeftShape')
+shorthandsOfLonghands.add('cornerBlockStartShape')
+shorthandsOfLonghands.add('cornerBlockEndShape')
+shorthandsOfLonghands.add('cornerInlineStartShape')
+shorthandsOfLonghands.add('cornerInlineEndShape')
+
 longHandLogical.add('boxShadow')
 
 // CSS Basic User Interface
 longHandLogical.add('accentColor')
 longHandLogical.add('appearance')
+shorthandsOfLonghands.add('WebkitAppearance') // alias for `appearance`
 longHandLogical.add('aspectRatio')
 
 shorthandsOfLonghands.add('caret')
@@ -128,6 +147,10 @@ longHandLogical.add('caretShape')
 longHandLogical.add('cursor')
 longHandLogical.add('imeMode')
 longHandLogical.add('inputSecurity')
+
+shorthandsOfLonghands.add('interestDelay')
+longHandLogical.add('interestDelayEnd')
+longHandLogical.add('interestDelayStart')
 
 shorthandsOfLonghands.add('outline')
 longHandLogical.add('outlineColor')
@@ -139,13 +162,14 @@ longHandLogical.add('pointerEvents')
 longHandLogical.add('resize') // horizontal, vertical, block, inline, both
 longHandLogical.add('textOverflow')
 longHandLogical.add('userSelect')
+shorthandsOfLonghands.add('WebkitUserSelect') // alias for `userSelect`
 
 // CSS Box Alignment
 shorthandsOfLonghands.add('gridGap') // alias for `gap`
 shorthandsOfLonghands.add('gap')
-longHandLogical.add('gridRowGap')
+shorthandsOfLonghands.add('gridRowGap') // alias for `rowGap`
 longHandLogical.add('rowGap')
-longHandLogical.add('gridColumnGap')
+shorthandsOfLonghands.add('gridColumnGap') // alias for `columnGap`
 longHandLogical.add('columnGap')
 
 shorthandsOfLonghands.add('placeContent')
@@ -317,8 +341,10 @@ shorthandsOfShorthands.add('grid')
 longHandLogical.add('gridAutoFlow')
 longHandLogical.add('gridAutoRows')
 longHandLogical.add('gridAutoColumns')
-shorthandsOfShorthands.add('gridTemplate')
-shorthandsOfLonghands.add('gridTemplateAreas')
+// `grid` sets everything `gridTemplate` does, so `gridTemplate` ranks above it, and its own
+// longhands — `gridTemplateAreas` is one — above that.
+shorthandsOfLonghands.add('gridTemplate')
+longHandLogical.add('gridTemplateAreas')
 longHandLogical.add('gridTemplateColumns')
 longHandLogical.add('gridTemplateRows')
 
@@ -344,6 +370,9 @@ longHandLogical.add('objectPosition')
 // CSS Inline
 longHandLogical.add('initialLetter')
 longHandLogical.add('initialLetterAlign')
+shorthandsOfLonghands.add('textBox')
+longHandLogical.add('textBoxEdge')
+longHandLogical.add('textBoxTrim')
 
 // CSS Lists and Counters
 shorthandsOfLonghands.add('listStyle')
@@ -355,15 +384,25 @@ longHandLogical.add('listStyleType')
 longHandLogical.add('clip') // @deprecated
 longHandLogical.add('clipPath')
 
-shorthandsOfLonghands.add('mask')
+// `maskPosition` sets `-webkit-mask-position-x` and `-y`, as `backgroundPosition` sets its own
+// two, so `mask` is a shorthand of shorthands as `background` is.
+shorthandsOfShorthands.add('mask')
+shorthandsOfShorthands.add('WebkitMask') // sets what `mask` does
 longHandLogical.add('maskClip')
+shorthandsOfLonghands.add('WebkitMaskClip') // alias for `maskClip`
 longHandLogical.add('maskComposite')
+shorthandsOfLonghands.add('WebkitMaskComposite') // alias for `maskComposite`
 longHandLogical.add('maskImage')
+shorthandsOfLonghands.add('WebkitMaskImage') // alias for `maskImage`
 longHandLogical.add('maskMode')
 longHandLogical.add('maskOrigin')
-longHandLogical.add('maskPosition')
+shorthandsOfLonghands.add('WebkitMaskOrigin') // alias for `maskOrigin`
+shorthandsOfLonghands.add('maskPosition')
+shorthandsOfLonghands.add('WebkitMaskPosition') // sets what `maskPosition` does
 longHandLogical.add('maskRepeat')
+shorthandsOfLonghands.add('WebkitMaskRepeat') // alias for `maskRepeat`
 longHandLogical.add('maskSize')
+shorthandsOfLonghands.add('WebkitMaskSize') // alias for `maskSize`
 
 longHandLogical.add('maskType')
 
@@ -408,9 +447,9 @@ longHandLogical.add('scrollBehavior')
 
 // CSS Pages
 longHandLogical.add('page')
-longHandLogical.add('pageBreakAfter')
-longHandLogical.add('pageBreakBefore')
-longHandLogical.add('pageBreakInside')
+shorthandsOfLonghands.add('pageBreakAfter') // legacy shorthand for `breakAfter`
+shorthandsOfLonghands.add('pageBreakBefore') // legacy shorthand for `breakBefore`
+shorthandsOfLonghands.add('pageBreakInside') // legacy shorthand for `breakInside`
 
 // CSS Positioning
 shorthandsOfShorthands.add('inset')
@@ -430,6 +469,11 @@ longHandLogical.add('float')
 longHandLogical.add('overlay')
 longHandLogical.add('position')
 longHandLogical.add('zIndex')
+
+// CSS Anchor Positioning
+shorthandsOfLonghands.add('positionTry')
+longHandLogical.add('positionTryFallbacks')
+longHandLogical.add('positionTryOrder')
 
 // CSS Ruby
 longHandLogical.add('rubyAlign')
@@ -488,7 +532,7 @@ longHandLogical.add('azimuth')
 
 // CSS Table
 longHandLogical.add('borderCollapse')
-longHandLogical.add('borderSpacing')
+shorthandsOfLonghands.add('borderSpacing') // of `-webkit-border-horizontal-spacing` and `-vertical-`, in Chrome
 longHandLogical.add('captionSide')
 longHandLogical.add('emptyCells')
 longHandLogical.add('tableLayout')
@@ -535,12 +579,12 @@ longHandLogical.add('textTransform')
 shorthandsOfLonghands.add('textWrap')
 longHandLogical.add('textWrapMode')
 longHandLogical.add('textWrapStyle')
-longHandLogical.add('whiteSpace')
+shorthandsOfLonghands.add('whiteSpace') // of `whiteSpaceCollapse` and `textWrapMode`
 longHandLogical.add('whiteSpaceCollapse')
 longHandLogical.add('whiteSpaceTrim')
 longHandLogical.add('wordBreak')
 longHandLogical.add('wordSpacing')
-longHandLogical.add('wordWrap')
+shorthandsOfLonghands.add('wordWrap') // alias for `overflowWrap`
 
 // CSS Transforms
 longHandLogical.add('backfaceVisibility')
@@ -586,6 +630,12 @@ longHandLogical.add('mathStyle')
 
 // CSS Pointer Events
 longHandLogical.add('touchAction')
+
+// SVG
+shorthandsOfLonghands.add('marker')
+longHandLogical.add('markerEnd')
+longHandLogical.add('markerMid')
+longHandLogical.add('markerStart')
 
 export function getPropertyPriority(key: string): number {
   if (key === 'all') return 0

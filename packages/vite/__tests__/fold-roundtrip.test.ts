@@ -38,6 +38,9 @@ const cases: Array<{ name: string; styles: string }> = [
   { name: 'numeric value', styles: `{ zIndex: 10, opacity: 0.4 }` },
   // Read back as numbers on the way into the sheet, and named as written by the compiler.
   { name: 'number written as a string', styles: `{ padding: '1e3', marginTop: '+2', top: '-0' }` },
+  // Kept as written in the sheet; the compiler collapsed it, and literals lost it in extraction.
+  { name: 'spaces inside quotes', styles: `{ content: '"a  b"' }` },
+  { name: 'spaces inside quotes, in a string built in source', styles: `{ content: '"a ' + ' b"' }` },
   { name: 'negative value', styles: `{ marginTop: '-2' }` },
   { name: 'token reference', styles: `{ boxShadow: 'md' }` },
   { name: 'empty-ish value', styles: `{ color: 'red.300', display: undefined }` },
@@ -171,3 +174,31 @@ function evalStyles(source: string): Record<string, any> {
   // eslint-disable-next-line no-new-func
   return new Function(`return (${source})`)()
 }
+
+/**
+ * A quoted string's spaces are what `content` shows. They reach the stylesheet as written, from a
+ * call and from a config recipe alike, and the class the compiler names is one the sheet carries:
+ * the recipe's was named with the spaces collapsed, and the build failed on a class with no rule.
+ */
+describe('a quoted string', () => {
+  test('keeps its spaces in the emitted declaration', () => {
+    const { fold, getCss } = createFoldFixture()
+
+    fold(`import { css } from 'styled-system/css'\nexport const cls = css({ content: '"a  b"' })\n`)
+
+    expect(getCss()).toContain('content: "a  b"')
+  })
+
+  test('in a config recipe, folds to a class the stylesheet carries', () => {
+    const { fold, getStyleSetCss } = createFoldFixture({
+      theme: { extend: { recipes: { quoted: { className: 'quoted', base: { content: '"x  y"' } } } } },
+    } as never)
+
+    const result = fold(`import { quoted } from '../styled-system/recipes'\nexport const cls = quoted()\n`)
+
+    expect(result.folded).toHaveLength(1)
+    const css = getStyleSetCss()
+    for (const selector of selectorsFor(result.folded[0]!.className)) expect(css).toContain(selector)
+    expect(css).toContain('content: "x  y"')
+  })
+})

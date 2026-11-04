@@ -233,6 +233,25 @@ describe('important and space handling', () => {
       expect(sanitize('')).toBe('')
       expect(sanitize(4)).toBe(4)
     })
+
+    // `content` and `grid-template-areas` show the spaces inside a quoted string, and the sheet
+    // keeps them, so the class the compiler names has to keep them too.
+    test('keeps the spaces inside a quoted string, collapsing only the runs outside it', () => {
+      expect(sanitize('"a  b"')).toBe('"a  b"')
+      expect(sanitize("'a  b'   'c'")).toBe("'a  b' 'c'")
+      expect(sanitize('"My  Font",   serif')).toBe('"My  Font", serif')
+      expect(sanitize('"a  b"')).toBe('"a  b"')
+    })
+
+    test('writes a tab or a line break inside a quoted string as a space, as no class can hold one', () => {
+      expect(sanitize('"a\tb"')).toBe('"a b"')
+      expect(sanitize('"a\r\nb"')).toBe('"a  b"')
+    })
+
+    test('reads an escaped quote as part of its string', () => {
+      expect(sanitize('"a\\"  b"   x')).toBe('"a\\"  b" x')
+      expect(sanitize('\\"  x')).toBe('\\" x')
+    })
   })
 
   describe('withoutSpace', () => {

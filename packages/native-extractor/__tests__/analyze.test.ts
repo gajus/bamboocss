@@ -117,6 +117,22 @@ describe('native extraction analysis', () => {
     expect(result.calls[1]).toMatchObject({ line: 3, column: 1 })
   })
 
+  // `content` and `grid-template-areas` show the spaces inside a quoted string. Collapsed with
+  // the rest, `content: '"a  b"'` shipped as `"a b"`.
+  test('keeps the spaces inside a quoted string, collapsing only the runs outside it', () => {
+    const { calls } = analyze(
+      'source.ts',
+      `import { css } from 'styled-system/css'
+       css({ content: '"a  b"', fontFamily: '"My  Font",   serif', gridTemplateAreas: \`"a  b"
+         "c d"\` })`,
+      entrypoints,
+    )
+
+    expect(calls[0]!.arguments).toEqual([
+      { content: '"a  b"', fontFamily: '"My  Font", serif', gridTemplateAreas: '"a  b" "c d"' },
+    ])
+  })
+
   test('places each call as JavaScript reads the source, past every kind of line break', () => {
     const source = [
       `import { css } from 'styled-system/css'\r\n`,

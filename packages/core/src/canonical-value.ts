@@ -1,3 +1,5 @@
+import { collapseWhitespace } from '@bamboocss/shared'
+
 /**
  * One spelling per value, so one atom per declaration.
  *
@@ -51,9 +53,12 @@ const contractHex = (digits: string) => {
 
 export const canonicalValue = (value: string): string => {
   // A quoted string or a url() carries bytes that are not CSS syntax — a font family, a path, a
-  // `content` string. Nothing here can tell those apart from the value around them, so the
-  // whole value is left exactly as written rather than risk editing inside one.
-  if (OPAQUE.test(value)) return value
+  // `content` string. Nothing here can tell those apart from the value around them, so nothing
+  // is rewritten but whitespace, folded as the compiler's `sanitize` folds it: each run one space
+  // outside a quoted string, the spaces inside one kept. Left exactly as written, a value with a
+  // run outside its quotes, or a tab inside them, was named one way here and another by the
+  // compiler, and the element got a class with no rule.
+  if (OPAQUE.test(value)) return collapseWhitespace(value).trim()
 
   let out = value.replace(HEX, (whole, digits: string) => {
     // Only the lengths that are colours. `#12345` is not one, and neither is a fragment

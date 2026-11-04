@@ -72,6 +72,15 @@ describe('canonicalValue leaves alone what it cannot fold safely', () => {
     expect(canonicalValue('url("x.png") no-repeat')).toBe('url("x.png") no-repeat')
   })
 
+  // Only the whitespace, and as the compiler's `sanitize` folds it: left exactly as written, a
+  // run outside the quotes, or a tab inside them, named the class apart from the compiler's.
+  test('the whitespace around a quoted string, as anywhere else', () => {
+    expect(canonicalValue('"a"   "b"')).toBe('"a" "b"')
+    expect(canonicalValue('  "a  b"  ')).toBe('"a  b"')
+    expect(canonicalValue('"Helvetica  Neue",\n  #FFFFFF')).toBe('"Helvetica  Neue", #FFFFFF')
+    expect(canonicalValue('"a\tb"')).toBe('"a b"')
+  })
+
   test('a colour written in another notation — that conversion is the optimizer’s', () => {
     expect(canonicalValue('rgba(0, 0, 0, .1)')).toBe('rgba(0, 0, 0, 0.1)')
     expect(canonicalValue('rgb(0 0 0 / 10%)')).toBe('rgb(0 0 0 / 10%)')

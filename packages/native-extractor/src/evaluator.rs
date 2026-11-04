@@ -5910,9 +5910,50 @@ fn is_javascript_whitespace(character: char) -> bool {
     matches!(character, '\u{0009}'..='\u{000d}' | '\u{0020}' | '\u{00a0}' | '\u{1680}' | '\u{2000}'..='\u{200a}' | '\u{2028}' | '\u{2029}' | '\u{202f}' | '\u{205f}' | '\u{3000}' | '\u{feff}')
 }
 
+/// `value` as a style reads it: each run of whitespace one space, outside a quoted string. Inside
+/// one the spaces are what `content` and `grid-template-areas` show, so the string is kept as
+/// written; collapsed, `content: '"a  b"'` shipped as `"a b"`. `collapseWhitespace` in
+/// `@bamboocss/shared` folds it the same way where the class name is made.
 fn normalize_whitespace(value: &str) -> String {
     let mut output = String::with_capacity(value.len());
-    output.extend(collapsed(value));
+    if !value.contains(['"', '\'']) {
+        output.extend(collapsed(value));
+        return output;
+    }
+    let mut quote = None;
+    let mut whitespace = false;
+    let mut characters = value.chars();
+    while let Some(character) = characters.next() {
+        // An escaped character is never a quote that opens or closes a string.
+        if character == '\\' {
+            output.push(character);
+            output.extend(characters.next());
+            whitespace = false;
+            continue;
+        }
+        match quote {
+            Some(open) => {
+                output.push(character);
+                if character == open {
+                    quote = None;
+                }
+            }
+            None if is_javascript_whitespace(character) => {
+                if !whitespace {
+                    output.push(' ');
+                }
+                whitespace = true;
+                continue;
+            }
+            None => {
+                if matches!(character, '"' | '\'') {
+                    quote = Some(character);
+                }
+                output.push(character);
+            }
+        }
+        whitespace = false;
+    }
     output
 }
 

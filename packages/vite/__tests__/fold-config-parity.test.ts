@@ -39,6 +39,12 @@ const SHAPES: Array<{ name: string; styles: Record<string, unknown> }> = [
   // Leads with a digit, so the selector needs a hex escape rather than a backslash before
   // the character — a different branch of `esc` from every other shape here.
   { name: 'numeric-leading arbitrary', styles: { gridArea: '[2col]' } },
+  // Read back with `Number()` on the way into the sheet, and once named as written by the fold.
+  { name: 'number written as a string', styles: { padding: '1e3' } },
+  // The spaces inside a quoted string are kept in the sheet, and were once collapsed in the fold.
+  { name: 'spaces inside quotes', styles: { content: '"a  b"' } },
+  { name: 'tab inside quotes', styles: { content: '"a\tb"' } },
+  { name: 'runs around quotes', styles: { fontFamily: '"My  Font",   serif' } },
 ]
 
 /**

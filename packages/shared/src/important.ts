@@ -153,14 +153,53 @@ function markedFallback(value: string): string[] | undefined {
 // - `trimTrivia` strips WhiteSpace ∪ LineTerminator, the same set again, and NUL, which `sanitize`
 //   removes as well.
 
+/** What a class attribute splits on, besides a space: a tab, a line feed, a form feed, a return. */
+const SPLITS_CLASS = /[\t\n\f\r]/
+
 /**
- * Collapse every run of whitespace to a single space, which is what the class name is
- * built from. Exported because `leafClass` has to reproduce this exact pipeline, and a
- * second copy of it would be free to drift from the one `createCss` runs.
+ * `value` with each run of whitespace one space, outside a quoted string. Inside one the spaces
+ * are what `content` and `grid-template-areas` show, so they are kept as written, and a tab or a
+ * line break there is a space, since a class name is made from the value and can hold neither.
+ *
+ * The stylesheet's `canonicalValue` folds a value the same way, so the compiler and the sheet name
+ * a quoted value alike. Collapsing inside quotes too, the compiler named `content: '"a  b"'` as
+ * `"a b"` while the sheet wrote its rule for `"a  b"`.
+ */
+export function collapseWhitespace(value: string): string {
+  if (!value.includes('"') && !value.includes("'")) return value.replaceAll(/[\n\s]+/g, ' ')
+  let out = ''
+  let quote = ''
+  let space = false
+  for (let index = 0; index < value.length; index++) {
+    const character = value[index]!
+    // An escaped character is never a quote that opens or closes a string: `"a\"  b"` is one.
+    if (character === '\\' && index + 1 < value.length) {
+      const escaped = value[++index]!
+      out += character + (SPLITS_CLASS.test(escaped) ? ' ' : escaped)
+      space = false
+    } else if (quote) {
+      out += SPLITS_CLASS.test(character) ? ' ' : character
+      if (character === quote) quote = ''
+    } else if (whitespaceRegex.test(character)) {
+      if (!space) out += ' '
+      space = true
+    } else {
+      if (character === '"' || character === "'") quote = character
+      out += character
+      space = false
+    }
+  }
+  return out
+}
+
+/**
+ * Collapse every run of whitespace outside a quoted string to a single space, which is what the
+ * class name is built from (`collapseWhitespace`). Exported because `leafClass` has to reproduce
+ * this exact pipeline, and a second copy of it would be free to drift from the one `createCss` runs.
  */
 export function sanitize<T>(value: T): T {
   if (typeof value !== 'string') return value
-  const collapsed = whitespaceRegex.test(value) ? value.replaceAll(/[\n\s]+/g, ' ') : value
+  const collapsed = whitespaceRegex.test(value) ? collapseWhitespace(value) : value
   // NUL is what a `fallback(...)` joins its candidates with on the way to `stringify`. It
   // cannot appear in CSS, but it can appear in a JS string, and one arriving from pasted or
   // generated content would be split into declarations nobody wrote — and would put a raw

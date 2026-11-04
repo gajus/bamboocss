@@ -125,7 +125,7 @@ export async function generate(config: Config, configPath?: string, options: Gen
       const done = logger.time.info(ctx.messages.buildComplete(parsed))
       const sheet = assembleExtractedSheet(ctx, { layerParams: true, sourceScanCache })
       const css = ctx.getCss(sheet)
-      await ctx.runtime.fs.writeFile(outfile, css)
+      await ctx.output.writeFile(outfile, css)
 
       done()
     }

@@ -1,6 +1,6 @@
 import { fixtureDefaults } from '@bamboocss/fixture'
 import type { WatcherEventType } from '@bamboocss/types'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, test, vi } from 'vitest'
@@ -136,5 +136,52 @@ describe('generate watch add invalidation', () => {
     const css = readFileSync(outfile, 'utf8')
     expect(css).toMatch(/color:\s*red/)
     expect(css).not.toMatch(/color:\s*blue/)
+  })
+
+  /**
+   * A rebuild whose stylesheet comes out as it was writes nothing: an edit that moves no style,
+   * a comment, reached the stylesheet a dev server watches, which did its work over for it.
+   */
+  test('leaves the stylesheet as it was when a rebuild changes nothing in it', async () => {
+    const directory = createFiles({
+      'src/app.tsx': `import { css } from 'styled-system/css'\nexport const className = css({ color: 'blue' })\n`,
+    })
+    const ctx = new BambooContext({
+      ...fixtureDefaults,
+      config: {
+        ...fixtureDefaults.config,
+        cwd: directory,
+        include: ['src/**/*.tsx'],
+        outdir: 'styled-system',
+        watch: true,
+      },
+    })
+    let onFile!: (event: WatcherEventType, file: string) => void | Promise<void>
+    ctx.watchConfig = vi.fn()
+    ctx.watchFiles = vi.fn((callback) => {
+      onFile = callback
+    })
+    mocked.loadConfigAndCreateContext.mockResolvedValue(ctx)
+
+    await generate(ctx.config)
+
+    const outfile = path.join(directory, 'styled-system/styles.css')
+    const past = new Date(Date.UTC(2020, 0, 1))
+    utimesSync(outfile, past, past)
+
+    writeFileSync(
+      path.join(directory, 'src/app.tsx'),
+      `import { css } from 'styled-system/css'\n// a comment\nexport const className = css({ color: 'blue' })\n`,
+    )
+    await onFile('change', 'src/app.tsx')
+    expect(statSync(outfile).mtimeMs, 'nothing in it moved').toBe(past.getTime())
+
+    writeFileSync(
+      path.join(directory, 'src/app.tsx'),
+      `import { css } from 'styled-system/css'\nexport const className = css({ color: 'red' })\n`,
+    )
+    await onFile('change', 'src/app.tsx')
+    expect(statSync(outfile).mtimeMs, 'a style moved').not.toBe(past.getTime())
+    expect(readFileSync(outfile, 'utf8')).toMatch(/color:\s*red/)
   })
 })

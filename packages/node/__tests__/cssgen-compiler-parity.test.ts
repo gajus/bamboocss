@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, test } from 'vitest'
@@ -124,4 +124,24 @@ describe('cssgen compiled sheet', () => {
     expect(existsSync(join(stylesDir, 'recipes.css'))).toBe(false)
     expect(existsSync(join(stylesDir, 'recipes'))).toBe(false)
   })
+})
+
+/**
+ * `cssgen -o` wrote its file whatever it held, so every run touched a stylesheet that a dev server
+ * or a bundler watches, and each did its work over. The stylesheet `bamboo` writes itself was
+ * already left alone when nothing in it moved; an outfile is too now.
+ */
+test('cssgen leaves an outfile that holds the same stylesheet as it was', async () => {
+  const cwd = createProject()
+  const outfile = join(cwd, 'from-cssgen.css')
+  const ctx = await loadConfigAndCreateContext({ cwd })
+  await cssgen(ctx, { cwd, outfile })
+  const written = readFileSync(outfile, 'utf8')
+
+  const past = new Date(Date.UTC(2020, 0, 1))
+  utimesSync(outfile, past, past)
+  await cssgen(ctx, { cwd, outfile })
+
+  expect(readFileSync(outfile, 'utf8')).toBe(written)
+  expect(statSync(outfile).mtimeMs).toBe(past.getTime())
 })

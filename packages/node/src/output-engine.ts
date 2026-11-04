@@ -148,6 +148,21 @@ export class OutputEngine {
   }
 
   /**
+   * Write one file outside an artifact — `cssgen -o`, the stylesheet `bamboo --watch` rebuilds —
+   * unless it holds exactly that already. They wrote it whatever it held, so every rebuild touched
+   * the stylesheet a dev server or a bundler watches, and each of them did its work over for it.
+   * Whether it was written is the answer.
+   */
+  writeFile = async (absPath: string, code: string): Promise<boolean> => {
+    if (this.isUnchanged(absPath, code)) {
+      logger.debug('write:unchanged', absPath)
+      return false
+    }
+    await this.fs.writeFile(absPath, code)
+    return true
+  }
+
+  /**
    * Whether the file on disk already holds exactly what codegen would write.
    *
    * Not for the write itself, which is cheap — 54 artifacts and 1.4 MB measure ~6ms, against

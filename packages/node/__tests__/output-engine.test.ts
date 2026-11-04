@@ -53,6 +53,19 @@ const pkg = (code: string) => ({ id: 'package.json' as const, files: [{ file: 'p
 
 const generated = JSON.stringify({ type: 'module', sideEffects: ['*.css'] })
 
+describe('OutputEngine.writeFile', () => {
+  test('writes a file that is absent or holds something else, and leaves one holding the same', async () => {
+    const { engine, files, written } = createEngine({ 'out/same.css': 'a{}', 'out/other.css': 'a{}' })
+
+    expect(await engine.writeFile('out/new.css', 'b{}')).toBe(true)
+    expect(await engine.writeFile('out/other.css', 'b{}')).toBe(true)
+    expect(await engine.writeFile('out/same.css', 'a{}')).toBe(false)
+
+    expect(written).toEqual(['out/new.css', 'out/other.css'])
+    expect(files['out/other.css']).toBe('b{}')
+  })
+})
+
 describe('OutputEngine package.json', () => {
   test('writes the file when the output directory has none', async () => {
     const { engine, files } = createEngine({})

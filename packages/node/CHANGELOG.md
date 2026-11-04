@@ -1,5 +1,45 @@
 # @bamboocss/node
 
+## 1.60.2
+
+### Patch Changes
+
+- 75cb89f: The bundled native binary loads on every Linux that Node 22 runs on, and on Alpine and Windows on Arm, which
+  had none.
+  - The glibc binaries needed glibc 2.34, the release on the machines that built them, so Debian 11, Ubuntu 20.04 and
+    RHEL 8 failed with `GLIBC_2.33 not found` although Node 22 itself needs only 2.28. They now need no glibc newer than
+    2.17, and the release loads each one on RHEL 8 before publishing it.
+  - Alpine got the glibc binary, which failed on x64 for want of glibc's dynamic loader and loaded on arm64 only because
+    musl's loader does not check the glibc versions it is asked for. `@bamboocss/node` now ships musl binaries for arm64
+    and x64, and loads one where Node runs on musl.
+  - Windows on Arm had no binary. Both Windows binaries now link the C runtime in, so neither needs the Visual C++
+    Redistributable installed.
+
+- a624969: A panic in the native extractor fails the call that hit it with an error, instead of ending the process. The
+  dev server stays up and reports it on the module it was transforming, and a build reports it as it does any other
+  extraction failure. The message is the panic's, and the terminal shows where in the Rust code it happened.
+
+  The caches native calls share across transforms empty themselves and go on when a panic poisons one of their locks.
+  They used to switch themselves off for the rest of the process instead, without saying so.
+
+- 5739004: Extraction finds where a call is in its file with one pass over the file, rather than one per call. A call's
+  line, column and UTF-16 offsets each walked the file from its start, so extracting a module took as long as its calls
+  times its length: a module of 1,000 calls took 120 ms, and takes 2.2 ms. The 500 small modules the extraction
+  benchmark parses take 4.5 ms rather than 5.0 ms. Token accounting placed each token reference it declines the same
+  way, and the evaluator each helper it refuses.
+- Updated dependencies [6bc9293]
+- Updated dependencies [ee37e92]
+  - @bamboocss/generator@1.60.2
+  - @bamboocss/shared@1.60.2
+  - @bamboocss/reporter@1.60.2
+  - @bamboocss/config@1.60.2
+  - @bamboocss/core@1.60.2
+  - @bamboocss/token-dictionary@1.60.2
+  - @bamboocss/logger@1.60.2
+  - @bamboocss/plugin-svelte@1.60.2
+  - @bamboocss/plugin-vue@1.60.2
+  - @bamboocss/types@1.60.2
+
 ## 1.60.1
 
 ### Patch Changes

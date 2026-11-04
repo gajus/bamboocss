@@ -45,4 +45,23 @@ describe('pluginLightningcss', () => {
 
     expect(optimize(css, { browserslist: ['chrome 90'] })).not.toBe(optimize(css, { browserslist: ['chrome 130'] }))
   })
+
+  test('leaves `light-dark()` native for every target, so a `color-scheme` subtree still switches tokens', () => {
+    // A semantic token whose only condition is `_osDark` is folded into `light-dark()` on the
+    // token root, and the documented toggle is `color-scheme: dark` on a subtree. Lowered for a
+    // target older than Chrome 123 — `defaults` resolves to one — the value became
+    // `var(--lightningcss-light, #111) var(--lightningcss-dark, #eee)`, which a custom property
+    // substitutes where it is declared: the token was settled at the root, and no subtree could
+    // change it.
+    const css = [
+      ':where(:root, :host) { color-scheme: light dark; --colors-fg: light-dark(#111, #eee) }',
+      "[data-theme='dark'] { color-scheme: dark }",
+    ].join('\n')
+
+    const lowered = optimize(css, { browserslist: ['chrome 109'] })
+
+    expect(lowered).toContain('--colors-fg: light-dark(#111, #eee)')
+    expect(lowered).not.toContain('--lightningcss-')
+    expect(lowered).toBe(optimize(css, { browserslist: ['chrome 130'] }))
+  })
 })

@@ -19,6 +19,12 @@ export function optimizeLightCss(code: string, options: OptimizeOptions = {}) {
     sourceMap: false,
     filename: 'styles.css',
     include: Features.Nesting | Features.MediaRangeSyntax,
+    // `light-dark()` stays as written. Lowered, each token folded into it becomes
+    // `var(--lightningcss-light, …) var(--lightningcss-dark, …)`, which a custom property
+    // substitutes where it is declared, so a subtree's `color-scheme: dark` — the documented
+    // toggle — changed no token at all. The baseline already requires `light-dark()`, and the
+    // PostCSS path never lowered it.
+    exclude: Features.LightDark,
     targets: browserslistToTargets(browserslist(targets)),
     errorRecovery: true,
   })

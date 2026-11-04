@@ -521,6 +521,10 @@ export default defineConfig({
 })
 ```
 
+It lowers what your [`browserslist`](#browserslist) targets lack, except `light-dark()`, which it leaves as written so a
+`color-scheme` toggle keeps switching semantic tokens; see
+[Browser Support](/docs/overview/browser-support#semantic-tokens-and-light-dark).
+
 There was a `lightningcss: boolean` option whose only job was to push that plugin into this list. Naming the plugin from
 inside `@bamboocss/node` made it a static import, so every project installed a native binary whether or not the flag was
 ever set — the package is separate precisely so that cost is opt-in.

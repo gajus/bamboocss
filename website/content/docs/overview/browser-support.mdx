@@ -49,6 +49,10 @@ A semantic token with a `_osDark` value and nothing else conditional is emitted 
 }
 ```
 
+`@bamboocss/plugin-lightningcss` leaves `light-dark()` as written, whatever your `browserslist` targets. LightningCSS
+would otherwise lower it for any target older than the baseline, and the lowered form settles each token where the token
+is declared — the root — so the override above would change nothing.
+
 A token that also carries `_osLight` keeps its media blocks, because folding it would put a media declaration and a
 `light-dark()` arm in play for the same variable. `_dark` also remains separate because it is a selector rather than an
 operating-system media query.

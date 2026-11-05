@@ -104,8 +104,18 @@ As in CSS, a declaration written later does not override an important one unless
 The same holds wherever styles are combined: a recipe variant's mixin overrides the base, a compound variant's overrides
 the variants it matches, and `cx()` keeps what an earlier mixin sets that a later one does not.
 
-A mixin that is the whole style, as in `css({ mixin: 'card' })`, compiles to one class, `mixin_card`. Combined with
-anything else, it compiles to the atoms of the declarations it applies, which is what lets them take part in that order.
+Wherever it is applied, alone too, a mixin compiles to the atoms of the declarations it applies:
+`css({ mixin: 'body' })` compiles to the same classes as `body`'s declarations written out. That is what lets them take
+part in that order, and rank against every other class on the element as declarations written there would. Under a
+selector they rank by its specificity, under a condition as the condition ranks, and a longhand among them outranks a
+shorthand another class sets:
+
+```jsx
+// small: { value: { fontSize: '14px' } }
+<div className={css({ '& input': { mixin: 'small' } })}>
+  <input className={css({ fontSize: '16px' })} /> {/* 14px, as with '& input': { fontSize: '14px' } */}
+</div>
+```
 
 ## Nesting mixins
 

@@ -471,8 +471,9 @@ export const foldSource = (options: FoldOptions): FoldResult => {
    *
    * Composing is where the key surfaces, but a `cx()` is rarely where it is written. Each part that
    * holds one on its own reports it and is not emitted; the composition reports it only when none
-   * does, which is a mixin written out once its part is no longer alone. Run only once composing
-   * has thrown, so naming the parts again costs nothing on the way to a successful build.
+   * does. That is a fallback: the one case known to reach it, a mixin written out only once its part
+   * was no longer alone, is now written out alone too. Run only once composing has thrown, so naming
+   * the parts again costs nothing on the way to a successful build.
    */
   const reportComposing = (
     composition: { name: string; start: number; end: number },

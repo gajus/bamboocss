@@ -12,12 +12,15 @@ interface MixinsOptions {
 /**
  * The theme's mixins, and what applying one means beside other declarations.
  *
- * Applied alone, a mixin is one class in the `compositions` layer, below every other utility.
- * That says the right thing while nothing else on the element sets what the mixin sets.
- * Composed with something that does, it has to mean what writing its declarations in its place
- * means: a later key wins over it, it wins over an earlier one, and its own conditions rank as
- * conditions do. A class in the lowest layer can mean none of that — every utility beat it, so a
- * recipe variant's mixin lost to the base and a mixin's `_hover` lost to any `color`.
+ * Applying a mixin means what writing its declarations in its place means: a later key wins over
+ * it, it wins over an earlier one, its conditions, its own and those it is applied under, rank as
+ * conditions do over the element's base state, a selector's specificity ranks it over the selected
+ * element's own utilities, and a longhand it sets outranks a shorthand as any longhand does. Its
+ * own class, `mixin_*`, sits in the `compositions` layer, below every other utility, and can mean
+ * none of that — every utility beat it, so a recipe variant's mixin lost to the base, a mixin's
+ * `_hover` lost to any `color`, and its `'& input'` to the input's own `fontSize`. The compiler
+ * writes every mixin out wherever it is applied, alone too; the class is what `staticCss` and the
+ * rule processor name.
  *
  * `expand` is the written-out form: the style object with each `mixin` replaced by the
  * declarations it names, merged in key order the way `css(a, b)` merges its arguments — except

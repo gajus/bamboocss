@@ -328,9 +328,42 @@ export const layered${index} = css(${layered(LAYERS)})
 ).join('')}
 `
 
+/**
+ * Mixins in each shape they are applied in — alone, alone setting something under a condition
+ * itself, beside a property, and alone under a selector or a condition — each written out into the
+ * declarations it applies. Folded with a context of its own, since the fixture's theme has no
+ * mixins.
+ */
+const MIXIN_MODULE = `
+import { css } from 'styled-system/css'
+
+${Array.from(
+  { length: 12 },
+  (_, index) => `
+export const alone${index} = css({ mixin: 'body' })
+export const hovering${index} = css({ mixin: 'card' })
+export const beside${index} = css({ mixin: 'body', color: '${TONES[index % 3]}' })
+export const nested${index} = css({ '& input': { mixin: 'body' } })
+export const hovered${index} = css({ _hover: { mixin: 'card' } })
+`,
+).join('')}
+`
+
 const ctx = createContext()
 const runtimeCss = createRuntimeCss(ctx)
 const styleCompiler = createStaticStyleSetCompiler(ctx, runtimeCss)
+
+const mixinCtx = createContext({
+  theme: {
+    extend: {
+      mixins: {
+        body: { value: { fontSize: '16px', lineHeight: '24px', letterSpacing: '0' } },
+        card: { value: { color: 'gray.700', _hover: { color: 'blue.500' } } },
+      },
+    },
+  },
+})
+const mixinCompiler = createStaticStyleSetCompiler(mixinCtx, createRuntimeCss(mixinCtx))
 
 // Where `CX_IMPORTED_MODULE` finds its styles: an overlay, so nothing is written to disk.
 ctx.project.overlaySource(join(ctx.config.cwd, 'app/src/bench-cx-styles.ts'), CX_STYLES_MODULE)
@@ -366,6 +399,23 @@ const parseAndFoldCold = (code: string) => {
     analysis: analyze(code, filePath),
     filePath,
     styleCompiler: cold,
+    reportSurvivors: true,
+  })
+}
+
+const nextMixinPath = () => join(mixinCtx.config.cwd, `app/src/bench-mixin-${counter++}.tsx`)
+
+const analyzeMixins = (code: string, filePath = nextMixinPath()) =>
+  mixinCtx.compileModules([{ filename: filePath, source: code }], { references: true })[0]!
+
+const parseAndFoldMixins = (code: string) => {
+  const filePath = nextMixinPath()
+  return foldSource({
+    ctx: mixinCtx,
+    code,
+    analysis: analyzeMixins(code, filePath),
+    filePath,
+    styleCompiler: mixinCompiler,
     reportSurvivors: true,
   })
 }
@@ -469,6 +519,15 @@ describe('per-module transform cost', () => {
   // spread.
   bench('analyze only (spread arguments module)', () => {
     parseOnly(SPREAD_MODULE)
+  })
+
+  // The control for the one below.
+  bench('analyze only (mixin module)', () => {
+    analyzeMixins(MIXIN_MODULE)
+  })
+
+  bench('analyze + fold (mixin module)', () => {
+    parseAndFoldMixins(MIXIN_MODULE)
   })
 
   for (const { file, code } of SANDBOX_FILES) {

@@ -5831,12 +5831,12 @@ describe.sequential('vendor-prefixed pairs', () => {
 })
 
 /**
- * Mixins composed with other declarations, through a real build.
+ * Mixins wherever they are applied, through a real build.
  *
- * The compiler writes such a mixin out into ordinary atoms, which only works if the sheet has
- * rules for them — and extraction reads the mixin as one call, without seeing what it is
- * composed with. The sheet carries both forms at every application, and pruning keeps the one
- * the output named.
+ * The compiler writes every mixin out into ordinary atoms, which only works if the sheet has rules
+ * for them — and extraction reads each call on its own, without seeing what it is composed with.
+ * The sheet carries the atoms and the mixin's class at every application, and pruning drops the
+ * class, which no output names.
  */
 describe.sequential('composed mixins', () => {
   const html = join(cwd, '__mixin-index.html')
@@ -5850,6 +5850,8 @@ describe.sequential('composed mixins', () => {
         `export default { ...base, theme: { ...base.theme, extend: { mixins: {\n` +
         `  cardA: { value: { color: 'red', letterSpacing: '0.1em' } },\n` +
         `  cardB: { value: { color: 'blue' } },\n` +
+        `  textSmall: { value: { fontSize: '14px' } },\n` +
+        `  field: { value: { '& input': { fontSize: '14px' } } },\n` +
         `} } } }\n`,
     )
     writeFileSync(html, `<script type="module" src="/src/__mixin-entry.tsx"></script>`)
@@ -5859,7 +5861,13 @@ describe.sequential('composed mixins', () => {
         `import { css, cva } from '../styled-system/css'\n` +
         `const tone = cva({ base: { color: 'green' }, variants: { tone: { loud: { mixin: 'cardA' } } } })\n` +
         `document.body.className = tone({ tone: 'loud' })\n` +
-        `document.documentElement.className = css({ mixin: 'cardB' })\n`,
+        `document.documentElement.className = css({ mixin: 'cardB' })\n` +
+        `const field = document.createElement('fieldset')\n` +
+        `field.className = css({ '& input': { mixin: 'textSmall' } })\n` +
+        `document.body.append(field)\n` +
+        `const form = document.createElement('form')\n` +
+        `form.className = css({ mixin: 'field' })\n` +
+        `document.body.append(form)\n`,
     )
   })
 
@@ -5867,7 +5875,7 @@ describe.sequential('composed mixins', () => {
     for (const file of [html, entry, configPath]) rmSync(file, { force: true })
   })
 
-  test('compile to atoms the pruned sheet keeps, while a lone mixin keeps its class', async () => {
+  test('compile to atoms the pruned sheet keeps, wherever they are applied, and no mixin class ships', async () => {
     const result = (await build({
       root: cwd,
       logLevel: 'silent',
@@ -5892,14 +5900,24 @@ describe.sequential('composed mixins', () => {
     expect(css).toMatch(/\.c_red\s*\{\s*color:\s*red/)
     expect(css).toMatch(/\.ls_0\\\.1em\s*\{\s*letter-spacing:\s*0\.1em/)
 
-    const lone = js.match(/document\.documentElement\.className = "([^"]*)"/)?.[1]
-    expect(lone).toBe('mixin_cardB')
-    expect(css).toContain('.mixin_cardB')
+    // Alone too: its class ranked below every other utility on the element.
+    expect(js.match(/document\.documentElement\.className = "([^"]*)"/)?.[1]).toBe('c_blue')
+    expect(css).toMatch(/\.c_blue\s*\{\s*color:\s*blue/)
 
-    // What no output names is pruned: the class of the mixin that was written out, and the
-    // base colour the variant replaced.
-    expect(css).not.toContain('.mixin_cardA')
+    // What no output names is pruned: the base colour the variant replaced.
     expect(css).not.toContain('.c_green')
+
+    // Alone under a selector, a mixin is written out too: its declaration ranks in the selector's
+    // specificity sublayer, over the selected element's own utilities, where its class sat in
+    // `compositions` and lost to every one of them.
+    expect(js.match(/field\.className = "([^"]*)"/)?.[1]).toBe('[&_input]:fs_14px')
+    expect(css).toMatch(/@layer s011-c\d+-p3000\s*\{\s*\.\\\[\\&_input\\\]\\:fs_14px input\s*\{\s*font-size:\s*14px/)
+    // So is one with the selector in it: the same declaration, the same atom.
+    expect(js.match(/form\.className = "([^"]*)"/)?.[1]).toBe('[&_input]:fs_14px')
+
+    // No output names a mixin's class, so none ships.
+    expect(js).not.toContain('mixin_')
+    expect(css).not.toContain('mixin_')
   }, 60_000)
 })
 

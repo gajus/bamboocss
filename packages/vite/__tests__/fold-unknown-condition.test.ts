@@ -141,18 +141,24 @@ describe('in a `cx()` composing a recipe chosen at runtime', () => {
   })
 })
 
-describe('by the composition, when no part holds it on its own', () => {
-  // Applied alone, a mixin keeps its own class, and the key in its declaration is never named at
-  // the call. Composed, it is written out where it is applied, and the composition meets it.
+// A mixin's own class wrote the declaration under such a key with no condition at all. Every mixin
+// is written out wherever it is applied, alone too, so the call applying it meets the key, and a
+// `cx()` holding that call adds no report of its own.
+describe('in a mixin, by the call applying it', () => {
   const config = { theme: { extend: { mixins: { ring: { value: { _hovr: { color: 'red.300' } } } } } } }
 
-  test('a mixin written out once its argument is no longer alone', () => {
+  test.each([
+    `css({ mixin: 'ring' })`,
+    `css({ '& input': { mixin: 'ring' } })`,
+    `css({ _hover: { mixin: 'ring' } })`,
+    `cx(css({ mixin: 'ring' }), css({ color: 'blue.300' }))`,
+  ])('%s', (call) => {
     const skips = createFoldFixture(config)
-      .fold(withImport(`export const A = cx(css({ mixin: 'ring' }), css({ color: 'blue.300' }))`))
+      .fold(withImport(`export const A = ${call}`))
       .skipped.map(({ name, reason, detail }) => ({ name, reason, detail }))
 
     expect(skips).toEqual([
-      { name: 'cx', reason: 'unknown-condition', detail: '`_hovr` is not a condition; did you mean `_hover`?' },
+      { name: 'css', reason: 'unknown-condition', detail: '`_hovr` is not a condition; did you mean `_hover`?' },
     ])
   })
 })

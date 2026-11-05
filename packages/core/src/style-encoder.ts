@@ -1574,12 +1574,12 @@ export class StyleEncoder {
    * Run `fn` with `processAtomic` interning each mixin's declarations as ordinary atoms, beside
    * the mixin's own class.
    *
-   * For a sheet the Vite compiler's output is checked against. The compiler keeps a mixin's one
-   * class only where the mixin is the whole style set; composed with anything else it writes the
-   * mixin out (`Mixins.expand`) and asks for those declarations' atoms — a composition the
-   * extraction side cannot see, since it reads `cx(a, b)` as two calls. Interning both forms at
-   * every application, in the same scope as the call, puts a rule behind whichever the compiler
-   * chose, and pruning drops the one no output named.
+   * For a sheet the Vite compiler's output is checked against. The compiler writes every mixin out
+   * wherever it is applied (`Mixins.expand`) and asks for those declarations' atoms. Extraction
+   * reads `cx(a, b)` as two calls, but a composition's atoms are among those of its parts written
+   * out, so interning them at every application, in the same scope as the call, puts a rule behind
+   * whatever the compiler emits. The class is interned as before, for anything naming it as
+   * written, and pruning drops it where no output does.
    */
   withMixinAtoms = <T>(fn: () => T): T => {
     const previous = this.mixinAtoms

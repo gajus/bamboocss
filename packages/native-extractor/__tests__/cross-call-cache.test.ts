@@ -215,4 +215,34 @@ describe('the cross-call export cache', () => {
 
     expect(analysis.importedRecipes.map((recipe) => recipe.config)).toEqual([{ base: { color: 'green' } }])
   })
+
+  /**
+   * A specifier resolved through a manifest also depends on each manifest looked for closer to
+   * the importer and not found: one appearing there resolves the specifier instead. Only the
+   * manifest found was recorded, so the cached answer went on resolving through it.
+   */
+  test('sees a package.json that now owns a # import, closer to the importer', () => {
+    const p = project({
+      'package.json': JSON.stringify({ name: 'app', imports: { '#tone': './src/tones/red.ts' } }),
+      'src/tones/red.ts': `export const tone = { color: 'red' }\n`,
+      'src/ui/index.ts': `export { tone } from '#tone'\n`,
+      'src/ui/blue.ts': `export const tone = { color: 'blue' }\n`,
+    })
+    expect(dataOf(p.compile(CONSUMER))).toEqual([[{ color: 'red' }]])
+    p.write('src/ui/package.json', JSON.stringify({ name: 'ui', imports: { '#tone': './blue.ts' } }))
+    expect(dataOf(p.compile(CONSUMER))).toEqual([[{ color: 'blue' }]])
+  })
+
+  test('sees a package installed closer to the importer', () => {
+    const p = project({
+      'node_modules/tones/package.json': JSON.stringify({ name: 'tones', main: 'index.js' }),
+      'node_modules/tones/index.js': `export const tone = { color: 'red' }\n`,
+      'src/ui/index.ts': `export { tone } from 'tones'\n`,
+    })
+    expect(dataOf(p.compile(CONSUMER))).toEqual([[{ color: 'red' }]])
+    mkdirSync(join(p.cwd, 'src/node_modules/tones'), { recursive: true })
+    p.write('src/node_modules/tones/index.js', `export const tone = { color: 'blue' }\n`)
+    p.write('src/node_modules/tones/package.json', JSON.stringify({ name: 'tones', main: 'index.js' }))
+    expect(dataOf(p.compile(CONSUMER))).toEqual([[{ color: 'blue' }]])
+  })
 })

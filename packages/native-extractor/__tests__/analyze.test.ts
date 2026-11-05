@@ -372,8 +372,19 @@ describe('native extraction analysis', () => {
       // Spelled with `/` on every platform, where `join` spells a path with `\` on Windows.
       const slash = (path: string) => path.replaceAll('\\', '/')
       expect(analysis.dependencies.map(slash)).toEqual([dependency, local].map(slash).sort())
+      // The manifests found, and each looked for closer to the importer and not there: one created
+      // there would resolve the specifier instead, so the answer depends on its absence too.
       expect(analysis.configurationFiles.map(slash)).toEqual(
-        [join(cwd, 'package.json'), join(dependencyRoot, 'package.json')].map(slash).sort(),
+        [
+          join(cwd, 'src/package.json'),
+          join(cwd, 'package.json'),
+          join(cwd, 'src/node_modules/example/package.json'),
+          join(cwd, 'node_modules/example/package.json'),
+          join(root, 'apps/node_modules/example/package.json'),
+          join(dependencyRoot, 'package.json'),
+        ]
+          .map(slash)
+          .sort(),
       )
     } finally {
       rmSync(root, { force: true, recursive: true })

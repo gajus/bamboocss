@@ -678,6 +678,12 @@ pub(crate) struct ProjectEvaluator<'a> {
     /// Set when a call past the depth or the count is refused: what every call returns until the
     /// outermost one has.
     abandoned: RefCell<Option<Abandoned>>,
+    /// What each path held when this call first looked, `None` where nothing was there. Every
+    /// cached entry validated in a call checks its witnesses, and many share them: an importer's
+    /// exports all depend on the manifests looked for on the way to the package they come from,
+    /// most of them missing. Asked once per call, each is one `stat` rather than one per entry,
+    /// and the call reads the project as one moment, which it already did.
+    witnessed_paths: RefCell<HashMap<String, Option<u64>>>,
 }
 
 impl<'a> ProjectEvaluator<'a> {
@@ -728,6 +734,7 @@ impl<'a> ProjectEvaluator<'a> {
             call_depth: Cell::new(0),
             call_count: Cell::new(0),
             abandoned: RefCell::new(None),
+            witnessed_paths: RefCell::new(HashMap::new()),
             sources: source_map,
             entrypoints,
             cwd,
@@ -942,12 +949,24 @@ impl<'a> ProjectEvaluator<'a> {
     ///
     /// A file on disk is re-read only when its modification time or size moved: validating a
     /// cached barrel lookup checks every member, and hashing each one's text on every transform
-    /// cost a noticeable share of what the cache saved.
+    /// cost a noticeable share of what the cache saved. Asked once per path per call: see
+    /// `witnessed_paths`.
+    fn witness(&self, path: &str) -> Option<u64> {
+        if let Some(known) = self.witnessed_paths.borrow().get(path) {
+            return *known;
+        }
+        let hash = self.witness_unmemoized(path);
+        self.witnessed_paths
+            .borrow_mut()
+            .insert(path.to_string(), hash);
+        hash
+    }
+
     #[expect(
         clippy::disallowed_methods,
         reason = "it reads what was recorded, to tell whether it changed"
     )]
-    fn witness(&self, path: &str) -> Option<u64> {
+    fn witness_unmemoized(&self, path: &str) -> Option<u64> {
         if let Some(source) = self.sources.get(path) {
             return Some(content_hash(source));
         }
@@ -985,17 +1004,19 @@ impl<'a> ProjectEvaluator<'a> {
 
     #[expect(
         clippy::disallowed_methods,
-        reason = "it records the `package.json` it finds, as a configuration file"
+        reason = "it records each `package.json` it looks for, there or not, as a configuration file"
     )]
     fn package_import_bases(&self, importer: &Path, specifier: &str) -> Vec<PathBuf> {
         let mut directory = importer.parent();
         while let Some(current) = directory {
             let manifest = current.join("package.json");
+            // The nearest package scope owns every `#` specifier, so each manifest looked for is
+            // recorded, there or not: one created closer than the scope found takes the specifier
+            // over, and a cached answer read through the farther one has to see it arrive. A
+            // found one is recorded even when its map has no matching key, because adding one
+            // must invalidate an unchanged importer on the next incremental pass.
+            self.record_read(&self.configuration_files, &manifest);
             if manifest.is_file() {
-                // The nearest package scope owns every `#` specifier. Record it even when the
-                // current map has no matching key, because adding one must invalidate an
-                // unchanged importer on the next incremental pass.
-                self.record_read(&self.configuration_files, &manifest);
                 let Ok(source) = fs::read_to_string(&manifest) else {
                     return Vec::new();
                 };
@@ -1023,7 +1044,7 @@ impl<'a> ProjectEvaluator<'a> {
 
     #[expect(
         clippy::disallowed_methods,
-        reason = "it records the `package.json` it finds, as a configuration file"
+        reason = "it records each `package.json` it looks for, there or not, as a configuration file"
     )]
     fn package_bases(&self, importer: &Path, specifier: &str) -> Vec<PathBuf> {
         let segments = specifier.split('/').collect::<Vec<_>>();
@@ -1037,11 +1058,13 @@ impl<'a> ProjectEvaluator<'a> {
         while let Some(current) = directory {
             let package = current.join("node_modules").join(&package_name);
             let manifest = package.join("package.json");
+            // Recorded there or not: a package installed closer than the one found is the one
+            // that resolves, and a cached answer read through the farther one has to see it.
+            self.record_read(&self.configuration_files, &manifest);
             if manifest.is_file()
                 && let Ok(source) = fs::read_to_string(&manifest)
                 && let Ok(json) = serde_json::from_str::<serde_json::Value>(&source)
             {
-                self.record_read(&self.configuration_files, &manifest);
                 let mut targets = Vec::new();
                 let has_exports = json.get("exports").is_some();
                 if let Some(exports) = json.get("exports") {

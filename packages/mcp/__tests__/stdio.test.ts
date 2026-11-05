@@ -26,8 +26,8 @@ afterAll(() => {
   for (const directory of directories) rmSync(directory, { force: true, recursive: true })
 })
 
-/** Start the server on a project logging at `info`, and initialize a session with it. */
-const serve = async ({ before = '', logLevel = 'info' } = {}) => {
+/** Start the server on a project logging at `info`, and initialize a session with it unless asked not to. */
+const serve = async ({ before = '', logLevel = 'info', initialize = true } = {}) => {
   const cwd = mkdtempSync(join(tmpdir(), 'bamboo-mcp-stdio-'))
   directories.push(cwd)
   const files = {
@@ -71,12 +71,14 @@ const serve = async ({ before = '', logLevel = 'info' } = {}) => {
     if ((await within(response, 30_000)) === 'timed out') throw new Error(`No response to \`${method}\``)
   }
 
-  await request(1, 'initialize', {
-    protocolVersion: LATEST_PROTOCOL_VERSION,
-    capabilities: {},
-    clientInfo: { name: 'test', version: '0.0.0' },
-  })
-  send({ method: 'notifications/initialized' })
+  if (initialize) {
+    await request(1, 'initialize', {
+      protocolVersion: LATEST_PROTOCOL_VERSION,
+      capabilities: {},
+      clientInfo: { name: 'test', version: '0.0.0' },
+    })
+    send({ method: 'notifications/initialized' })
+  }
 
   return { child, exited, output, request, send }
 }
@@ -119,13 +121,17 @@ test('exits when stdin ends, though the config keeps the event loop busy', { tim
 
 // The handler `@bamboocss/node` installs for an uncaught error logged it and went on, and the logger
 // here can be silent: a server in a state the error left unknown went on answering, saying nothing.
+//
+// No session first: the config loads before the server answers anything, and its timer can fire
+// before `initialize` is answered on a busy machine, leaving the request with no answer for good.
 test('leaves on an uncaught error, saying so on stderr though the logger is silent', { timeout: 60_000 }, async () => {
   const { exited, output } = await serve({
     before: "setTimeout(() => { throw new Error('the config broke') }, 200)",
     logLevel: 'silent',
+    initialize: false,
   })
 
-  expect(await within(exited, 10_000)).toBe(1)
+  expect(await within(exited, 40_000)).toBe(1)
   expect(output.stderr).toContain('uncaught exception: Error: the config broke')
 })
 

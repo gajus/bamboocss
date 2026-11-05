@@ -66,5 +66,10 @@ export interface EncoderJson {
     keyframes?: {
       [name: string]: Record<string, any>
     }
+    /**
+     * The order the producing build's style objects wrote conditions that rank alike in, each
+     * the atoms of one property in the order written, which the consuming sheet keeps.
+     */
+    writtenOrders?: string[][]
   }
 }

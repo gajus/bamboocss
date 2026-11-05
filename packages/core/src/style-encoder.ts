@@ -3067,6 +3067,14 @@ export class StyleEncoder {
       styles.keyframes = Object.fromEntries(this.keyframes)
     }
 
+    // The order the style objects wrote conditions that rank alike in, `_dark` and
+    // `&[data-active]`, which the sheet keeps. Left out, a build restoring the dump ordered them
+    // by whichever it met first, the way they were ordered before the orders were kept at all.
+    // Sorted, so one build writes one file.
+    const orders = new Set<string>()
+    for (const { hashes } of this.writtenOrders()) orders.add(hashes.join(WRITTEN_ORDER_SEPARATOR))
+    if (orders.size) styles.writtenOrders = [...orders].sort().map((order) => order.split(WRITTEN_ORDER_SEPARATOR))
+
     return {
       schemaVersion: version,
       styles,
@@ -3075,6 +3083,15 @@ export class StyleEncoder {
 
   fromJSON = (json: EncoderJson) => {
     const { styles } = json
+
+    // Pinned with the atoms they order: the dump is a safelist rather than a file's work.
+    let restoredOrder = false
+    for (const order of styles.writtenOrders ?? []) {
+      if (!Array.isArray(order) || order.length < 2 || !order.every((hash) => typeof hash === 'string')) continue
+      this.pinnedWrittenOrders.add(order.join(WRITTEN_ORDER_SEPARATOR))
+      restoredOrder = true
+    }
+    if (restoredOrder) this.writtenOrderList = undefined
 
     // process atomic styles + compound variants. Pinned: a restored dump is a safelist rather
     // than a file's work, so no file's re-parse may take it away.

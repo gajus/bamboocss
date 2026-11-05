@@ -169,3 +169,39 @@ describe('conditions that rank alike', () => {
     }
   })
 })
+
+/**
+ * A build info file, `bamboo ship`'s output, carries the orders its style objects wrote. It
+ * carried only their atoms, so a build restoring it ordered the dump's tied conditions by
+ * whichever it met first: a file of the consuming project writing both decided for the library.
+ */
+describe('a build info file', () => {
+  const shipped = () => {
+    const library = createContext() as any
+    library.encoder.reconcileFileOwnerOrder('extract', ['lib/button.tsx'])
+    library.encoder.withOwner('extract', 'lib/button.tsx', () => library.encoder.processAtomic(recipe))
+    return JSON.parse(JSON.stringify(library.encoder.toJSON()))
+  }
+
+  test('keeps the order its style objects wrote, where it is restored', () => {
+    const ctx = createContext() as any
+    ctx.encoder.reconcileFileOwnerOrder('extract', ['src/a.tsx'])
+    ctx.encoder.withOwner('extract', 'src/a.tsx', () => ctx.encoder.processAtomic(other))
+    ctx.encoder.fromJSON(shipped())
+    const sheet = ctx.createSheet()
+    ctx.appendParserCss(sheet)
+    const css = ctx.getCss(sheet) as string
+
+    expect(winner(css, 'color')).toContain('c_red')
+    expect(winner(css, 'font-weight')).toContain('fw_normal')
+  })
+
+  test('writes no orders where nothing wrote one', () => {
+    const ctx = createContext() as any
+    ctx.encoder.withOwner('extract', 'src/a.tsx', () =>
+      ctx.encoder.processAtomic({ color: 'red', _dark: { bg: 'blue' } }),
+    )
+
+    expect(ctx.encoder.toJSON().styles).not.toHaveProperty('writtenOrders')
+  })
+})

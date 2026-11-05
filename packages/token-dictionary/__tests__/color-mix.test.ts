@@ -184,3 +184,17 @@ test('color-mix of a colour written out', () => {
   }
   expect(dictionary.unresolvedReferences('token(colors.nope/50)')).toEqual(['colors.nope/50'])
 })
+
+// Out of `color-mix()`'s 0% to 100%, in a token's value as in a style: an invalid mix there fails the
+// build, as `token(colors.pink/unknown)` already did.
+test('color-mix with an opacity outside 0 to 100', () => {
+  const dictionary = new TokenDictionary({ tokens: { colors: { pink: { value: '#ff00ff' } } } })
+  dictionary.init()
+
+  expect(() => dictionary.expandReferenceInValue('token(colors.pink/150)')).toThrow(
+    'Invalid color mix at colors.pink/150',
+  )
+  expect(dictionary.expandReferenceInValue('token(colors.pink/100)')).toBe(
+    'color-mix(in srgb, var(--colors-pink) 100%, transparent)',
+  )
+})

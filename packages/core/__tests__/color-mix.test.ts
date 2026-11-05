@@ -325,3 +325,34 @@ describe('color-mix', () => {
     `)
   })
 })
+
+/**
+ * `color-mix()` takes a percentage from 0% to 100%, and refuses one outside: `red.500/150` wrote
+ * `color-mix(in srgb, var(--colors-red-500) 150%, transparent)`, which reads a variable and so passed
+ * every check the sheet makes, while the browser dropped it. Out of range, the modifier is no mix:
+ * the value is written as it is, which the sheet reports as no valid colour.
+ */
+describe('an opacity outside 0 to 100', () => {
+  const written = (color: string) => {
+    const css = createRuleProcessor().css({ color }).toCss()
+    return css.match(/color: ([^;]+);/)?.[1]
+  }
+
+  test('is no mix', () => {
+    expect(written('red.500/150')).toBe('red.500/150')
+    expect(written('red.500/-5')).toBe('red.500/-5')
+    expect(written('red.500/100.5')).toBe('red.500/100.5')
+  })
+
+  test('the bounds are', () => {
+    expect(written('red.500/0')).toBe('color-mix(in srgb, var(--colors-red-500) 0%, transparent)')
+    expect(written('red.500/100')).toBe('color-mix(in srgb, var(--colors-red-500) 100%, transparent)')
+  })
+
+  test('nor an opacity token holding more than 1', () => {
+    const css = createRuleProcessor({ theme: { extend: { tokens: { opacity: { over: { value: 1.5 } } } } } })
+      .css({ color: 'red.500/over' })
+      .toCss()
+    expect(css).toContain('color: red.500/over;')
+  })
+})

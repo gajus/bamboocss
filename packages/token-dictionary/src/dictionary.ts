@@ -464,7 +464,9 @@ export class TokenDictionary {
     const colorToken = tokenFn(colorPath)
     const opacityToken = this.getByName(`opacity.${rawOpacity}`)?.value
 
-    if (!opacityToken && isNaN(Number(rawOpacity))) {
+    // A percentage `color-mix()` takes, from 0% to 100%, as an opacity token's 0 to 1 gives one.
+    const opacity = opacityToken ? Number(opacityToken) * 100 : Number(rawOpacity)
+    if (!(opacity >= 0 && opacity <= 100)) {
       return { invalid: true, value: colorPath }
     }
 

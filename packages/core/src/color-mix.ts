@@ -13,7 +13,10 @@ export const colorMix = (value: string, token: TransformArgs['token']) => {
   const colorToken = token(`colors.${rawColor}`)
   const opacityToken = token.raw(`opacity.${rawOpacity}`)?.value
 
-  if (!opacityToken && isNaN(Number(rawOpacity))) {
+  // A percentage `color-mix()` takes, from 0% to 100%: `red.500/150` wrote one it refuses, and
+  // reading a variable, the declaration was one no check could judge, so nothing said so.
+  const opacity = opacityToken ? Number(opacityToken) * 100 : Number(rawOpacity)
+  if (!(opacity >= 0 && opacity <= 100)) {
     return { invalid: true, value: rawColor }
   }
 

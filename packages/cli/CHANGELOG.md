@@ -1,5 +1,39 @@
 # @bamboocss/dev
 
+## 1.60.3
+
+### Patch Changes
+
+- 4df5660: `cssgen`, `analyze`, `debug` and `ship` read every glob they are given, as the main command does. Each took
+  one, so a list the shell expanded, or two globs written out, built from the first and dropped the rest without a word.
+  `cssgen tokens` and the other types take no globs beside them, and say so.
+
+  A single `-e`/`--exclude` now excludes what it names. One given once arrived as a string and excluded nothing; only
+  two or more worked.
+
+- Updated dependencies [7174c56]
+- Updated dependencies [4df5660]
+- Updated dependencies [e8317ed]
+- Updated dependencies [daddb52]
+- Updated dependencies [cf5beff]
+- Updated dependencies [c2eb8ba]
+- Updated dependencies [1d001cb]
+- Updated dependencies [deb3073]
+- Updated dependencies [739ed83]
+- Updated dependencies [7a280a9]
+- Updated dependencies [6f5a5c0]
+- Updated dependencies [dc52431]
+- Updated dependencies [752bf79]
+- Updated dependencies [d3d84ac]
+- Updated dependencies [786db84]
+  - @bamboocss/types@1.60.3
+  - @bamboocss/shared@1.60.3
+  - @bamboocss/node@1.60.3
+  - @bamboocss/preset-base@1.60.3
+  - @bamboocss/token-dictionary@1.60.3
+  - @bamboocss/logger@1.60.3
+  - @bamboocss/preset-bamboo@1.60.3
+
 ## 1.60.2
 
 ### Patch Changes

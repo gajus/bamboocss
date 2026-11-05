@@ -1,5 +1,135 @@
 # @bamboocss/core
 
+## 1.60.3
+
+### Patch Changes
+
+- 7174c56: A build info file written by `bamboo ship` carries the order its style objects wrote conditions that rank
+  alike in, such as `_dark` and `&[data-active]`, and a build restoring it keeps that order. It carried only the atoms,
+  so the restoring build ordered them by whichever it met first: a file of the consuming project writing both conditions
+  for another property decided which of the library's own declarations won.
+
+  A file written before this loads as it did, and a file without such orders is unchanged.
+
+- cf5beff: An opacity modifier outside 0 to 100 is no longer written into a `color-mix()` the browser refuses.
+  `red.500/150` wrote `color-mix(in srgb, var(--colors-red-500) 150%, transparent)`, which reads a variable and so
+  passed every check the sheet makes, while the browser dropped it and the color was absent with nothing said.
+  - In a style, the value is written as it is, `color: red.500/150`, and the sheet reports it as a declaration that is
+    not valid CSS, as it reports `red.500/unknown`.
+  - In a token's value, `token(colors.red.500/150)` fails the build as an invalid color mix, as an unknown opacity
+    already did.
+  - An opacity token holding more than 1 is out of range the same way.
+
+- 8301701: `global.css` reads a nested key named like a property as the selector it is when it holds styles.
+  `'.prose': { p: { color: 'red' } }` wrote `.prose { color: red }`, reading `p` as the padding shorthand, and under an
+  `@media` it wrote the declaration with no selector at all. It now writes `.prose p { color: red }`. `filter`, `font`
+  and `mask` name elements as well as properties, and are read the same way. A property holding conditions,
+  `p: { base: '2', md: '4' }`, is still that property.
+  - A breakpoint or another at-rule condition at the top, `md: { body: { … } }`, is the at-rule it stands for, as
+    `'@media (width >= 48rem)': { body: { … } }` already was. It was written as a selector named `md`.
+  - What still cannot mean what it says is reported the way the config is: a warning, and an error under
+    `validation: 'error'`. That is a condition at the top that applies to an element, `_dark: { body: { … } }`, which is
+    written as a selector named `_dark`; a key read as an element no document has, `_hovr` or `has`; and a declaration
+    with no selector above it.
+
+- b33d255: A declaration written later in the same style object no longer replaces an important one unless it is
+  important too, as CSS does not within one rule.
+  - `{ color: 'red !important', mixin: 'body' }` took the mixin's color in `css()`, in recipes and in `global.css`. It
+    keeps red, and a mixin's own important value survives a property written after it.
+  - In `global.css`, and in a recipe written to its own layer, `{ display: 'block !important', stack: true }` wrote
+    `display: flex` where the `stack` utility writes `display`. It keeps the block.
+  - A later important value still replaces an earlier one, and composing two style objects, `css(a, b)`, still lets the
+    later one's value win.
+
+- 4e5db20: A rule whose selector uses `:nth-child(An+B of S)` or `:nth-last-child(An+B of S)` is ranked with the
+  selectors `S` names, as browsers count it. `&:nth-child(2 of .x.y)` has specificity (0,4,0) and was put in the
+  sublayer for (0,2,0), so a rule such as `&.p.q`, at (0,3,0), won wherever both applied.
+- 140172e: A number written as a string, such as `padding: '1e3'`, `'+2'` or `'-0'`, is named as the number it reads as.
+  The stylesheet read the value back as a number and wrote its rule for `p_1000`, while the compiler put `p_1e3` on the
+  element, so the build failed with a compiled class that had no rule.
+- deb3073: The spaces inside a quoted string reach the stylesheet as written, and the compiler names the class the way
+  the stylesheet does.
+  - `content: '"a  b"'` shipped as `"a b"`. Extraction collapsed every run of whitespace in a string, quotes included; a
+    run outside a quoted string is still one space.
+  - A value whose spaces survived extraction failed the build. That covers a config recipe's `content: '"x  y"'`, and a
+    string built in source. The stylesheet named the class with the spaces, the compiler without them, and the element
+    got a class with no rule.
+  - A tab or a line break inside a quoted string is now written as a space, since a class name can hold neither.
+
+- 7a280a9: A shorthand and the property it stands for in one style object, `bg` and `background`, merge as two
+  declarations of one CSS rule: the later wins unless the earlier is important and the later is not.
+  `css({ bg: 'red!', background: 'blue' })` compiled to `bg_blue`, dropping the important red, in the stylesheet and in
+  the class the compiler wrote.
+  - Either order keeps the important value, and so does a later value under conditions, which takes it as its base.
+  - Otherwise nothing changes: the later still wins, and a later value under conditions still replaces an earlier plain
+    one, as it does through `css(a, b)` and a mixin.
+  - The generated runtime merge behind `css.raw()` keeps the later value, as before. What it returns is never named at
+    runtime, and merging the other way would bring the important parser, 3 KB gzipped, into every bundle that merges
+    styles.
+
+- 492e761: Rules of equal specificity under two conditions are ordered by the states their selectors require, read by
+  name. The state used to be found by searching the selector's text, and it went wrong four ways:
+  - `&:has(> input:focus)` always beat `&:has(> input[aria-invalid=true])`, for the `:focus` of another element. A state
+    inside `:has()` or `:nth-child(… of …)` no longer ranks a rule.
+  - `_hover` always beat `&:is(:focus, :active)`, because a list ranked as its weakest state. It ranks as its strongest.
+  - `:focus-visible` ranked as `:focus`, so `_focus` against `_focusVisible` went to whichever rule the build saw first.
+    `_focusVisible` wins now.
+  - Nested conditions ranked by their first, so `_hover: { _active }` against `_hover: { _focus }` went to whichever the
+    build saw first, and under an at-rule the order they were nested in decided. They rank by every state they require,
+    and the `_active` one wins.
+
+  States under a selector of your own, such as a part selector wrapping a recipe's conditions, were never ranked for the
+  last reason. They are now, so `_active` beats `_dark` there as it does everywhere else.
+
+- d3d84ac: A condition a utility's transform writes ranks as that condition does written in a style. An at-rule ranked
+  as no condition, so a transform returning `{ md: { width: '100%' } }` sat beside a plain `width` of the same
+  specificity and lost to it at `md` on any element that had both, whichever was written first.
+  - A condition named, `md`, `_hover` or one of several blocks, ranks in the same sublayer as the condition written in a
+    style.
+  - An at-rule spelled out, `'@media (width >= 48rem)'`, ranks as that at-rule written as a condition.
+  - A selector spelled out, such as `focusRing`'s `&:is(:focus, [data-focus])`, still ranks by its specificity alone, so
+    no preset utility's output changes.
+
+- c9ae475: A utility whose `transform` returns styles under a condition, `{ _hover: { … } }` or `{ md: { … } }`, writes
+  the selector or at-rule that condition stands for. The condition's name was written as it was and read as an element,
+  so `.hs_true _hover` and `.wl_true md` matched nothing, and what the utility set under the condition never applied,
+  with nothing reported.
+  - This holds wherever the utility is used: in `css()`, in a recipe, in global css, and under a condition of the
+    style's own, `md: { hoverStack: true }`.
+  - A condition defined as several blocks is written under each, and one that is an at-rule and a selector nests the
+    selector inside the at-rule.
+  - A selector or at-rule the transform spells out, `&:hover` or `@media …`, is written as before.
+
+- 7641d32: A utility whose `values` callback returns nothing keeps the value as written. `theme('spacing')` returns
+  nothing in a theme with no spacing tokens, and indexing that threw on the first use of the utility; a callback
+  returning `null` failed the whole config. preset-base's `translateZ` returns just that, so
+  `css({ translateZ: '4px' })` threw in a project with no spacing tokens.
+- bec901b: Two conditions that rank alike, such as `_dark` and `&[data-active]`, are ordered the way each style object
+  writes them, for each property it writes: the one written later wins. They were ordered by whichever the build met
+  first, so any call writing both, anywhere, decided for every other. A `css()` call setting `fontWeight` under
+  `&[data-active]` and then `_dark` made a recipe's `_dark` color win over the `&[data-active]` color written after it,
+  and recipes always lost that race, being written out after every `css()` call.
+  - Where two objects write the conditions in opposite orders, for different properties or different values, their rules
+    share one sublayer, named for both conditions (`s020-c4c5-p3000`), and each object keeps its order.
+  - Only the same two declarations written in opposite orders cannot both keep theirs. The build warns, naming the
+    files, and the stylesheet keeps one order in every build.
+  - Nothing changes where every object already agreed with the order the build met the conditions in.
+
+- Updated dependencies [7174c56]
+- Updated dependencies [4df5660]
+- Updated dependencies [cf5beff]
+- Updated dependencies [deb3073]
+- Updated dependencies [7a280a9]
+- Updated dependencies [6f5a5c0]
+- Updated dependencies [dc52431]
+- Updated dependencies [752bf79]
+- Updated dependencies [d3d84ac]
+  - @bamboocss/types@1.60.3
+  - @bamboocss/shared@1.60.3
+  - @bamboocss/token-dictionary@1.60.3
+  - @bamboocss/logger@1.60.3
+  - @bamboocss/is-valid-prop@1.60.3
+
 ## 1.60.2
 
 ### Patch Changes

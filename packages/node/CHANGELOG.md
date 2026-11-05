@@ -1,5 +1,80 @@
 # @bamboocss/node
 
+## 1.60.3
+
+### Patch Changes
+
+- e8317ed: A value imported through a package is evaluated again when a `package.json` appears closer to the importer
+  than the one it resolved through: one that takes over a `#` import, or the package installed into a nearer
+  `node_modules`. Only the manifest found was recorded, so the answer cached across transforms went on resolving through
+  the farther one, and the dev server kept serving the old class until it restarted.
+  - Each manifest looked for and not found is now recorded with the configuration files an extraction reads, so its
+    arrival invalidates what depended on its absence.
+  - A cached answer checks each file it depends on once per call rather than once per answer: a module four directories
+    deep importing 21 values from a package compiles in 1.6ms, where it took 1.9ms before and 2.4ms with the new
+    manifests and no such check.
+
+- c2eb8ba: A Vue or Svelte component whose `<script lang="ts">` holds TypeScript that TSX cannot read, such as a generic
+  arrow `<T>(list: T[]) => list[0]` or an assertion `<boolean>value`, no longer fails the build. The component is read
+  as TSX, for the JSX a `lang="tsx"` script can hold, and the whole file failed to parse. A component that fails as TSX
+  is now read as TypeScript.
+- 1d001cb: The source glob enters each real folder once, however many symbolic links lead to it. In a pnpm workspace,
+  where each package's `node_modules` links its siblings, an include such as `../**/src/*.ts` went down every sequence
+  of links: 8 packages took a minute and returned their 8 files 109,600 times. It now takes a few milliseconds and
+  returns each once.
+  - Folders reached directly are read first, so a file is found where it really is rather than through a link to it.
+  - A link to a folder read already is read as empty, as a loop's is. A link leading anywhere else is followed as
+    before.
+  - Two links in one pattern to one folder outside the walk find its files through the first. Two patterns, such as
+    `src/**` and `vendor/**`, still find them through each.
+
+- deb3073: The spaces inside a quoted string reach the stylesheet as written, and the compiler names the class the way
+  the stylesheet does.
+  - `content: '"a  b"'` shipped as `"a b"`. Extraction collapsed every run of whitespace in a string, quotes included; a
+    run outside a quoted string is still one space.
+  - A value whose spaces survived extraction failed the build. That covers a config recipe's `content: '"x  y"'`, and a
+    string built in source. The stylesheet named the class with the spaces, the compiler without them, and the element
+    got a class with no rule.
+  - A tab or a line break inside a quoted string is now written as a space, since a class name can hold neither.
+
+- 739ed83: A value imported from a file whose name has a dot before its extension, such as `./card.styles` for
+  `card.styles.ts`, resolves as TypeScript and Vite resolve it, and so does one imported through a `.jsx` specifier for
+  a `.tsx` source. Each import was read as unknown, so a call using the value was refused as dynamic and the build
+  failed.
+- 786db84: `bamboo --watch` and `cssgen -o` no longer rewrite a stylesheet that comes out the same. Both wrote it on
+  every rebuild, so an edit that moved no style touched a file a dev server or a bundler watches, and each did its work
+  over for it. The stylesheet `bamboo` and `cssgen` write without `-o` was already left alone.
+- Updated dependencies [4637bce]
+- Updated dependencies [7174c56]
+- Updated dependencies [4df5660]
+- Updated dependencies [cf5beff]
+- Updated dependencies [8301701]
+- Updated dependencies [b33d255]
+- Updated dependencies [6298a91]
+- Updated dependencies [4e5db20]
+- Updated dependencies [140172e]
+- Updated dependencies [deb3073]
+- Updated dependencies [7a280a9]
+- Updated dependencies [b01fdaa]
+- Updated dependencies [492e761]
+- Updated dependencies [6f5a5c0]
+- Updated dependencies [dc52431]
+- Updated dependencies [752bf79]
+- Updated dependencies [d3d84ac]
+- Updated dependencies [c9ae475]
+- Updated dependencies [7641d32]
+- Updated dependencies [bec901b]
+  - @bamboocss/config@1.60.3
+  - @bamboocss/core@1.60.3
+  - @bamboocss/types@1.60.3
+  - @bamboocss/shared@1.60.3
+  - @bamboocss/token-dictionary@1.60.3
+  - @bamboocss/generator@1.60.3
+  - @bamboocss/reporter@1.60.3
+  - @bamboocss/logger@1.60.3
+  - @bamboocss/plugin-svelte@1.60.3
+  - @bamboocss/plugin-vue@1.60.3
+
 ## 1.60.2
 
 ### Patch Changes

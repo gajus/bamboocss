@@ -1,5 +1,42 @@
 # @bamboocss/generator
 
+## 1.60.3
+
+### Patch Changes
+
+- 6298a91: `css/merge-css.d.mts` imports `../types/index` with its extension under `forceConsistentTypeExtension`, as
+  every other generated declaration file does. It spelled the import by hand, without one, and failed type-checking with
+  TS2834 under `moduleResolution: nodenext`.
+- b01fdaa: The semantic-token spec no longer lists the negative a semantic spacing token is given, `-gutter` beside
+  `gutter`, with the positive token's value, description and variable. No one declared it, and the tokens spec already
+  left negatives out.
+- dc52431: An inline `sva()` call is typed as returning a class string for every slot, as a config slot recipe already
+  was. Compiled, it names each slot's classes, an empty string for a slot with no styles, but its type gave each slot as
+  `string | undefined`, so every use of one took a `!` or a fallback for an `undefined` that never comes.
+- Updated dependencies [7174c56]
+- Updated dependencies [4df5660]
+- Updated dependencies [cf5beff]
+- Updated dependencies [8301701]
+- Updated dependencies [b33d255]
+- Updated dependencies [4e5db20]
+- Updated dependencies [140172e]
+- Updated dependencies [deb3073]
+- Updated dependencies [7a280a9]
+- Updated dependencies [492e761]
+- Updated dependencies [6f5a5c0]
+- Updated dependencies [dc52431]
+- Updated dependencies [752bf79]
+- Updated dependencies [d3d84ac]
+- Updated dependencies [c9ae475]
+- Updated dependencies [7641d32]
+- Updated dependencies [bec901b]
+  - @bamboocss/core@1.60.3
+  - @bamboocss/types@1.60.3
+  - @bamboocss/shared@1.60.3
+  - @bamboocss/token-dictionary@1.60.3
+  - @bamboocss/logger@1.60.3
+  - @bamboocss/is-valid-prop@1.60.3
+
 ## 1.60.2
 
 ### Patch Changes

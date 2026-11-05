@@ -562,6 +562,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     'compile-failed',
     'opaque-composition',
     'unknown-condition',
+    'empty-value',
   ])
   const isRecord = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -901,6 +902,12 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
             `condition. The stylesheet drops it, so the class named for it would have no rule and the styles ` +
             `under it would never apply. A nested key is a condition (\`_hover\`, \`md\`) or a selector ` +
             `written with \`&\` (\`'& svg'\`, \`'&:has(svg)'\`).\n\n`
+          : '') +
+        (entries.some((entry) => entry.reason === 'empty-value')
+          ? `\`empty-value\` is a declaration whose value is an empty string. CSS has no empty value, so the ` +
+            `stylesheet drops the declaration and the class named for it would have no rule. An empty ` +
+            `\`content\` is written \`'""'\`; anything else meant no declaration at all, which is the property ` +
+            `left out, or \`undefined\` where it is chosen.\n\n`
           : '') +
         (entries.some((entry) => entry.reason === 'runtime-binding')
           ? `\`runtime-binding\` is a Bamboo value read rather than called. An inline \`cva\`/\`sva\` ` +

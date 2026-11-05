@@ -91,3 +91,17 @@ describe('one spelling per value', () => {
     expect(css).toContain('rgba(0,0,0,0.02)')
   })
 })
+
+describe('a value read back from its atom', () => {
+  // `Number('')` is 0, so an empty value came back as `content: 0`, named `content_0` where the
+  // runtime named `content_`, and `width: ''` as `var(--sizes-0)`: a rule nothing named, for a
+  // declaration nobody wrote.
+  test.each(['', ' '])('an empty or blank one is the string it was written as: %j', (value) => {
+    const ctx = createContext() as any
+    ctx.encoder.processAtomic({ content: value, width: value })
+    ctx.decoder.collect(ctx.encoder)
+    const names = [...ctx.decoder.atomic].map((result: any) => result.className)
+
+    expect(names).toEqual(['content_', 'w_'])
+  })
+})

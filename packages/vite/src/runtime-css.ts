@@ -1,6 +1,7 @@
 import type { Context } from '@bamboocss/core'
 import { createCssUncached, createMergeCss, memo } from '@bamboocss/shared'
 import type { Dict } from '@bamboocss/types'
+import { checkValue } from './empty-value'
 import { createConditionCheck } from './unknown-condition'
 
 /**
@@ -22,9 +23,10 @@ import { createConditionCheck } from './unknown-condition'
  * inner cache. Unlike the generated runtime this one is built once per build and shared
  * across every module, so the outer cache is what carries the repeats.
  *
- * It departs from the runtime in one place: a key that is neither a property nor a condition
- * throws `UnknownConditionError` instead of being named. The runtime returns `_hovr:c_red.300`
- * for it, a class the stylesheet has no rule for.
+ * It departs from the runtime in two places, both a class the stylesheet has no rule for: a key
+ * that is neither a property nor a condition throws `UnknownConditionError` instead of being
+ * named, where the runtime returns `_hovr:c_red.300`, and an empty value throws `EmptyValueError`,
+ * where the runtime returns `content_`.
  */
 export interface RuntimeCss {
   (...styles: Dict[]): string
@@ -51,10 +53,12 @@ export const createRuntimeCss = (ctx: Context): RuntimeCss => {
   const cssContext = createCssContext(ctx)
   const checkConditions = createConditionCheck(ctx)
   const { shift } = cssContext.conditions
+  const { transform } = cssContext.utility
 
-  // The one thing this does that the runtime does not: refuse a key that is neither a property
-  // nor a condition, which the runtime names a class for that no rule matches.
+  // What this does that the runtime does not: refuse what the runtime names a class for that no
+  // rule can match — a key that is neither a property nor a condition, and an empty value.
   // @see UnknownConditionError
+  // @see EmptyValueError
   const cssFn = createCssUncached({
     ...cssContext,
     conditions: {
@@ -62,6 +66,13 @@ export const createRuntimeCss = (ctx: Context): RuntimeCss => {
       shift: (paths) => {
         checkConditions(paths)
         return shift(paths)
+      },
+    },
+    utility: {
+      ...cssContext.utility,
+      transform: (property, value) => {
+        checkValue(property, value)
+        return transform(property, value)
       },
     },
   })

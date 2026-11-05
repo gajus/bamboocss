@@ -19,7 +19,7 @@ import {
 } from './fold-recipe'
 import { createRuntimeToken, createRuntimeTokenValue } from './runtime-css'
 import type { StaticStyleSetCompiler } from './style-set'
-import { UnknownConditionError } from './unknown-condition'
+import { UnwritableStyleError } from './unwritable-style'
 
 /**
  * Why a call site could not be compiled. Surfaced through diagnostics so a user can tell
@@ -38,6 +38,7 @@ export type SkipReason =
   | 'compile-failed' // compilation threw on this module, so nothing about it was established
   | 'opaque-composition' // a `cx()` joining compiled atoms with a class the build cannot see
   | 'unknown-condition' // a nested key that is neither a property nor a condition, so no rule has its class
+  | 'empty-value' // a declaration whose value is an empty string, which CSS has no value for
 
 export interface FoldedCall {
   name: string
@@ -86,7 +87,8 @@ export interface SkippedCall {
   refusal?: FoldRefusal
   /**
    * What to change, where the reason does not say: for `unknown-condition` the key and what it
-   * was probably meant to be, for a `recipe-call` or a `dynamic` call the shape it cannot take.
+   * was probably meant to be, for `empty-value` the property and what to write instead, for a
+   * `recipe-call` or a `dynamic` call the shape it cannot take.
    */
   detail?: string
 }
@@ -152,6 +154,7 @@ export const SURVIVES_TO_RUNTIME = new Set<SkipReason>([
   // *nothing* still calls `css()`, and a module nobody checked cannot support it.
   'compile-failed',
   'unknown-condition',
+  'empty-value',
 ])
 
 /**
@@ -417,8 +420,8 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     /** Set once an enclosing semantic composition owns this candidate. */
     subsumed?: boolean
     /**
-     * Reported as `unknown-condition` already. Nothing is emitted for it, and a `cx()` holding it
-     * adds no report of its own.
+     * Reported already, as `unknown-condition` or `empty-value`. Nothing is emitted for it, and a
+     * `cx()` holding it adds no report of its own.
      */
     failed?: boolean
     /** The replacement evaluates to a slot-name → class-string object. */
@@ -448,25 +451,26 @@ export const foldSource = (options: FoldOptions): FoldResult => {
   const recipeDefinitions: Array<{ name: string; factory: string; start: number; end: number }> = []
 
   /**
-   * The key `allocate` found that is neither a property nor a condition, when that is why it threw.
-   * Anything else it throws is not this call's to report.
+   * What `allocate` found that no rule can be written for — a key that is neither a property nor a
+   * condition, or an empty value — when that is why it threw. Anything else it throws is not this
+   * call's to report.
    */
-  const unknownConditionIn = (allocate: () => unknown) => {
+  const unwritableIn = (allocate: () => unknown) => {
     try {
       allocate()
     } catch (error) {
-      if (error instanceof UnknownConditionError) return error
+      if (error instanceof UnwritableStyleError) return error
       throw error
     }
     return undefined
   }
 
-  const reportUnknownCondition = (name: string, start: number, end: number, error: UnknownConditionError) => {
-    skipped.push({ name, reason: 'unknown-condition', start, end, detail: error.message })
+  const reportUnwritable = (name: string, start: number, end: number, error: UnwritableStyleError) => {
+    skipped.push({ name, reason: error.reason, start, end, detail: error.message })
   }
 
   /**
-   * Report a key that is not a condition, found composing `parts` in `composition`, by the parts
+   * Report what no rule can be written for, found composing `parts` in `composition`, by the parts
    * it is written in.
    *
    * Composing is where the key surfaces, but a `cx()` is rarely where it is written. Each part that
@@ -478,19 +482,19 @@ export const foldSource = (options: FoldOptions): FoldResult => {
   const reportComposing = (
     composition: { name: string; start: number; end: number },
     parts: Candidate[],
-    error: UnknownConditionError,
+    error: UnwritableStyleError,
   ) => {
     let reported = false
     for (const part of parts) {
-      const unknown = unknownConditionIn(() =>
+      const unknown = unwritableIn(() =>
         part.styleMap ? part.styleMap.compile() : styleCompiler.className(part.styleSet ?? {}),
       )
       if (!unknown) continue
-      reportUnknownCondition(part.name, part.start, part.end, unknown)
+      reportUnwritable(part.name, part.start, part.end, unknown)
       part.failed = true
       reported = true
     }
-    if (!reported) reportUnknownCondition(composition.name, composition.start, composition.end, error)
+    if (!reported) reportUnwritable(composition.name, composition.start, composition.end, error)
   }
 
   for (const call of analysis.calls) {
@@ -644,8 +648,8 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       try {
         lowered = lowerRecipeCall(call, entry, styleCompiler, slot, maxRecipeStates)
       } catch (error) {
-        if (!(error instanceof UnknownConditionError)) throw error
-        reportUnknownCondition(name, start, end, error)
+        if (!(error instanceof UnwritableStyleError)) throw error
+        reportUnwritable(name, start, end, error)
         candidates.push({ call, name, start, end: replaceEnd, failed: true })
         continue
       }
@@ -955,7 +959,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
             : JSON.stringify(leaf(flattenCxItems(items)))
         return { written, classNames: [...classNames] }
       } catch (error) {
-        if (!(error instanceof UnknownConditionError)) throw error
+        if (!(error instanceof UnwritableStyleError)) throw error
         reportComposing({ name: 'cx', start: call.span.start, end: call.span.end }, matched, error)
         return undefined
       }
@@ -1080,7 +1084,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       try {
         compiled = dynamicCandidate.styleMap!.compile(before, after)
       } catch (error) {
-        if (!(error instanceof UnknownConditionError)) throw error
+        if (!(error instanceof UnwritableStyleError)) throw error
         reportComposing(
           { name: 'cx', start: call.span.start, end: call.span.end },
           styleParts.map((part) => part.candidate),
@@ -1150,7 +1154,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     try {
       compiled = styleCompiler.className(merged)
     } catch (error) {
-      if (!(error instanceof UnknownConditionError)) throw error
+      if (!(error instanceof UnwritableStyleError)) throw error
       reportComposing({ name: 'cx', start: call.span.start, end: call.span.end }, matched, error)
       continue
     }
@@ -1189,8 +1193,8 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     try {
       compiled = candidate.styleMap.compile()
     } catch (error) {
-      if (!(error instanceof UnknownConditionError)) throw error
-      reportUnknownCondition(candidate.name, candidate.start, candidate.end, error)
+      if (!(error instanceof UnwritableStyleError)) throw error
+      reportUnwritable(candidate.name, candidate.start, candidate.end, error)
       candidate.failed = true
       continue
     }
@@ -1325,7 +1329,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     try {
       className = styleCompiler.className(candidate.styleSet ?? {})
     } catch (error) {
-      if (error instanceof UnknownConditionError) reportUnknownCondition(name, start, end, error)
+      if (error instanceof UnwritableStyleError) reportUnwritable(name, start, end, error)
       else skipped.push({ name, reason: 'dynamic', start, end, ...styleErrorDetail(error) })
       continue
     }
@@ -1376,9 +1380,9 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     // the module the user sees is a recipe that silently became `undefined`. A throw here is
     // what makes the plugin report the module as one it could not compile — or, for a key that
     // is not a condition, the declaration as the place it is written.
-    const unknown = unknownConditionIn(() => assertCompiles(recipeConfigs.get(name)?.config))
+    const unknown = unwritableIn(() => assertCompiles(recipeConfigs.get(name)?.config))
     if (unknown) {
-      reportUnknownCondition(factory, start, end, unknown)
+      reportUnwritable(factory, start, end, unknown)
       continue
     }
     magic.overwrite(start, end, 'undefined')

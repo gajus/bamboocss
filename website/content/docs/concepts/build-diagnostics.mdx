@@ -88,6 +88,23 @@ bamboocss: 2 call(s) could not be compiled.
     18: css() — unknown-condition: `has` is not a condition; did you mean `'&:has(svg)'`?
 ```
 
+### A declaration whose value is an empty string
+
+Reported by the Vite compiler as `empty-value`
+
+CSS has no empty value, so a declaration written with one, `content: ''`, has no rule: the stylesheet drops it. Nearly
+always it is `content` meant as an empty string, the one that makes a `::before` or `::after` render, which is written
+`'""'`. Anywhere else an empty string meant no declaration at all: leave the property out, or write `undefined` where it
+is chosen.
+
+```text
+bamboocss: 2 call(s) could not be compiled.
+
+  src/badge.tsx
+     7: css() — empty-value: `content` is an empty string, which CSS has no value for; an empty `content` is written `'""'`
+    15: css() — empty-value: `color` is an empty string, which CSS has no value for; leave it out, or write `undefined` where it is chosen
+```
+
 ### A compiled class with no rule
 
 Reported by the Vite compiler as it writes the stylesheet

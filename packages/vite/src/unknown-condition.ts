@@ -1,5 +1,6 @@
 import type { Context } from '@bamboocss/core'
 import { closestMatch } from '@bamboocss/shared'
+import { UnwritableStyleError } from './unwritable-style'
 
 /**
  * A key nested in a style object that is neither a property nor a condition.
@@ -14,7 +15,9 @@ import { closestMatch } from '@bamboocss/shared'
  * Thrown while a class is named, by the build's copy of the runtime; the fold reports it by the
  * call the style is written in. The message is the whole report.
  */
-export class UnknownConditionError extends Error {
+export class UnknownConditionError extends UnwritableStyleError {
+  readonly reason = 'unknown-condition'
+
   constructor(
     readonly key: string,
     readonly suggestion: string | undefined,

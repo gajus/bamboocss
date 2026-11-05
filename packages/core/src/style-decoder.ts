@@ -828,7 +828,10 @@ const parseValue = (value: string) => {
   }
 
   const asNumber = Number(value)
-  if (!Number.isNaN(asNumber)) return asNumber
+  // `Number` reads an empty or blank string as 0, which it is not: `content: ''` came back as
+  // `content: 0`, named `content_0` where the compiler named `content_`, and `width: ''` as
+  // `var(--sizes-0)`. It is a string, as written.
+  if (!Number.isNaN(asNumber) && value.trim() !== '') return asNumber
   return castBoolean(value)
 }
 

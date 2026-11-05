@@ -3958,8 +3958,10 @@ export default defineConfig({
         `export const cached = css({ width: '[${widths.cached}]' })\n` +
         `export const fresh = css({ width: '[${widths.fresh}]' })\n`,
     )
-    writeFileSync(trigger, `export const version = 'first'\n`)
-    writeFileSync(clientTrigger, `export const clientVersion = 'first'\n`)
+    // Written as one change each: `writeFileSync` can reach a watcher as a truncation and a
+    // write, which rebuilds twice and retransforms the shared module a third time.
+    writeWatchTrigger(trigger, `export const version = 'first'`)
+    writeWatchTrigger(clientTrigger, `export const clientVersion = 'first'`)
     writeFileSync(
       clientEntry,
       `import 'virtual:bamboo.css'\n` +
@@ -4030,7 +4032,7 @@ export default defineConfig({
       const rebuiltClient = nextBuild(clientWatcher)
       const rebuiltSsr = nextBuild(ssrWatcher)
       await new Promise((settle) => setTimeout(settle, 800))
-      writeFileSync(trigger, `export const version = 'second'\n`)
+      writeWatchTrigger(trigger, `export const version = 'second'`)
       const [clientError, ssrError] = await Promise.all([rebuiltClient, rebuiltSsr])
 
       expect(calls, 'client retransforms while SSR reuses its environment-local cache').toEqual({ client: 2, ssr: 1 })
@@ -4045,7 +4047,7 @@ export default defineConfig({
       rmSync(clientOutDir, { force: true, recursive: true })
       const clientOnlyBuild = nextBuild(clientWatcher)
       await new Promise((settle) => setTimeout(settle, 800))
-      writeFileSync(clientTrigger, `export const clientVersion = 'second'\n`)
+      writeWatchTrigger(clientTrigger, `export const clientVersion = 'second'`)
       expect(await clientOnlyBuild).toBeUndefined()
       expect(calls).toEqual({ client: 2, ssr: 1 })
       watchedCss = writtenCss()

@@ -5,6 +5,7 @@ import type { ImportResult } from '.'
 import { loadConfig } from '@bamboocss/config'
 import { resolveTsPathPattern } from '@bamboocss/config/ts-path'
 import { Generator } from '@bamboocss/generator'
+import { isImportant } from '@bamboocss/shared'
 import type { TokenDataTypes } from '@bamboocss/types'
 import { logger } from '@bamboocss/logger'
 import { readFileSync, statSync } from 'node:fs'
@@ -292,6 +293,15 @@ type MatchImportResult = {
   name: string
 }
 
+/**
+ * A declaration written before a `mixin` in one style object: the keys from that object down to its
+ * value, and whether the value is important.
+ */
+export type MixinSibling = { important: boolean; keys: string[] }
+
+/** One of the siblings a mixin overrides: its index, and the key naming its property as written. */
+export type OverriddenByMixin = { index: number; property: string }
+
 export function run(action: 'filterInvalidTokens', options: Options, paths: string[]): string[]
 export function run(
   action: 'explainUnresolvedValue',
@@ -326,6 +336,12 @@ export function run(action: 'filterImports', options: Options, imports: MatchImp
 export function run(action: 'getPropCategory', options: Options, property: string): string
 export function run(action: 'filterDeprecatedTokens', options: Options, tokens: DeprecatedToken[]): DeprecatedToken[]
 export function run(action: 'extractionFindings', options: Options, text: string): ExtractionFindings
+export function run(
+  action: 'overriddenByMixin',
+  options: Options,
+  mixin: unknown,
+  siblings: MixinSibling[],
+): OverriddenByMixin[]
 export function run(
   action: 'tokensWithValue',
   options: Options,
@@ -365,6 +381,12 @@ export function runAsync(
   imports: MatchImportResult[],
 ): Promise<MatchImportResult[]>
 export function runAsync(action: 'getPropCategory', options: Options, property: string): Promise<string>
+export function runAsync(
+  action: 'overriddenByMixin',
+  options: Options,
+  mixin: unknown,
+  siblings: MixinSibling[],
+): Promise<OverriddenByMixin[]>
 export function runAsync(
   action: 'filterDeprecatedTokens',
   options: Options,
@@ -417,6 +439,9 @@ export async function runAsync(action: string, options: Options, ...args: any): 
     case 'matchImports':
       // @ts-expect-error cast
       return matchImports(context, ...args)
+    case 'overriddenByMixin':
+      // @ts-expect-error cast
+      return overriddenByMixin(context, ...args)
     case 'resolveLongHand':
       // @ts-expect-error cast
       return resolveLongHand(context, ...args)
@@ -543,6 +568,69 @@ const resolveLongHand = (context: Generator, name: string): string | undefined =
 // Refactored to arrow function, removed async
 const resolveShorthands = (context: Generator, name: string): string[] | undefined => {
   return context.utility.getPropShorthandsMap().get(name)
+}
+
+/**
+ * One declaration, by what decides whether another one replaces it: the property as its longhand,
+ * and the conditions it applies under, in whatever order they were nested. `base` is none. A path
+ * with no property, or with two keys that are neither a condition nor `base`, is no declaration this
+ * can place, and has no key.
+ */
+const declarationKey = (context: Generator, keys: string[]): { key: string; property: string } | undefined => {
+  let property: string | undefined
+  const conditions: string[] = []
+  for (const key of keys) {
+    if (key === 'base') continue
+    if (context.conditions.isCondition(key)) conditions.push(key)
+    else if (property === undefined) property = key
+    else return undefined
+  }
+  if (property === undefined) return undefined
+  return { key: JSON.stringify([conditions.sort(), context.utility.resolveShorthand(property)]), property }
+}
+
+/** Every declaration in `style` by its key, with whether one under that key is important. */
+const collectDeclarations = (
+  context: Generator,
+  style: Record<string, unknown>,
+  keys: string[],
+  into: Map<string, boolean>,
+) => {
+  for (const key in style) {
+    const value = style[key]
+    // A `mixin` left as written is one no mixin has, which writes nothing.
+    if (value == null || key === 'mixin') continue
+    if (typeof value === 'object' && !Array.isArray(value)) {
+      collectDeclarations(context, value as Record<string, unknown>, [...keys, key], into)
+      continue
+    }
+    const declaration = declarationKey(context, [...keys, key])
+    if (!declaration) continue
+    into.set(declaration.key, (into.get(declaration.key) ?? false) || (typeof value === 'string' && isImportant(value)))
+  }
+}
+
+/**
+ * Which of `siblings`, written before `mixin` in one style object, the mixin overrides.
+ *
+ * A mixin is its declarations written where it is applied, merged as the keys of one object merge:
+ * one it sets too, under the same conditions, replaces one written before it, unless that one is
+ * important and the mixin's is not. The mixin is written out as the build writes it, mixins it
+ * applies included.
+ */
+const overriddenByMixin = (context: Generator, mixin: unknown, siblings: MixinSibling[]): OverriddenByMixin[] => {
+  const written = new Map<string, boolean>()
+  collectDeclarations(context, context.mixins.expand({ mixin }), [], written)
+  if (written.size === 0) return []
+
+  const overridden: OverriddenByMixin[] = []
+  siblings.forEach((sibling, index) => {
+    const declaration = declarationKey(context, sibling.keys)
+    if (!declaration || !written.has(declaration.key)) return
+    if (sibling.important && !written.get(declaration.key)) return
+    overridden.push({ index, property: declaration.property })
+  })
+  return overridden
 }
 
 runAsWorker(run as any)

@@ -51,6 +51,12 @@ const mixins = {
       },
     },
   },
+  // Written with a shorthand, as a mixin may be: `padding` beside it is the same declaration.
+  inset: {
+    value: {
+      p: '4',
+    },
+  },
 }
 
 export const fixturePreset: Omit<PresetCore, 'global' | 'staticCss'> = {

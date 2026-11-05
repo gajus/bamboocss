@@ -10,6 +10,7 @@ import noImportant, { RULE_NAME as NoImportant } from './no-important'
 import noInvalidNesting, { RULE_NAME as NoInvalidNesting } from './no-invalid-nesting'
 import noInvalidTokenPaths, { RULE_NAME as NoInvalidTokenPaths } from './no-invalid-token-paths'
 import noMarginProperties, { RULE_NAME as NoMarginProperties } from './no-margin-properties'
+import noOverriddenByMixin, { RULE_NAME as NoOverriddenByMixin } from './no-overridden-by-mixin'
 import noPhysicalProperties, { RULE_NAME as NoPhysicalProperties } from './no-physical-properties'
 import noPropertyRenaming, { RULE_NAME as NoPropertyRenaming } from './no-property-renaming'
 import noRedundantValue, { RULE_NAME as NoRedundantValue } from './no-redundant-value'
@@ -38,6 +39,7 @@ export const rules = {
   [NoInvalidNesting]: noInvalidNesting,
   [NoInvalidTokenPaths]: noInvalidTokenPaths,
   [NoMarginProperties]: noMarginProperties,
+  [NoOverriddenByMixin]: noOverriddenByMixin,
   [NoPhysicalProperties]: noPhysicalProperties,
   [NoPropertyRenaming]: noPropertyRenaming,
   [NoRedundantValue]: noRedundantValue,

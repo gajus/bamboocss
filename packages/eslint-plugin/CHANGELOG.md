@@ -1,5 +1,46 @@
 # @bamboocss/eslint-plugin
 
+## 1.61.0
+
+### Minor Changes
+
+- 869906e: Add `no-overridden-by-mixin`, in `recommended` as a warning: a property written before a mixin in the same
+  object that the mixin sets too is replaced by it, and does nothing.
+  `css({ fontWeight: '300', mixin: 'text-xl/regular' })` compiles to the mixin's weight, and nothing said so; with keys
+  sorted alphabetically, `mixin` comes after nearly every property written to adjust it.
+  - The mixin is read from the theme as the build writes it out, mixins it applies included. A shorthand and its
+    longhand are one property, a value chosen per condition is judged one condition at a time, and an important value
+    the mixin does not make important is kept, so it is not reported.
+  - `--fix` writes the mixin first in its object, which makes each property it overrode win. It leaves the object alone
+    where a spread or a computed key comes before the mixin, or a comment lies between the mixin and the key before it.
+
+### Patch Changes
+
+- 9d4f8c5: A name `keyframes()` returns is read as the static value it is. The build evaluates the call and writes the
+  name in its place, but the rules took a binding to it for a runtime value, so the documented
+  `const fadeIn = keyframes({ … })` reported three ways:
+  - `no-dynamic-styling` reported `css({ animationName: fadeIn })` and
+    ``css({ animation: `${fadeIn} 0.2s ease-out` })``.
+  - `no-property-renaming` reported `animationName: fadeIn` as a renamed prop.
+  - `require-recipe-class-name`, in `dynamic-only` mode, required a name on a recipe reading one.
+
+  A call to bamboo's `keyframes()` counts, and so does a binding the file declares as one. A binding imported from
+  another module is still read as any other binding is.
+
+- 88c0228: Under oxlint's `jsPlugins`, every rule reads each file's own imports. The rules cached a file's imports by
+  their `context`, which oxlint creates once per rule and passes to `create` for every file, so each rule kept the
+  imports of the first file it read: a file after one that imports nothing from bamboo went unread, and one with a `css`
+  of its own after a bamboo file was read as bamboo's. What `no-hardcoded-color` and the other rules found depended on
+  which files a run covered — 29 colors in one directory, none in its parent — whatever the thread count.
+
+  The imports are cached by the file's `SourceCode` now, one per file in ESLint and, through oxlint's own handling of
+  it, in oxlint too.
+  - @bamboocss/generator@1.61.0
+  - @bamboocss/node@1.61.0
+  - @bamboocss/config@1.61.0
+  - @bamboocss/logger@1.61.0
+  - @bamboocss/shared@1.61.0
+
 ## 1.60.3
 
 ### Patch Changes

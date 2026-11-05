@@ -177,6 +177,29 @@ const findDeclaration = (name: string, context: RuleContext<any, any>) => {
   }
 }
 
+/** Whether `node` calls bamboo's `keyframes()`. @see isKeyframesName */
+const isKeyframesCall = (node: Node | null | undefined, context: RuleContext<any, any>): boolean => {
+  if (!node || !isCallExpression(node) || !isIdentifier(node.callee)) return false
+  const callee = node.callee.name
+  const imported = _getImports(context).find(({ alias, name }) => alias === callee && name === 'keyframes')
+  if (!imported) return false
+  // `keyframes` is exported beside `css`, so it is bamboo's where a `css` from the same module would be.
+  return syncAction('matchImports', getSyncOptions(context), { alias: 'css', mod: imported.mod, name: 'css' }) === true
+}
+
+/**
+ * Whether `node` is a keyframes name: a call to bamboo's `keyframes()`, or a binding this file
+ * declares as one.
+ *
+ * The build evaluates the call and writes the name it returns in its place, so a style reading it
+ * is as static as one written with the name: `css({ animationName: fadeIn })`, or `fadeIn` in a
+ * template. A binding imported from another module is not followed, as no other binding is.
+ */
+export const isKeyframesName = (node: Node | null | undefined, context: RuleContext<any, any>): boolean => {
+  if (node && isIdentifier(node)) return isKeyframesCall(findDeclaration(node.name, context)?.init, context)
+  return isKeyframesCall(node, context)
+}
+
 const isLocalStyledFactory = (node: TSESTree.JSXOpeningElement, context: RuleContext<any, any>) => {
   if (!isJSXIdentifier(node.name)) {
     return

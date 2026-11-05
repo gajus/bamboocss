@@ -1,5 +1,5 @@
 import { createRule } from '../utils'
-import { isBambooAttribute, isBambooProp as isBambooProperty, isRecipeVariant } from '../utils/helpers'
+import { isBambooAttribute, isBambooProp as isBambooProperty, isKeyframesName, isRecipeVariant } from '../utils/helpers'
 import { isIdentifier, isJSXExpressionContainer, isMemberExpression } from '../utils/nodes'
 import { type TSESTree } from '@typescript-eslint/utils'
 
@@ -54,6 +54,9 @@ const rule = createRule({
     }
 
     const handleReport = (node: TSESTree.Node, value: TSESTree.Node, attribute: string) => {
+      // A keyframes name is no prop: `animationName: fadeIn` reads the name `keyframes()` returned.
+      if (isKeyframesName(value, context)) return
+
       if (isIdentifier(value) && attribute !== value.name) {
         sendReport(node, attribute, value.name)
       } else if (isMemberExpression(value) && isIdentifier(value.property) && attribute !== value.property.name) {

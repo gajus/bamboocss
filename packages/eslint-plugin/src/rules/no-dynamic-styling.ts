@@ -3,6 +3,7 @@ import {
   isInBambooFunction,
   isBambooAttribute,
   isBambooProp as isBambooProperty,
+  isKeyframesName,
   isRecipeVariant,
 } from '../utils/helpers'
 import {
@@ -29,7 +30,13 @@ const rule = createRule({
         return true
       }
 
-      if (isTemplateLiteral(node) && node.expressions.length === 0) {
+      // A keyframes name is replaced by the name the build writes in its place, alone or in a template:
+      // `${fadeIn} 0.2s ease-out`.
+      if (isTemplateLiteral(node)) {
+        return node.expressions.every((expression) => isKeyframesName(expression, context))
+      }
+
+      if (isKeyframesName(node, context)) {
         return true
       }
 

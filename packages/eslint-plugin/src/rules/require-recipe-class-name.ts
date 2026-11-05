@@ -1,6 +1,7 @@
 import { type TSESTree } from '@typescript-eslint/utils'
+import { type RuleContext } from '@typescript-eslint/utils/ts-eslint'
 import { createRule } from '../utils'
-import { isValidFile } from '../utils/helpers'
+import { isKeyframesName, isValidFile } from '../utils/helpers'
 import { isIdentifier } from '../utils/nodes'
 
 export const RULE_NAME = 'require-recipe-class-name'
@@ -13,24 +14,28 @@ const RECIPE_CALLS = new Set(['cva', 'sva'])
  *
  * Deliberately narrow. A spread, a computed key, a call — anything the extractor might not
  * resolve — makes the config's *content* uncertain, and the content is what the name is
- * derived from.
+ * derived from. A keyframes name is the one call it reads: the build evaluates `keyframes()` and
+ * writes the name in its place, whether called there or bound to a name in this file.
  */
-const isStatic = (node: TSESTree.Node): boolean => {
+const isStatic = (node: TSESTree.Node, context: RuleContext<any, any>): boolean => {
   switch (node.type) {
     case 'Literal':
       return true
     case 'TemplateLiteral':
-      return node.expressions.length === 0
+      return node.expressions.every((expression) => isKeyframesName(expression, context))
+    case 'Identifier':
+    case 'CallExpression':
+      return isKeyframesName(node, context)
     case 'TSAsExpression':
     case 'TSSatisfiesExpression':
     case 'TSNonNullExpression':
-      return isStatic(node.expression)
+      return isStatic(node.expression, context)
     case 'ArrayExpression':
-      return node.elements.every((element) => element !== null && isStatic(element))
+      return node.elements.every((element) => element !== null && isStatic(element, context))
     case 'ObjectExpression':
       return node.properties.every((property) => {
         if (property.type !== 'Property' || property.computed) return false
-        return isStatic(property.value as TSESTree.Node)
+        return isStatic(property.value as TSESTree.Node, context)
       })
     default:
       return false
@@ -69,7 +74,7 @@ const rule = createRule({
           )
           if (named) return
 
-          if (mode === 'dynamic-only' && isStatic(unwrapped)) return
+          if (mode === 'dynamic-only' && isStatic(unwrapped, context)) return
         }
 
         context.report({ messageId: 'requireRecipeClassName', node: node.callee })

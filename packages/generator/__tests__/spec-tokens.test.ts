@@ -315,18 +315,6 @@ describe('generateSemanticTokensSpec', () => {
               },
             ],
           },
-          {
-            "cssVar": "var(--spacing-container)",
-            "deprecated": undefined,
-            "description": undefined,
-            "name": "-container",
-            "values": [
-              {
-                "condition": "base",
-                "value": "1rem",
-              },
-            ],
-          },
         ]
       `)
 
@@ -433,5 +421,22 @@ describe('generateSemanticTokensSpec', () => {
     const spec = generateSemanticTokensSpec(ctx)
     expect(spec.type).toBe('semantic-tokens')
     expect(spec.data).toEqual([])
+  })
+
+  // A semantic spacing token is given a negative twin, `-gutter`, for `margin: '-gutter'`. It is no
+  // token anyone declared: the tokens spec leaves the negatives out, and this listed `-gutter` with
+  // the positive one's value, description and variable.
+  test('leaves out the negative a semantic spacing token is given', () => {
+    const ctx = createContext({
+      presets: [],
+      theme: {
+        tokens: { spacing: { 4: { value: '1rem' } } },
+        semanticTokens: { spacing: { gutter: { value: 'token(spacing.4)', description: 'Between columns' } } },
+      },
+    })
+
+    const spacing = generateSemanticTokensSpec(ctx).data.find((group) => group.type === 'spacing')
+
+    expect(spacing?.values.map((token) => token.name)).toEqual(['gutter'])
   })
 })

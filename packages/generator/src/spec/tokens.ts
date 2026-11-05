@@ -60,9 +60,13 @@ export const generateSemanticTokensSpec = (ctx: Context): SemanticTokenSpec => {
   // Create grouped data structure using tokens.view.categoryMap
   const groupedData: SemanticTokenGroupDefinition[] = Array.from(ctx.tokens.view.categoryMap.entries())
     .map(([category, tokenMap]) => {
-      // Convert Map values to array and filter for semantic tokens
+      // Convert Map values to array and filter for semantic tokens. Not the negative a semantic
+      // spacing token is given, `-gutter`, which no one declared: the tokens spec leaves those out too.
       const typeTokens = Array.from(tokenMap.values()).filter(
-        (token) => (token.extensions.isSemantic || token.extensions.conditions) && !token.extensions.isVirtual,
+        (token) =>
+          (token.extensions.isSemantic || token.extensions.conditions) &&
+          !token.extensions.isVirtual &&
+          !token.extensions.isNegative,
       )
 
       // Skip if no tokens after filtering

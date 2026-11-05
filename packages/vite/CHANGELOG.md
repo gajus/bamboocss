@@ -1,5 +1,49 @@
 # @bamboocss/vite
 
+## 1.61.0
+
+### Patch Changes
+
+- 857d4e6: A declaration whose value is an empty string, such as `content: ''`, is reported by the call it is written
+  in, as `empty-value`, with what to write instead. CSS has no empty value: the stylesheet drops the declaration, so the
+  class the compiler named for it, `content_`, had no rule, and the build failed on that as a mismatch between the
+  compiler and the stylesheet, calling it a Bamboo bug and suggesting a workaround that only applies to single-file
+  components.
+  - An empty `content`, nearly always meant as the empty string a `::before` or `::after` needs to render, is reported
+    with `content: '""'`, which is how that is written.
+  - Any other empty value is reported as meaning no declaration at all: leave the property out, or write `undefined`
+    where it is chosen.
+  - The stylesheet no longer reads an empty or blank value back as `0`. `content: ''` was written as `content: 0` under
+    `.content_0`, and `width: ''` as `width: var(--sizes-0)`, rules nothing named.
+
+- d1bd873: A mixin compiles to the atoms of the declarations it applies wherever it is applied, alone too, so it ranks
+  against every other class on the element as those declarations written there would. A mixin that was the whole style
+  kept its one `mixin_*` class, in the `compositions` layer below every other utility, and lost to any of them its
+  declarations would rank above:
+  - `css({ '& input': { mixin: 'small' } })` lost to the input's own `fontSize`. Since 1.56.5 compiles a mixin combined
+    with other styles to atoms, that included the input's own mixin: `css({ flex: '1', mixin: 'large' })` on it won over
+    the parent's `small`.
+  - `css({ _hover: { mixin: 'card' } })`, and `css({ mixin: 'card' })` with a `_hover` in `card`, never applied on hover
+    over a `color` another class on the element set. The same held at a breakpoint.
+  - `css({ mixin: 'pad' })` with `paddingTop` in `pad` lost to another class's `padding`, which a longhand outranks.
+
+  The compiler no longer emits `mixin_*` classes: `css({ mixin: 'body' })` compiles to the classes of `body`'s
+  declarations written out. A selector or test matching an element by its `mixin_*` class has to match those instead.
+  `staticCss` still generates `mixin_*` classes, as before.
+
+  A key in a mixin that is not a condition, such as `_hovr`, is now reported by any call applying the mixin, alone too,
+  and fails the build as it already did wherever the mixin was combined with anything else. The mixin's class wrote the
+  declaration under no condition at all.
+
+- Updated dependencies [857d4e6]
+- Updated dependencies [d1bd873]
+  - @bamboocss/core@1.61.0
+  - @bamboocss/node@1.61.0
+  - @bamboocss/config@1.61.0
+  - @bamboocss/logger@1.61.0
+  - @bamboocss/shared@1.61.0
+  - @bamboocss/types@1.61.0
+
 ## 1.60.3
 
 ### Patch Changes

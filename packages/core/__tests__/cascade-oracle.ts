@@ -74,7 +74,17 @@ const specificityOfSelector = (selector: Selector): Specificity => {
           total[2] += best[2]
           break
         }
-        // `:nth-child(An+B of S)` adds S as well; nothing here emits that form.
+        // `:nth-child(An+B of S)` and `:nth-last-child()` add the most specific member of S.
+        const of =
+          (name === ':nth-child' || name === ':nth-last-child') &&
+          /\bof\s+([\s\S]+)$/i.exec((node.nodes as Selector[]).map(String).join(','))
+        if (of) {
+          const inner = specificity(of[1]!)
+          total[0] += inner[0]
+          total[1] += inner[1] + 1
+          total[2] += inner[2]
+          break
+        }
         total[1]++
         break
       }

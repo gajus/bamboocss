@@ -29,11 +29,12 @@ describe('the states a rule is ordered by', () => {
   })
 
   test('nor does one in the selector :nth-child() counts by', () => {
+    // Equal in specificity, (0,3,0) each: the selector `of` names counts, whatever is in it.
     const counted: [string, Dict] = ['&:nth-child(2 of :hover)', { color: 'red' }]
-    const first: [string, Dict] = ['&:first-child', { color: 'blue' }]
+    const byClass: [string, Dict] = ['&:nth-child(2 of .x)', { color: 'blue' }]
 
-    const [firstLast, countedLast] = bothOrders(counted, first)
-    expect(firstLast).toContain('c_blue')
+    const [byClassLast, countedLast] = bothOrders(counted, byClass)
+    expect(byClassLast).toContain('c_blue')
     expect(countedLast).toContain('c_red')
   })
 

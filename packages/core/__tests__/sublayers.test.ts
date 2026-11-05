@@ -1,6 +1,7 @@
 import { createRuleProcessor } from '@bamboocss/fixture'
 import postcss from 'postcss'
 import { describe, expect, test } from 'vitest'
+import { cascadeOrder } from './cascade-oracle'
 
 /**
  * Utilities are written into cascade sublayers keyed by specificity, condition and property
@@ -96,6 +97,20 @@ describe('utility sublayers', () => {
 
     expect(sublayerOf.get('.group:is(:hover, [data-hover]) .groupHover\\:op_1')).toBe('s030-c1-p3000')
     expect(sublayerOf.get('.\\[\\&_\\>_p\\]\\:op_0\\.5 > p')).toBe('s011-c0-p3000')
+  })
+
+  /**
+   * `&:nth-child(2 of .x.y)` is (0,4,0) in the browser: the atom's class, the pseudo-class and
+   * `.x.y`. Counted as the pseudo-class alone, it was put at (0,2,0), and `&.p.q` at (0,3,0) won
+   * where both apply.
+   */
+  test('counts the selector `:nth-child(… of S)` names', () => {
+    const css = sheetFor({ '&:nth-child(2 of .x.y)': { color: 'red' }, '&.p.q': { color: 'blue' } })
+    const { sublayerOf } = inspect(css)
+    const nth = [...sublayerOf.keys()].find((selector) => selector.endsWith(':nth-child(2 of .x.y)'))!
+
+    expect(sublayerOf.get(nth)).toMatch(/^s040-/)
+    expect(cascadeOrder(css).color!.at(-1)).toBe(nth)
   })
 
   test('asks for the layer root more than once without repeating the statement', () => {

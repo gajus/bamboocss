@@ -16,6 +16,10 @@ export const NO_SPECIFICITY: Specificity = [0, 0, 0]
 
 /** Pseudo-classes whose specificity is that of their most specific argument. */
 const FORGIVING = new Set([':is', ':matches', ':not', ':has', ':-webkit-any', ':-moz-any'])
+/** Pseudo-classes whose argument, `An+B of S`, may name a selector list. */
+const NTH_OF = new Set([':nth-child', ':nth-last-child'])
+/** The `S` of an `An+B of S` argument. `An+B` never holds an `of`, so the first is the keyword. */
+const OF_SELECTOR = /\bof\s+([\s\S]+)$/i
 /** Legacy single-colon spellings of pseudo-elements. */
 const ELEMENT_PSEUDOS = new Set([':before', ':after', ':first-line', ':first-letter'])
 
@@ -66,7 +70,19 @@ const measure = (selector: Selector): Measured => {
           nesting += best.nesting
           break
         }
-        // `:nth-child(An+B of S)` would add S as well; nothing here emits that form.
+        // `:nth-child(2 of .x.y)` is a pseudo-class and its most specific selector, (0,3,0) there.
+        // Counted as the pseudo-class alone, a rule written with one was put a sublayer too low,
+        // and `&.p.q` won where the browser ranks `&:nth-child(2 of .x.y)` above it.
+        const of = NTH_OF.has(name) && OF_SELECTOR.exec((node.nodes as Selector[]).map(String).join(','))
+        if (of) {
+          let best: Measured = { own: NO_SPECIFICITY, nesting: 0 }
+          for (const candidate of measureList(of[1]!)) {
+            if (compareSpecificity(candidate.own, best.own) > 0) best = candidate
+          }
+          own = add(own, add([0, 1, 0], best.own))
+          nesting += best.nesting
+          break
+        }
         own = add(own, [0, 1, 0])
         break
       }
@@ -84,8 +100,11 @@ const measured = new Map<string, Measured[]>()
  * A lone class selector, escapes and all — `.c_red\\.500`, `.md\\:d_flex` — which is what the
  * base of every atom is. Answered without parsing: there is one per atom, they never repeat,
  * and a sheet of twenty thousand atoms would otherwise pay twenty thousand parses per build.
+ *
+ * A class name and its escapes only: an unescaped `.` or `#` begins another class or an id, so
+ * `.x.y` is two classes and is parsed.
  */
-const SINGLE_CLASS = /^\.(?:[^\s>+~:[\],\\]|\\.)+$/
+const SINGLE_CLASS = /^\.(?:[\w-]|[^\p{ASCII}]|\\.)+$/u
 const ONE_CLASS: Measured[] = [{ own: [0, 1, 0], nesting: 0 }]
 
 /** Each member of a selector list, measured. Memoised, since conditions repeat across a sheet. */

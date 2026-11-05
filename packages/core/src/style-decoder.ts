@@ -4,6 +4,7 @@ import {
   esc,
   getOrCreateSet,
   isImportant,
+  isObject,
   markImportant,
   viewTransitionPseudo,
   viewTransitionSlots,
@@ -23,7 +24,7 @@ import type {
   ViewTransitionResult,
 } from '@bamboocss/types'
 import type { Context } from './context'
-import { setDeclarations } from './merge-declarations'
+import { mergeDeclarations, setDeclarations } from './merge-declarations'
 import { sortStyleRules } from './sort-style-rules'
 import { type EncoderScope, StyleEncoder, type WrittenOrder } from './style-encoder'
 
@@ -165,7 +166,8 @@ export class StyleDecoder {
     }
 
     const important = isImportant(entry.value)
-    const styles = important ? markImportant(transformed.styles) : transformed.styles
+    const resolved = this.resolveStyleConditions(transformed.styles)
+    const styles = important ? markImportant(resolved) : resolved
 
     const parts = entry.cond ? entry.cond.split(StyleEncoder.conditionSeparator) : []
     const className = this.formatSelector(parts, transformed.className)
@@ -219,6 +221,51 @@ export class StyleDecoder {
         ?.map((combination) => combination.map((className) => `.${this.formatSelector([], className)}`).join(''))
         .join(', '),
     }
+  }
+
+  /**
+   * A transform's styles with each condition it writes, `{ _hover: { … } }` or `{ md: { … } }`,
+   * written as the selector or at-rule that condition stands for.
+   *
+   * Left as a key, `stringify` reads a condition's name as an element: `.hs_true _hover` and
+   * `.wl_true md`, which match nothing, so what the utility set under the condition was absent
+   * with nothing said. One written out already, `&:hover` or `@media …`, is left as it is.
+   *
+   * The transform's styles are cached and handed out again, so they are copied, never written
+   * into: an object holding no nested one comes back as it is, and every other is rebuilt.
+   */
+  private resolveStyleConditions = (styles: Dict): Dict => {
+    let nested = false
+    for (const key in styles) {
+      if (isObject(styles[key])) {
+        nested = true
+        break
+      }
+    }
+    if (!nested) return styles
+
+    const { conditions } = this.context
+    const resolved: Dict = {}
+    for (const [key, value] of Object.entries(styles)) {
+      if (!isObject(value)) {
+        resolved[key] = value
+        continue
+      }
+      const inner = this.resolveStyleConditions(value)
+      const details = conditions.has(key) ? conditions.getRaw(key) : undefined
+      // A multi-block condition holds in more than one way, `@media (hover: hover)` with `&:hover`
+      // and `@media (hover: none)` with `&:active`, and the styles are written under each. A mixed
+      // one is an at-rule and a selector within it, nested in the order the condition writes them.
+      const paths: string[][] = []
+      for (const block of details ? (details.type === 'multi-block' ? details.value : [details]) : []) {
+        const path = this.resolveCondition(block)
+        const segments = (Array.isArray(path) ? path : [path]).filter(Boolean) as string[]
+        if (segments.length) paths.push(segments)
+      }
+      if (!paths.length) paths.push([key])
+      for (const path of paths) writeStylesAt(resolved, path, inner)
+    }
+    return resolved
   }
 
   resolveCondition = (condition: ConditionDetails) => {
@@ -344,7 +391,8 @@ export class StyleDecoder {
       if (!transformed.className) return
 
       const important = isImportant(entry.value)
-      const result = important ? markImportant(transformed.styles) : transformed.styles
+      const styles = this.resolveStyleConditions(transformed.styles)
+      const result = important ? markImportant(styles) : styles
 
       const parts = entry.cond ? entry.cond.split(StyleEncoder.conditionSeparator) : []
 
@@ -685,6 +733,22 @@ export class StyleDecoder {
 
     return this.getConfigRecipeResult(recipeName)
   }
+}
+
+/**
+ * `styles` written at `path` in `target`, merged with what is there as the later declarations of
+ * one rule. Each object passed on the way down is copied rather than written into, since it may be
+ * one a transform handed out, and `styles` is never written into either.
+ */
+const writeStylesAt = (target: Dict, path: string[], styles: Dict) => {
+  let cursor = target
+  for (let i = 0; i < path.length - 1; i++) {
+    const existing = cursor[path[i]!]
+    cursor = cursor[path[i]!] = isObject(existing) ? { ...existing } : {}
+  }
+  const last = path[path.length - 1]!
+  const existing = cursor[last]
+  cursor[last] = isObject(existing) ? mergeDeclarations(existing, styles) : styles
 }
 
 const slotSegment = StyleEncoder.separator + 'slot:'

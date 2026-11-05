@@ -148,3 +148,33 @@ export default defineConfig({
   },
 })
 ```
+
+### Writing under a condition
+
+A transform can return styles under a condition, as a style object can. Each condition is written as the selector or
+at-rule it stands for, and a selector or at-rule spelled out, `&:hover` or `@media …`, is written as it is.
+
+```ts filename="bamboo.config.ts"
+import { defineConfig } from '@bamboocss/dev'
+
+export default defineConfig({
+  utilities: {
+    extend: {
+      interactive: {
+        className: 'interactive',
+        values: { type: 'boolean' },
+        transform(value) {
+          if (!value) return {}
+          return {
+            cursor: 'pointer',
+            _hover: { opacity: '0.8' },
+          }
+        },
+      },
+    },
+  },
+})
+```
+
+`css({ interactive: true })` sets `cursor: pointer` on `.interactive_true`, and `opacity: 0.8` on
+`.interactive_true:is(:hover, [data-hover])`.

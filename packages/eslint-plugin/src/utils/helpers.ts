@@ -77,13 +77,26 @@ export const isBambooConfigFunction = (context: RuleContext<any, any>, name: str
   return imports.some(({ alias, mod }) => alias === name && mod === '@bamboocss/dev')
 }
 
-// Caching raw imports per context to avoid redundant AST traversal
-const rawImportsCache = new WeakMap<RuleContext<any, any>, ImportResult[]>()
+/**
+ * What the per-file caches below are keyed by: the `SourceCode` the linter hands every rule linting
+ * one version of a file.
+ *
+ * Not the rule's context. ESLint creates a context per rule per file, but oxlint creates one per rule
+ * and passes it to `create` for every file, so a cache keyed by it held the first file's answer for
+ * every file after it, and which file came first decided what each rule saw: `no-hardcoded-color`
+ * reported 29 colors in one directory and none in its parent. oxlint's `context.sourceCode` is one
+ * object throughout as well, and it has a `WeakMap` keyed by that object read per file, as ESLint's
+ * own `SourceCode` per file is. A context without one keys by itself, as before.
+ */
+const fileKey = (context: RuleContext<any, any>): object => context.sourceCode ?? context
+
+// Each file's imports as written, so the AST is walked once per file.
+const rawImportsCache = new WeakMap<object, ImportResult[]>()
 
 const _getImports = (context: RuleContext<any, any>) => {
-  if (rawImportsCache.has(context)) {
-    return rawImportsCache.get(context)!
-  }
+  const key = fileKey(context)
+  const cached = rawImportsCache.get(key)
+  if (cached) return cached
 
   const specifiers = getImportSpecifiers(context)
 
@@ -93,17 +106,17 @@ const _getImports = (context: RuleContext<any, any>) => {
     name: (specifier.imported as any).name,
   }))
 
-  rawImportsCache.set(context, imports)
+  rawImportsCache.set(key, imports)
   return imports
 }
 
-// Caching filtered imports per context to avoid redundant computations
-const importsCache = new WeakMap<RuleContext<any, any>, ImportResult[]>()
+// Each file's imports that reach bamboo, so the worker is asked once per file.
+const importsCache = new WeakMap<object, ImportResult[]>()
 
 const getImports = (context: RuleContext<any, any>): ImportResult[] => {
-  if (importsCache.has(context)) {
-    return importsCache.get(context)!
-  }
+  const key = fileKey(context)
+  const cached = importsCache.get(key)
+  if (cached) return cached
 
   const imports = _getImports(context)
   // Batch filter all imports in a single sync call to reduce worker thread crossings
@@ -111,7 +124,7 @@ const getImports = (context: RuleContext<any, any>): ImportResult[] => {
   // syncAction returns undefined when the worker fails (e.g. config loading error).
   // Fall back to an empty array to prevent downstream crashes.
   const result = filteredImports ?? []
-  importsCache.set(context, result)
+  importsCache.set(key, result)
   return result
 }
 

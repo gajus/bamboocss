@@ -303,6 +303,7 @@ export interface SolutionAliases {
  * here as TypeScript resolves it, through the project including it. The config beside the root is
  * in none, and resolves through the `paths` of whichever project's patterns it matches and reach a
  * file — not a `baseUrl` alone, which would put a directory of the project ahead of every package.
+ * So does a file in a project that declares no aliases, where TypeScript would fail the import.
  * A root declaring aliases of its own keeps those for a file in no project: esbuild reads them.
  *
  * Only the aliases. The rest of that project's options are its own: its `verbatimModuleSyntax`
@@ -382,7 +383,13 @@ export async function resolveSolutionAliases(configFile: string, cwd: string): P
       const file = underRoot(importer)
       if (!file) return undefined
       const owner = ownerOf(file)
-      return owner ? (matcherFor(owner)?.(specifier) ?? []) : borrowed(specifier)
+      if (!owner) return borrowed(specifier)
+      // A project with aliases of its own resolves through those alone, as TypeScript does. One
+      // with none — `tsconfig.node.json` as `create vite` writes it, which includes the config —
+      // borrows another's, as a file in no project does: the config importing a theme through the
+      // app's `@/*` failed to load, where TypeScript fails it under `tsc -b` too, and there is no
+      // alias of the project's own for the borrowed one to stand in for.
+      return declaresAliases(owner) ? (matcherFor(owner)?.(specifier) ?? []) : borrowed(specifier)
     },
     files: () => graph.files(),
   }

@@ -1714,6 +1714,26 @@ describe('load config', () => {
       await expect(bundle<any>(file, root, { projectReferences: true })).resolves.toMatchObject({ config: brand })
     })
 
+    // As `create vite` lays it out: the config in `tsconfig.node.json`, which declares no aliases,
+    // and its theme imported through the app's. TypeScript fails that import under `tsc -b`; the
+    // config failed to load. A project with no aliases of its own borrows another's.
+    test('the paths of another project, for one including the config that declares none', async () => {
+      const root = solution(
+        { include: ['src'], compilerOptions: { paths: { '@/*': ['./src/*'] } } },
+        {
+          'tsconfig.json': JSON.stringify({
+            files: [],
+            references: [{ path: './tsconfig.app.json' }, { path: './tsconfig.node.json' }],
+          }),
+          'tsconfig.node.json': JSON.stringify({ include: ['bamboo.config.ts'], compilerOptions: { strict: true } }),
+        },
+      )
+
+      const { config } = await bundle<any>(join(root, 'bamboo.config.ts'), root, { projectReferences: true })
+
+      expect(config).toEqual(brand)
+    })
+
     test('the project that includes it through a nested solution', async () => {
       const root = project({
         'tsconfig.json': JSON.stringify({ files: [], references: [{ path: './tsconfig.web.json' }] }),

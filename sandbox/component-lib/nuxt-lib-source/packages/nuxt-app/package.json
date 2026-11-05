@@ -16,6 +16,6 @@
     "@bamboocss/vite": "workspace:*",
     "@sandbox-nuxt-lib-source/css-lib": "workspace:*",
     "nuxt": "4.2.1",
-    "postcss": "8.5.14"
+    "postcss": "8.5.26"
   }
 }

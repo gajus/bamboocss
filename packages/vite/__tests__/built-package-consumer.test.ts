@@ -119,7 +119,7 @@ beforeAll(() => {
   // enough to hide a mixed-format graph: its dependencies resolve from the monorepo instead of
   // the consumer install, which is not the package topology users run.
   const runtimeClosure = new Set<string>()
-  const pending = ['@bamboocss/vite', '@bamboocss/node']
+  const pending = ['@bamboocss/vite', '@bamboocss/node', '@bamboocss/plugin-astro', '@bamboocss/plugin-mdx']
   for (const name of pending) {
     if (runtimeClosure.has(name)) continue
     runtimeClosure.add(name)
@@ -160,6 +160,9 @@ beforeAll(() => {
         dependencies: {
           '@bamboocss/node': `file:${nodePack.filename}`,
           '@bamboocss/vite': `file:${vitePack.filename}`,
+          '@bamboocss/plugin-astro': `file:${packedClosure.get('@bamboocss/plugin-astro')!.filename}`,
+          '@bamboocss/plugin-mdx': `file:${packedClosure.get('@bamboocss/plugin-mdx')!.filename}`,
+          '@astrojs/compiler': `link:${realpathSync(join(repositoryRoot, 'packages/plugin-astro/node_modules/@astrojs/compiler'))}`,
           vite: `link:${realpathSync(join(packageRoot, 'node_modules/vite'))}`,
         },
       },
@@ -423,6 +426,53 @@ describe('packed and installed NodeNext consumers', () => {
       )
     }
   })
+
+  test.each(['mjs', 'cjs'] as const)(
+    'explicit Astro and MDX plugins work in an installed %s consumer',
+    (format) => {
+      const cwd = join(consumerRoot, `formats-${format}`)
+      mkdirSync(cwd)
+      writeFileSync(
+        join(cwd, 'bamboo.config.mjs'),
+        `import { pluginAstro } from '@bamboocss/plugin-astro'
+import { pluginMdx } from '@bamboocss/plugin-mdx'
+export default { plugins: [pluginAstro(), pluginMdx()], include: [] }`,
+      )
+      const script = join(consumerRoot, `formats.${format}`)
+      const imports =
+        format === 'mjs'
+          ? `import { loadConfigAndCreateContext } from '@bamboocss/node';
+import { isValidTsx } from '@bamboocss/node/syntax';`
+          : `const { loadConfigAndCreateContext } = require('@bamboocss/node');
+const { isValidTsx } = require('@bamboocss/node/syntax');`
+      writeFileSync(
+        script,
+        `${imports}
+;(async () => {
+  if (!isValidTsx('const a = <div />') || isValidTsx('const =')) throw new Error('syntax parser unavailable')
+  const empty = await loadConfigAndCreateContext({ cwd: ${JSON.stringify(consumerFixture)} })
+  if ((empty.config.plugins ?? []).length) throw new Error('plugins were injected')
+  const ctx = await loadConfigAndCreateContext({ cwd: ${JSON.stringify(cwd)} })
+  const names = ctx.config.plugins.map(plugin => plugin.name)
+  if (names.join(',') !== '@bamboocss/plugin-astro,@bamboocss/plugin-mdx') throw new Error('bad plugin registration')
+  const sources = {
+    astro: '---\\nimport { css } from "styled-system/css"\\n---\\n<div class={css({ color: "red" })} />',
+    mdx: 'import { css } from "styled-system/css"\\n\\n# Title\\n\\n<div className={css({ color: "red" })} />',
+  }
+  for (const [extension, content] of Object.entries(sources)) {
+    const result = ctx.hooks['parser:before']({ filePath: 'Card.' + extension, content, configure() {} })
+    if (!result.includes('css(') || result.includes('# Title') || result.includes('---')) throw new Error('source was not converted')
+  }
+})().catch(error => { console.error(error); process.exitCode = 1 })
+`,
+      )
+      const { NODE_PATH: _, ...env } = process.env
+      expect(() =>
+        execFileSync(process.execPath, [script], { cwd: consumerRoot, env, encoding: 'utf8', timeout: 120_000 }),
+      ).not.toThrow()
+    },
+    120_000,
+  )
 
   test('packs every declaration and runtime chunk targeted by the package graphs', () => {
     const packedFiles = (name: string) => packs.get(name)!.files.map((file) => file.path)

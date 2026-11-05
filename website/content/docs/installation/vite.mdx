@@ -335,6 +335,36 @@ Compilation and strict rejection are not options. A style-producing call that ca
 fails instead of retaining a runtime fallback. See [Source compilation](/docs/guides/source-transformation) for the
 accepted static and finite-dynamic shapes.
 
+## Extracting framework source files
+
+Install and register the Bamboo extraction plugin for each source format in `include`:
+
+| Source     | Package                    | Configuration               |
+| ---------- | -------------------------- | --------------------------- |
+| Astro      | `@bamboocss/plugin-astro`  | `plugins: [pluginAstro()]`  |
+| MDX        | `@bamboocss/plugin-mdx`    | `plugins: [pluginMdx()]`    |
+| Svelte     | `@bamboocss/plugin-svelte` | `plugins: [pluginSvelte()]` |
+| Vue / Nuxt | `@bamboocss/plugin-vue`    | `plugins: [pluginVue()]`    |
+
+These plugins are configured in `bamboo.config.ts`, separately from framework plugins in `vite.config.ts`. For MDX:
+
+```bash
+pnpm install -D @bamboocss/plugin-mdx
+```
+
+```ts filename="bamboo.config.ts"
+import { defineConfig } from '@bamboocss/dev'
+import { pluginMdx } from '@bamboocss/plugin-mdx'
+
+export default defineConfig({
+  plugins: [pluginMdx()],
+  include: ['./src/**/*.{ts,tsx,mdx}'],
+  outdir: 'styled-system',
+})
+```
+
+Register `pluginMdx()` after any custom MDX conversion plugins. It leaves content rewritten by an earlier hook intact.
+
 ## Troubleshooting
 
 If your IDE does not autocomplete `styled-system` imports, add that directory to `include` in `tsconfig.json`. See

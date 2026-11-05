@@ -14,7 +14,7 @@ Everything below is exported from `@bamboocss/node`.
 ### Context
 
 - `loadConfigAndCreateContext({ cwd?, config?, configPath? })` – resolve the config file, merge presets and inline
-  overrides, auto-inject the built-in plugins (`vue`, `svelte`), and return a `BambooContext`.
+  overrides, resolve explicitly configured plugins, and return a `BambooContext`.
 - `BambooContext` – the resolved config plus everything derived from it: tokens, utilities, conditions, recipes,
   patterns, the TypeScript 7 project used by the source compiler, the output engine and the diff engine. Stylesheet
   extraction runs through the Rust/Oxc native evaluator.
@@ -33,6 +33,11 @@ Each takes a `BambooContext`, and each backs the CLI command of the same name.
 - `buildInfo(ctx, outfile)` – write the static extraction result as JSON, for consumers that ship it instead of source.
 - `spec(ctx, options)` – write the spec files.
 
+### Syntax validation
+
+`@bamboocss/node/syntax` exports `isValidTsx(code)`, which checks converted TSX with the native extraction parser. The
+Astro plugin uses this entrypoint to validate its compiler fallback output.
+
 ### Setup and utilities
 
 - `setupConfig(cwd, options?)` – scaffold `bamboo.config.ts`.
@@ -40,3 +45,22 @@ Each takes a `BambooContext`, and each backs the CLI command of the same name.
 - `setLogStream({ cwd, logfile })` – tee logs to a file.
 - `startProfiling(cwd, prefix, isWatching?)` – start a V8 CPU profile; the returned function stops it and writes
   `bamboo-{prefix}-{timestamp}.cpuprofile` into `cwd`.
+
+Astro, MDX, Vue and Svelte extraction requires installing the corresponding `@bamboocss/plugin-*` package and
+registering it in `bamboo.config.ts`:
+
+```ts
+import { defineConfig } from '@bamboocss/dev'
+import { pluginVue } from '@bamboocss/plugin-vue'
+
+export default defineConfig({
+  plugins: [pluginVue()],
+  include: ['./src/**/*.{ts,vue}'],
+})
+```
+
+For Svelte, import `pluginSvelte` from `@bamboocss/plugin-svelte` and use `plugins: [pluginSvelte()]` with `.svelte`
+files in `include`.
+
+For Astro, use `pluginAstro()` from `@bamboocss/plugin-astro`. For MDX, use `pluginMdx()` from `@bamboocss/plugin-mdx`.
+Register `pluginMdx()` after any custom MDX conversion hooks so it can leave their output intact.

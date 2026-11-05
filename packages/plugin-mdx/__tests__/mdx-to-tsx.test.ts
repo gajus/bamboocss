@@ -1,9 +1,9 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { afterAll, describe, expect, test } from 'vitest'
-import { Builder } from '../src/builder'
+import { Builder } from '@bamboocss/node'
 import { mdxToTsx, pluginMdx } from '../src/mdx-to-tsx'
 
 /** What the TSX keeps, with the blanks between it run together. */
@@ -238,7 +238,8 @@ test('an `.mdx` file in `include` reaches the stylesheet, without its code', asy
   mkdirSync(join(cwd, 'src'))
   writeFileSync(
     join(cwd, 'bamboo.config.ts'),
-    `export default { preflight: false, include: ['src/**/*.mdx'], outdir: 'styled-system' }\n`,
+    `import { pluginMdx } from ${JSON.stringify(resolve(__dirname, '../src/index.ts'))}
+export default { plugins: [pluginMdx()], preflight: false, include: ['src/**/*.mdx'], outdir: 'styled-system' }\n`,
   )
   writeFileSync(
     join(cwd, 'src/doc.mdx'),

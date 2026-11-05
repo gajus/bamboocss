@@ -1,6 +1,6 @@
 import { compile } from '@mdx-js/mdx'
 import { describe, expect, test } from 'vitest'
-import { pluginMdx } from '../../node/src/mdx-to-tsx'
+import { pluginMdx } from '../../plugin-mdx/src'
 import { compilerParsePath } from '../src/plugin'
 import { createFoldFixture, selectorsFor } from './fixture'
 

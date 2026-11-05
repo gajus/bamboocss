@@ -80,6 +80,10 @@ export default defineConfig({
         replacement: resolve('./packages/config/src/tsconfig-utils.ts'),
       },
       {
+        find: '@bamboocss/node/syntax',
+        replacement: resolve('./packages/node/src/syntax.ts'),
+      },
+      {
         find: '@bamboocss/node/static-compiler',
         replacement: resolve('./packages/node/src/static-compiler.ts'),
       },

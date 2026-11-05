@@ -10,19 +10,21 @@ Astro exposes its Vite plugin list, so Bamboo can compile style calls in `.astro
 ### Install and initialize Bamboo
 
 ```bash
-pnpm install -D @bamboocss/dev @bamboocss/vite
+pnpm install -D @bamboocss/dev @bamboocss/vite @bamboocss/plugin-astro
 pnpm bamboo init
 ```
 
 Keep `"prepare": "bamboo codegen"` in `package.json` so generated types exist before the editor or TypeScript reads
 them.
 
-### Include Astro sources
+### Register Astro extraction and include sources
 
 ```ts filename="bamboo.config.ts"
 import { defineConfig } from '@bamboocss/dev'
+import { pluginAstro } from '@bamboocss/plugin-astro'
 
 export default defineConfig({
+  plugins: [pluginAstro()],
   include: ['./src/**/*.{astro,js,jsx,ts,tsx}'],
   outdir: 'styled-system',
 })

@@ -1,5 +1,6 @@
-import { createGeneratorContext } from '@bamboocss/fixture'
+import { createGeneratorContext, fixtureDefaults } from '@bamboocss/fixture'
 import { describe, expect, test } from 'vitest'
+import { Generator } from '../src'
 import { generatePackageExports } from '../src/artifacts/js/package-json'
 import { generatePackageJson } from '../src/artifacts/js/package-json'
 
@@ -98,4 +99,33 @@ describe('generated package exports', () => {
     expect(pkg.exports['./css']).toBeDefined()
     expect(pkg.private).toBe(true)
   })
+})
+
+/**
+ * Under `forceConsistentTypeExtension`, a declaration file is `.d.mts` and every relative import
+ * in it has to name its extension, which `moduleResolution: nodenext` requires of an ES module.
+ * `css/merge-css.d.mts` spelled its import of `../types/index` by hand, without one, and failed
+ * type-checking with TS2834 there while every other artifact took it from `ctx.file.importType`.
+ */
+test('every relative import of a declaration file names its extension under forceConsistentTypeExtension', () => {
+  const artifacts =
+    new Generator({
+      ...fixtureDefaults,
+      config: { ...fixtureDefaults.config, forceConsistentTypeExtension: true, outExtension: 'mjs' },
+    }).getArtifacts() ?? []
+  const declarations = artifacts.flatMap((artifact) =>
+    (artifact?.files ?? [])
+      .filter((file) => file.file.endsWith('.d.mts') && file.code)
+      .map((file) => ({ path: [...(artifact!.dir ?? []), file.file].join('/'), code: file.code! })),
+  )
+
+  const bare = declarations.flatMap(({ path, code }) =>
+    [...code.matchAll(/from\s*'(\.{1,2}\/[^']*)'/g)]
+      .map((match) => match[1]!)
+      .filter((specifier) => !/\.(mjs|js|json|css)$/.test(specifier))
+      .map((specifier) => `${path} imports ${specifier}`),
+  )
+
+  expect(bare).toEqual([])
+  expect(declarations.some(({ path }) => path.endsWith('merge-css.d.mts'))).toBe(true)
 })

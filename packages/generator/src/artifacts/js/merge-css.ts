@@ -39,7 +39,7 @@ export function generateMergeCssFn(ctx: Context) {
 
   return {
     dts: outdent`
-    import type { SystemStyleObject } from '../types/index';
+    ${ctx.file.importType('SystemStyleObject', '../types/index')}
 
     /** Deep-merge style objects, resolving shorthands before merging. */
     export declare function mergeCss(...styles: SystemStyleObject[]): SystemStyleObject;

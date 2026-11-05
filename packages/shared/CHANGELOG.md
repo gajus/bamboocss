@@ -1,5 +1,41 @@
 # @bamboocss/shared
 
+## 1.60.3
+
+### Patch Changes
+
+- 4df5660: `cssgen`, `analyze`, `debug` and `ship` read every glob they are given, as the main command does. Each took
+  one, so a list the shell expanded, or two globs written out, built from the first and dropped the rest without a word.
+  `cssgen tokens` and the other types take no globs beside them, and say so.
+
+  A single `-e`/`--exclude` now excludes what it names. One given once arrived as a string and excluded nothing; only
+  two or more worked.
+
+- deb3073: The spaces inside a quoted string reach the stylesheet as written, and the compiler names the class the way
+  the stylesheet does.
+  - `content: '"a  b"'` shipped as `"a b"`. Extraction collapsed every run of whitespace in a string, quotes included; a
+    run outside a quoted string is still one space.
+  - A value whose spaces survived extraction failed the build. That covers a config recipe's `content: '"x  y"'`, and a
+    string built in source. The stylesheet named the class with the spaces, the compiler without them, and the element
+    got a class with no rule.
+  - A tab or a line break inside a quoted string is now written as a space, since a class name can hold neither.
+
+- 7a280a9: A shorthand and the property it stands for in one style object, `bg` and `background`, merge as two
+  declarations of one CSS rule: the later wins unless the earlier is important and the later is not.
+  `css({ bg: 'red!', background: 'blue' })` compiled to `bg_blue`, dropping the important red, in the stylesheet and in
+  the class the compiler wrote.
+  - Either order keeps the important value, and so does a later value under conditions, which takes it as its base.
+  - Otherwise nothing changes: the later still wins, and a later value under conditions still replaces an earlier plain
+    one, as it does through `css(a, b)` and a mixin.
+  - The generated runtime merge behind `css.raw()` keeps the later value, as before. What it returns is never named at
+    runtime, and merging the other way would bring the important parser, 3 KB gzipped, into every bundle that merges
+    styles.
+
+- 6f5a5c0: An inline `sva()` written without `slots` compiles, with the slots its styles name. The stylesheet worked
+  them out from `base`, `variants` and `compoundVariants`, but the compiler took the recipe for a `cva`, so neither its
+  call nor a slot of it was compiled, and the call left in the bundle threw. Both now read the slots through one
+  `inferSlots`.
+
 ## 1.60.2
 
 ### Patch Changes

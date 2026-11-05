@@ -1,5 +1,29 @@
 # @bamboocss/eslint-plugin
 
+## 1.60.3
+
+### Patch Changes
+
+- Updated dependencies [4637bce]
+- Updated dependencies [4df5660]
+- Updated dependencies [e8317ed]
+- Updated dependencies [c2eb8ba]
+- Updated dependencies [1d001cb]
+- Updated dependencies [6298a91]
+- Updated dependencies [deb3073]
+- Updated dependencies [739ed83]
+- Updated dependencies [7a280a9]
+- Updated dependencies [b01fdaa]
+- Updated dependencies [6f5a5c0]
+- Updated dependencies [dc52431]
+- Updated dependencies [752bf79]
+- Updated dependencies [786db84]
+  - @bamboocss/config@1.60.3
+  - @bamboocss/shared@1.60.3
+  - @bamboocss/node@1.60.3
+  - @bamboocss/generator@1.60.3
+  - @bamboocss/logger@1.60.3
+
 ## 1.60.2
 
 ### Patch Changes

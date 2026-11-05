@@ -1,5 +1,7 @@
 # @bamboocss/native-extractor
 
+## 1.60.3
+
 ## 1.60.2
 
 ## 1.60.1

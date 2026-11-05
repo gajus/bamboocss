@@ -1,5 +1,38 @@
 # @bamboocss/config
 
+## 1.60.3
+
+### Patch Changes
+
+- 4637bce: A config in a project that declares no aliases of its own loads through the `paths` of another the
+  solution-style `tsconfig.json` references. As `create vite` lays a project out, the config is in `tsconfig.node.json`,
+  which declares none, and a theme it imports through the app's `@/*` failed to load with `Could not resolve`.
+  TypeScript fails that import under `tsc -b` too, but the project has no alias of its own for the borrowed one to stand
+  in for. A project that declares aliases still resolves through those alone, as TypeScript does.
+- 752bf79: A color written out inside `token()` is taken for itself, not for a token, in a token's value and in a style
+  value alike.
+  - `token(#000/64)` resolved to `color-mix(in srgb, #000 64%, transparent)`, yet validation reported a missing token
+    `#000`, which fails the config under `validation: 'error'`, and the build's unresolved-token report flagged it too.
+  - `token(rgb(0 0 0)/64)` passed validation and reached the css as written: its parentheses kept it from being read as
+    a reference. It is now mixed like any other color, and so is one whose own alpha holds a slash,
+    `token(rgb(0 0 0 / 50%)/64)`.
+  - `token(#000)` with no opacity became `var(--\#000)` in a token's value, a variable nothing declares. It is `#000`,
+    as it already was in a style value.
+
+- Updated dependencies [7174c56]
+- Updated dependencies [4df5660]
+- Updated dependencies [daddb52]
+- Updated dependencies [deb3073]
+- Updated dependencies [7a280a9]
+- Updated dependencies [6f5a5c0]
+- Updated dependencies [dc52431]
+- Updated dependencies [d3d84ac]
+  - @bamboocss/types@1.60.3
+  - @bamboocss/shared@1.60.3
+  - @bamboocss/preset-base@1.60.3
+  - @bamboocss/logger@1.60.3
+  - @bamboocss/preset-bamboo@1.60.3
+
 ## 1.60.2
 
 ### Patch Changes

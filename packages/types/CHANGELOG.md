@@ -1,5 +1,28 @@
 # @bamboocss/types
 
+## 1.60.3
+
+### Patch Changes
+
+- 7174c56: A build info file written by `bamboo ship` carries the order its style objects wrote conditions that rank
+  alike in, such as `_dark` and `&[data-active]`, and a build restoring it keeps that order. It carried only the atoms,
+  so the restoring build ordered them by whichever it met first: a file of the consuming project writing both conditions
+  for another property decided which of the library's own declarations won.
+
+  A file written before this loads as it did, and a file without such orders is unchanged.
+
+- dc52431: An inline `sva()` call is typed as returning a class string for every slot, as a config slot recipe already
+  was. Compiled, it names each slot's classes, an empty string for a slot with no styles, but its type gave each slot as
+  `string | undefined`, so every use of one took a `!` or a fallback for an `undefined` that never comes.
+- d3d84ac: A condition a utility's transform writes ranks as that condition does written in a style. An at-rule ranked
+  as no condition, so a transform returning `{ md: { width: '100%' } }` sat beside a plain `width` of the same
+  specificity and lost to it at `md` on any element that had both, whichever was written first.
+  - A condition named, `md`, `_hover` or one of several blocks, ranks in the same sublayer as the condition written in a
+    style.
+  - An at-rule spelled out, `'@media (width >= 48rem)'`, ranks as that at-rule written as a condition.
+  - A selector spelled out, such as `focusRing`'s `&:is(:focus, [data-focus])`, still ranks by its specificity alone, so
+    no preset utility's output changes.
+
 ## 1.60.2
 
 ## 1.60.1

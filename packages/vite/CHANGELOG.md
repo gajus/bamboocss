@@ -1,5 +1,66 @@
 # @bamboocss/vite
 
+## 1.60.3
+
+### Patch Changes
+
+- c34dcd4: A Svelte, Astro or Vue component whose markup holds a `<script>`, `<template>` or `<style>` tag is compiled.
+  The compiled module carries the tag in a string or a template, as it does for a JSON-LD script in `<svelte:head>`, an
+  Astro `<script is:inline>` or a `<template>` element. It was taken for a component not yet compiled and skipped, so
+  its `css()` calls reached the browser, where they throw.
+- 7a280a9: A shorthand and the property it stands for in one style object, `bg` and `background`, merge as two
+  declarations of one CSS rule: the later wins unless the earlier is important and the later is not.
+  `css({ bg: 'red!', background: 'blue' })` compiled to `bg_blue`, dropping the important red, in the stylesheet and in
+  the class the compiler wrote.
+  - Either order keeps the important value, and so does a later value under conditions, which takes it as its base.
+  - Otherwise nothing changes: the later still wins, and a later value under conditions still replaces an earlier plain
+    one, as it does through `css(a, b)` and a mixin.
+  - The generated runtime merge behind `css.raw()` keeps the later value, as before. What it returns is never named at
+    runtime, and merging the other way would bring the important parser, 3 KB gzipped, into every bundle that merges
+    styles.
+
+- 6f5a5c0: An inline `sva()` written without `slots` compiles, with the slots its styles name. The stylesheet worked
+  them out from `base`, `variants` and `compoundVariants`, but the compiler took the recipe for a `cva`, so neither its
+  call nor a slot of it was compiled, and the call left in the bundle threw. Both now read the slots through one
+  `inferSlots`.
+- 55860b3: A dev server restarts for an edit to a preset named by path, `presets: ['./preset.ts']`. Only the config's
+  own imports were declared to Vite, and such a preset is bundled on its own as the config loads, so an edit to it
+  reached neither Vite's restart nor the plugin's watcher, and the server went on with the old preset until it was
+  restarted by hand. The loaded config's files are declared once it has loaded.
+
+  The config's files are declared with `/` on Windows too, which is how Vite names the file an edit reached; spelled
+  with `\`, no edit to the config restarted the server there.
+
+- Updated dependencies [4637bce]
+- Updated dependencies [7174c56]
+- Updated dependencies [4df5660]
+- Updated dependencies [e8317ed]
+- Updated dependencies [cf5beff]
+- Updated dependencies [c2eb8ba]
+- Updated dependencies [1d001cb]
+- Updated dependencies [8301701]
+- Updated dependencies [b33d255]
+- Updated dependencies [4e5db20]
+- Updated dependencies [140172e]
+- Updated dependencies [deb3073]
+- Updated dependencies [739ed83]
+- Updated dependencies [7a280a9]
+- Updated dependencies [492e761]
+- Updated dependencies [6f5a5c0]
+- Updated dependencies [dc52431]
+- Updated dependencies [752bf79]
+- Updated dependencies [d3d84ac]
+- Updated dependencies [c9ae475]
+- Updated dependencies [786db84]
+- Updated dependencies [7641d32]
+- Updated dependencies [bec901b]
+  - @bamboocss/config@1.60.3
+  - @bamboocss/core@1.60.3
+  - @bamboocss/types@1.60.3
+  - @bamboocss/shared@1.60.3
+  - @bamboocss/node@1.60.3
+  - @bamboocss/logger@1.60.3
+
 ## 1.60.2
 
 ### Patch Changes

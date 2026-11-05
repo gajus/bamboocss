@@ -1,5 +1,39 @@
 # @bamboocss/token-dictionary
 
+## 1.60.3
+
+### Patch Changes
+
+- cf5beff: An opacity modifier outside 0 to 100 is no longer written into a `color-mix()` the browser refuses.
+  `red.500/150` wrote `color-mix(in srgb, var(--colors-red-500) 150%, transparent)`, which reads a variable and so
+  passed every check the sheet makes, while the browser dropped it and the color was absent with nothing said.
+  - In a style, the value is written as it is, `color: red.500/150`, and the sheet reports it as a declaration that is
+    not valid CSS, as it reports `red.500/unknown`.
+  - In a token's value, `token(colors.red.500/150)` fails the build as an invalid color mix, as an unknown opacity
+    already did.
+  - An opacity token holding more than 1 is out of range the same way.
+
+- 752bf79: A color written out inside `token()` is taken for itself, not for a token, in a token's value and in a style
+  value alike.
+  - `token(#000/64)` resolved to `color-mix(in srgb, #000 64%, transparent)`, yet validation reported a missing token
+    `#000`, which fails the config under `validation: 'error'`, and the build's unresolved-token report flagged it too.
+  - `token(rgb(0 0 0)/64)` passed validation and reached the css as written: its parentheses kept it from being read as
+    a reference. It is now mixed like any other color, and so is one whose own alpha holds a slash,
+    `token(rgb(0 0 0 / 50%)/64)`.
+  - `token(#000)` with no opacity became `var(--\#000)` in a token's value, a variable nothing declares. It is `#000`,
+    as it already was in a style value.
+
+- Updated dependencies [7174c56]
+- Updated dependencies [4df5660]
+- Updated dependencies [deb3073]
+- Updated dependencies [7a280a9]
+- Updated dependencies [6f5a5c0]
+- Updated dependencies [dc52431]
+- Updated dependencies [d3d84ac]
+  - @bamboocss/types@1.60.3
+  - @bamboocss/shared@1.60.3
+  - @bamboocss/logger@1.60.3
+
 ## 1.60.2
 
 ### Patch Changes

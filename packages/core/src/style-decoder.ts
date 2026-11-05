@@ -6,6 +6,8 @@ import {
   isImportant,
   isObject,
   markImportant,
+  mergeDeclarations,
+  setDeclarations,
   viewTransitionPseudo,
   viewTransitionSlots,
   withoutImportant,
@@ -24,7 +26,6 @@ import type {
   ViewTransitionResult,
 } from '@bamboocss/types'
 import type { Context } from './context'
-import { mergeDeclarations, setDeclarations } from './merge-declarations'
 import { sortStyleRules } from './sort-style-rules'
 import { type EncoderScope, StyleEncoder, type WrittenOrder } from './style-encoder'
 

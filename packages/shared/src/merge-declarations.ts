@@ -1,5 +1,7 @@
-import { isImportant, isObject } from '@bamboocss/shared'
-import type { Dict } from '@bamboocss/types'
+import { isObject } from './assert'
+import { isImportant } from './important'
+
+type Dict = Record<string, any>
 
 const MERGE_OMIT = new Set(['__proto__', 'constructor', 'prototype'])
 
@@ -29,12 +31,16 @@ const unwrapBase = (value: unknown) => {
 const mergeInto = (target: Dict, source: Dict) => {
   for (const key of Object.keys(source)) {
     if (MERGE_OMIT.has(key)) continue
-    target[key] = mergeValue(target[key], source[key])
+    target[key] = mergeDeclarationValue(target[key], source[key])
   }
   return target
 }
 
-const mergeValue = (prev: unknown, next: unknown): unknown => {
+/**
+ * Two values one style object writes for one property, merged as `mergeDeclarations` merges them:
+ * the later replaces the earlier, unless the earlier is important and the later is not.
+ */
+export const mergeDeclarationValue = (prev: unknown, next: unknown): unknown => {
   if (prev === undefined) return next
   if (isObject(prev) && isObject(next)) return mergeInto(mergeInto({}, prev), next)
 
@@ -46,7 +52,9 @@ const mergeValue = (prev: unknown, next: unknown): unknown => {
 
   // A value against a value under conditions: the value is their `base`, so `color: 'red!'` and
   // then `color: { _hover: 'blue' }` keep red as the base and add the hover.
-  return unwrapBase(mergeValue(isObject(kept) ? kept : { base: kept }, isObject(next) ? next : { base: next }))
+  return unwrapBase(
+    mergeDeclarationValue(isObject(kept) ? kept : { base: kept }, isObject(next) ? next : { base: next }),
+  )
 }
 
 /**
@@ -78,7 +86,7 @@ export const setDeclarations = (target: Dict, path: string[], value: Dict | stri
       current[key] =
         isValueObject && isObject(current[key])
           ? mergeDeclarations(current[key], value)
-          : mergeValue(current[key], value)
+          : mergeDeclarationValue(current[key], value)
     } else {
       current = current[key]
     }

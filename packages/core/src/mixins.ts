@@ -1,6 +1,5 @@
-import { flatten, isObject, normalizeStyleObject } from '@bamboocss/shared'
+import { flatten, isObject, mergeDeclarations, normalizeStyleObject } from '@bamboocss/shared'
 import type { Dict, Theme } from '@bamboocss/types'
-import { mergeDeclarations } from './merge-declarations'
 import type { Utility } from './utility'
 
 const MIXIN = 'mixin'

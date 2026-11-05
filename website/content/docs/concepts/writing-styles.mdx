@@ -710,6 +710,11 @@ cascade wherever the two rules land in the stylesheet:
 
 See [sublayers of `utilities`](/docs/concepts/cascade-layers#sublayers-of-utilities).
 
+An alias and the property it stands for, `bg` and `background`, are one property written twice. The later one wins, as
+two declarations do in one CSS rule, unless the earlier is important and the later is not. So
+`css({ bg: 'red!', background: 'blue' })` is red. A later value under conditions replaces an earlier plain one, as it
+would in `css(a, b)`: `css({ bg: 'red', background: { _hover: 'blue' } })` sets only the hover.
+
 ## Global vars
 
 You can use the `global.vars` property to define global

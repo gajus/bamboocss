@@ -15,6 +15,11 @@ export type WalkObjectStopFn = (value: any, path: string[]) => boolean
 export interface WalkObjectOptions {
   stop?: WalkObjectStopFn
   getKey?(prop: string, value: any): string
+  /**
+   * What to keep when `getKey` gives two props of one object the same key. Without it the
+   * later replaces the earlier, as assigning the key twice would.
+   */
+  merge?(earlier: any, later: any): any
 }
 
 type Nullable<T> = T | null | undefined
@@ -25,7 +30,7 @@ export function walkObject<T, K>(
   predicate: Predicate<K>,
   options: WalkObjectOptions = {},
 ): MappedObject<T, ReturnType<Predicate<K>>> {
-  const { stop, getKey } = options
+  const { stop, getKey, merge } = options
 
   function inner(value: any, path: string[] = []): any {
     if (isObjectOrArray(value)) {
@@ -39,7 +44,7 @@ export function walkObject<T, K>(
 
         const next = inner(child, childPath)
         if (isNotNullish(next)) {
-          result[key] = next
+          result[key] = merge && Object.prototype.hasOwnProperty.call(result, key) ? merge(result[key], next) : next
         }
       }
       return result

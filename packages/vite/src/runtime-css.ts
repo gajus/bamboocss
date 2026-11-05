@@ -43,6 +43,7 @@ export const createCssContext = (ctx: Context) => ({
     resolveShorthand: ctx.utility.resolveShorthand.bind(ctx.utility),
     transform: ctx.utility.transform.bind(ctx.utility),
     toHash: ctx.utility.toHash.bind(ctx.utility),
+    mergeDeclarationValue: ctx.utility.mergeDeclarationValue,
   },
 })
 

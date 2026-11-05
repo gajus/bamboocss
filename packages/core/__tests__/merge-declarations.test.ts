@@ -1,8 +1,7 @@
 import { createGeneratorContext, createRuleProcessor } from '@bamboocss/fixture'
-import { mergeProps } from '@bamboocss/shared'
+import { mergeDeclarations, mergeProps, setDeclarations } from '@bamboocss/shared'
 import type { Dict } from '@bamboocss/types'
 import { describe, expect, test } from 'vitest'
-import { mergeDeclarations, setDeclarations } from '../src/merge-declarations'
 import { stringify } from '../src/stringify'
 
 describe('mergeDeclarations', () => {
@@ -100,6 +99,13 @@ describe('one rule’s declarations keep an earlier important one against a late
       }
       "
     `)
+  })
+
+  test('in one style object, against its own longhand', () => {
+    const css = createRuleProcessor().css({ bg: 'red!', background: 'blue' }).toCss()
+
+    expect(css).toContain('background: red !important')
+    expect(css).not.toContain('blue')
   })
 
   test('and still give way to a later important one', () => {

@@ -35,6 +35,9 @@ const cases: Array<{ name: string; styles: string }> = [
   { name: 'shorthand', styles: `{ mx: '4', py: '2' }` },
   { name: 'shorthand and longhand together', styles: `{ mx: '4', marginLeft: '2' }` },
   { name: 'longhand then shorthand', styles: `{ marginLeft: '2', mx: '4' }` },
+  // One property written twice, under its shorthand and its own name: the important one stays.
+  { name: 'important shorthand then its longhand', styles: `{ bg: 'red.300!', background: 'blue.500' }` },
+  { name: 'important longhand then its shorthand', styles: `{ background: 'red.300!', bg: 'blue.500' }` },
   { name: 'numeric value', styles: `{ zIndex: 10, opacity: 0.4 }` },
   // Read back as numbers on the way into the sheet, and named as written by the compiler.
   { name: 'number written as a string', styles: `{ padding: '1e3', marginTop: '+2', top: '-0' }` },
@@ -78,6 +81,21 @@ describe('fold round-trip', () => {
     for (const selector of selectorsFor(result.folded[0]!.className)) {
       expect(css).toContain(selector)
     }
+  })
+})
+
+describe('a shorthand and its longhand in one call', () => {
+  test('fold to the earlier important value, and the sheet has its rule', () => {
+    const { fold, getCss } = createFoldFixture()
+
+    const result = fold(`
+      import { css } from 'styled-system/css'
+      export const cls = css({ bg: 'red.300!', background: 'blue.500' })
+    `)
+
+    expect(result.folded).toHaveLength(1)
+    expect(result.folded[0]!.className).toBe('bg_red.300!')
+    expect(getCss()).toContain('background: var(--colors-red-300) !important')
   })
 })
 

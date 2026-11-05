@@ -19,6 +19,14 @@ export interface CreateCssContext {
     resolveShorthand: (prop: string) => string
     transform: (prop: string, value: any) => { className: string }
     toHash: (path: string[], toHash: (str: string) => string) => string
+    /**
+     * How two keys of one object writing one property merge, a shorthand and the property it
+     * stands for. Given where the build names classes, which have to agree with the stylesheet.
+     * The generated runtime merge leaves it out, and the later key replaces the earlier there:
+     * its result is never named at runtime, and bringing it would bring the important parser,
+     * 3 KB gzipped, into every bundle that merges styles. @see mergeDeclarationValue
+     */
+    mergeDeclarationValue?: (earlier: unknown, later: unknown) => unknown
   }
   /**
    * Partial properties from the Condition class

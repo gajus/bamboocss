@@ -10,6 +10,7 @@ import {
   isString,
   mapToJson,
   memo,
+  mergeDeclarationValue,
   parseFallbackValue,
   toHash,
   withoutImportant,
@@ -381,6 +382,13 @@ export class Utility {
   public get hasShorthand() {
     return this.shorthands.size > 0
   }
+
+  /**
+   * How a shorthand and the property it stands for merge, written in one object: as two
+   * declarations of one rule, so `{ bg: 'red!', background: 'blue' }` keeps the important red.
+   * Read by `normalizeStyleObject` wherever the build names classes or writes the stylesheet.
+   */
+  mergeDeclarationValue = mergeDeclarationValue
 
   public get isEmpty() {
     return Object.keys(this.config).length === 0

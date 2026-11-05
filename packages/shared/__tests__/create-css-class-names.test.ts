@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { createCss } from '../src/classname'
+import { mergeDeclarationValue } from '../src/merge-declarations'
 
 const makeContext = (over: { prefix?: string; hash?: boolean } = {}) => ({
   hash: over.hash ?? false,
@@ -92,5 +93,22 @@ describe('createCss top-level base', () => {
 
   test('still overrides a declaration it repeats', () => {
     expect(createCss(makeContext())({ color: 'red', base: { color: 'blue' } })).toBe('color_blue')
+  })
+})
+
+/** The engine the Vite compiler names a call's classes with, which normalizes the same way. */
+describe('createCss with a shorthand and its longhand', () => {
+  test('names the earlier important value', () => {
+    const context = {
+      ...makeContext(),
+      utility: {
+        ...makeContext().utility,
+        hasShorthand: true,
+        resolveShorthand: (prop: string) => (prop === 'bg' ? 'background' : prop),
+        mergeDeclarationValue,
+      },
+    }
+
+    expect(createCss(context)({ bg: 'red !important', background: 'blue' })).toBe('background_red!')
   })
 })

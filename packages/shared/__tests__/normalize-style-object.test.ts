@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest'
+import { mergeDeclarationValue } from '../src/merge-declarations'
 import { normalizeStyleObject } from '../src/normalize-style-object'
 
 const SHORTHANDS: Record<string, string> = { bg: 'background', p: 'padding' }
@@ -92,5 +93,45 @@ describe('normalizeStyleObject', () => {
       content: '',
       flexGrow: false,
     })
+  })
+})
+
+/**
+ * A shorthand and its longhand are two keys writing one property, so where the build names
+ * classes they merge as one style object's declarations do: the later replaces the earlier,
+ * unless the earlier is important and the later is not. The later key used to replace the
+ * earlier outright, important or not.
+ */
+describe('a shorthand and its longhand in one object', () => {
+  const merging = { ...context, utility: { ...context.utility, mergeDeclarationValue } }
+
+  test('keep the earlier important value, written in either order', () => {
+    expect(normalizeStyleObject({ bg: 'red!', background: 'blue' }, merging)).toEqual({ background: 'red!' })
+    expect(normalizeStyleObject({ background: 'red!', bg: 'blue' }, merging)).toEqual({ background: 'red!' })
+  })
+
+  test('as the base of a later value under conditions', () => {
+    expect(normalizeStyleObject({ bg: 'red!', background: { _hover: 'blue' } }, merging)).toEqual({
+      background: { base: 'red!', _hover: 'blue' },
+    })
+  })
+
+  test('at any depth', () => {
+    expect(normalizeStyleObject({ _hover: { bg: 'red!', background: 'blue' } }, merging)).toEqual({
+      _hover: { background: 'red!' },
+    })
+  })
+
+  test('otherwise the later one wins, as `css(a, b)` and a mixin have it', () => {
+    expect(normalizeStyleObject({ bg: 'red', background: 'blue' }, merging)).toEqual({ background: 'blue' })
+    expect(normalizeStyleObject({ bg: 'red!', background: 'blue!' }, merging)).toEqual({ background: 'blue!' })
+    expect(normalizeStyleObject({ bg: 'red', background: { _hover: 'blue' } }, merging)).toEqual({
+      background: { _hover: 'blue' },
+    })
+  })
+
+  /** The generated runtime merge, whose result is never named, and which leaves the parser out. */
+  test('without a merge in the context, the later one wins', () => {
+    expect(normalizeStyleObject({ bg: 'red!', background: 'blue' }, context)).toEqual({ background: 'blue' })
   })
 })

@@ -49,7 +49,7 @@ function needsNoNormalizing(styles: Record<string, any>, resolveShorthand: ((pro
  */
 export function normalizeStyleObject(styles: Record<string, any>, context: NormalizeContext, shorthand = true) {
   const { utility } = context
-  const { hasShorthand, resolveShorthand } = utility
+  const { hasShorthand, resolveShorthand, mergeDeclarationValue } = utility
 
   if (needsNoNormalizing(styles, shorthand && hasShorthand ? resolveShorthand : undefined)) return styles
 
@@ -67,6 +67,10 @@ export function normalizeStyleObject(styles: Record<string, any>, context: Norma
     {
       stop: (value) => Array.isArray(value),
       getKey: shorthand ? (prop) => (hasShorthand ? resolveShorthand(prop) : prop) : undefined,
+      // A shorthand and its longhand are two keys writing one property, so where the context
+      // says how they merge, they merge so: `{ bg: 'red!', background: 'blue' }` keeps the
+      // important red, where the later key used to replace the earlier outright.
+      merge: shorthand && hasShorthand ? mergeDeclarationValue : undefined,
     },
   )
 }

@@ -24,8 +24,7 @@ This will generate:
 ```css
 @layer utilities {
   .bg_red\.300\/40 {
-    --mix-background: color-mix(in srgb, var(--colors-red-300) 40%, transparent);
-    background: var(--mix-background, var(--colors-red-300));
+    background: color-mix(in srgb, var(--colors-red-300) 40%, transparent);
   }
 
   .c_white {
@@ -35,8 +34,7 @@ This will generate:
 ```
 
 - If you're not using any opacity, the utility will **not** use `color-mix`
-- The utility will automatically fallback to the original color if the `color-mix` function is not supported by the
-  browser.
+- For a browser without `color-mix`, give the plain color as a fallback: `bg: 'fallback(red.300/40, red.300)'`.
 - You can use any of the color tokens, and any of the opacity tokens.
 
 Inside a value, such as a shadow or a token's own value, write the color in `token()`: `token(colors.red.300/40)`. A
@@ -91,11 +89,7 @@ export const createColorMixTransform =
   (value, args) => {
     const mix = args.utils.colorMix(value)
     if (mix.invalid) return { [prop]: value }
-    const cssVar = '--mix-' + prop
-    return {
-      [cssVar]: mix.value,
-      [prop]: `var(${cssVar}, ${mix.color})`,
-    }
+    return { [prop]: mix.value }
   }
 ```
 

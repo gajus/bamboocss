@@ -572,9 +572,9 @@ property could end up disagreeing. Bamboo will not guess: it warns and applies y
    so no fallback was emitted. Only `none` was applied.
 ```
 
-The same is true of tokens that expand, like the color-opacity modifier: `color: 'fallback(red.300/50, red)'` is
-refused, because `red.300/50` emits a `--mix-color` variable alongside `color`. Write the two declarations yourself if
-you need that.
+A color with an opacity modifier is one declaration, so it takes a fallback like any other value:
+`color: 'fallback(red.300/50, red)'` writes `color: red` and then the `color-mix()`, which a browser without
+`color-mix()` drops in favor of the plain color.
 
 ### When you don't need it
 

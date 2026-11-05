@@ -197,9 +197,13 @@ describe('composed transforms and scrollbars are declarations the browser keeps'
   })
 
   // Named as every other colour utility's helper is, not `--mix---scrollbar-thumb`.
-  test('an opacity modifier mixes through a variable named for the utility', () => {
-    expect(value({ scrollbarThumb: 'red.300/50' } as Styles, '--mix-scrollbarThumb')).toContain('color-mix(')
-    expect(value({ scrollbarThumb: 'red.300/50' } as Styles, '--scrollbar-thumb')).toContain('var(--mix-scrollbarThumb')
+  // Written straight into the property: a variable of its own held `color-mix()` whether or not the
+  // browser knows it, so the `var()` fallback beside it never applied, and only doubled the bytes.
+  test('an opacity modifier mixes into the property itself', () => {
+    expect(value({ scrollbarThumb: 'red.300/50' } as Styles, '--scrollbar-thumb')).toBe(
+      'color-mix(in srgb, var(--colors-red-300) 50%, transparent)',
+    )
+    expect(css({ scrollbarThumb: 'red.300/50' } as Styles)).not.toContain('--mix-')
   })
 })
 

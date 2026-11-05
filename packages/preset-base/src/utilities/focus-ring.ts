@@ -79,12 +79,8 @@ export const focusRing: UtilityConfig = {
     transform(value, { utils }) {
       const prop = '--focus-ring-color-prop'
       const mix = utils.colorMix(value)
-      if (mix.invalid) return { [prop]: value }
-      const cssVar = '--mix-' + prop
-      return {
-        [cssVar]: mix.value,
-        [prop]: `var(${cssVar}, ${mix.color})`,
-      }
+      // As `createColorMixTransform` writes one, without a variable of its own.
+      return { [prop]: mix.invalid ? value : mix.value }
     },
   },
   focusRingOffset: {

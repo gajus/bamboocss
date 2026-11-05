@@ -50,8 +50,7 @@ describe('color-mix', () => {
 
         @layer s010-c0-p1000 {
           .bg_red\\/30 {
-            --mix-background: color-mix(in srgb, red 30%, transparent);
-            background: var(--mix-background, red);
+            background: color-mix(in srgb, red 30%, transparent);
       }
         }
       }",
@@ -70,8 +69,7 @@ describe('color-mix', () => {
 
         @layer s010-c0-p1000 {
           .bg_red\\/30 {
-            --mix-background: color-mix(in srgb, red 30%, transparent);
-            background: var(--mix-background, red);
+            background: color-mix(in srgb, red 30%, transparent);
       }
         }
       }",
@@ -90,8 +88,7 @@ describe('color-mix', () => {
 
         @layer s010-c0-p1000 {
           .bg_red\\.300\\/30 {
-            --mix-background: color-mix(in srgb, var(--colors-red-300) 30%, transparent);
-            background: var(--mix-background, var(--colors-red-300));
+            background: color-mix(in srgb, var(--colors-red-300) 30%, transparent);
       }
         }
       }",
@@ -110,8 +107,7 @@ describe('color-mix', () => {
 
         @layer s010-c0-p1000 {
           .bg_red\\/0\\.33 {
-            --mix-background: color-mix(in srgb, red 0.33%, transparent);
-            background: var(--mix-background, red);
+            background: color-mix(in srgb, red 0.33%, transparent);
       }
         }
       }",
@@ -130,8 +126,7 @@ describe('color-mix', () => {
 
         @layer s010-c0-p1000 {
           .bg_red\\/33 {
-            --mix-background: color-mix(in srgb, red 33%, transparent);
-            background: var(--mix-background, red);
+            background: color-mix(in srgb, red 33%, transparent);
       }
         }
       }",
@@ -150,8 +145,7 @@ describe('color-mix', () => {
 
         @layer s010-c0-p3000 {
           .from_red\\/33 {
-            --mix---gradient-from: color-mix(in srgb, red 33%, transparent);
-            --gradient-from: var(--mix---gradient-from, red);
+            --gradient-from: color-mix(in srgb, red 33%, transparent);
       }
         }
       }",
@@ -299,8 +293,7 @@ describe('color-mix', () => {
 
         @layer s010-c0-p1000 {
           .bg_red\\/half {
-            --mix-background: color-mix(in srgb, red 50%, transparent);
-            background: var(--mix-background, red);
+            background: color-mix(in srgb, red 50%, transparent);
       }
         }
       }",

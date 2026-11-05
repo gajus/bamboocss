@@ -108,11 +108,12 @@ describe('the fade helpers', () => {
     )
   })
 
-  test('a colour stop mixes an opacity modifier through a variable named for the utility', () => {
+  test('a colour stop mixes an opacity modifier into each stop it sets', () => {
     const written = css({ maskXFromColor: 'red.300/50' })
-    expect(written).toContain('--mix-maskXFromColor: color-mix(')
-    expect(written).toContain('--mask-left-from-color: var(--mix-maskXFromColor')
-    expect(written).toContain('--mask-right-from-color: var(--mix-maskXFromColor')
+    const mixed = 'color-mix(in srgb, var(--colors-red-300) 50%, transparent)'
+    expect(written).toContain(`--mask-left-from-color: ${mixed}`)
+    expect(written).toContain(`--mask-right-from-color: ${mixed}`)
+    expect(written).not.toContain('--mix-')
   })
 })
 

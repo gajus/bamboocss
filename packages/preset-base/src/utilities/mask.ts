@@ -139,8 +139,8 @@ function positionStop(
   }
 }
 
-/** A colour stop, with an opacity modifier mixed through a variable named for the utility. */
-function colorStop(utility: string, className: string, vars: readonly string[], wiring: Wiring): PropertyConfig {
+/** A colour stop, with an opacity modifier mixed. */
+function colorStop(className: string, vars: readonly string[], wiring: Wiring): PropertyConfig {
   return {
     className,
     values: 'colors',
@@ -148,7 +148,7 @@ function colorStop(utility: string, className: string, vars: readonly string[], 
     customProperties: maskVars,
     transform(value, args) {
       const stops: Declarations = {}
-      for (const name of vars) Object.assign(stops, createColorMixTransform(`--mask-${name}`, utility)(value, args))
+      for (const name of vars) Object.assign(stops, createColorMixTransform(`--mask-${name}`)(value, args))
       return cssProps({ ...wiring(), ...stops })
     },
   }
@@ -165,8 +165,8 @@ function stopProps(prop: string, className: string, targets: readonly string[], 
   return {
     [`${prop}From`]: positionStop(`${className}-from`, vars('from-position'), wiring, values),
     [`${prop}To`]: positionStop(`${className}-to`, vars('to-position'), wiring, values),
-    [`${prop}FromColor`]: colorStop(`${prop}FromColor`, `${className}-from-c`, vars('from-color'), wiring),
-    [`${prop}ToColor`]: colorStop(`${prop}ToColor`, `${className}-to-c`, vars('to-color'), wiring),
+    [`${prop}FromColor`]: colorStop(`${className}-from-c`, vars('from-color'), wiring),
+    [`${prop}ToColor`]: colorStop(`${className}-to-c`, vars('to-color'), wiring),
   } satisfies UtilityConfig
 }
 

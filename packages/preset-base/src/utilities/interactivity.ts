@@ -78,7 +78,7 @@ export const interactivity: UtilityConfig = {
     values: 'colors',
     group: 'Scroll',
     transform(value, args) {
-      return scrollbarColorStyles(createColorMixTransform('--scrollbar-thumb', 'scrollbarThumb')(value, args))
+      return scrollbarColorStyles(createColorMixTransform('--scrollbar-thumb')(value, args))
     },
     customProperties: scrollbarSides,
   },
@@ -87,7 +87,7 @@ export const interactivity: UtilityConfig = {
     values: 'colors',
     group: 'Scroll',
     transform(value, args) {
-      return scrollbarColorStyles(createColorMixTransform('--scrollbar-track', 'scrollbarTrack')(value, args))
+      return scrollbarColorStyles(createColorMixTransform('--scrollbar-track')(value, args))
     },
     customProperties: scrollbarSides,
   },

@@ -1349,8 +1349,7 @@ describe('js to css', () => {
 
         @layer s010-c0-p1000 {
           .bg_red\\.300\\/40 {
-            --mix-background: color-mix(in srgb, var(--colors-red-300) 40%, transparent);
-            background: var(--mix-background, var(--colors-red-300));
+            background: color-mix(in srgb, var(--colors-red-300) 40%, transparent);
       }
         }
 

@@ -1,6 +1,8 @@
 import { createGeneratorContext, fixturePreset } from '@bamboocss/fixture'
 import type { Dict } from '@bamboocss/types'
+import postcss from 'postcss'
 import { describe, expect, test } from 'vitest'
+import { cascadeOrder } from './cascade-oracle'
 import { createRuleProcessor } from './fixture'
 
 describe('custom utility', () => {
@@ -228,5 +230,79 @@ describe('a transform writing under a condition', () => {
     css({ darkHover: true, md: { darkHover: true } })
 
     expect(dark).toEqual({ '@media (prefers-color-scheme: dark)': { color: 'black' }, _darkHover: { color: 'white' } })
+  })
+})
+
+/**
+ * What a transform writes under a condition ranks as the condition does written in a style. An
+ * at-rule ranked as no condition: `{ md: { width: '100%' } }` sat beside a bare `width` of the
+ * same specificity, and lost to it at `md` whichever of the two was written first.
+ */
+describe('a condition a transform writes ranks as written in a style', () => {
+  const config = {
+    utilities: {
+      extend: {
+        wideLater: { className: 'wl', values: { type: 'boolean' }, transform: () => ({ md: { width: '100%' } }) },
+        wideSpelled: {
+          className: 'ws',
+          values: { type: 'boolean' },
+          transform: () => ({ '@media (width >= 48rem)': { width: '100%' } }),
+        },
+        darkHover: {
+          className: 'dh',
+          values: { type: 'boolean' },
+          transform: () => ({ _darkHover: { color: 'white' } }),
+        },
+        touchy: { className: 'th', values: { type: 'boolean' }, transform: () => ({ _touchy: { color: 'white' } }) },
+      },
+    },
+    conditions: {
+      extend: {
+        touchy: { '@media (hover: hover)': { '&:hover': '@slot' }, '@media (hover: none)': { '&:active': '@slot' } },
+        darkHover: ['@media (prefers-color-scheme: dark)', '&:hover'],
+      },
+    },
+  } as never
+
+  const sheet = (styles: Dict) => createRuleProcessor(config).css(styles).toCss()
+
+  /** The condition part of each rule's sublayer, `c1` of `s020-c1-p3000`, by its selector. */
+  const conditionOf = (css: string) => {
+    const found = new Map<string, string>()
+    postcss.parse(css).walkAtRules('layer', (layer) => {
+      if (!layer.nodes || (layer.parent as postcss.AtRule | undefined)?.params !== 'utilities') return
+      layer.walkRules((rule) => void found.set(rule.selector, layer.params.split('-')[1]!))
+    })
+    return found
+  }
+
+  test('an at-rule, written by name or spelled out, over a bare declaration', () => {
+    for (const utility of ['wideLater', 'wideSpelled']) {
+      for (const styles of [
+        { w: '50%', [utility]: true },
+        { [utility]: true, w: '50%' },
+      ]) {
+        expect(cascadeOrder(sheet(styles)).width!.at(-1), JSON.stringify(styles)).toMatch(/^@media .*_true$/)
+      }
+    }
+  })
+
+  test('in the sublayer the condition has written in a style', () => {
+    const cases: Array<[Dict, string, string]> = [
+      [{ wideLater: true, md: { color: 'red' } }, '.wl_true', '.md\\:c_red'],
+      [
+        { _hover: { wideLater: true }, md: { _hover: { color: 'red' } } },
+        '.hover\\:wl_true:is(:hover, [data-hover])',
+        '.md\\:hover\\:c_red:is(:hover, [data-hover])',
+      ],
+      [{ darkHover: true, _darkHover: { bg: 'red' } }, '.dh_true:hover', '.darkHover\\:bg_red:hover'],
+      [{ touchy: true, _touchy: { bg: 'red' } }, '.th_true:active', '.touchy\\:bg_red:active'],
+    ]
+    for (const [styles, transformed, written] of cases) {
+      const conditions = conditionOf(sheet(styles))
+
+      expect(conditions.get(transformed), JSON.stringify(styles)).toBeDefined()
+      expect(conditions.get(transformed), JSON.stringify(styles)).toBe(conditions.get(written))
+    }
   })
 })

@@ -32,6 +32,15 @@ export interface AtomicStyleResult {
    * reporting it would put a class on the element that no rule ever matches.
    */
   scoped?: boolean
+  /**
+   * The conditions the utility's transform wrote in its styles: each path those styles were
+   * written at, its keys joined by `\0`, and each condition by the text written for it. The sheet
+   * ranks what is under one as written under that condition.
+   */
+  transformConditions?: {
+    at: ReadonlySet<string>
+    written: ReadonlyMap<string, ConditionDetails>
+  }
 }
 
 export interface GroupedResult extends Pick<AtomicStyleResult, 'result' | 'className'> {

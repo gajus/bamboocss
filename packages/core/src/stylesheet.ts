@@ -2,6 +2,7 @@ import merge from 'lodash.merge'
 import { logger } from '@bamboocss/logger'
 import { getPropertyPriority, isImportant } from '@bamboocss/shared'
 import type {
+  AtomicStyleResult,
   CascadeLayer,
   ConditionDetails,
   Dict,
@@ -24,7 +25,7 @@ import {
   type Specificity,
 } from './specificity'
 import { stringify } from './stringify'
-import type { StyleDecoder } from './style-decoder'
+import { sortConditionDetails, type StyleDecoder } from './style-decoder'
 import type { CssOptions, LayerName, ProcessOptions, StylesheetContext } from './types'
 import type { UnresolvedTokenRef } from './utility'
 import { findInvalidDeclarations, type InvalidDeclaration } from './validate-declarations'
@@ -77,6 +78,8 @@ const singleUtilityKey = (
   if (property === undefined || important === undefined) return undefined
   return { important, specificity, conditions, priority: priorityOf(property) }
 }
+
+const NO_CONDITIONS: ConditionDetails[] = []
 
 export class Stylesheet {
   constructor(private context: StylesheetContext) {}
@@ -190,12 +193,14 @@ export class Stylesheet {
     conditions: ConditionDetails[] | undefined,
     priorityOf: (property: string) => number,
     atom?: UtilityAtom,
+    transformConditions?: AtomicStyleResult['transformConditions'],
   ) => {
     // The ordinary atom — one selector, perhaps a condition or two, then its declarations —
     // is one group, and can be written as it stands. Only an object that branches, or that
     // mixes importances or selector-list members of differing specificity, needs taking
-    // apart. This is where a sheet spends its time, so the walk below is the exception.
-    const single = singleUtilityKey(styles, conditions, priorityOf)
+    // apart. This is where a sheet spends its time, so the walk below is the exception. So is
+    // an atom whose transform wrote a condition, which the conditions passed in do not hold.
+    const single = transformConditions ? undefined : singleUtilityKey(styles, conditions, priorityOf)
     if (single) {
       this.appendUtility(single, styles, atom)
       return
@@ -203,13 +208,25 @@ export class Stylesheet {
 
     const groups = new Map<string, { key: UtilitySublayerKey; styles: Dict }>()
 
-    const place = (path: string[], pathKey: string, property: string, value: unknown, specificity: Specificity) => {
+    const place = (
+      path: string[],
+      pathKey: string,
+      property: string,
+      value: unknown,
+      specificity: Specificity,
+      written: ConditionDetails[],
+    ) => {
       const important = typeof value === 'string' && isImportant(value)
       const priority = priorityOf(property)
       const id = `${important ? 'i' : 'n'}${specificity[0]}.${specificity[1]}.${specificity[2]}\0${priority}\0${pathKey}`
       let group = groups.get(id)
       if (!group) {
-        group = { key: { important, specificity, conditions, priority }, styles: {} }
+        // `md` written by a transform ranks as `md` written in a style does, sorted in with the
+        // atom's own as the sorter sorts those. Left out, `{ md: { width: '100%' } }` ranked as no
+        // condition, beside a bare `width` of the same specificity, and lost to it at `md`
+        // whatever the order the two were written in.
+        const keyConditions = written.length ? sortConditionDetails([...(conditions ?? []), ...written]) : conditions
+        group = { key: { important, specificity, conditions: keyConditions, priority }, styles: {} }
         groups.set(id, group)
       }
       let cursor: Dict = group.styles
@@ -217,33 +234,73 @@ export class Stylesheet {
       cursor[property] = value
     }
 
-    const walk = (node: Dict, path: string[], pathKey: string, specificity: Specificity, underSelector: boolean) => {
+    /**
+     * Where the walk is: the keys that led there as written, for `transformConditions.at`, whether
+     * that is inside the transform's styles, and the conditions those styles wrote on the way.
+     */
+    interface Within {
+      keys: string
+      inTransform: boolean
+      written: ConditionDetails[]
+    }
+
+    const enter = (within: Within, name: string): Within => {
+      const keys = within.keys ? `${within.keys}\0${name}` : name
+      // A key of the transform's styles may be a condition it wrote; a key on the atom's own path
+      // never is, however it is spelled.
+      const condition = within.inTransform ? transformConditions!.written.get(name) : undefined
+      // Each block of a multi-block condition is an at-rule and a selector, and counts once.
+      const repeated = condition?.type === 'multi-block' && within.written.at(-1) === condition
+      return {
+        keys,
+        inTransform: within.inTransform || transformConditions!.at.has(keys),
+        written: condition && !repeated ? [...within.written, condition] : within.written,
+      }
+    }
+
+    const walk = (
+      node: Dict,
+      path: string[],
+      pathKey: string,
+      specificity: Specificity,
+      underSelector: boolean,
+      within: Within | undefined,
+    ) => {
       for (const name in node) {
         const value = node[name]
         const nested = typeof value === 'object' && value !== null && !Array.isArray(value)
         if (!nested) {
           // An at-rule key holding a list of blocks, the one shape `stringify` reads an array as.
           if (name[0] === '@' && Array.isArray(value)) {
+            const next = within && enter(within, name)
             for (const block of value as Dict[]) {
-              walk(block, [...path, name], `${pathKey}\0${name}`, specificity, underSelector)
+              walk(block, [...path, name], `${pathKey}\0${name}`, specificity, underSelector, next)
             }
             continue
           }
-          place(path, pathKey, name, value, specificity)
+          place(path, pathKey, name, value, specificity, within?.written ?? NO_CONDITIONS)
           continue
         }
+        const next = within && enter(within, name)
         if (name[0] === '@') {
-          walk(value as Dict, [...path, name], `${pathKey}\0${name}`, specificity, underSelector)
+          walk(value as Dict, [...path, name], `${pathKey}\0${name}`, specificity, underSelector, next)
           continue
         }
         for (const member of selectorMembers(name)) {
-          const next = underSelector ? nestedSpecificity(specificity, member) : selectorSpecificity(member)
-          walk(value as Dict, [...path, member], `${pathKey}\0${member}`, next, true)
+          const nextSpecificity = underSelector ? nestedSpecificity(specificity, member) : selectorSpecificity(member)
+          walk(value as Dict, [...path, member], `${pathKey}\0${member}`, nextSpecificity, true, next)
         }
       }
     }
 
-    walk(styles, [], '', NO_SPECIFICITY, false)
+    walk(
+      styles,
+      [],
+      '',
+      NO_SPECIFICITY,
+      false,
+      transformConditions && { keys: '', inTransform: false, written: NO_CONDITIONS },
+    )
 
     for (const { key, styles: grouped } of groups.values()) this.appendUtility(key, grouped, atom)
   }
@@ -271,11 +328,13 @@ export class Stylesheet {
       // The sorter's last key is the property the atom was written as, resolved shorthand
       // and all; every declaration the atom emits inherits it, as it did in the flat layer.
       const priority = getPropertyPriority(css.entry.prop)
-      this.processUtility(css.result, css.conditions, () => priority, {
-        hash: css.hash,
-        className: css.className,
-        value: css.entry.value,
-      })
+      this.processUtility(
+        css.result,
+        css.conditions,
+        () => priority,
+        { hash: css.hash, className: css.className, value: css.entry.value },
+        css.transformConditions,
+      )
     })
 
     if (includeRecipes)

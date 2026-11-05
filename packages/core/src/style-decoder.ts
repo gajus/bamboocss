@@ -166,7 +166,9 @@ export class StyleDecoder {
     }
 
     const important = isImportant(entry.value)
-    const resolved = this.resolveStyleConditions(transformed.styles)
+    // Allocated only for styles that can hold a condition, which few transforms write.
+    const written = holdsObject(transformed.styles) ? new Map<string, ConditionDetails>() : undefined
+    const resolved = written ? this.resolveStyleConditions(transformed.styles, written) : transformed.styles
     const styles = important ? markImportant(resolved) : resolved
 
     const parts = entry.cond ? entry.cond.split(StyleEncoder.conditionSeparator) : []
@@ -177,6 +179,7 @@ export class StyleDecoder {
       className,
       classSelector,
       styles,
+      writtenConditions: written?.size ? written : undefined,
       transformed,
       parts,
       // A non-anchor slot's variant rules. The selector is the slot's *constant* class, put
@@ -233,25 +236,25 @@ export class StyleDecoder {
    *
    * The transform's styles are cached and handed out again, so they are copied, never written
    * into: an object holding no nested one comes back as it is, and every other is rebuilt.
+   *
+   * What the sheet ranks as a condition goes into `written`, by the text written: each part of a
+   * condition named, with that condition's own details, so it ranks as the condition does written
+   * in a style, and an at-rule spelled out. A selector spelled out, `&:is(:focus, [data-focus])`,
+   * is left to rank by its specificity, as it always has.
    */
-  private resolveStyleConditions = (styles: Dict): Dict => {
-    let nested = false
-    for (const key in styles) {
-      if (isObject(styles[key])) {
-        nested = true
-        break
-      }
-    }
-    if (!nested) return styles
+  private resolveStyleConditions = (styles: Dict, written?: Map<string, ConditionDetails>): Dict => {
+    if (!holdsObject(styles)) return styles
 
     const { conditions } = this.context
     const resolved: Dict = {}
     for (const [key, value] of Object.entries(styles)) {
       if (!isObject(value)) {
+        // An at-rule holding a list of blocks, the one shape `stringify` reads an array as.
+        if (written && key[0] === '@' && Array.isArray(value)) this.noteAtRule(written, key)
         resolved[key] = value
         continue
       }
-      const inner = this.resolveStyleConditions(value)
+      const inner = this.resolveStyleConditions(value, written)
       const details = conditions.has(key) ? conditions.getRaw(key) : undefined
       // A multi-block condition holds in more than one way, `@media (hover: hover)` with `&:hover`
       // and `@media (hover: none)` with `&:active`, and the styles are written under each. A mixed
@@ -260,12 +263,28 @@ export class StyleDecoder {
       for (const block of details ? (details.type === 'multi-block' ? details.value : [details]) : []) {
         const path = this.resolveCondition(block)
         const segments = (Array.isArray(path) ? path : [path]).filter(Boolean) as string[]
-        if (segments.length) paths.push(segments)
+        if (!segments.length) continue
+        paths.push(segments)
+        if (!written) continue
+        // A mixed condition ranks as its parts, as an atom's own is flattened into them; a
+        // multi-block one as itself, as an atom's own is kept whole.
+        for (const part of block.type === 'mixed' ? block.value : [block]) {
+          written.set(this.resolveCondition(part) as string, details!.type === 'multi-block' ? details! : part)
+        }
       }
-      if (!paths.length) paths.push([key])
+      if (!paths.length) {
+        paths.push([key])
+        if (written && key[0] === '@') this.noteAtRule(written, key)
+      }
       for (const path of paths) writeStylesAt(resolved, path, inner)
     }
     return resolved
+  }
+
+  /** An at-rule a transform spelled out, read as a condition written the same way would be. */
+  private noteAtRule = (written: Map<string, ConditionDetails>, text: string) => {
+    const details = this.context.conditions.getRaw(text)
+    if (details?.type === 'at-rule') written.set(text, details)
   }
 
   resolveCondition = (condition: ConditionDetails) => {
@@ -323,7 +342,8 @@ export class StyleDecoder {
     const transformResult = this.getTransformResult(hash)
     if (!transformResult) return
 
-    const { className, classSelector, styles, transformed, parts, scopes, selector } = transformResult
+    const { className, classSelector, styles, transformed, parts, scopes, selector, writtenConditions } =
+      transformResult
 
     // One base path per anchor when the rule is scoped, otherwise the single class it
     // selects on. Each anchor's prelude is a distinct key, so the paths never collide and
@@ -333,6 +353,9 @@ export class StyleDecoder {
       : [[selector ?? classSelector]]
 
     const obj: StyleResultObject = {}
+    // Each path the transform's styles are written at, its keys joined by `\0`, so the sheet can
+    // tell a condition the transform wrote from one of the atom's own. Only where it wrote one.
+    const at = writtenConditions ? new Set<string>() : undefined
 
     let conditions
 
@@ -346,17 +369,21 @@ export class StyleDecoder {
           for (const blockConditions of expanded) {
             const path = basePath.concat(blockConditions.flatMap((c) => this.resolveCondition(c)))
             deepSet(obj, path, styles)
+            at?.add(path.join('\0'))
           }
         }
       } else {
         const resolved = conditions.flatMap((c) => this.resolveCondition(c))
         for (const basePath of basePaths) {
-          deepSet(obj, basePath.concat(resolved), styles)
+          const path = basePath.concat(resolved)
+          deepSet(obj, path, styles)
+          at?.add(path.join('\0'))
         }
       }
     } else {
       for (const basePath of basePaths) {
         deepSet(obj, basePath, styles)
+        at?.add(basePath.join('\0'))
       }
     }
 
@@ -369,6 +396,8 @@ export class StyleDecoder {
       layer: transformed.layer,
       scoped: Boolean(scopes?.length),
     }
+    // Set only where a transform wrote one, which leaves every other result's shape as it was.
+    if (at) styleResult.transformConditions = { at, written: writtenConditions! }
 
     this.atomic_cache.set(hash, styleResult)
 
@@ -735,6 +764,12 @@ export class StyleDecoder {
   }
 }
 
+/** Whether a style object holds another, the only shape anything can be written under a condition in. */
+const holdsObject = (styles: Dict) => {
+  for (const key in styles) if (isObject(styles[key])) return true
+  return false
+}
+
 /**
  * `styles` written at `path` in `target`, merged with what is there as the later declarations of
  * one rule. Each object passed on the way down is copied rather than written into, since it may be
@@ -812,7 +847,7 @@ const pseudoElementRegex = /::[\w-]/
  * (not mixed or multi-block), so checking `raw` as string is sufficient
  * for pseudo-element detection.
  */
-const sortConditionDetails = (conditions: ConditionDetails[]): ConditionDetails[] => {
+export const sortConditionDetails = (conditions: ConditionDetails[]): ConditionDetails[] => {
   const indexed = conditions.map((cond, i) => ({ cond, i }))
   indexed.sort((a, b) => {
     const aIsAtRule = a.cond.type === 'at-rule'

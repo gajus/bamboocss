@@ -178,3 +178,8 @@ export default defineConfig({
 
 `css({ interactive: true })` sets `cursor: pointer` on `.interactive_true`, and `opacity: 0.8` on
 `.interactive_true:is(:hover, [data-hover])`.
+
+What a transform writes under a condition ranks as that condition does written in a style. So with a transform returning
+`{ md: { width: '100%' } }`, the `md` width wins over a plain `w: '50%'` on the same element at that breakpoint,
+whichever is written first. An at-rule spelled out ranks the same way. A selector spelled out ranks by its specificity
+alone.

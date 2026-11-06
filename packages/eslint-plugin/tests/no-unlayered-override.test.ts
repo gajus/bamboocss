@@ -107,6 +107,34 @@ eslintTester.run(RULE_NAME, rule, {
   const Card = ({ className }) => <div className={[css({ padding: '4' }), className].join(' ')} />`,
       errors: [{ data: { join: 'An array `join()`' }, messageId: 'unlayeredOverride' }],
     },
+    {
+      // The styles a component declares once and forwards a class beside, as the docs write it.
+      code: multiline`
+  import { css, cx } from './bamboo/css';
+
+  const styles = css({ padding: '4' });
+  const Card = (props) => <div className={cx(styles, props.className)} />`,
+      errors: [{ messageId: 'unlayeredOverride' }],
+    },
+    {
+      // Declared inside the component, the binding is the file's own all the same.
+      code: multiline`
+  import { css, cx } from './bamboo/css';
+
+  const Card = ({ className }) => {
+    const styles = css({ padding: '4' });
+    return <div className={cx(styles, className)} />
+  }`,
+      errors: [{ messageId: 'unlayeredOverride' }],
+    },
+    {
+      code: multiline`
+  import { css } from './bamboo/css';
+
+  const styles = css({ padding: '4' });
+  const Card = ({ className }) => <div className={\`\${styles} \${className}\`} />`,
+      errors: [{ data: { join: 'A template literal' }, messageId: 'unlayeredOverride' }],
+    },
   ],
   valid: [
     {
@@ -148,6 +176,30 @@ eslintTester.run(RULE_NAME, rule, {
   import { css, cx } from './bamboo/css';
 
   const styles = cx(css({ padding: '4' }), css({ color: 'red.300' }))`,
+    },
+    {
+      // And a call beside a binding holding another: the file's own twice over.
+      code: multiline`
+  import { css, cx } from './bamboo/css';
+
+  const loud = css({ color: 'red.300' });
+  const styles = cx(css({ padding: '4' }), loud)`,
+    },
+    {
+      // A parameter of the same name shadows the binding, so neither part is the file's own.
+      code: multiline`
+  import { css, cx } from './bamboo/css';
+
+  const styles = css({ padding: '4' });
+  const Card = ({ styles, className }) => <div className={cx(styles, className)} />`,
+    },
+    {
+      // A binding that can be reassigned may hold anything by the time it is joined.
+      code: multiline`
+  import { css, cx } from './bamboo/css';
+
+  let styles = css({ padding: '4' });
+  const Card = ({ className }) => <div className={cx(styles, className)} />`,
     },
     {
       // A static marker class carries no styles to conflict with.

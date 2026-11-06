@@ -16,7 +16,7 @@ import {
   type Node,
 } from './nodes'
 import { type DeprecatedToken, type ExtractionFindings } from './worker'
-import { analyze, type ScopeManager } from '@typescript-eslint/scope-manager'
+import { analyze, type ScopeManager, type Variable } from '@typescript-eslint/scope-manager'
 import { type TSESTree } from '@typescript-eslint/utils'
 import { type RuleContext } from '@typescript-eslint/utils/ts-eslint'
 
@@ -148,6 +148,45 @@ const isBambooIsh = (name: string, context: RuleContext<any, any>) => {
 // Caching scope analysis per AST to avoid expensive re-computation
 const scopeCache = new WeakMap<TSESTree.Program, ScopeManager>()
 
+const scopeManagerOf = (context: RuleContext<any, any>) => {
+  const source = context.sourceCode
+  if (!source) return undefined
+  let scope = scopeCache.get(source.ast)
+  if (!scope) {
+    scope = analyze(source.ast, {
+      sourceType: 'module',
+    })
+    scopeCache.set(source.ast, scope)
+  }
+  return scope
+}
+
+/** What each identifier read in a file resolves to, by the scope analysis it was read in. */
+const resolvedReferences = new WeakMap<ScopeManager, Map<TSESTree.Node, Variable | null>>()
+
+/**
+ * The variable `identifier` reads, as scope analysis resolves it: a parameter or a nested
+ * declaration of the same name shadows a module-scope one, as it does when the code runs.
+ * Undefined for a name this file does not declare.
+ */
+export const resolveReference = (identifier: TSESTree.Identifier, context: RuleContext<any, any>) => {
+  try {
+    const manager = scopeManagerOf(context)
+    if (!manager) return undefined
+    let resolved = resolvedReferences.get(manager)
+    if (!resolved) {
+      resolved = new Map()
+      for (const scope of manager.scopes) {
+        for (const reference of scope.references) resolved.set(reference.identifier, reference.resolved)
+      }
+      resolvedReferences.set(manager, resolved)
+    }
+    return resolved.get(identifier) ?? undefined
+  } catch {
+    return undefined
+  }
+}
+
 const findDeclaration = (name: string, context: RuleContext<any, any>) => {
   try {
     const source = context.sourceCode
@@ -157,13 +196,7 @@ const findDeclaration = (name: string, context: RuleContext<any, any>) => {
       return undefined
     }
 
-    let scope = scopeCache.get(source.ast)
-    if (!scope) {
-      scope = analyze(source.ast, {
-        sourceType: 'module',
-      })
-      scopeCache.set(source.ast, scope)
-    }
+    const scope = scopeManagerOf(context)!
 
     const decl = scope.variables
       .find((v) => v.name === name)

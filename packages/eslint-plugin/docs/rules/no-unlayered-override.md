@@ -54,10 +54,12 @@ object is not something the compiler can read.
 
 ## When not to use it
 
-The rule only fires when one part of the join is a `css()` call this file wrote and another is a value it cannot see.
-Joining two visible `css()` calls is not reported — you own both, and `cx()` merges them. Neither is a static marker
-class such as `'group'`, written as a string or as the text of a template literal, which carries no styles to conflict
-with.
+The rule only fires when one part of the join is styles this file wrote and another is a value it cannot see. Styles
+this file wrote are a `css()` call or a `const` the file declares holding one, so `cx(styles, props.className)` is
+reported wherever `styles` is declared, and a parameter named `styles` is not mistaken for it. A binding imported from
+another module is not followed. Joining two of the file's own styles is not reported — `cx()` merges them. Neither is a
+static marker class such as `'group'`, written as a string or as the text of a template literal, which carries no styles
+to conflict with.
 
 Recipe results are not reported either, though they collide the same way: a recipe compiles to the same `utilities`
 atoms as `css()`, and no `recipes` layer is emitted for a caller's class to beat it from.

@@ -1,6 +1,6 @@
 import { type TSESTree } from '@typescript-eslint/utils'
 import { createRule } from '../utils'
-import { isBambooImport, isValidFile } from '../utils/helpers'
+import { isBambooImport, isValidFile, resolveReference } from '../utils/helpers'
 import {
   isArrayExpression,
   isCallExpression,
@@ -18,16 +18,6 @@ export const RULE_NAME = 'no-unlayered-override'
  */
 const CLASS_JOINERS = new Set(['clsx', 'classnames', 'classNames', 'cn'])
 
-/**
- * An argument the rule cannot see the styles behind: a prop, a parameter, anything whose
- * value arrives at runtime. `props.className` is the shape this exists for.
- */
-const isOpaque = (node: TSESTree.Node): boolean => {
-  if (isMemberExpression(node)) return true
-  if (isIdentifier(node) && node.name !== 'undefined') return true
-  return false
-}
-
 /** The operands of `a + b + c`, however it is parenthesized. */
 const operandsOf = (node: TSESTree.Node): TSESTree.Node[] =>
   node.type === 'BinaryExpression' && node.operator === '+'
@@ -42,6 +32,12 @@ const operandsOf = (node: TSESTree.Node): TSESTree.Node[] =>
  * in the entry sheet when it splits the stylesheet per route. A join it does not see — a template
  * literal, `+`, `clsx` — gets neither, and can resolve differently depending on the route the
  * visitor opened first. So every one of them is reported, and `cx` under an alias as well.
+ *
+ * Styles this file owns are a `css()` call, or a `const` this file declares holding one:
+ * `cx(styles, className)` is the forwarding a component does, and `cx(css(…), styles)` joins two
+ * of the file's own. A name is read as the code reads it, so a parameter that shadows such a
+ * binding is a value the rule cannot see. A binding imported from another module is not
+ * followed, as this rule reads one file.
  *
  * Recipe results are not reported, though they collide the same way: a recipe compiles to the same
  * `utilities` atoms as `css()`, and there is no `recipes` layer for a consumer's class to beat it
@@ -68,14 +64,35 @@ const rule = createRule({
       return names
     }
 
-    /** A call that may be styles this file owns, before asking which names are Bamboo's. */
-    const isCandidate = (node: TSESTree.Node | null): node is TSESTree.CallExpression =>
-      node !== null && isCallExpression(node) && isIdentifier(node.callee)
+    /** A part that may be styles this file owns, before asking which names are Bamboo's. */
+    const isCandidate = (node: TSESTree.Node | null): node is TSESTree.CallExpression | TSESTree.Identifier =>
+      node !== null && ((isCallExpression(node) && isIdentifier(node.callee)) || isIdentifier(node))
+
+    const isStyleCall = (node: TSESTree.Node | null | undefined) =>
+      node != null && isCallExpression(node) && isIdentifier(node.callee) && bambooNames().css.has(node.callee.name)
+
+    /** A `const` this file declares holding a `css()` call. */
+    const isStyleBinding = (node: TSESTree.Identifier) => {
+      const variable = resolveReference(node, context)
+      if (!variable || variable.defs.length !== 1) return false
+      const [definition] = variable.defs
+      return definition?.type === 'Variable' && definition.parent.kind === 'const' && isStyleCall(definition.node.init)
+    }
+
+    const isOwnStyles = (node: TSESTree.Node) =>
+      isIdentifier(node) ? node.name !== 'undefined' && isStyleBinding(node) : isStyleCall(node)
+
+    /**
+     * A part the rule cannot see the styles behind: a prop, a parameter, anything whose value
+     * arrives at runtime. `props.className` is the shape this exists for.
+     */
+    const isOpaque = (node: TSESTree.Node) =>
+      isMemberExpression(node) || (isIdentifier(node) && node.name !== 'undefined' && !isStyleBinding(node))
 
     const check = (parts: ReadonlyArray<TSESTree.Node | null>, join: string) => {
       const candidates = parts.filter(isCandidate)
       if (candidates.length === 0) return
-      const own = candidates.find((part) => bambooNames().css.has((part.callee as TSESTree.Identifier).name))
+      const own = candidates.find(isOwnStyles)
       if (!own) return
       if (!parts.some((part) => part !== null && part !== own && isOpaque(part))) return
       context.report({ data: { join }, messageId: 'unlayeredOverride', node: own })

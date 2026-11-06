@@ -1,5 +1,32 @@
 # @bamboocss/eslint-plugin
 
+## 1.63.0
+
+### Minor Changes
+
+- a5eb1bb: Report every join of a `css()` class with one the file cannot see in `no-unlayered-override`, not only a call
+  named `cx`: `cx` and `css` imported under other names, `clsx`, `classnames`, `classNames` and a `cn` wrapper, a
+  template literal, `+` and an array's `join()`. A join outside `cx()` is one the build cannot see, so when the Vite
+  plugin splits the stylesheet per route it cannot keep the component's atoms in the entry sheet, and which class
+  applies can change with the route the visitor opened first.
+  - The message no longer suggests `css(base, props.css)`, which the compiler cannot compile for an arbitrary runtime
+    object, or a `cva` in the `recipes` layer, which is not emitted. It suggests a recipe variant for an override the
+    caller chooses, and `cx()` over style calls for styles the file owns.
+
+### Patch Changes
+
+- 5499e37: Read a `const` the file declares holding a `css()` call as the file's own styles in `no-unlayered-override`.
+  The rule looked only for a `css()` call written in the join, so it missed `cx(styles, props.className)`, the
+  forwarding the docs show, and reported `cx(css({ padding: '4' }), styles)`, two of the file's own styles that `cx()`
+  merges, as a join with a class it cannot see. A name is read as the code reads it, so a parameter that shadows such a
+  binding is still a value the rule cannot see, and a binding imported from another module is not followed.
+- Updated dependencies [a5eb1bb]
+  - @bamboocss/generator@1.63.0
+  - @bamboocss/node@1.63.0
+  - @bamboocss/config@1.63.0
+  - @bamboocss/logger@1.63.0
+  - @bamboocss/shared@1.63.0
+
 ## 1.62.1
 
 ### Patch Changes

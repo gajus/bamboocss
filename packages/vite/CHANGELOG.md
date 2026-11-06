@@ -1,5 +1,35 @@
 # @bamboocss/vite
 
+## 1.63.0
+
+### Patch Changes
+
+- b190b75: Say so when a class the build finds without a rule had its rule moved into a chunk's own sheet by the
+  per-chunk split. A framework that copies an entry sheet into another output without its chunk sheets, as
+  `@vitejs/plugin-rsc` did for a server component loaded with `import()`, failed the build with a report blaming a theme
+  value nothing resolves, such as a `mixin` the theme does not define. The report now names the chunk and the
+  environment that split the sheet, and says the sheet checked is a copy of its entry sheet without those rules.
+- c2d8850: Keep the stylesheet whole in the server environment of `@vitejs/plugin-rsc`, so a React Server Components app
+  that loads a server component with `import()` builds again. That environment writes the stylesheet, and splitting it
+  per chunk gave such a component's chunk a sheet of its utilities, which the plugin links only for a module that
+  imports CSS itself. Bamboo's last check, made for the client environment, found those rules missing from the entry
+  sheet and failed the build. Other server environments are still split, for a framework such as Astro that links each
+  chunk's sheets.
+- b165c41: Keep the atoms a `cx()` joins at runtime from its own compiled calls in one sheet when splitting the
+  stylesheet per chunk, so a build styles the same split as unsplit. Two runtime recipe lookups in one `cx()`, a lookup
+  beside a condition, or more condition combinations than the compiler writes out, are compiled one by one and joined
+  rather than merged, so where two set one property the stylesheet's order decides. Each was written in a class string
+  of its own, so nothing told the split they meet on one element: one shared with another route stayed in the entry
+  sheet while one only this route used moved into its own, which the document orders after the entry sheet rather than
+  as the unsplit sheet does. The compiler now records what each such join puts on one element, and the split keeps a
+  pair that competes together.
+  - @bamboocss/node@1.63.0
+  - @bamboocss/config@1.63.0
+  - @bamboocss/core@1.63.0
+  - @bamboocss/logger@1.63.0
+  - @bamboocss/shared@1.63.0
+  - @bamboocss/types@1.63.0
+
 ## 1.62.1
 
 ### Patch Changes

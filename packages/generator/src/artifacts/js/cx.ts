@@ -12,12 +12,13 @@ import outdent from 'outdent'
  * The two could not be reconciled by teaching the matcher to read hashed names: under
  * `hash: true` a class is an opaque digest with no property to compare.
  *
- * So precedence is decided where it can be decided the same way everywhere: by
- * {@link https://bamboocss.com/docs/concepts/cascade-layers cascade layers}. A component
- * whose styles a consumer will override belongs in `recipes` — write it with `cva`/`sva`,
- * not bare `css()` — and the consumer's `css()` in `utilities` wins by layer, in every
- * build. Two `css()` outputs joined with `cx` are in the same layer and resolve by source
- * order; when you own both, merge the style objects with `css(a, b)` instead.
+ * So precedence is decided where it can be decided the same way everywhere: by the compiler,
+ * which merges every Bamboo style a `cx()` call holds before a class exists, later arguments
+ * winning. What reaches this join at runtime is only what the compiler could not see — a class
+ * passed in, or one assembled at runtime — and no
+ * {@link https://bamboocss.com/docs/concepts/cascade-layers cascade layer} ranks it above the
+ * styles it is joined with: recipes compile to the same `utilities` atoms as `css()`, and the
+ * named `recipes` layer is not emitted. An override a caller chooses belongs in a recipe variant.
  */
 const declaration = outdent`
    type Argument = string | boolean | null | undefined | Argument[]
@@ -25,14 +26,15 @@ const declaration = outdent`
    /**
     * Join classNames into a single string.
     *
-    * This does **not** resolve conflicts between them: \`cx('px_4', 'px_2')\` keeps both, and
-    * the browser picks by their order in the stylesheet rather than by the order you passed
-    * them. That is true of every build — atomic, hashed and grouped alike.
+    * Bamboo styles passed here — a \`css()\` call, a recipe, or a binding holding either — are
+    * merged by the compiler before any class exists, later arguments winning:
+    * \`cx(css({ paddingX: '4' }), css({ paddingX: '2' }))\` compiles to the one class for
+    * \`paddingX: '2'\`.
     *
-    * To override a style rather than append to it, let the cascade decide: styles from
-    * \`cva\`/\`sva\` sit in the \`recipes\` layer and \`css()\` in \`utilities\`, so a consumer's
-    * \`css()\` always wins. Between two \`css()\` calls you own, merge the objects instead —
-    * \`css(base, override)\` resolves per property before any class name exists.
+    * Anything else is only joined, such as a \`className\` prop or a class assembled at runtime, and
+    * the join does **not** resolve conflicts: recipes and \`css()\` share one cascade layer, so where
+    * such a class sets a property these styles set too, the browser picks by stylesheet order rather
+    * than by the order you passed them. For an override a caller chooses, expose a recipe variant.
     */
    export declare function cx(...args: Argument[]): string
 

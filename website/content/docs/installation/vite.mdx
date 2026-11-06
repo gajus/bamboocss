@@ -257,7 +257,9 @@ loads — in the order the visitor happened to open routes. So two utilities a c
 are never split across sheets, and the atoms a `cx()` joins with a class passed in at runtime, as a component's
 `cx(styles, className)` does, stay in the entry sheet. What is passed in is only known at runtime, and from the entry
 sheet every lazily loaded sheet comes after those atoms, whichever route loaded first. Join classes through `cx()` for
-this to hold: a template literal or a helper such as `clsx` is a join the build does not see.
+this to hold: a template literal or a helper such as `clsx` is a join the build does not see, and
+[`no-unlayered-override`](https://github.com/gajus/bamboocss/blob/main/packages/eslint-plugin/docs/rules/no-unlayered-override.md)
+reports it.
 
 Builds only, and only where Vite's `build.cssCodeSplit` is on, which it is unless you turned it off or are building a
 library. A framework that copies a server build's stylesheets into the client build by the names its chunks recorded, as

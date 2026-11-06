@@ -71,9 +71,9 @@ describe('generated cx', () => {
    * compare, and silently stopped in any build that hashed them — so the same source
    * behaved differently in development and production.
    *
-   * Now it keeps both, everywhere, and precedence is the cascade's job. Two `css()` outputs
-   * are in the same layer and resolve by source order; a `cva`/`sva` class is in `recipes`
-   * and always loses to a consumer's `css()` in `utilities`.
+   * Now it keeps both, everywhere. What the compiler can see in a `cx()` call it merges before
+   * any class exists; what reaches this join is the rest, and a `css()` output, a recipe's atoms
+   * and a class passed in are all in `utilities`, so between them stylesheet order decides.
    */
   test('does not resolve conflicts — both classes survive', () => {
     expect(cx('px_4', 'px_2')).toBe('px_4 px_2')

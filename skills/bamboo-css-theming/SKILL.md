@@ -135,8 +135,8 @@ export const mixins = defineMixins({
 // css({ mixin: 'heading' }), css({ mixin: 'heading.h1' })
 ```
 
-A mixin means its declarations written where it is applied, so a property written after it overrides it. If it needs
-variants, it is a recipe.
+A mixin is the base of the style it is applied in, so the style's own properties override it wherever the `mixin` key is
+written; list several to apply them in order, `mixin: ['heading', 'muted']`. If it needs variants, it is a recipe.
 
 ## Color mode and themes
 

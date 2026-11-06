@@ -31,10 +31,20 @@ eslintTester.run(RULE_NAME, rule, {
       errors: [{ messageId: 'array' }],
     },
 
+    // A list of mixins is an array a style takes, and each name in it is a value.
+    {
+      code: multiline`
+  import { css } from './bamboo/css';
+
+  const heading = 'headline.h2';
+  const styles = css({ mixin: ['headline.h1', heading], md: { mixin: { lg: [heading] } } })`,
+      errors: [{ messageId: 'dynamic' }, { messageId: 'dynamic' }],
+    },
+
     {
       code: multiline`
   import { flex } from './bamboo/patterns';
-  
+
   const align = 'center';
   const styles = flex({ align: align })`,
       errors: [{ messageId: 'dynamic' }],
@@ -118,6 +128,14 @@ eslintTester.run(RULE_NAME, rule, {
   const foo = 'foo'
   const nonStyles = {bar: [foo]}
   `,
+    },
+
+    // Mixins listed apply in order, alone and chosen per condition.
+    {
+      code: multiline`
+  import { css } from './bamboo/css';
+
+  const styles = css({ mixin: ['headline.h1', 'headline.h2'], _hover: { mixin: { base: 'headline.h1', md: ['headline.h2'] } } })`,
     },
   ],
 })

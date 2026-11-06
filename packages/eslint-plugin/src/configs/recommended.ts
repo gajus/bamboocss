@@ -10,7 +10,6 @@ export const recommendedRules = {
   'bamboo/no-hardcoded-color': 'warn',
   'bamboo/no-invalid-nesting': 'error',
   'bamboo/no-invalid-token-paths': 'error',
-  'bamboo/no-overridden-by-mixin': 'warn',
   'bamboo/no-property-renaming': 'warn',
   'bamboo/no-unlayered-override': 'warn',
   'bamboo/no-unresolved-styles': 'warn',

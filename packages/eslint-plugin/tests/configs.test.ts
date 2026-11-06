@@ -71,15 +71,16 @@ describe('configs', () => {
   })
 
   // An error where what the build emits would be wrong; every other rule warns.
-  test('all turns every rule on but the opposite of one it keeps, three of them as errors', () => {
+  test('all turns every rule on but the opposite of one it keeps and those deprecated, three of them as errors', () => {
     const rules = bamboo.configs['flat/all'].rules ?? {}
 
     expect(Object.keys(rules).sort()).toEqual(
-      Object.keys(bamboo.rules)
-        .filter((rule) => rule !== 'prefer-shorthand-properties')
-        .map((rule) => `bamboo/${rule}`)
+      Object.entries(bamboo.rules)
+        .filter(([rule, { meta }]) => rule !== 'prefer-shorthand-properties' && !meta?.deprecated)
+        .map(([rule]) => `bamboo/${rule}`)
         .sort(),
     )
+    expect(Object.keys(rules)).not.toContain('bamboo/no-overridden-by-mixin')
     expect(Object.keys(rules).filter((rule) => rules[rule] === 'error')).toEqual([
       'bamboo/file-not-included',
       'bamboo/no-config-function-in-source',

@@ -20,7 +20,8 @@ export default [{ files: ['**/*.{ts,tsx}'], languageOptions: { parser: tsParser 
 ```
 
 `bamboo.configs['flat/all']` turns on every rule except `prefer-shorthand-properties`, the opposite of
-`prefer-longhand-properties`. The configs name no parser, so `.vue`, `.svelte` and `.astro` files keep their own.
+`prefer-longhand-properties`, and the deprecated `no-overridden-by-mixin`. The configs name no parser, so `.vue`,
+`.svelte` and `.astro` files keep their own.
 
 In `.eslintrc`, extend `plugin:bamboo/recommended` or `plugin:bamboo/all`, which need `@typescript-eslint/parser`
 installed.

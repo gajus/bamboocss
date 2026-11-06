@@ -89,24 +89,32 @@ function App() {
 
 ## Combining a mixin with other styles
 
-A mixin means what writing its declarations in its place means. A property written after it overrides it, a property
-written before it is overridden by it, and its own conditions still apply as conditions:
+A mixin is the base of the style it is applied in: its declarations come first, and the style's own properties override
+them wherever the `mixin` key is written, so keys sorted by name mean the same as keys in any other order. Its own
+conditions still apply as conditions:
 
 ```jsx
 // card: { value: { color: 'gray.700', _hover: { color: 'blue.600' } } }
-css({ color: 'red.500', mixin: 'card' }) // gray, blue on hover
+css({ color: 'red.500', mixin: 'card' }) // red, blue on hover
 css({ mixin: 'card', color: 'red.500' }) // red, blue on hover
 ```
 
-As in CSS, a declaration written later does not override an important one unless it is important too, so
-`css({ color: 'red.500!', mixin: 'card' })` stays red, on hover as well.
+To apply several, list them. They apply in order, a later one overriding an earlier one, and the style's own properties
+override them all. A list can be chosen per condition, as one name can:
 
-A property written before a mixin that sets it too does nothing, which is easy to miss where keys are sorted and `mixin`
-comes last. The [ESLint plugin](/docs/guides/linting)'s `no-overridden-by-mixin` reports each one, and its `--fix`
-writes the mixin first.
+```jsx
+css({ mixin: ['card', 'compact'], color: 'red.500' })
+css({ mixin: { base: 'body', md: ['lead', 'muted'] } })
+```
 
-The same holds wherever styles are combined: a recipe variant's mixin overrides the base, a compound variant's overrides
-the variants it matches, and `cx()` keeps what an earlier mixin sets that a later one does not.
+As in CSS, a declaration does not override an important one unless it is important too: where `card` writes
+`color: 'gray.700!'`, `css({ mixin: 'card', color: 'red.500' })` stays gray, and `red.500!` overrides it.
+
+Across styles, a later one overrides an earlier one, its mixin included: a recipe variant's mixin overrides the base, a
+compound variant's overrides the variants it matches, `css(a, b)` lets the mixin in `b` override `a`, and `cx()` keeps
+what an earlier mixin sets that a later one does not. A spread's properties are the style's own, so to apply a mixin
+over a shared style, pass the two separately: `css(shared, { mixin: 'card' })`, not `css({ ...shared, mixin: 'card' })`.
+`globalCss` and a recipe's own classes apply a mixin the same way.
 
 Wherever it is applied, alone too, a mixin compiles to the atoms of the declarations it applies:
 `css({ mixin: 'body' })` compiles to the same classes as `body`'s declarations written out. That is what lets them take

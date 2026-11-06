@@ -15,7 +15,7 @@ import {
   isVariableDeclarator,
   type Node,
 } from './nodes'
-import { type DeprecatedToken, type ExtractionFindings, type MixinSibling, type OverriddenByMixin } from './worker'
+import { type DeprecatedToken, type ExtractionFindings } from './worker'
 import { analyze, type ScopeManager } from '@typescript-eslint/scope-manager'
 import { type TSESTree } from '@typescript-eslint/utils'
 import { type RuleContext } from '@typescript-eslint/utils/ts-eslint'
@@ -504,13 +504,6 @@ export const isBambooAttribute = (node: TSESTree.Property, context: RuleContext<
   // Object could be in JSX prop value i.e css prop or a pseudo
   return isInJSXProp(node, context) && isStyledProperty(node, context)
 }
-
-/** Which of `siblings`, written before `mixin` in one style object, the mixin overrides. */
-export const getOverriddenByMixin = (
-  context: RuleContext<any, any>,
-  mixin: unknown,
-  siblings: MixinSibling[],
-): OverriddenByMixin[] => syncAction('overriddenByMixin', getSyncOptions(context), mixin, siblings) ?? []
 
 export const resolveLonghand = (name: string, context: RuleContext<any, any>) => {
   return syncAction('resolveLongHand', getSyncOptions(context), name)

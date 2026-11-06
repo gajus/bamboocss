@@ -8,13 +8,18 @@ export interface SerializeContext extends Omit<StylesheetContext, 'layers' | 'he
 
 /**
  * Transform the style object (with conditions, shorthands, tokens) into a valid CSS (in JS) object
+ *
+ * One rule's declarations, its mixins written out first, as anywhere else: in `global.css`, a
+ * recipe's own classes and a mixin's own class. Hashed as written, a mixin was one atom placed
+ * where the rule's sort put it, among the object's own declarations by its key, and after a
+ * shorthand however it was written, so `{ mixin: 'card', padding: '1px' }` kept the card's padding.
  */
 export function transformStyles(context: SerializeContext, styleObj: Dict, key: string) {
   const encoder = context.encoder.clone()
   const decoder = context.decoder.clone()
 
   const hashSet = new Set<string>()
-  encoder.hashStyleObject(hashSet, styleObj)
+  encoder.hashStyleObject(hashSet, context.mixins.expand(styleObj))
 
   // Decoded into a clone, so `decoder.atomic` never holds these, and an unresolved token in them
   // is only ever seen here. @see Utility.serializedUnresolvedTokens
@@ -99,7 +104,9 @@ export function serializeStyles(context: SerializeContext, groupedObject: Dict) 
     const scope = scopeOf(context, key)
     result[scope] ||= {}
 
-    const styleObject = walkObject(styles, (value) => value, {
+    // Written out before the walk, which reads an array as an object keyed by index, so that a list
+    // of mixins is applied rather than written as declarations named `0` and `1`.
+    const styleObject = walkObject(context.mixins.expand(styles), (value) => value, {
       getKey: (prop, value) => {
         // Rewrite html selectors to include the parent selector so that it can be parsed later on
         // ex: 'body, :root' => '& body, & :root'

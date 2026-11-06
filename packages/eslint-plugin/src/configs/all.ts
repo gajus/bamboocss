@@ -14,9 +14,12 @@ const errorRules: string[] = [FileNotIncluded, NoConfigFunctionInSource, NoInval
  */
 const opposedRules: string[] = [PreferShorthandProperties]
 
+/** A rule kept only so that a config naming it still loads, which turning on would do nothing. */
+const isDeprecated = (name: string) => Boolean(rules[name as keyof typeof rules].meta.deprecated)
+
 /** Every rule but those: an error where the build would be wrong, a warning otherwise. */
 export const allRules: Linter.RulesRecord = Object.fromEntries(
   Object.keys(rules)
-    .filter((name) => !opposedRules.includes(name))
+    .filter((name) => !opposedRules.includes(name) && !isDeprecated(name))
     .map((name) => [`bamboo/${name}`, errorRules.includes(name) ? 'error' : 'warn']),
 )

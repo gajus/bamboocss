@@ -32,6 +32,7 @@ export interface StylesheetContext extends Pick<
   | 'conditions'
   | 'encoder'
   | 'decoder'
+  | 'mixins'
   | 'isValidProperty'
   | 'hooks'
   | 'globalVars'

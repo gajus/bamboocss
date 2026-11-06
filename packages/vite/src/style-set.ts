@@ -69,7 +69,8 @@ export const createStaticStyleSetCompiler = (
   const { mergeCssUncached } = createMergeCss(createCssContext(ctx))
 
   /**
-   * One style set's fragments, with every mixin written out where it is applied, alone too.
+   * One style set's fragments, with every mixin written out, alone too: first in the fragment
+   * applying it, the fragment's own declarations after it.
    *
    * A mixin kept as its own class is one opaque `mixin` key, and the class sits in the
    * `compositions` layer, below every other utility. Merged that way, a later fragment's mixin

@@ -5867,7 +5867,10 @@ describe.sequential('composed mixins', () => {
         `document.body.append(field)\n` +
         `const form = document.createElement('form')\n` +
         `form.className = css({ mixin: 'field' })\n` +
-        `document.body.append(form)\n`,
+        `document.body.append(form)\n` +
+        `const listed = document.createElement('p')\n` +
+        `listed.className = css({ letterSpacing: '0.2em', mixin: ['cardA', 'cardB'] })\n` +
+        `document.body.append(listed)\n`,
     )
   })
 
@@ -5914,6 +5917,16 @@ describe.sequential('composed mixins', () => {
     expect(css).toMatch(/@layer s011-c\d+-p3000\s*\{\s*\.\\\[\\&_input\\\]\\:fs_14px input\s*\{\s*font-size:\s*14px/)
     // So is one with the selector in it: the same declaration, the same atom.
     expect(js.match(/form\.className = "([^"]*)"/)?.[1]).toBe('[&_input]:fs_14px')
+
+    // Mixins listed apply in order, and the property written before them overrides both: no class
+    // stands for a list, so its declarations are the only thing extraction could have given rules.
+    expect(
+      js
+        .match(/listed\.className = "([^"]*)"/)?.[1]
+        ?.split(' ')
+        .sort(),
+    ).toEqual(['c_blue', 'ls_0.2em'])
+    expect(css).toMatch(/\.ls_0\\\.2em\s*\{\s*letter-spacing:\s*0\.2em/)
 
     // No output names a mixin's class, so none ships.
     expect(js).not.toContain('mixin_')

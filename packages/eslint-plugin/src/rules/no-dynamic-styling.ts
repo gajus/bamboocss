@@ -49,12 +49,35 @@ const rule = createRule({
 
     // An array is not a style value: the runtime throws on one and the compiler fails the build.
     // It used to be read as one value per breakpoint, which is why this rule once accepted an
-    // array of literals — the one shape that now always fails.
-    function reportArray(array: TSESTree.ArrayExpression) {
-      context.report({
-        messageId: 'array',
-        node: array,
-      })
+    // array of literals — the one shape that now always fails. A list of mixins is the exception,
+    // `mixin: ['body', 'muted']`, names applied in order, each as static as any value has to be.
+    function reportArray(array: TSESTree.ArrayExpression, mixin: boolean) {
+      if (!mixin) {
+        context.report({
+          messageId: 'array',
+          node: array,
+        })
+        return
+      }
+
+      for (const element of array.elements) {
+        if (element && element.type !== 'SpreadElement' && isStaticValue(element)) continue
+        context.report({
+          messageId: 'dynamic',
+          node: element ?? array,
+        })
+      }
+    }
+
+    /** Whether `node` is a `mixin`, or a condition choosing one: `mixin: { md: ['lead', 'muted'] }`. */
+    function isMixinValue(node: TSESTree.Property): boolean {
+      for (let current: TSESTree.Node | undefined = node; current?.type === 'Property'; ) {
+        if (!current.computed && isIdentifier(current.key) && current.key.name === 'mixin') return true
+        const object: TSESTree.Node | undefined = current.parent
+        if (object?.type !== 'ObjectExpression') return false
+        current = object.parent
+      }
+      return false
     }
 
     return {
@@ -83,7 +106,7 @@ const rule = createRule({
           }
 
           if (isArrayExpression(expr)) {
-            reportArray(expr)
+            reportArray(expr, node.name.type === 'JSXIdentifier' && node.name.name === 'mixin')
             return
           }
 
@@ -115,7 +138,7 @@ const rule = createRule({
         }
 
         if (isArrayExpression(node.value)) {
-          reportArray(node.value)
+          reportArray(node.value, isMixinValue(node))
           return
         }
 

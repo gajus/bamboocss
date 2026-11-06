@@ -84,6 +84,8 @@ export function generateStyleProps(ctx: Context) {
           }
 
           const value = filtered.filter(Boolean).join(' | ')
+          if (key === MIXIN) return ' ' + [MIXIN_COMMENT, `${key}?: ${mixinValue(value)} | undefined`].join('\n')
+
           const line = `${key}?: ${restrict(prop, value, ctx.config)} | undefined`
 
           return ' ' + [comment, line].filter(Boolean).join('\n')
@@ -157,6 +159,20 @@ const strictPropertyList = new Set([
   'wordBreak',
   'writingMode',
 ])
+
+const MIXIN = 'mixin'
+
+/** What applying mixins means, where an editor shows the key's documentation. */
+const MIXIN_COMMENT = [
+  '/**',
+  `   * The mixins this style starts from: their declarations first, then this style's own, which`,
+  '   * override them wherever this key is written. Several apply in the order listed, a later one over',
+  '   * an earlier one.',
+  '   */',
+].join('\n')
+
+/** A mixin's name, or names applied in order, either chosen per condition. */
+const mixinValue = (value: string) => `ConditionalValue<${value} | AnyString | ReadonlyArray<${value} | AnyString>>`
 
 const restrict = (key: string, value: string, config: UserConfig) => {
   if (config.strictPropertyValues && strictPropertyList.has(key)) {

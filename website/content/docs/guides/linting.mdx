@@ -26,8 +26,9 @@ export default [{ files: ['**/*.{ts,tsx}'], languageOptions: { parser: tsParser 
 ```
 
 `bamboo.configs['flat/all']` turns on every rule instead, except `prefer-shorthand-properties`, the opposite of
-`prefer-longhand-properties`: with both on, each would undo the other's fixes. With `defineConfig`, the same is
-`extends: ['bamboo/flat/recommended']` beside `plugins: { bamboo }`.
+`prefer-longhand-properties` — with both on, each would undo the other's fixes — and the deprecated
+`no-overridden-by-mixin`. With `defineConfig`, the same is `extends: ['bamboo/flat/recommended']` beside
+`plugins: { bamboo }`.
 
 The configs name no parser: TypeScript files take the one your project configures — the line above, or
 `typescript-eslint`'s configs — and `.vue`, `.svelte` and `.astro` files keep their own. In a file ESLint lints as
@@ -94,7 +95,7 @@ export default [
 | [`no-invalid-nesting`](https://github.com/gajus/bamboocss/blob/main/packages/eslint-plugin/docs/rules/no-invalid-nesting.md)                       | Nested styles must contain `&`                                                                   | ✅  |
 | [`no-invalid-token-paths`](https://github.com/gajus/bamboocss/blob/main/packages/eslint-plugin/docs/rules/no-invalid-token-paths.md)               | Disallow token paths that do not exist, and values the build cannot resolve                      | ✅  |
 | [`no-margin-properties`](https://github.com/gajus/bamboocss/blob/main/packages/eslint-plugin/docs/rules/no-margin-properties.md)                   | Prefer `gap` in the parent to margins                                                            |     |
-| [`no-overridden-by-mixin`](https://github.com/gajus/bamboocss/blob/main/packages/eslint-plugin/docs/rules/no-overridden-by-mixin.md)               | Disallow a property a mixin written after it in the same object overrides                        | ✅  |
+| [`no-overridden-by-mixin`](https://github.com/gajus/bamboocss/blob/main/packages/eslint-plugin/docs/rules/no-overridden-by-mixin.md)               | Deprecated: a property beside a mixin overrides it wherever either is written                    |     |
 | [`no-physical-properties`](https://github.com/gajus/bamboocss/blob/main/packages/eslint-plugin/docs/rules/no-physical-properties.md)               | Prefer logical properties to physical ones                                                       |     |
 | [`no-property-renaming`](https://github.com/gajus/bamboocss/blob/main/packages/eslint-plugin/docs/rules/no-property-renaming.md)                   | Disallow renaming pattern and style props, which the build cannot follow                         | ✅  |
 | [`no-redundant-value`](https://github.com/gajus/bamboocss/blob/main/packages/eslint-plugin/docs/rules/no-redundant-value.md)                       | Report an edge or pair value written longer than it needs to be                                  |     |

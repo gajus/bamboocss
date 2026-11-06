@@ -403,6 +403,7 @@ export class Context {
       hash: this.hash.className,
       encoder: this.encoder,
       decoder: this.decoder,
+      mixins: this.mixins,
       hooks: this.hooks,
       isValidProperty: this.isValidProperty,
       browserslist: this.config.browserslist,

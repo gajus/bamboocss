@@ -2131,10 +2131,14 @@ export class StyleEncoder {
 
   private processRecipeBaseValue = (
     key: string,
-    value: StyleResultObject,
+    styles: StyleResultObject,
     baseEntry: Partial<Omit<StyleEntry, 'prop' | 'value' | 'cond'>>,
     pinned = false,
   ) => {
+    // The base's class is one rule, its mixins written out first as anywhere else. Hashed as
+    // written, a mixin was one atom placed where the rule's sort put it, so a shorthand written
+    // after it, sorted ahead, lost to the one the mixin set.
+    const value = this.context.mixins.expand(styles)
     this.ownRecipeBase(key, pinned)
     const existing = this.recipes_base.get(key)
     if (!existing) {
@@ -2534,12 +2538,16 @@ export class StyleEncoder {
     // the encoder already holds. Insertion order into `atomic` is unchanged by the detour: a
     // hash already there does not move, and a new one still arrives in traversal order.
     const set = new Set<string>()
-    // The written-out form is the one whose order is the call's: a mixin's declarations stand
-    // where it is applied. Expanded before either is hashed, which leaves the hashing order as
-    // it was, the call as written first.
-    const expanded = this.mixinAtoms ? this.context.mixins.expand(styles) : styles
+    // The written-out form is the one whose order is the call's: a mixin's declarations first in
+    // the object it is applied in, the object's own after them. Expanded before either is hashed,
+    // which leaves the hashing order as it was, the call as written first. A list of mixins has no
+    // class to stand for it, so it is written out wherever it is applied, and left out as written.
+    const mixins = this.context.mixins
+    const applies = mixins.has(styles)
+    const written = applies ? mixins.asWritten(styles) : styles
+    const expanded = applies && (this.mixinAtoms || written !== styles) ? mixins.expand(styles) : styles
     const leaves = this.recordsWrittenOrder ? [] : undefined
-    this.hashStyleObject(set, styles, undefined, expanded === styles ? leaves : undefined)
+    this.hashStyleObject(set, written, undefined, expanded === styles ? leaves : undefined)
     if (expanded !== styles) this.hashStyleObject(set, expanded, undefined, leaves)
     if (leaves && leaves.length > 3) this.noteWrittenOrder(leaves)
 

@@ -8268,7 +8268,12 @@ describe('generate property types', () => {
        maskConicFromColor?: ConditionalValue<UtilityValues["maskConicFromColor"] | CssVars | AnyString> | undefined
        maskConicToColor?: ConditionalValue<UtilityValues["maskConicToColor"] | CssVars | AnyString> | undefined
        colorPalette?: ConditionalValue<UtilityValues["colorPalette"] | CssVars | AnyString> | undefined
-       mixin?: ConditionalValue<UtilityValues["mixin"] | CssVars | AnyString> | undefined
+       /**
+         * The mixins this style starts from: their declarations first, then this style's own, which
+         * override them wherever this key is written. Several apply in the order listed, a later one over
+         * an earlier one.
+         */
+      mixin?: ConditionalValue<UtilityValues["mixin"] | CssVars | AnyString | ReadonlyArray<UtilityValues["mixin"] | CssVars | AnyString>> | undefined
       }"
     `)
   })

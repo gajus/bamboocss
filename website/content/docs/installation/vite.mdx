@@ -261,9 +261,11 @@ this to hold: a template literal or a helper such as `clsx` is a join the build 
 [`no-unlayered-override`](https://github.com/gajus/bamboocss/blob/main/packages/eslint-plugin/docs/rules/no-unlayered-override.md)
 reports it.
 
-Builds only, and only where Vite's `build.cssCodeSplit` is on, which it is unless you turned it off or are building a
-library. A framework that copies a server build's stylesheets into the client build by the names its chunks recorded, as
-the RSC plugin does, copies the chunk sheets along with the entry sheet. Set `splitCss: false` to keep one sheet.
+Builds only, only where Vite's `build.cssCodeSplit` is on, which it is unless you turned it off or are building a
+library, and only in an environment the browser loads. A chunk sheet reaches the page through the HTML, the manifest and
+the preload helper, which are all the client's, so a server environment that writes the stylesheet keeps it whole. The
+`rsc` environment of `@vitejs/plugin-rsc` is one: a server component loaded with `import()` has its utilities in the one
+sheet every page links. Set `splitCss: false` to keep one sheet everywhere.
 
 ### Source maps in development
 

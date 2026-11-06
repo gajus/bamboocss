@@ -346,9 +346,22 @@ const pruneEmittedSheets = async (
 
     // Splitting needs the chunks to still be open to a new stylesheet each, which is only so
     // when Vite emitted the sheet while rendering chunks — `cssCodeSplit` on, the default.
+    //
+    // And it needs a browser to load what it splits off. A chunk sheet reaches the document
+    // through the HTML, the manifest and the preload helper, which are all the client's. A server
+    // environment that writes the sheet, as `@vitejs/plugin-rsc`'s `rsc` does, has nothing that
+    // links one: a server component loaded with `import()` had its utilities moved into a sheet
+    // no page linked, and the guard failed the build over the rules the entry sheet then lacked.
     const cssCodeSplit = context.environment?.config?.build?.cssCodeSplit ?? session.cssCodeSplit ?? true
     const split =
-      splitCss && !discarded && session.splitCss && pruneCss && cssCodeSplit && context.emitFile && context.getFileName
+      splitCss &&
+      !discarded &&
+      browser &&
+      session.splitCss &&
+      pruneCss &&
+      cssCodeSplit &&
+      context.emitFile &&
+      context.getFileName
         ? {
             ...chunkOwnership(bundle, environmentName, session),
             emit: (chunkFileName: string, css: string) => {

@@ -14,6 +14,11 @@ import { describe, expect, test } from 'vitest'
  * sheet has to be pruned against every environment, and every copy and every reference to it
  * has to end up under the one final name, including the manifests the plugin writes after the
  * last environment.
+ *
+ * One server component is loaded with `import()`, as a router loads a page, and styled with a
+ * value nothing else uses. The sheet is not split per chunk here, as nothing in a server build
+ * links a chunk's stylesheet: split, that style went into a sheet no page linked, and the build
+ * failed over the rule the entry sheet lacked.
  */
 const cwd = join(dirname(fileURLToPath(import.meta.url)), '..')
 const dist = join(cwd, 'dist')
@@ -38,7 +43,8 @@ describe('react server components', () => {
     const sheets = Object.keys(outputs).filter((file) => file.endsWith('.css'))
     const names = new Set(sheets.map((file) => basename(file)))
 
-    // The server build's sheet and the copy the RSC plugin made of it, under one final name.
+    // The server build's sheet and the copy the RSC plugin made of it, under one final name, and
+    // no sheet for the lazily loaded chunk.
     expect(sheets.length, 'the rsc sheet and its client copy').toBe(2)
     expect(names.size, 'one name between them').toBe(1)
     const [name] = names
@@ -48,6 +54,7 @@ describe('react server components', () => {
       const css = outputs[sheet]!
       expect(css, `${sheet}: the rule only the server renders`).toContain('green-700')
       expect(css, `${sheet}: the rule only the browser renders`).toContain('purple-700')
+      expect(css, `${sheet}: the rule of the server component loaded with import()`).toContain('654.3px')
       expect(css, `${sheet}: the rule nothing reaches`).not.toContain('123.456px')
     }
 

@@ -3,6 +3,16 @@ import { css } from '../styled-system/css'
 import { Counter } from './counter'
 
 /**
+ * Loaded with `import()`, as a router loads a page, so the `rsc` build puts it in a chunk of its own.
+ * That environment writes the stylesheet, and splitting it there gave the chunk a sheet nothing
+ * links: the RSC plugin links the CSS of a module that imports CSS itself, and this one does not.
+ */
+async function Lazy() {
+  const { Section } = await import('./section')
+  return <Section />
+}
+
+/**
  * A server component. Nothing here reaches the client graph: the `css()` calls below are
  * compiled in the `rsc` environment only, so their rules exist only if the stylesheet is
  * pruned against that environment's reachability as well as the client's.
@@ -21,6 +31,7 @@ export function App() {
             This paragraph is styled by a server component that never ships to the browser.
           </p>
           <Counter />
+          <Lazy />
         </main>
       </body>
     </html>

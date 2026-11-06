@@ -389,6 +389,14 @@ const pruneEmittedSheets = async (
           }
         : undefined
 
+    // What this environment's split moves is recorded afresh, so a class an earlier generation
+    // moved and this one keeps is not reported as moved if a guard later finds it missing.
+    if (early && session.splitClasses) {
+      for (const [className, entry] of session.splitClasses) {
+        if (entry.environment === environmentName) session.splitClasses.delete(className)
+      }
+    }
+
     // What the loss history held before this prune, for one whose losses do not count.
     const before = discarded ? new Set(session.prunedClasses) : undefined
     const { sheets, results } = optimizeStaticCssAssets(bundle as never, session, {

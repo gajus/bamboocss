@@ -234,6 +234,12 @@ export const optimizeStaticCssAssets = (
       optimized = divided.css
       moved = divided.moved
       for (const [chunk, css] of divided.chunks) split.emit(chunk, css)
+      if (divided.moved.size) {
+        const record = (session.splitClasses ??= new Map())
+        for (const className of divided.moved) {
+          record.set(className, { environment: environment ?? 'default', chunk: split.ownership.get(className) ?? '' })
+        }
+      }
     }
 
     ;(output as Rollup.OutputAsset).source = optimized

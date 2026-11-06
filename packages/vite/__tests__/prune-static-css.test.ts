@@ -180,3 +180,46 @@ describe('a rule merged from several atoms', () => {
     expect(result).toContain('color:red')
   })
 })
+
+/**
+ * A rule the per-chunk split moved out of an entry sheet, missing from a copy of that sheet.
+ *
+ * `@vitejs/plugin-rsc` copied the server build's entry sheet into the client build, and a server
+ * component loaded with `import()` had its rule in a chunk sheet the copy did not come with. The
+ * guard called it a theme value nothing resolves, which sent the search to the theme.
+ */
+describe('a rule the split moved out of the sheet', () => {
+  const className = esc('w_[432.1px]')
+  /** The entry sheet as copied, with the moved rule gone. */
+  const copy = stylesheet(`.h_\\[1px\\]{height:1px}`)
+  const failureOf = (moved: boolean) => {
+    const session = createStaticCompilationSession()
+    session.prunableClasses.add(className)
+    session.usedClasses.add(className)
+    if (moved) session.splitClasses = new Map([['w_[432.1px]', { environment: 'rsc', chunk: 'assets/page-a.js' }]])
+    try {
+      pruneStaticCss(copy, session, { environment: 'client', requiredClasses: new Set([className]) })
+    } catch (error) {
+      return (error as Error).message
+    }
+    return ''
+  }
+
+  test('is reported as moved, with the chunk and the environment that moved it', () => {
+    const message = failureOf(true)
+
+    expect(message).toContain(
+      'moved into the sheet of chunk "assets/page-a.js" when the "rsc" environment split its stylesheet',
+    )
+    expect(message).toContain('the sheet checked here is a copy of its entry sheet without them')
+    expect(message).toContain('`splitCss: false`')
+    expect(message, 'not sent to the theme').not.toContain('mixin')
+  })
+
+  test('is reported as before when nothing moved it', () => {
+    const message = failureOf(false)
+
+    expect(message).toContain('rule generation produced no declarations')
+    expect(message).not.toContain('split its stylesheet')
+  })
+})

@@ -269,6 +269,16 @@ export interface StaticCompilationSession {
    */
   compiledIn?: (className: string) => readonly string[]
   /**
+   * The escape-free classes a split moved out of an environment's entry sheet into a chunk's
+   * own, with that environment and the chunk's file name.
+   *
+   * A copy of the entry sheet carried into another output lacks their rules, and the guard has
+   * to say the rules were moved rather than never written: told the latter, a framework's
+   * missing chunk sheets read as a theme value nothing resolves. Recorded afresh for an
+   * environment each time its early output pass runs.
+   */
+  splitClasses?: Map<string, { environment: string; chunk: string }>
+  /**
    * Finalize the deferred sheets if `environment` completes the run, rewriting `bundle` too.
    *
    * Installed by the compiler, which owns the reachability projection. Reached from the early

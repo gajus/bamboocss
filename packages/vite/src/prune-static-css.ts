@@ -180,9 +180,14 @@ export const pruneStaticCss = (
       const near = [...present].filter(
         (candidate) => candidate !== className && candidate.replaceAll('\\', '') === normalized,
       )
+      const split = session.splitClasses?.get(normalized)
 
       return (
         `  ${className}\n      (${extracted}; no rule in the sheet` +
+        (split
+          ? `; moved into the sheet of chunk ${JSON.stringify(split.chunk)} when the ` +
+            `${JSON.stringify(split.environment)} environment split its stylesheet`
+          : '') +
         (near.length ? `; a rule exists under ${near.map((n) => JSON.stringify(n)).join(', ')}` : '') +
         `)`
       )
@@ -190,7 +195,12 @@ export const pruneStaticCss = (
     const environmentDescription = environment ? ` for the ${JSON.stringify(environment)} environment` : ''
 
     /**
-     * Two very different situations end here, and the guidance must not swap them.
+     * Very different situations end here, and the guidance must not swap them.
+     *
+     * A class the per-chunk split moved has a rule, in a chunk sheet; the sheet checked here is a
+     * copy of the entry sheet it was taken out of, carried into another output without the chunk
+     * sheets. That is about the framework copying sheets, and it read as the next case when the
+     * guard said nothing of it: an RSC build failing over a theme value that resolved fine.
      *
      * A class *in the extracted atoms* with no rule means extraction saw the call and rule
      * generation produced nothing for it — which is what an unresolved value looks like one
@@ -210,19 +220,28 @@ export const pruneStaticCss = (
     const anyCompiledUnseen = orphaned.some(
       (className) => !prunable.has(bare(className)) && (session.compiledIn?.(className).length ?? 0) > 0,
     )
-    const guidance = anyCompiledUnseen
-      ? `The compiler compiled the calls naming these classes, but the stylesheet pass never saw them, so no rule ` +
-        `was written: the two read those files differently. This is a Bamboo bug — report it with the file. Until ` +
-        `then, moving the call into the component's \`<script>\` is the way around it.`
-      : everyOrphanExtracted
-        ? `Extraction saw every one of these calls, but rule generation produced no declarations for them — the ` +
-          `shape of a value nothing resolves, such as a \`mixin\` naming a composition the theme does not define. ` +
-          `Check the class name's property and value against the theme, and look for a \`🎋 warn [utility]\` line ` +
-          `above naming the same value. Set \`unresolvedToken: 'error'\` to fail fast at the exact call next time.`
-        : `The current source generation no longer provides every rule required by the JavaScript outputs still on ` +
-          `disk. Bamboo refused to replace the prior stylesheet. Finish rebuilding every output which retains an ` +
-          `older generation, then rebuild the stylesheet. If every output is already current, report this as a ` +
-          `compiler bug with the block above.`
+    const splitBy = [
+      ...new Set(orphaned.flatMap((className) => session.splitClasses?.get(bare(className))?.environment ?? [])),
+    ]
+    const guidance = splitBy.length
+      ? `${splitBy.length === 1 ? 'The' : 'Each'} ${splitBy.map((name) => JSON.stringify(name)).join(' and ')} ` +
+        `environment split its stylesheet per chunk and moved the rules of the classes marked above into chunk ` +
+        `sheets, and the sheet checked here is a copy of its entry sheet without them: whatever carried that sheet ` +
+        `into this output left the chunk sheets behind, so a page linking it lacks those rules. Set ` +
+        `\`splitCss: false\` to keep one sheet, and report the framework, so the split can leave its environment alone.`
+      : anyCompiledUnseen
+        ? `The compiler compiled the calls naming these classes, but the stylesheet pass never saw them, so no rule ` +
+          `was written: the two read those files differently. This is a Bamboo bug — report it with the file. Until ` +
+          `then, moving the call into the component's \`<script>\` is the way around it.`
+        : everyOrphanExtracted
+          ? `Extraction saw every one of these calls, but rule generation produced no declarations for them — the ` +
+            `shape of a value nothing resolves, such as a \`mixin\` naming a composition the theme does not define. ` +
+            `Check the class name's property and value against the theme, and look for a \`🎋 warn [utility]\` line ` +
+            `above naming the same value. Set \`unresolvedToken: 'error'\` to fail fast at the exact call next time.`
+          : `The current source generation no longer provides every rule required by the JavaScript outputs still on ` +
+            `disk. Bamboo refused to replace the prior stylesheet. Finish rebuilding every output which retains an ` +
+            `older generation, then rebuild the stylesheet. If every output is already current, report this as a ` +
+            `compiler bug with the block above.`
 
     throw new Error(
       `bamboocss: ${orphaned.length} compiled class(es) still named by live output have no rule in the candidate ` +

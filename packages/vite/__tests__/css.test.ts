@@ -1062,12 +1062,15 @@ describe('a server environment that writes the sheet', () => {
       viteMetadata: { importedCss: new Set<string>() },
     },
   })
-  const run = async (plugins: string[]) => {
+  const sessionOf = () => {
     const session = createStaticCompilationSession()
     session.prunableClasses.add(esc('h_[345.6789px]'))
     session.markClassUsed('h_[345.6789px]')
     // A lazy chunk owning the used atom, which a split moves into a sheet of the chunk's own.
     session.classNamesOf = (_environment, moduleId) => (moduleId === '/lazy.tsx' ? ['h_[345.6789px]'] : [])
+    return session
+  }
+  const run = async (plugins: string[], session = sessionOf()) => {
     const generate = hookOf(bamboocssCssEarly({ session, pruneCss: true }).generateBundle)!
     const bundle: Record<string, { type: string; source?: string; viteMetadata?: { importedCss: Set<string> } }> =
       bundleOf()
@@ -1083,7 +1086,7 @@ describe('a server environment that writes the sheet', () => {
       false as never,
     )
     const entrySheet = Object.values(bundle).find((output) => output.source?.includes('--made-with-bamboo'))
-    return { emitFile, entrySheet: entrySheet?.source ?? '', lazy: bundle['lazy.js']! }
+    return { emitFile, entrySheet: entrySheet?.source ?? '', lazy: bundle['lazy.js']!, session }
   }
 
   test("is split for a framework that links each chunk's sheets, as Astro does", async () => {
@@ -1092,6 +1095,17 @@ describe('a server environment that writes the sheet', () => {
     expect(emitFile, "the lazy chunk's sheet").toHaveBeenCalledOnce()
     expect(lazy.viteMetadata?.importedCss, 'attached where the framework reads it').toContain('assets/lazy.css')
     expect(entrySheet, 'the moved atom').not.toContain('345.6789px')
+  })
+
+  // For a guard to say so if a copy of the entry sheet turns up without it.
+  test('records what the split moved, and where to', async () => {
+    const session = sessionOf()
+    await run(['astro:build'], session)
+    expect(session.splitClasses?.get('h_[345.6789px]')).toEqual({ environment: 'ssr', chunk: 'lazy.js' })
+
+    // Forgotten once that environment passes again without moving it.
+    await run(['rsc'], session)
+    expect(session.splitClasses?.has('h_[345.6789px]')).toBe(false)
   })
 
   test('is kept whole under @vitejs/plugin-rsc, which links nothing for a module importing no CSS', async () => {

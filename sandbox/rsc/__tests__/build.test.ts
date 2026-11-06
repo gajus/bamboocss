@@ -16,9 +16,9 @@ import { describe, expect, test } from 'vitest'
  * last environment.
  *
  * One server component is loaded with `import()`, as a router loads a page, and styled with a
- * value nothing else uses. The sheet is not split per chunk here, as nothing in a server build
- * links a chunk's stylesheet: split, that style went into a sheet no page linked, and the build
- * failed over the rule the entry sheet lacked.
+ * value nothing else uses. The sheet is not split per chunk here, as the RSC plugin links a
+ * server module's stylesheets only when the module imports CSS itself: split, that style went
+ * into a sheet no page linked, and the build failed over the rule the entry sheet lacked.
  */
 const cwd = join(dirname(fileURLToPath(import.meta.url)), '..')
 const dist = join(cwd, 'dist')

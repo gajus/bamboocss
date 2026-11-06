@@ -1021,6 +1021,88 @@ describe("a server's discarded copy of the sheet", () => {
   })
 })
 
+/**
+ * A server environment that writes the sheet, rather than discarding it.
+ *
+ * A framework rendering pages from one links each chunk's sheets itself — Astro does, from what
+ * the chunk imports, and inlines them — so the sheet is split there as in the browser.
+ * `@vitejs/plugin-rsc` links a server module's sheets only when the module imports CSS itself,
+ * so a server component loaded with `import()` would have had its utilities in a sheet no page
+ * links. Under it the server environment keeps the sheet whole.
+ */
+describe('a server environment that writes the sheet', () => {
+  const sheet =
+    `@layer reset, base, tokens, utilities;` +
+    `@layer utilities{.h_\\[345\\.6789px\\]{height:345.6789px}.w_\\[3\\.1px\\]{width:3.1px}}` +
+    `:root{--made-with-bamboo:🌱}`
+  const writing = (plugins: string[]) => ({
+    name: 'ssr',
+    config: { consumer: 'server', build: { ssr: true, emitAssets: true }, plugins: plugins.map((name) => ({ name })) },
+  })
+  const bundleOf = () => ({
+    'a.css': { type: 'asset', fileName: 'a.css', names: [], source: sheet },
+    'entry.js': {
+      type: 'chunk',
+      fileName: 'entry.js',
+      name: 'entry',
+      isEntry: true,
+      imports: [],
+      modules: { '/entry.tsx': {} },
+      code: `export const href = "/a.css"\n`,
+      viteMetadata: { importedCss: new Set(['a.css']) },
+    },
+    'lazy.js': {
+      type: 'chunk',
+      fileName: 'lazy.js',
+      name: 'lazy',
+      isEntry: false,
+      imports: [],
+      modules: { '/lazy.tsx': {} },
+      code: ``,
+      viteMetadata: { importedCss: new Set<string>() },
+    },
+  })
+  const run = async (plugins: string[]) => {
+    const session = createStaticCompilationSession()
+    session.prunableClasses.add(esc('h_[345.6789px]'))
+    session.markClassUsed('h_[345.6789px]')
+    // A lazy chunk owning the used atom, which a split moves into a sheet of the chunk's own.
+    session.classNamesOf = (_environment, moduleId) => (moduleId === '/lazy.tsx' ? ['h_[345.6789px]'] : [])
+    const generate = hookOf(bamboocssCssEarly({ session, pruneCss: true }).generateBundle)!
+    const bundle: Record<string, { type: string; source?: string; viteMetadata?: { importedCss: Set<string> } }> =
+      bundleOf()
+    const emitFile = vi.fn(({ source }: { source: string }) => {
+      bundle['assets/lazy.css'] = { type: 'asset', source }
+      return 'assets/lazy.css'
+    })
+
+    await generate.call(
+      { environment: writing(plugins), emitFile, getFileName: (reference: string) => reference } as never,
+      {} as never,
+      bundle as never,
+      false as never,
+    )
+    const entrySheet = Object.values(bundle).find((output) => output.source?.includes('--made-with-bamboo'))
+    return { emitFile, entrySheet: entrySheet?.source ?? '', lazy: bundle['lazy.js']! }
+  }
+
+  test("is split for a framework that links each chunk's sheets, as Astro does", async () => {
+    const { emitFile, entrySheet, lazy } = await run(['astro:build', 'vite:css'])
+
+    expect(emitFile, "the lazy chunk's sheet").toHaveBeenCalledOnce()
+    expect(lazy.viteMetadata?.importedCss, 'attached where the framework reads it').toContain('assets/lazy.css')
+    expect(entrySheet, 'the moved atom').not.toContain('345.6789px')
+  })
+
+  test('is kept whole under @vitejs/plugin-rsc, which links nothing for a module importing no CSS', async () => {
+    const { emitFile, entrySheet, lazy } = await run(['rsc', 'rsc:importer-resources', 'vite:css'])
+
+    expect(emitFile, 'no chunk sheet').not.toHaveBeenCalled()
+    expect(lazy.viteMetadata?.importedCss.size).toBe(0)
+    expect(entrySheet, "the lazy chunk's atom stays where every page links it").toContain('345.6789px')
+  })
+})
+
 // A watching build reads its config again only once it changed, as a dev server does; the host
 // is told so from the resolved config.
 describe('a watching build', () => {

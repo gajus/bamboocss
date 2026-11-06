@@ -81,10 +81,9 @@ export interface BambooVitePluginOptions {
   pruneCss?: boolean
   /**
    * Give each lazily loaded chunk a stylesheet of the utilities only it uses, and keep the
-   * rest in the entry sheet. Builds only, only where Vite's own `build.cssCodeSplit` is on, and
-   * only in an environment the browser loads: a server environment that writes the sheet, as the
-   * `rsc` environment of `@vitejs/plugin-rsc` does, keeps it whole, as nothing there links a
-   * chunk's sheet.
+   * rest in the entry sheet. Builds only, and only where Vite's own `build.cssCodeSplit` is on.
+   * Under `@vitejs/plugin-rsc` its server environment keeps the sheet whole, as the plugin links
+   * a server module's stylesheets only when the module imports CSS itself.
    *
    * An atom two chunks use stays in the entry sheet, so nothing is ever downloaded twice; a
    * route that is the only user of a style downloads that style with the route. Precedence

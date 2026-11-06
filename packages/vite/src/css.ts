@@ -148,6 +148,7 @@ type OutputContext = {
         emitAssets?: boolean
         cssCodeSplit?: boolean
       }
+      plugins?: ReadonlyArray<{ name: string }>
     }
   }
   emitFile?: (file: { type: 'asset'; name?: string; source: string }) => string
@@ -347,16 +348,22 @@ const pruneEmittedSheets = async (
     // Splitting needs the chunks to still be open to a new stylesheet each, which is only so
     // when Vite emitted the sheet while rendering chunks — `cssCodeSplit` on, the default.
     //
-    // And it needs a browser to load what it splits off. A chunk sheet reaches the document
-    // through the HTML, the manifest and the preload helper, which are all the client's. A server
-    // environment that writes the sheet, as `@vitejs/plugin-rsc`'s `rsc` does, has nothing that
-    // links one: a server component loaded with `import()` had its utilities moved into a sheet
-    // no page linked, and the guard failed the build over the rules the entry sheet then lacked.
+    // And it needs something to link what it splits off. In the browser that is Vite's own
+    // plumbing; a framework rendering pages from a server environment links each chunk's sheets
+    // itself, as Astro does from what the chunk imports. `@vitejs/plugin-rsc` does that only for
+    // a server module that imports CSS itself, so a server component loaded with `import()` had
+    // its utilities moved into a sheet no page linked, and the guard failed the build over the
+    // rules the entry sheet then lacked. Its server environment keeps the sheet whole.
     const cssCodeSplit = context.environment?.config?.build?.cssCodeSplit ?? session.cssCodeSplit ?? true
+    const unlinkedChunkSheets =
+      !browser &&
+      (context.environment?.config?.plugins ?? []).some(
+        (plugin) => plugin.name === 'rsc' || plugin.name.startsWith('rsc:'),
+      )
     const split =
       splitCss &&
       !discarded &&
-      browser &&
+      !unlinkedChunkSheets &&
       session.splitCss &&
       pruneCss &&
       cssCodeSplit &&

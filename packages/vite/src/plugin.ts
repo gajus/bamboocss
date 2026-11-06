@@ -115,7 +115,7 @@ const SFC_SCRIPT_TAG = /<script[\s>/]/i
 const COMPILED_MDX = /^(?:export default )?function (?:_createMdxContent|MDXContent)\b/m
 const NODE_MODULES = /node_modules/
 const TRANSFORM_META_KEY = 'bamboocss:transform'
-const TRANSFORM_ARTIFACT_VERSION = 6 as const
+const TRANSFORM_ARTIFACT_VERSION = 7 as const
 
 /**
  * Queries that make Vite serve something other than the module's own source.
@@ -500,6 +500,8 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     literalClassNames: string[]
     /** Atoms a `cx()` here joins with a class the build cannot see. @see FoldResult.joinedClassNames */
     joinedClassNames: string[]
+    /** What each runtime join of this module's own calls puts on one element. @see FoldResult.joinGroups */
+    joinGroups: string[]
     dependencies: string[]
     signature?: { input: string; output: string; path: string }
   }
@@ -531,6 +533,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       [...artifact.classNames],
       [...artifact.literalClassNames],
       [...artifact.joinedClassNames],
+      [...artifact.joinGroups],
       [...artifact.dependencies],
       artifact.signature ? [artifact.signature.input, artifact.signature.output, artifact.signature.path] : null,
     ])
@@ -551,6 +554,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       classNames: [...artifact.classNames],
       literalClassNames: [...artifact.literalClassNames],
       joinedClassNames: [...artifact.joinedClassNames],
+      joinGroups: [...artifact.joinGroups],
       dependencies: [...artifact.dependencies],
       ...(artifact.signature ? { signature: { ...artifact.signature } } : {}),
     }
@@ -591,6 +595,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     if (!Array.isArray(value.joinedClassNames) || !value.joinedClassNames.every((entry) => typeof entry === 'string')) {
       return false
     }
+    if (!Array.isArray(value.joinGroups) || !value.joinGroups.every((entry) => typeof entry === 'string')) return false
     if (!Array.isArray(value.dependencies) || !value.dependencies.every((entry) => typeof entry === 'string'))
       return false
     if (
@@ -1704,6 +1709,9 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
 
   staticSession.joinedClassNamesOf = (environment, moduleId) =>
     transformStateByEnvironment.get(environment)?.transformArtifactsByModule.get(moduleId)?.joinedClassNames
+
+  staticSession.joinGroupsOf = (environment, moduleId) =>
+    transformStateByEnvironment.get(environment)?.transformArtifactsByModule.get(moduleId)?.joinGroups
 
   staticSession.beginOutputProjection = (environment, outputOptions, bundle, replacesGeneratedStylesheet) => {
     const generation = preparedGenerations.get(environment)
@@ -3045,6 +3053,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
         classNames: [],
         literalClassNames: [],
         joinedClassNames: [],
+        joinGroups: [],
         dependencies: previousDependencies,
       }
       commitTransformArtifact(state, failedArtifact)
@@ -3107,6 +3116,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       classNames: [...new Set(result.folded.flatMap((entry) => entry.classNames))],
       literalClassNames: literalOnly(result.folded),
       joinedClassNames: result.joinedClassNames ?? [],
+      joinGroups: result.joinGroups ?? [],
       dependencies: [...result.dependencies],
       ...(result.dependencies.length
         ? { signature: { input: (inputDigest ??= digest(code)), output: digest(result.code), path: filePath } }

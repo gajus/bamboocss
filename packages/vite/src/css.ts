@@ -185,6 +185,7 @@ interface OutputChunkShape {
 const chunkOwnership = (bundle: object, environment: string, session: StaticCompilationSession) => {
   const classNamesOf = session.classNamesOf
   const joinedClassNamesOf = session.joinedClassNamesOf
+  const joinGroupsOf = session.joinGroupsOf
   const ownership = new Map<string, string>()
   /**
    * Which atoms were emitted onto one element together.
@@ -192,9 +193,21 @@ const chunkOwnership = (bundle: object, environment: string, session: StaticComp
    * Collected on the same walk that decides ownership, from the same class strings, because
    * the split has to know which pairs can compete before it may move either of them. Only
    * strings naming more than one class say anything.
+   *
+   * A `cx()` the compiler leaves as a runtime join of its own calls puts atoms of several class
+   * strings on one element, and its module records them as a group, which says the same.
    */
   const coOccurrences = new Map<string, Set<string>>()
   if (!classNamesOf) return { ownership, coOccurrences }
+  /** Any two of these can reach one element, so they can compete in the cascade. */
+  const noteTogether = (together: readonly string[]) => {
+    if (together.length < 2) return
+    for (const className of together) {
+      const neighbours = coOccurrences.get(className) ?? new Set<string>()
+      for (const neighbour of together) if (neighbour !== className) neighbours.add(neighbour)
+      coOccurrences.set(className, neighbours)
+    }
+  }
 
   const chunks = Object.values(bundle as Record<string, { type: string }>).filter(
     (output): output is OutputChunkShape => output.type === 'chunk',
@@ -225,13 +238,10 @@ const chunkOwnership = (bundle: object, environment: string, session: StaticComp
           if (previous === undefined) owners.set(className, owner)
           else if (previous !== owner) owners.set(className, null)
         }
-        // These reached one element, so any two of them can compete in the cascade.
-        if (together.length < 2) continue
-        for (const className of together) {
-          const neighbours = coOccurrences.get(className) ?? new Set<string>()
-          for (const neighbour of together) if (neighbour !== className) neighbours.add(neighbour)
-          coOccurrences.set(className, neighbours)
-        }
+        noteTogether(together)
+      }
+      for (const group of joinGroupsOf?.(environment, moduleId) ?? []) {
+        noteTogether(group.split(' ').flatMap((token) => (token ? [bare(token)] : [])))
       }
       for (const className of joinedClassNamesOf?.(environment, moduleId) ?? []) joined.add(bare(className))
     }

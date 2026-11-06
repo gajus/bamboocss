@@ -1117,6 +1117,75 @@ describe('a server environment that writes the sheet', () => {
   })
 })
 
+/**
+ * Atoms a runtime join of a module's own calls puts on one element, in one sublayer.
+ *
+ * Joined rather than merged, so the stylesheet's order decides between them, and the split must
+ * not put them in two sheets: the entry sheet and a chunk sheet have no order relative to each
+ * other that matches the unsplit sheet's. Each was written in a class string of its own, so only
+ * the module's join group says they meet.
+ */
+describe('a runtime join of compiled calls', () => {
+  const sheet =
+    `@layer reset, base, tokens, utilities;` +
+    `@layer utilities{@layer s010-c0-p3000{.c_\\[\\#100\\]{color:#100}.c_\\[\\#200\\]{color:#200}}}` +
+    `:root{--made-with-bamboo:🌱}`
+  const run = async (joinGroups: string[]) => {
+    const session = createStaticCompilationSession()
+    for (const atom of ['c_[#100]', 'c_[#200]']) {
+      session.prunableClasses.add(esc(atom))
+      session.markClassUsed(atom)
+    }
+    // `c_[#100]` is the entry's too, so it stays in the entry sheet; `c_[#200]` is the lazy chunk's alone.
+    session.classNamesOf = (_environment, moduleId) =>
+      moduleId === '/lazy.tsx' ? ['c_[#100]', 'c_[#200]'] : moduleId === '/entry.tsx' ? ['c_[#100]'] : []
+    session.joinGroupsOf = (_environment, moduleId) => (moduleId === '/lazy.tsx' ? joinGroups : [])
+    const generate = hookOf(bamboocssCssEarly({ session, pruneCss: true }).generateBundle)!
+    const bundle: Record<string, object> = {
+      'a.css': { type: 'asset', fileName: 'a.css', names: [], source: sheet },
+      'entry.js': {
+        type: 'chunk',
+        fileName: 'entry.js',
+        name: 'entry',
+        isEntry: true,
+        imports: [],
+        modules: { '/entry.tsx': {} },
+        code: `export const href = "/a.css"\n`,
+      },
+      'lazy.js': {
+        type: 'chunk',
+        fileName: 'lazy.js',
+        name: 'lazy',
+        isEntry: false,
+        imports: [],
+        modules: { '/lazy.tsx': {} },
+        code: ``,
+      },
+    }
+    const emitFile = vi.fn(() => 'assets/lazy.css')
+
+    await generate.call(
+      {
+        environment: { name: 'client', config: { consumer: 'client', build: { emitAssets: true } } },
+        emitFile,
+        getFileName: (reference: string) => reference,
+      } as never,
+      {} as never,
+      bundle as never,
+      false as never,
+    )
+    return emitFile
+  }
+
+  test('keeps a pair the join puts on one element in one sheet', async () => {
+    expect(await run(['c_[#100] c_[#200]']), 'nothing moved out').not.toHaveBeenCalled()
+  })
+
+  test("moves the chunk's own atom where nothing says the two meet", async () => {
+    expect(await run([])).toHaveBeenCalledOnce()
+  })
+})
+
 // A watching build reads its config again only once it changed, as a dev server does; the host
 // is told so from the resolved config.
 describe('a watching build', () => {

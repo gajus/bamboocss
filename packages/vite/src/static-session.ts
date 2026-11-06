@@ -263,6 +263,14 @@ export interface StaticCompilationSession {
    */
   joinedClassNamesOf?: (environment: string, moduleId: string) => readonly string[] | undefined
   /**
+   * What each runtime join of a module's own compiled calls puts on one element, one
+   * space-separated string per join, which the split reads as atoms written together.
+   * @see FoldResult.joinGroups
+   *
+   * Installed by the compiler, which owns the transform artifacts.
+   */
+  joinGroupsOf?: (environment: string, moduleId: string) => readonly string[] | undefined
+  /**
    * The files whose compiled calls named `className`, for a report of a class with no rule.
    *
    * Installed by the compiler, which owns the transform artifacts.

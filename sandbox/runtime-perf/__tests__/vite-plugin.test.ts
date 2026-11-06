@@ -817,7 +817,7 @@ describe.sequential('vite plugin, real rebuild', () => {
       expect(transformCalls, 'the Bamboo-compiled entry took Rollup’s cached transform path').toBe(1)
       expect(error?.message).toContain('cached transform metadata')
       expect(error?.message).toContain(JSON.stringify(slash(staleEntry)))
-      expect(error?.message).toContain('version 1; expected schema version 6')
+      expect(error?.message).toContain('version 1; expected schema version 7')
       expect(error?.message).toContain('cached JavaScript may still name CSS classes whose rules would be dropped')
       expect(error?.message).toContain('Restart Vite to invalidate its in-memory transform cache')
     } finally {
@@ -848,7 +848,7 @@ describe.sequential('vite plugin, real rebuild', () => {
           throw new Error('test fixture could not observe Bamboo transform metadata')
         }
         expect(artifact).toMatchObject({
-          version: 6,
+          version: 7,
           classNames: [`w_[${width}]`],
           integrity: expect.any(String),
         })
@@ -932,7 +932,7 @@ describe.sequential('vite plugin, real rebuild', () => {
       expect(transformCalls, 'the altered Bamboo entry took Rollup’s cached transform path').toBe(1)
       expect(error?.message).toContain('cached transform metadata')
       expect(error?.message).toContain(JSON.stringify(slash(integrityEntry)))
-      expect(error?.message).toContain('schema version 6 integrity check')
+      expect(error?.message).toContain('schema version 7 integrity check')
       expect(error?.message).toContain('cached JavaScript may still name CSS classes whose rules would be dropped')
       expect(error?.message).toContain('Restart Vite to invalidate its in-memory transform cache')
     } finally {
@@ -973,7 +973,7 @@ describe.sequential('vite plugin, real rebuild', () => {
           throw new Error('test fixture could not observe Bamboo transform metadata')
         }
         expect(artifact).toMatchObject({
-          version: 6,
+          version: 7,
           classNames: [`w_[${width}]`],
           integrity: expect.any(String),
         })
@@ -5838,6 +5838,49 @@ describe.sequential('per-route stylesheets', () => {
 
   test('Vite 8 resolves a class joined at runtime the same whichever route loaded first', async () => {
     assertJoinedAtRuntime(await buildJoinedAtRuntime(buildVite8 as unknown as typeof build))
+  }, 60_000)
+
+  /**
+   * Two runtime recipe lookups in one `cx()`, which the compiler joins rather than merges.
+   *
+   * Each lookup is compiled to a class string of its own, so no string holds an answer of one
+   * beside an answer of the other, though both land on the element. Here they set one property:
+   * route a alone uses `w_[701.2px]` and `w_[702.1px]`, and route b shares `w_[701.1px]`, which
+   * keeps that one in the entry sheet. Moved out, route a's two would sit in a sheet ordered after
+   * the entry's, where the unsplit sheet orders them by rank: the same build, styled differently
+   * once split. The join is recorded, and they stay with the atom they meet.
+   */
+  const buildRuntimeJoin = async (run: typeof build) => {
+    writeFileSync(
+      entry,
+      `import 'virtual:bamboo.css'\n` +
+        `window.addEventListener('hashchange', () => {\n` +
+        `  const route = location.hash === '#a' ? import('./__split-route-a') : import('./__split-route-b')\n` +
+        `  void route.then((m) => { document.body.className = m.render(location.hash, location.search) })\n` +
+        `})\n`,
+    )
+    writeFileSync(
+      routeA,
+      `import { cva, cx } from '../styled-system/css'\n` +
+        `const badge = cva({ variants: { tone: { a: { width: '[701.1px]' }, b: { width: '[701.2px]' } } } })\n` +
+        `const chip = cva({ variants: { size: { a: { width: '[702.1px]' } } } })\n` +
+        `export const render = (tone, size) => cx(badge({ tone }), chip({ size }))\n`,
+    )
+    writeFileSync(
+      routeB,
+      `import { css } from '../styled-system/css'\n` + `export const render = () => css({ width: '[701.1px]' })\n`,
+    )
+    const { sheets, source, entrySheet } = await buildSplit(run)
+    return { entryCss: source(entrySheet!), routeSheets: sheets.filter((sheet) => sheet !== entrySheet).map(source) }
+  }
+
+  test('keeps the atoms a runtime join of compiled calls puts on one element in one sheet', async () => {
+    const { entryCss, routeSheets } = await buildRuntimeJoin(build)
+
+    for (const value of ['701.1px', '701.2px', '702.1px']) {
+      expect(entryCss, `w_[${value}]`).toContain(value)
+      for (const sheet of routeSheets) expect(sheet, `w_[${value}] in no route sheet`).not.toContain(value)
+    }
   }, 60_000)
 
   test('splitCss: false keeps one sheet', async () => {

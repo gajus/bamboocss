@@ -537,3 +537,56 @@ describe('the atoms cx() joins with a class it cannot read', () => {
     ).toBe(undefined)
   })
 })
+
+/**
+ * What a `cx()` left as a runtime join of its own compiled calls puts on one element.
+ *
+ * The calls inside are compiled one by one and joined as they are, so where two set one property
+ * the stylesheet's order decides, and no class string the compiler wrote holds them together. The
+ * group is what tells the per-chunk split to keep such a pair in one sheet.
+ */
+describe('the atoms a runtime join of compiled calls puts on one element', () => {
+  const atomsOf = (fixture: ReturnType<typeof createFoldFixture>, ...styles: Record<string, unknown>[]) =>
+    [...new Set(styles.flatMap((style) => fixture.runtimeCss(style).split(' ')))].sort().join(' ')
+  const RECIPES =
+    `import { cva, cx } from 'styled-system/css'\n` +
+    `const badge = cva({ variants: { tone: { quiet: { color: 'gray.500' }, loud: { color: 'red.500' } } } })\n` +
+    `const chip = cva({ variants: { size: { sm: { padding: '2' }, md: { padding: '4' } } } })\n`
+
+  test('two runtime recipe lookups, with every answer of each', () => {
+    const fixture = createFoldFixture()
+    const result = fixture.foldStrict(
+      `${RECIPES}export const f = (tone, size) => cx(badge({ tone }), chip({ size }))\n`,
+    )
+
+    expect(result.skipped).toContainEqual(expect.objectContaining({ name: 'cx', reason: 'dynamic' }))
+    expect(result.joinGroups).toEqual([
+      atomsOf(fixture, { color: 'gray.500' }, { color: 'red.500' }, { padding: '2' }, { padding: '4' }),
+    ])
+    expect(result.joinedClassNames, 'nothing joined with a class it cannot see').toBe(undefined)
+  })
+
+  test('more combinations than the call is compiled to, its bindings read where they are declared', () => {
+    const fixture = createFoldFixture()
+    const flags = Array.from({ length: Math.log2(MAX_CX_COMBINATIONS) + 1 }, (_, index) => `f${index}`)
+    const result = fixture.foldStrict(
+      module(
+        `export const pick = (${flags.join(', ')}) => cx(base, ${flags.map((flag) => `${flag} && loud`).join(', ')})`,
+      ),
+    )
+
+    expect(result.code).toContain('cx(base,')
+    expect(result.joinGroups).toEqual([atomsOf(fixture, { display: 'flex', color: 'red.300' }, { color: 'blue.500' })])
+  })
+
+  test('none where the call is merged, or joins a class it cannot see', () => {
+    const fixture = createFoldFixture()
+
+    expect(fixture.foldStrict(module(`export const pick = (on) => cx(base, on && loud)`)).joinGroups).toBe(undefined)
+    const opaque = fixture.foldStrict(
+      `${RECIPES}export const f = (tone, size, props) => cx(badge({ tone }), chip({ size }), props.className)\n`,
+    )
+    expect(opaque.joinGroups).toBe(undefined)
+    expect(opaque.joinedClassNames, 'kept in the entry sheet instead').toBeDefined()
+  })
+})

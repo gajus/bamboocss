@@ -1,5 +1,20 @@
 # @bamboocss/node
 
+## 1.62.1
+
+### Patch Changes
+
+- @bamboocss/config@1.62.1
+- @bamboocss/core@1.62.1
+- @bamboocss/generator@1.62.1
+- @bamboocss/logger@1.62.1
+- @bamboocss/plugin-svelte@1.62.1
+- @bamboocss/plugin-vue@1.62.1
+- @bamboocss/reporter@1.62.1
+- @bamboocss/shared@1.62.1
+- @bamboocss/token-dictionary@1.62.1
+- @bamboocss/types@1.62.1
+
 ## 1.62.0
 
 ### Patch Changes

@@ -1,5 +1,15 @@
 # @bamboocss/eslint-plugin
 
+## 1.62.1
+
+### Patch Changes
+
+- @bamboocss/config@1.62.1
+- @bamboocss/generator@1.62.1
+- @bamboocss/logger@1.62.1
+- @bamboocss/node@1.62.1
+- @bamboocss/shared@1.62.1
+
 ## 1.62.0
 
 ### Minor Changes

@@ -457,3 +457,83 @@ export const pick = (on) => cx(base, on && loud)
     expect(result.code).toContain('cx(base, on && loud)')
   })
 })
+
+/**
+ * The atoms a `cx()` joins with a class it cannot read.
+ *
+ * Whatever is passed in reaches the element beside them, and nothing at build time says what that
+ * is, so the per-chunk split is told which atoms these are and keeps them in the entry sheet, ahead
+ * of every class a lazily loaded chunk passes in. A binding counts wherever it is declared: the
+ * runtime join reads the class its declaration compiled to.
+ */
+describe('the atoms cx() joins with a class it cannot read', () => {
+  const atomsOf = (fixture: ReturnType<typeof createFoldFixture>, ...styles: Record<string, unknown>[]) =>
+    [...new Set(styles.flatMap((style) => fixture.runtimeCss(style).split(' ')))].sort()
+
+  test('a call written inside it', () => {
+    const fixture = createFoldFixture()
+    const result = fixture.foldStrict(
+      `import { css, cx } from 'styled-system/css'\n` +
+        `export const pick = (className) => cx(css({ color: 'gray.700' }), className)\n`,
+    )
+
+    expect(result.code).toContain('cx("')
+    expect(result.joinedClassNames).toEqual(atomsOf(fixture, { color: 'gray.700' }))
+  })
+
+  test('a binding declared outside the call', () => {
+    const fixture = createFoldFixture()
+    const result = fixture.foldStrict(module(`export const pick = (className) => cx(base, className)`))
+
+    expect(result.joinedClassNames).toEqual(atomsOf(fixture, { display: 'flex', color: 'red.300' }))
+  })
+
+  test('every composition it writes into a call that still joins a class', () => {
+    const fixture = createFoldFixture()
+    const result = fixture.foldStrict(
+      module(`export const pick = (on, open, extra) => cx(base, on && loud, open && extra)`),
+    )
+
+    expect(result.code).toContain(', open && extra)')
+    expect(result.joinedClassNames).toEqual(
+      atomsOf(fixture, { display: 'flex', color: 'blue.500' }, { display: 'flex', color: 'red.300' }),
+    )
+  })
+
+  test('a binding or call inside an argument it cannot read', () => {
+    const fixture = createFoldFixture()
+    const result = fixture.foldStrict(
+      module(`export const pick = (on, extra) => cx(base, on && loud, [css({ color: 'gray.700' }), extra])`),
+    )
+
+    expect(result.joinedClassNames).toEqual(
+      atomsOf(fixture, { display: 'flex', color: 'red.300' }, { color: 'blue.500' }, { color: 'gray.700' }),
+    )
+  })
+
+  test('a binding imported from another module', () => {
+    const fixture = createFoldFixture()
+    fixture.addFiles({
+      'app/styles.ts': `import { css } from 'styled-system/css'\nexport const base = css({ display: 'flex', color: 'red.300' })\n`,
+    })
+    const result = fixture.foldStrict(
+      `import { cx } from 'styled-system/css'\nimport { base } from './styles'\nexport const pick = (className) => cx(base, className)\n`,
+      'app/use.tsx',
+    )
+
+    expect(result.joinedClassNames).toEqual(atomsOf(fixture, { display: 'flex', color: 'red.300' }))
+  })
+
+  test('none where it composes every argument, or joins nothing of Bamboo', () => {
+    const fixture = createFoldFixture()
+
+    expect(fixture.foldStrict(module(`export const pick = (on) => cx(base, on && loud)`)).joinedClassNames).toBe(
+      undefined,
+    )
+    expect(
+      fixture.foldStrict(
+        `import { cx } from 'styled-system/css'\nexport const pick = (className) => cx('group', className)\n`,
+      ).joinedClassNames,
+    ).toBe(undefined)
+  })
+})

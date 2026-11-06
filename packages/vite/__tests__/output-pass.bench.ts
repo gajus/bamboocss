@@ -2,7 +2,7 @@ import { esc } from '@bamboocss/shared'
 import { bench, describe } from 'vitest'
 import { bamboocssCssEarly } from '../src/css'
 import { pruneStaticCss } from '../src/css-output-module'
-import { createStaticCompilationSession } from '../src/static-session'
+import { createStaticCompilationSession, type StaticCompilationSession } from '../src/static-session'
 
 /**
  * What the early output pass costs an output, which had no benchmark: once per output rather than
@@ -57,6 +57,90 @@ const pass = (environment: (typeof environments)[keyof typeof environments]) =>
 // takes its name from it.
 await pass(environments.client)
 
+/**
+ * The same pass splitting the sheet per lazily loaded chunk, which the two cases above never reach:
+ * their one chunk is an entry holding no module, so nothing is owned and the split returns at once.
+ *
+ * Twelve route chunks hold a module each, and each module writes 100 of the used atoms, five to a
+ * class string. Where joined, 20 of each route's atoms are ones a `cx()` there joins with a class
+ * passed in at runtime, which keeps them in the entry sheet: read against the case without, the
+ * difference is what asking each module for them costs, plus the 240 rules that no longer move.
+ */
+const ROUTES = 12
+const routeAtoms = (route: number) => atoms.slice(route * 100, route * 100 + 100)
+const routeOf = (moduleId: string) => Number(/route-(\d+)/.exec(moduleId)?.[1] ?? -1)
+
+const splitSession = (joined: boolean) => {
+  const split = createStaticCompilationSession()
+  for (const atom of atoms) split.prunableClasses.add(esc(atom))
+  for (const atom of atoms.slice(0, 2000)) split.markClassUsed(atom)
+  split.classNamesOf = (_environment, moduleId) => {
+    const route = routeOf(moduleId)
+    if (route < 0) return undefined
+    const own = routeAtoms(route)
+    return Array.from({ length: own.length / 5 }, (_, index) => own.slice(index * 5, index * 5 + 5).join(' '))
+  }
+  if (joined) {
+    split.joinedClassNamesOf = (_environment, moduleId) => {
+      const route = routeOf(moduleId)
+      return route < 0 ? undefined : routeAtoms(route).slice(0, 20)
+    }
+  }
+  return split
+}
+
+/** A fresh bundle of the entry and its routes each time, with the hooks the split emits through. */
+const splitPass = (split: StaticCompilationSession) => {
+  const run = bamboocssCssEarly({ session: split, pruneCss: true }).generateBundle as typeof generate
+  return async () => {
+    const bundle: Record<string, object> = {
+      [ORIGINAL]: { type: 'asset', fileName: ORIGINAL, names: [], source: SHEET },
+      'entry.js': {
+        type: 'chunk',
+        fileName: 'entry.js',
+        name: 'entry',
+        isEntry: true,
+        imports: [],
+        modules: { '/src/entry.tsx': {} },
+        code: `export const href = "/${ORIGINAL}"\n`,
+        viteMetadata: { importedCss: new Set([ORIGINAL]) },
+      },
+    }
+    for (let route = 0; route < ROUTES; route++) {
+      bundle[`route-${route}.js`] = {
+        type: 'chunk',
+        fileName: `route-${route}.js`,
+        name: `route-${route}`,
+        isEntry: false,
+        imports: [],
+        modules: { [`/src/route-${route}.tsx`]: {} },
+        code: '',
+        viteMetadata: { importedCss: new Set<string>() },
+      }
+    }
+    let emitted = 0
+    const context = {
+      environment: environments.client,
+      emitFile: ({ name, source }: { name: string; source: string }) => {
+        const fileName = `assets/${name.replace(/\.css$/, '')}-${emitted++}.css`
+        bundle[fileName] = { type: 'asset', fileName, names: [name], source }
+        return fileName
+      },
+      getFileName: (referenceId: string) => referenceId,
+    }
+    await run.handler.call(context, {}, bundle, false)
+    return bundle
+  }
+}
+
+// A split that stopped happening would leave both cases timing the pass above under another name.
+const sampled = Object.values(await splitPass(splitSession(false))()).filter((output) =>
+  (output as { fileName?: string }).fileName?.endsWith('.css'),
+)
+if (sampled.length !== ROUTES + 1) {
+  throw new Error(`Expected the entry sheet and one per route, found ${sampled.length} sheet(s).`)
+}
+
 const benchOptions = { iterations: 30, warmupIterations: 10, time: 1000 }
 
 describe('early output pass, 3,000 atoms', () => {
@@ -80,6 +164,24 @@ describe('early output pass, 3,000 atoms', () => {
     'a copy the environment discards',
     async () => {
       await pass(environments.ssr)
+    },
+    benchOptions,
+  )
+
+  const split = splitPass(splitSession(false))
+  bench(
+    `a sheet split across ${ROUTES} lazy chunks`,
+    async () => {
+      await split()
+    },
+    benchOptions,
+  )
+
+  const joined = splitPass(splitSession(true))
+  bench(
+    `the same split, ${ROUTES * 20} atoms joined at runtime`,
+    async () => {
+      await joined()
     },
     benchOptions,
   )

@@ -256,6 +256,13 @@ export interface StaticCompilationSession {
    */
   classNamesOf?: (environment: string, moduleId: string) => readonly string[] | undefined
   /**
+   * The atoms a module's `cx()` calls join with a class the build cannot see, which the split
+   * keeps in the entry sheet. @see FoldResult.joinedClassNames
+   *
+   * Installed by the compiler, which owns the transform artifacts.
+   */
+  joinedClassNamesOf?: (environment: string, moduleId: string) => readonly string[] | undefined
+  /**
    * The files whose compiled calls named `className`, for a report of a class with no rule.
    *
    * Installed by the compiler, which owns the transform artifacts.

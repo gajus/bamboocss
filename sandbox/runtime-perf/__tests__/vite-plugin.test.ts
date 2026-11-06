@@ -817,7 +817,7 @@ describe.sequential('vite plugin, real rebuild', () => {
       expect(transformCalls, 'the Bamboo-compiled entry took Rollup’s cached transform path').toBe(1)
       expect(error?.message).toContain('cached transform metadata')
       expect(error?.message).toContain(JSON.stringify(slash(staleEntry)))
-      expect(error?.message).toContain('version 1; expected schema version 5')
+      expect(error?.message).toContain('version 1; expected schema version 6')
       expect(error?.message).toContain('cached JavaScript may still name CSS classes whose rules would be dropped')
       expect(error?.message).toContain('Restart Vite to invalidate its in-memory transform cache')
     } finally {
@@ -848,7 +848,7 @@ describe.sequential('vite plugin, real rebuild', () => {
           throw new Error('test fixture could not observe Bamboo transform metadata')
         }
         expect(artifact).toMatchObject({
-          version: 5,
+          version: 6,
           classNames: [`w_[${width}]`],
           integrity: expect.any(String),
         })
@@ -932,7 +932,7 @@ describe.sequential('vite plugin, real rebuild', () => {
       expect(transformCalls, 'the altered Bamboo entry took Rollup’s cached transform path').toBe(1)
       expect(error?.message).toContain('cached transform metadata')
       expect(error?.message).toContain(JSON.stringify(slash(integrityEntry)))
-      expect(error?.message).toContain('schema version 5 integrity check')
+      expect(error?.message).toContain('schema version 6 integrity check')
       expect(error?.message).toContain('cached JavaScript may still name CSS classes whose rules would be dropped')
       expect(error?.message).toContain('Restart Vite to invalidate its in-memory transform cache')
     } finally {
@@ -973,7 +973,7 @@ describe.sequential('vite plugin, real rebuild', () => {
           throw new Error('test fixture could not observe Bamboo transform metadata')
         }
         expect(artifact).toMatchObject({
-          version: 5,
+          version: 6,
           classNames: [`w_[${width}]`],
           integrity: expect.any(String),
         })
@@ -5753,6 +5753,91 @@ describe.sequential('per-route stylesheets', () => {
   // before Bamboo splits the sheet. Every split ran unminified above, so none saw that.
   test('Vite 8 keeps breakpoint order across route sheets under its default minifier', async () => {
     assertSplit(await buildSplit(buildVite8 as unknown as typeof build, {}))
+  }, 60_000)
+
+  /**
+   * A class passed in at runtime, against the atoms of the component it is joined with.
+   *
+   * `cx(css({ width }), className)` compiles to `cx('w_…', className)`: the component's atom and
+   * whatever is passed in never share a class string, so nothing tells the split they compete.
+   * Here the component sits in a chunk two routes load with `import()`, and route a passes an
+   * override in. In a browser the entry sheet comes first and each lazy sheet follows the first
+   * time its chunk loads, so a widget sheet holding its atom would land before route a's or after
+   * it depending on which route the visitor opened first, and the same page would render two ways.
+   * So an atom a `cx()` joins with a class passed in stays in the entry sheet, ahead of them all.
+   */
+  const buildJoinedAtRuntime = async (run: typeof build) => {
+    const widget = join(cwd, 'src/__split-widget.tsx')
+    onTestFinished(() => rmSync(widget, { force: true }))
+    writeFileSync(
+      entry,
+      `import 'virtual:bamboo.css'\n` +
+        `window.addEventListener('hashchange', () => {\n` +
+        `  const route = location.hash === '#a' ? import('./__split-route-a') : import('./__split-route-b')\n` +
+        `  void route.then((m) => m.render())\n` +
+        `})\n`,
+    )
+    writeFileSync(
+      widget,
+      `import { css, cx } from '../styled-system/css'\n` +
+        `export const widget = (className?: string) => cx(css({ width: '[480.4px]' }), className)\n`,
+    )
+    writeFileSync(
+      routeA,
+      `import { css } from '../styled-system/css'\n` +
+        `export const render = () =>\n` +
+        `  import('./__split-widget').then((m) => {\n` +
+        `    document.body.className = m.widget(css({ width: '[640.4px]' }))\n` +
+        `  })\n`,
+    )
+    writeFileSync(
+      routeB,
+      `export const render = () =>\n` +
+        `  import('./__split-widget').then((m) => {\n` +
+        `    document.body.className = m.widget()\n` +
+        `  })\n`,
+    )
+    const { sheets, source, entrySheet, chunkOf } = await buildSplit(run)
+    /** What the preload helper inserts when the chunk first loads: its own sheets, in order. */
+    const sheetsOf = (name: string) => {
+      const chunk = chunkOf(name)
+      expect(chunk, name).toBeDefined()
+      return [...(chunk!.viteMetadata?.importedCss ?? [])]
+        .map((file) => source(sheets.find((sheet) => sheet.fileName === file)!))
+        .join('\n')
+    }
+    const entryCss = source(entrySheet!)
+    const routeACss = sheetsOf('__split-route-a')
+    const widgetCss = sheetsOf('__split-widget')
+    const winner = (css: string) => cascadeOrder(css).width?.at(-1)
+    return {
+      entryCss,
+      routeACss,
+      // Route a opened first: its sheet, then the widget's as route a imports it.
+      routeAFirst: winner([entryCss, routeACss, widgetCss].join('\n')),
+      // Route b opened first: the widget's sheet, and route a's after it.
+      routeBFirst: winner([entryCss, widgetCss, routeACss].join('\n')),
+    }
+  }
+
+  const assertJoinedAtRuntime = ({
+    entryCss,
+    routeACss,
+    routeAFirst,
+    routeBFirst,
+  }: Awaited<ReturnType<typeof buildJoinedAtRuntime>>) => {
+    expect(entryCss, "the widget's atom, which a class passed in can meet").toContain('480.4px')
+    expect(routeACss, 'the class route a passes in still loads with route a').toContain('640.4px')
+    expect(routeBFirst, 'the same width wins either way').toBe(routeAFirst)
+    expect(routeAFirst, 'the class passed in, as it loads after the entry sheet').toContain('640\\.4px')
+  }
+
+  test('Vite 7 resolves a class joined at runtime the same whichever route loaded first', async () => {
+    assertJoinedAtRuntime(await buildJoinedAtRuntime(build))
+  }, 60_000)
+
+  test('Vite 8 resolves a class joined at runtime the same whichever route loaded first', async () => {
+    assertJoinedAtRuntime(await buildJoinedAtRuntime(buildVite8 as unknown as typeof build))
   }, 60_000)
 
   test('splitCss: false keeps one sheet', async () => {

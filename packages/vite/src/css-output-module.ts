@@ -520,8 +520,9 @@ export { pruneStaticCss } from './prune-static-css'
  * What decides which chunk a utility rule belongs to, by the escape-free class it selects on.
  *
  * Only atoms exclusive to a chunk that is not loaded with an entry appear here. Everything
- * else — an atom two chunks use, one an entry or its static imports reach, `staticCss` — has no
- * owner and stays in the entry sheet, which is what every route loads.
+ * else — an atom two chunks use, one an entry or its static imports reach, one a `cx()` joins
+ * with a class passed in at runtime, `staticCss` — has no owner and stays in the entry sheet,
+ * which is what every route loads.
  */
 export type ChunkOwnership = ReadonlyMap<string, string>
 

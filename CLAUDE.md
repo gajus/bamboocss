@@ -255,7 +255,7 @@ Perf-sensitive code has Vitest benchmarks in `{packages,sandbox}/*/__tests__/**/
 | `node/parse-file`                               | decoding one file's native analysis (`parseNativeFile`)         |
 | `shared/split-props`, `shared/leaf-class`       | runtime helpers on the per-render path                          |
 | `vite/fold`                                     | native analysis per module, and the JS fold on top of it        |
-| `vite/output-pass`                              | the early output pass: pruning and naming a sheet, per output   |
+| `vite/output-pass`                              | the early output pass: pruning, naming and splitting a sheet    |
 
 Nothing measures what the compiled output costs to _render_. `sandbox/runtime-perf/render.bench.ts` did, and went with
 `13ce729fc` — it drove the old `foldSource` signature over fixtures that commit deleted. Compilation now runs on every

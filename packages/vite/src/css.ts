@@ -174,9 +174,16 @@ interface OutputChunkShape {
  * or one no compiled module emits — `staticCss` — has no owner and stays where every route
  * finds it. Loading with an entry is the static import closure of every entry, which is what
  * the browser fetches before the first render.
+ *
+ * Nor has an atom a `cx()` joins with a class passed in at runtime, as `cx(css({ … }), className)`
+ * does. What it competes with is decided at runtime, so co-occurrence cannot say, and two lazy
+ * sheets reach the document in the order their chunks first loaded, which is the order the visitor
+ * opened routes in. In the entry sheet it comes before every lazy sheet, so a class passed in from
+ * a lazy chunk is after it whichever route came first.
  */
 const chunkOwnership = (bundle: object, environment: string, session: StaticCompilationSession) => {
   const classNamesOf = session.classNamesOf
+  const joinedClassNamesOf = session.joinedClassNamesOf
   const ownership = new Map<string, string>()
   /**
    * Which atoms were emitted onto one element together.
@@ -202,6 +209,8 @@ const chunkOwnership = (bundle: object, environment: string, session: StaticComp
 
   // `null` marks an atom seen from more than one chunk, or from an eager one.
   const owners = new Map<string, string | null>()
+  /** Atoms a `cx()` in this output joins with a class passed in at runtime. */
+  const joined = new Set<string>()
   for (const chunk of chunks) {
     const owner = eager.has(chunk.fileName) ? null : chunk.fileName
     for (const moduleId of Object.keys(chunk.modules)) {
@@ -223,13 +232,15 @@ const chunkOwnership = (bundle: object, environment: string, session: StaticComp
           coOccurrences.set(className, neighbours)
         }
       }
+      for (const className of joinedClassNamesOf?.(environment, moduleId) ?? []) joined.add(bare(className))
     }
   }
+  for (const className of joined) owners.set(className, null)
   for (const [className, owner] of owners) if (owner !== null) ownership.set(className, owner)
   logger.debug(
     'vite',
     `Split: ${chunks.length} chunk(s), ${eager.size} loaded with an entry, ${owners.size} atom(s) seen, ` +
-      `${ownership.size} owned by a lazy chunk.`,
+      `${ownership.size} owned by a lazy chunk, ${joined.size} joined with a class passed in at runtime.`,
   )
   return { ownership, coOccurrences }
 }

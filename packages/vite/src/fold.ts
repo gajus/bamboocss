@@ -108,6 +108,16 @@ export interface FoldResult {
    * watch files.
    */
   dependencies: string[]
+  /**
+   * The atoms this module writes into a `cx()` that also joins a class the build cannot see —
+   * `cx(css({ … }), className)` — escape-free, as `classNames` are. Absent when there are none.
+   *
+   * Such an atom can end up on one element with any class passed in, and nothing at build time
+   * says which. The per-chunk split keeps it in the entry sheet for that reason: the document has
+   * the entry sheet before any lazily loaded one, so a class passed in from a lazy chunk comes
+   * after it whichever route loaded first. A binding the call reads counts, wherever it is declared.
+   */
+  joinedClassNames?: string[]
 }
 
 export interface FoldOptions {
@@ -379,6 +389,46 @@ export const foldSource = (options: FoldOptions): FoldResult => {
 
   const folded: FoldedCall[] = []
   const skipped: SkippedCall[] = []
+
+  /** Each `cx()` keeping a class it cannot read beside atoms it compiles. @see FoldResult.joinedClassNames */
+  const joinSpans: FoldSpan[] = []
+  /** What the bindings such a call reads compile to, as their own declarations write it. */
+  const joinedBindings = new Set<string>()
+  /**
+   * Every atom the module writes into one of those calls, once the calls are written.
+   *
+   * Spans of source nest or are apart, so those holding others merge into the outermost, and each
+   * written call is looked for in the one span that starts last before it rather than in all of them,
+   * which a module holding many such calls would otherwise pay for once per call per span.
+   */
+  const joinedClassNames = () => {
+    if (joinSpans.length === 0) return {}
+    const spans: Array<{ start: number; end: number }> = []
+    for (const { start, end } of [...joinSpans].sort((a, b) => a.start - b.start || b.end - a.end)) {
+      const last = spans.at(-1)
+      if (last && start < last.end) last.end = Math.max(last.end, end)
+      else spans.push({ start, end })
+    }
+    const joined = new Set(joinedBindings)
+    for (const entry of folded) {
+      let low = 0
+      let high = spans.length - 1
+      let holder: { start: number; end: number } | undefined
+      while (low <= high) {
+        const middle = (low + high) >> 1
+        if (spans[middle]!.start <= entry.start) {
+          holder = spans[middle]
+          low = middle + 1
+        } else high = middle - 1
+      }
+      if (!holder || entry.end > holder.end) continue
+      const passed = entry.literalClassNames?.length ? new Set(entry.literalClassNames) : undefined
+      for (const names of entry.classNames) {
+        for (const name of names.split(' ')) if (name && !passed?.has(name)) joined.add(name)
+      }
+    }
+    return joined.size > 0 ? { joinedClassNames: [...joined].sort() } : {}
+  }
 
   /** Modules other than this one whose declarations a folded recipe call selected. */
   const foreignDependencies = new Set<string>()
@@ -1010,6 +1060,8 @@ export const foldSource = (options: FoldOptions): FoldResult => {
           literalClassNames: literalClasses(),
           foreign: matched.flatMap((candidate) => candidate.foreign ?? []),
         })
+        // The composed atoms are written into the call, beside the classes it still joins.
+        joinSpans.push(call.span)
         continue
       }
     }
@@ -1034,6 +1086,32 @@ export const foldSource = (options: FoldOptions): FoldResult => {
         start: call.span.start,
         end: call.span.end,
       })
+      if (mixed) {
+        // Every call inside is compiled on its own and joined as it is. A binding is compiled where
+        // it is declared, which the call's span does not hold, so each is read for itself — those an
+        // unreadable argument holds as well, since they reach the element all the same.
+        joinSpans.push(call.span)
+        const readBindings = (arg: FoldCxArgument) => {
+          if (arg.kind === 'array' || arg.kind === 'when' || arg.kind === 'choose') {
+            for (const element of arg.elements ?? []) readBindings(element)
+            return
+          }
+          if (arg.kind !== 'binding') return
+          const imported = arg.binding === undefined ? undefined : importedStyleSet(arg.binding)
+          if (!imported) {
+            if (arg.definition) joinSpans.push(arg.definition)
+            return
+          }
+          try {
+            for (const name of styleCompiler.className(imported.styleSet).split(' ')) {
+              if (name) joinedBindings.add(name)
+            }
+          } catch {
+            // The module declaring it reports why it cannot be written, and writes no atom for it.
+          }
+        }
+        for (const arg of call.cxArguments) readBindings(arg)
+      }
       continue
     }
 
@@ -1241,7 +1319,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
   if (candidates.length === 0 && recipeDefinitions.length === 0 && analysis.vueExposures.length === 0) {
     settleUnwritableTokens()
     if (reportSurvivors) reportRuntimeBindings()
-    return { code, map: null, folded, skipped, dependencies: [] }
+    return { code, map: null, folded, skipped, dependencies: [], ...joinedClassNames() }
   }
 
   // Outermost-first, so a nested candidate can be detected and dropped rather than producing
@@ -1509,7 +1587,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
   if (reportSurvivors) reportRuntimeBindings()
 
   if (folded.length === 0) {
-    return { code, map: null, folded, skipped, dependencies: [] }
+    return { code, map: null, folded, skipped, dependencies: [], ...joinedClassNames() }
   }
 
   const dependencies = new Set<string>([...analysis.dependencies, ...foreignDependencies])
@@ -1521,6 +1599,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     folded,
     skipped,
     dependencies: [...dependencies],
+    ...joinedClassNames(),
   }
 }
 

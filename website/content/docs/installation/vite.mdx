@@ -252,6 +252,13 @@ The split is safe because precedence does not depend on where a rule sits: it li
 same layer order and sublayer order as the entry sheet, so whichever the document parses first establishes the same
 order. A chunk sheet that loads first still ranks every utility above preflight and global styles.
 
+Within one sublayer, source order still decides, and a lazily loaded sheet joins the document the first time its chunk
+loads — in the order the visitor happened to open routes. So two utilities a compiled class string puts on one element
+are never split across sheets, and the atoms a `cx()` joins with a class passed in at runtime, as a component's
+`cx(styles, className)` does, stay in the entry sheet. What is passed in is only known at runtime, and from the entry
+sheet every lazily loaded sheet comes after those atoms, whichever route loaded first. Join classes through `cx()` for
+this to hold: a template literal or a helper such as `clsx` is a join the build does not see.
+
 Builds only, and only where Vite's `build.cssCodeSplit` is on, which it is unless you turned it off or are building a
 library. A framework that copies a server build's stylesheets into the client build by the names its chunks recorded, as
 the RSC plugin does, copies the chunk sheets along with the entry sheet. Set `splitCss: false` to keep one sheet.

@@ -86,6 +86,8 @@ export interface BambooVitePluginOptions {
    * An atom two chunks use stays in the entry sheet, so nothing is ever downloaded twice; a
    * route that is the only user of a style downloads that style with the route. Precedence
    * does not depend on which sheet a rule is in, since it lives in the cascade sublayers.
+   * An atom a `cx()` joins with a class passed in at runtime stays in the entry sheet too, so
+   * whatever is passed in from a lazy chunk loads after it, whichever route loaded first.
    *
    * @default true
    */
@@ -111,7 +113,7 @@ const SFC_SCRIPT_TAG = /<script[\s>/]/i
 const COMPILED_MDX = /^(?:export default )?function (?:_createMdxContent|MDXContent)\b/m
 const NODE_MODULES = /node_modules/
 const TRANSFORM_META_KEY = 'bamboocss:transform'
-const TRANSFORM_ARTIFACT_VERSION = 5 as const
+const TRANSFORM_ARTIFACT_VERSION = 6 as const
 
 /**
  * Queries that make Vite serve something other than the module's own source.
@@ -494,6 +496,8 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     classNames: string[]
     /** Of `classNames`, the ones only ever passed through a `cx()` as written: not Bamboo's. */
     literalClassNames: string[]
+    /** Atoms a `cx()` here joins with a class the build cannot see. @see FoldResult.joinedClassNames */
+    joinedClassNames: string[]
     dependencies: string[]
     signature?: { input: string; output: string; path: string }
   }
@@ -524,6 +528,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       artifact.transformedFile,
       [...artifact.classNames],
       [...artifact.literalClassNames],
+      [...artifact.joinedClassNames],
       [...artifact.dependencies],
       artifact.signature ? [artifact.signature.input, artifact.signature.output, artifact.signature.path] : null,
     ])
@@ -543,6 +548,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       survivors: artifact.survivors.map((survivor) => ({ ...survivor })),
       classNames: [...artifact.classNames],
       literalClassNames: [...artifact.literalClassNames],
+      joinedClassNames: [...artifact.joinedClassNames],
       dependencies: [...artifact.dependencies],
       ...(artifact.signature ? { signature: { ...artifact.signature } } : {}),
     }
@@ -578,6 +584,9 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       !Array.isArray(value.literalClassNames) ||
       !value.literalClassNames.every((entry) => typeof entry === 'string')
     ) {
+      return false
+    }
+    if (!Array.isArray(value.joinedClassNames) || !value.joinedClassNames.every((entry) => typeof entry === 'string')) {
       return false
     }
     if (!Array.isArray(value.dependencies) || !value.dependencies.every((entry) => typeof entry === 'string'))
@@ -1690,6 +1699,9 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
 
   staticSession.classNamesOf = (environment, moduleId) =>
     transformStateByEnvironment.get(environment)?.transformArtifactsByModule.get(moduleId)?.classNames
+
+  staticSession.joinedClassNamesOf = (environment, moduleId) =>
+    transformStateByEnvironment.get(environment)?.transformArtifactsByModule.get(moduleId)?.joinedClassNames
 
   staticSession.beginOutputProjection = (environment, outputOptions, bundle, replacesGeneratedStylesheet) => {
     const generation = preparedGenerations.get(environment)
@@ -3030,6 +3042,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
         transformedFile: false,
         classNames: [],
         literalClassNames: [],
+        joinedClassNames: [],
         dependencies: previousDependencies,
       }
       commitTransformArtifact(state, failedArtifact)
@@ -3091,6 +3104,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       transformedFile: result.folded.some((entry) => entry.kind === 'class' || entry.kind === 'slots'),
       classNames: [...new Set(result.folded.flatMap((entry) => entry.classNames))],
       literalClassNames: literalOnly(result.folded),
+      joinedClassNames: result.joinedClassNames ?? [],
       dependencies: [...result.dependencies],
       ...(result.dependencies.length
         ? { signature: { input: (inputDigest ??= digest(code)), output: digest(result.code), path: filePath } }

@@ -1,5 +1,15 @@
 # @bamboocss/core
 
+## 1.64.1
+
+### Patch Changes
+
+- @bamboocss/is-valid-prop@1.64.1
+- @bamboocss/logger@1.64.1
+- @bamboocss/shared@1.64.1
+- @bamboocss/token-dictionary@1.64.1
+- @bamboocss/types@1.64.1
+
 ## 1.64.0
 
 ### Minor Changes

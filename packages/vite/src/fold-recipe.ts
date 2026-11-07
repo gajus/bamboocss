@@ -476,7 +476,8 @@ export const lowerRecipeCall = (
 
         const styles = styleCompiler.resolveRecipe(config as StyleSetRecipeConfig, selected, slot)
         if (!styles) return internLeaf('')
-        const className = styleCompiler.className(styleCompiler.compose(...before, styles, ...after))
+        // Beside the other arguments of a `cx()`, if any, merged as the runtime `cx` merges their classes.
+        const className = styleCompiler.className(styleCompiler.composeCx(...before, styles, ...after))
         for (const token of className.split(' ')) if (token) emittedClasses.add(token)
         return internLeaf(className)
       }

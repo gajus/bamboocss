@@ -15,9 +15,9 @@ import outdent from 'outdent'
  * characters coding the property and conditions, `:`, then the value. So development and
  * production merge alike. @see mergeableAtomName
  *
- * The compiler still merges every Bamboo style a `cx()` call holds before a class exists, later
- * arguments winning. What reaches the runtime `cx` is what it could not see — a class passed in,
- * or one assembled at runtime.
+ * The compiler still merges every Bamboo style a `cx()` call holds before a class exists, by property
+ * and conditions as this does, later arguments winning. What reaches the runtime `cx` is what it
+ * could not see — a class passed in, or one assembled at runtime.
  */
 const declaration = outdent`
    type Argument = string | boolean | null | undefined | Argument[]

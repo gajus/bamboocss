@@ -373,7 +373,7 @@ composes the same way: `cx(card({ size }).root, css({ color: 'blue.400' }))`.
 Bamboo provides a `cx` function for combining class names, and the later argument wins wherever two set the same
 property under the same conditions:
 
-- when every Bamboo argument is analyzable, the compiler merges their StyleSets before allocating classes;
+- when every Bamboo argument is analyzable, the compiler merges their StyleSets before allocating classes, the same way;
 - when an arbitrary runtime class is present — a `className` a component forwards, usually — the other arguments are
   still merged at build time, and the generated helper merges the runtime class with them. Each class Bamboo names
   carries the property and conditions it sets, and `cx` keeps the last class of each, so a `className` passed in
@@ -395,6 +395,10 @@ const Card = ({ className, ...props }) => {
   return <div className={rootClassName} {...props} />
 }
 ```
+
+Either way the merge is by property and conditions, which is not quite `css(a, b)`: `css()` merges objects, so a later
+`{ padding: '3' }` replaces an earlier `{ padding: { base: '2', md: '4' } }` outright, while `cx()` replaces the base
+padding and keeps the `md` one, whether the compiler sees the second class or it arrives as a `className`.
 
 With fully analyzable Bamboo arguments, later declarations win and the losing atom is never allocated:
 

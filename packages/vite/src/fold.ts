@@ -277,15 +277,15 @@ const writeCxBranches = <C>(
 }
 
 /**
- * The class string one combination of `cx()` arguments composes to: their declarations merged,
- * later ones winning, and the merged atoms written where the first style stood among the classes
- * passed through as written.
+ * The class string one combination of `cx()` arguments composes to: their declarations merged by
+ * property and conditions as the runtime `cx` merges, the later winning, and the merged atoms
+ * written where the first style stood among the classes passed through as written.
  */
 const composeCxParts = <C extends { styleSet?: Dict }>(parts: CxPart<C>[], styleCompiler: StaticStyleSetCompiler) => {
   const styles = parts.flatMap((part) =>
     part.kind === 'style' && part.candidate.styleSet ? [part.candidate.styleSet] : [],
   )
-  const compiled = styles.length > 0 ? styleCompiler.className(styleCompiler.compose(...styles)) : ''
+  const compiled = styles.length > 0 ? styleCompiler.className(styleCompiler.composeCx(...styles)) : ''
   const classParts: string[] = []
   let wroteCompiled = false
   for (const part of parts) {
@@ -1279,9 +1279,10 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       continue
     }
 
-    const merged = styleCompiler.compose(...matched.map((candidate) => candidate.styleSet!))
+    let merged: Dict
     let compiled: string
     try {
+      merged = styleCompiler.composeCx(...matched.map((candidate) => candidate.styleSet!))
       compiled = styleCompiler.className(merged)
     } catch (error) {
       if (!(error instanceof UnwritableStyleError)) throw error

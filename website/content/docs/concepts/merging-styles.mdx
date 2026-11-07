@@ -151,7 +151,8 @@ const className = cx(
 ## Merging config recipe and style object
 
 With the Vite compiler, an analyzable `cx()` composes the recipe and utility StyleSets before allocating shared atoms.
-Later arguments win, and losing declarations are not emitted for that composition.
+Later arguments win by property and conditions, as the runtime `cx` merges, and losing declarations are not emitted for
+that composition.
 
 ```js
 import { css, cx } from 'styled-system/css'

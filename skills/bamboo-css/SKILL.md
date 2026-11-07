@@ -156,7 +156,9 @@ Not failures: `not-imported` (a local function with the same name), `overlapping
 
 - `css(a, b)` merges style objects, and the later value wins per property.
 - `cx()` of calls the compiler can see merges them before allocating classes, so the later argument wins:
-  `cx(button({ size: 'sm' }), css({ bg: 'red.500' }))` overrides the recipe's `bg`.
+  `cx(button({ size: 'sm' }), css({ bg: 'red.500' }))` overrides the recipe's `bg`. It merges by property and
+  conditions, as at runtime: a later plain `padding` replaces the base padding and keeps an earlier `md` one, where
+  `css(a, b)` would replace the whole value.
 - A class the compiler cannot see, such as a forwarded `className`, is merged at runtime: of two Bamboo classes setting
   one property under the same conditions, the later argument wins, so `cx(styles, className)` lets the caller override.
   A class Bamboo did not name is only joined. The merge compares property and conditions only: `paddingTop` passed

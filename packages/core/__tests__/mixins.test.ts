@@ -1,4 +1,4 @@
-import { createContext } from '@bamboocss/fixture'
+import { createContext, withoutMergeCodes } from '@bamboocss/fixture'
 import type { Config, Dict } from '@bamboocss/types'
 import { describe, expect, test } from 'vitest'
 import { stringify } from '../src/stringify'
@@ -145,7 +145,7 @@ describe('the encoder and mixin atoms', () => {
     encode(ctx)
     const sheet = ctx.createSheet()
     ctx.appendParserCss(sheet)
-    return ctx.getCss(sheet)
+    return withoutMergeCodes(ctx.getCss(sheet))
   }
 
   test("interns a mixin's declarations beside its class, for a sheet the compiler is checked against", () => {
@@ -226,6 +226,8 @@ describe('a rule writing a mixin out in place of the compiler', () => {
     const processor = createRuleProcessor(config)
     processor.css({ mixin: 'stackedAfter' })
 
-    expect(processor.toCss()).toContain('.mixin_stackedAfter {\n      padding: 1px;\n      color: blue;')
+    expect(withoutMergeCodes(processor.toCss())).toContain(
+      '.mixin_stackedAfter {\n      padding: 1px;\n      color: blue;',
+    )
   })
 })

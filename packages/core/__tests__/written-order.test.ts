@@ -95,7 +95,7 @@ describe('conditions that rank alike', () => {
       [
         [
           "sheet:order",
-          "\`dark:c_white\` and \`[&[data-active]]:c_red\` set one property under conditions that rank alike, and are written in both orders: \`src/a.tsx\` writes \`dark:c_white\` first, \`src/b.tsx\` writes \`[&[data-active]]:c_red\` first. One stylesheet can keep only one order, so where both apply \`[&[data-active]]:c_red\` wins. To choose, nest one condition inside the other.",
+          "\`_gtEApe:dark:c_white\` and \`_1IuQAG:[&[data-active]]:c_red\` set one property under conditions that rank alike, and are written in both orders: \`src/a.tsx\` writes \`_gtEApe:dark:c_white\` first, \`src/b.tsx\` writes \`_1IuQAG:[&[data-active]]:c_red\` first. One stylesheet can keep only one order, so where both apply \`_1IuQAG:[&[data-active]]:c_red\` wins. To choose, nest one condition inside the other.",
         ],
       ]
     `)
@@ -122,7 +122,7 @@ describe('conditions that rank alike', () => {
     expect(warn.mock.calls.filter(([scope]) => scope === 'sheet:order').map(([, message]) => message))
       .toMatchInlineSnapshot(`
         [
-          "\`dark:c_white\` and \`[&[data-open]]:c_blue\` set one property under conditions that rank alike, and are written in both orders: the order others write puts \`dark:c_white\` first, \`src/c.tsx\` writes \`[&[data-open]]:c_blue\` first. One stylesheet can keep only one order, so where both apply \`[&[data-open]]:c_blue\` wins. To choose, nest one condition inside the other.",
+          "\`_gtEApe:dark:c_white\` and \`_CMFrxa:[&[data-open]]:c_blue\` set one property under conditions that rank alike, and are written in both orders: the order others write puts \`_gtEApe:dark:c_white\` first, \`src/c.tsx\` writes \`_CMFrxa:[&[data-open]]:c_blue\` first. One stylesheet can keep only one order, so where both apply \`_CMFrxa:[&[data-open]]:c_blue\` wins. To choose, nest one condition inside the other.",
         ]
       `)
   })

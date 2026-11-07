@@ -1,4 +1,6 @@
 import {
+  atomKey,
+  atomKeyCode,
   BambooError,
   deepSet,
   esc,
@@ -6,6 +8,7 @@ import {
   isImportant,
   isObject,
   markImportant,
+  mergeableAtomName,
   mergeDeclarations,
   setDeclarations,
   viewTransitionPseudo,
@@ -119,11 +122,26 @@ export class StyleDecoder {
     }
   }
 
-  private formatSelector = (conditions: string[], className: string) => {
+  /**
+   * The selector a rule is written under. `property` is given for a utility atom only, which is
+   * named after what it sets so the runtime `cx` can merge it; a recipe's class keeps its name.
+   * @see mergeableAtomName
+   */
+  private formatSelector = (conditions: string[], className: string, property?: string) => {
     const { conditions: cond, hash, utility } = this.context
 
     const conds = cond.finalize(conditions)
     let result: string
+
+    if (property !== undefined) {
+      const key = atomKey(conds, utility.resolveShorthand(property))
+      const keyCode = utility.claimAtomKeyCode(key, atomKeyCode(key))
+      const identity = [...conds, className].join(':')
+      const name = hash.className
+        ? utility.claimHashedClassName(identity, mergeableAtomName(keyCode, identity))
+        : mergeableAtomName(keyCode, identity, identity)
+      return esc(utility.formatClassName(name))
+    }
 
     if (hash.className) {
       conds.push(className)
@@ -173,7 +191,7 @@ export class StyleDecoder {
     const styles = important ? markImportant(resolved) : resolved
 
     const parts = entry.cond ? entry.cond.split(StyleEncoder.conditionSeparator) : []
-    const className = this.formatSelector(parts, transformed.className)
+    const className = this.formatSelector(parts, transformed.className, recipeName ? undefined : entry.prop)
     const classSelector = important ? `.${className}\\!` : `.${className}`
 
     return {

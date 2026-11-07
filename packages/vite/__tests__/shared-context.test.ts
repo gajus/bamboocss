@@ -2,6 +2,8 @@
 // Loads a `bamboo.config.mjs` written outside the project, and an ES module config is imported from a
 // temporary file. happy-dom reads modules as a browser would and cannot resolve one outside the
 // project; a build loads its config in Node, which is what this pins.
+import { withoutMergeCodes } from '@bamboocss/fixture'
+import { esc } from '@bamboocss/shared'
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -102,7 +104,7 @@ describe('one context for the compiler and the stylesheet', () => {
     const className = folded?.match(/"([^"\s]+)"/)?.[1]
 
     expect(className, 'the fold produced a class name').toBeTruthy()
-    expect(await sheet()).toContain(`.${className}`)
+    expect(await sheet()).toContain(`.${esc(className!)}`)
   })
 
   /** What a project setting no `hash` gets: hashed in a build, readable in the dev server. */
@@ -112,16 +114,16 @@ describe('one context for the compiler and the stylesheet', () => {
 
     const className = (await fold('src/app.tsx', APP))?.match(/"([^"\s]+)"/)?.[1]
 
-    expect(className, 'a hash, not the readable name').toMatch(/^[a-zA-Z]+$/)
-    expect(await sheet()).toContain(`.${className}`)
+    expect(className, 'a hash, not the readable name').toMatch(/^_[\w-]{6}:[\w-]{5}$/)
+    expect(await sheet()).toContain(`.${esc(className!)}`)
   })
 
   test('by default the dev server keeps the class readable, and the sheet has its rule', async () => {
     const root = project({ 'src/app.tsx': APP })
     const { fold, sheet } = await run(root, 'serve')
 
-    expect(await fold('src/app.tsx', APP)).toContain('"c_blue"')
-    expect(await sheet()).toContain('.c_blue')
+    expect(withoutMergeCodes(await fold('src/app.tsx', APP))).toContain('"c_blue"')
+    expect(withoutMergeCodes(await sheet())).toContain('.c_blue')
   })
 
   /**

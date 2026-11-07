@@ -13,7 +13,6 @@ const makeContext = () => ({
     hasShorthand: false,
     resolveShorthand: (p: string) => p,
     transform: (prop: string, value: any) => ({ className: `${prop}_${value}` }),
-    toHash: (path: string[], h: (s: string) => string) => h(path.join(':')),
   },
   conditions: {
     breakpoints: { keys: ['sm', 'md'] },

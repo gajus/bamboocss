@@ -1,4 +1,4 @@
-import { createContext } from '@bamboocss/fixture'
+import { createContext, withoutMergeCodes } from '@bamboocss/fixture'
 import type { Config } from '@bamboocss/types'
 import { describe, expect, test } from 'vitest'
 import { parseFile } from './fixture'
@@ -23,7 +23,8 @@ const extract = (userConfig?: Config, code = source) => {
   ctx.encoder.withOwner('extract', filePath, () => parseFile(ctx, filePath))
   // What a build does once every file is read: an inline recipe's atoms are written here.
   ctx.encoder.atomizeObservedRecipes()
-  return ctx.getAtomOrigins()
+  // Keyed by the readable name, which is what the expectations below spell.
+  return new Map([...ctx.getAtomOrigins()].map(([className, origin]) => [withoutMergeCodes(className), origin]))
 }
 
 const at = (line: number) => ({

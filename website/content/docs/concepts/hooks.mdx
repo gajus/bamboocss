@@ -43,32 +43,9 @@ export default defineConfig({
 
 ### Customizing the hash function
 
-Wherever class names are hashed — production builds by default, every mode with
-[`hash: true`](/docs/references/config#hash) — you can customize the function used to hash them.
-
-```ts
-export default defineConfig({
-  // ...
-  hash: true,
-  plugins: [
-    {
-      name: 'my-app',
-      hooks: {
-        'utility:created': ({ configure }) => {
-          configure({
-            toHash: (paths, toHash) => {
-              const stringConds = paths.join(':')
-              const splitConds = stringConds.split('_')
-              const hashConds = splitConds.map(toHash)
-              return hashConds.join('_')
-            },
-          })
-        },
-      },
-    },
-  ],
-})
-```
+A `utility:created` hook could once replace the function class names are hashed with, through `configure({ toHash })`.
+It is no longer used: a utility class name has the fixed shape the runtime `cx` merges by, so no hook can hash it
+differently, and a config whose hook sets it is reported.
 
 ### Modifying the config
 

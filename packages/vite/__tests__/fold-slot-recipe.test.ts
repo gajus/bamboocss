@@ -1,3 +1,4 @@
+import { withoutMergeCodes } from '@bamboocss/fixture'
 import { describe, expect, test } from 'vitest'
 import { createFoldFixture, selectorsFor } from './fixture'
 
@@ -40,7 +41,7 @@ describe('config slot recipes', () => {
     const css = createFoldFixture().fold(
       `import { css } from '../styled-system/css'\nexport const value = css({ color: 'red' }).trim()`,
     )
-    expect(css.code).toContain('"c_red".trim()')
+    expect(withoutMergeCodes(css.code)).toContain('"c_red".trim()')
 
     const recipe = createFoldFixture().fold(
       `import { buttonStyle } from '../styled-system/recipes'\nexport const value = buttonStyle({ size: 'sm' }).length`,
@@ -85,10 +86,12 @@ export const root = card().root
     expect(result.code.split('\n').filter((line) => line.startsWith('export const'))).toEqual(
       named.code.split('\n').filter((line) => line.startsWith('export const')),
     )
-    expect(result.code).toContain('export const whole = {"root":"c_red","label":"fs_lg","icon":"w_4"}')
+    const whole = JSON.parse(/export const whole = (\{.*\})/.exec(result.code)![1]!) as Record<string, string>
+    expect(Object.keys(whole)).toEqual(['root', 'label', 'icon'])
+    expect(withoutMergeCodes(Object.values(whole))).toEqual(['c_red', 'fs_lg', 'w_4'])
 
     const css = fixture.getStyleSetCss()
-    for (const className of ['c_red', 'fs_lg', 'w_4']) {
+    for (const className of Object.values(whole)) {
       for (const selector of selectorsFor(className)) expect(css).toContain(selector)
     }
   })

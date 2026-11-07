@@ -1,3 +1,4 @@
+import { withoutMergeCodes } from '@bamboocss/fixture'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -141,7 +142,7 @@ describe('watch rebuilds', () => {
 
     writeDependency('red.300')
     await start()
-    expect(await fold()).toContain('"c_red.300"')
+    expect(withoutMergeCodes(await fold())).toContain('"c_red.300"')
 
     writeDependency('blue.500')
     change('update')
@@ -149,7 +150,7 @@ describe('watch rebuilds', () => {
 
     // Without the refresh this is still `c_red.300`: the class is correct for source the
     // user no longer has, and nothing in the build says so.
-    expect(await fold()).toContain('"c_blue.500"')
+    expect(withoutMergeCodes(await fold())).toContain('"c_blue.500"')
   }, 60_000)
 
   test('a deleted dependency stops resolving rather than folding its last contents', async () => {
@@ -157,7 +158,7 @@ describe('watch rebuilds', () => {
 
     writeDependency('red.300')
     await start()
-    expect(await fold()).toContain('"c_red.300"')
+    expect(withoutMergeCodes(await fold())).toContain('"c_red.300"')
 
     rmSync(DEPENDENCY, { force: true })
     change('delete')
@@ -190,7 +191,7 @@ describe('dev invalidation of modules that folded across files', () => {
 
     writeDependency('red.300')
     await start()
-    expect(await fold()).toContain('"c_red.300"')
+    expect(withoutMergeCodes(await fold())).toContain('"c_red.300"')
 
     // Alongside the module Vite matched for the edit itself, which this must not disturb.
     const changed = { id: DEPENDENCY }
@@ -200,7 +201,9 @@ describe('dev invalidation of modules that folded across files', () => {
 
     // The same module, no longer reading anything out of the dependency.
     expect(
-      await fold(`import { css } from 'styled-system/css'\nexport const cls = css({ color: 'red.300' })\n`),
+      withoutMergeCodes(
+        await fold(`import { css } from 'styled-system/css'\nexport const cls = css({ color: 'red.300' })\n`),
+      ),
     ).toContain('"c_red.300"')
 
     const second = stubGraph({ [CONSUMER]: [{ id: CONSUMER }] })
@@ -340,8 +343,8 @@ describe('a dependent the edit does not actually change', () => {
 
     writePair('red.300', 'blue.500')
     await start()
-    expect(await foldFile(CONSUMER, consumerOf('alpha'))).toContain('"c_red.300"')
-    expect(await foldFile(OTHER_CONSUMER, consumerOf('beta'))).toContain('"c_blue.500"')
+    expect(withoutMergeCodes(await foldFile(CONSUMER, consumerOf('alpha')))).toContain('"c_red.300"')
+    expect(withoutMergeCodes(await foldFile(OTHER_CONSUMER, consumerOf('beta')))).toContain('"c_blue.500"')
 
     // One export moves. `beta` is untouched, so the module reading it folds to the same bytes.
     writePair('red.400', 'blue.500')
@@ -352,7 +355,7 @@ describe('a dependent the edit does not actually change', () => {
     expect(first.invalidated, 'identical bytes have nothing stale to drop').toEqual([CONSUMER])
 
     // What the browser does next with the module that was announced.
-    expect(await foldFile(CONSUMER, consumerOf('alpha'))).toContain('"c_red.400"')
+    expect(withoutMergeCodes(await foldFile(CONSUMER, consumerOf('alpha')))).toContain('"c_red.400"')
 
     // The other half of the same claim: suppression is per edit, not a state a module gets stuck
     // in. Move `beta` this time and the two swap places.
@@ -372,7 +375,9 @@ describe('a dependent the edit does not actually change', () => {
     writePair('red.300', 'blue.500')
     await start()
     const initial = await fold(file, compiled)
-    expect(typeof initial === 'object' && initial !== null ? initial.code : initial).toContain('"c_blue.500"')
+    expect(withoutMergeCodes(typeof initial === 'object' && initial !== null ? initial.code : initial)).toContain(
+      '"c_blue.500"',
+    )
 
     // The file on disk is deliberately raw Vue source. Re-reading it cannot answer whether
     // the compiled module changed; the retained post-plugin bytes can.
@@ -397,12 +402,16 @@ describe('a dependent the edit does not actually change', () => {
     await start()
     await fold(file, recipe('red.300'))
     const initial = await foldModule(consumer, useRecipe)
-    expect(typeof initial === 'object' && initial !== null ? initial.code : initial).toContain('"c_red.300"')
+    expect(withoutMergeCodes(typeof initial === 'object' && initial !== null ? initial.code : initial)).toContain(
+      '"c_red.300"',
+    )
 
     change(file)
     await fold(file, recipe('blue.500'))
     const updated = await foldModule(consumer, useRecipe)
-    expect(typeof updated === 'object' && updated !== null ? updated.code : updated).toContain('"c_blue.500"')
+    expect(withoutMergeCodes(typeof updated === 'object' && updated !== null ? updated.code : updated)).toContain(
+      '"c_blue.500"',
+    )
   }, 60_000)
 })
 
@@ -458,7 +467,7 @@ describe('what the unchanged check has to get right', () => {
     await start()
 
     // What the module was actually compiled from, which is not what the file holds.
-    expect(await foldFile(CONSUMER, served)).toContain('"c_red.300"')
+    expect(withoutMergeCodes(await foldFile(CONSUMER, served))).toContain('"c_red.300"')
 
     // `a` moves and `b` does not, so re-folding disk still produces the recorded output while the
     // module that was really served no longer does.
@@ -489,7 +498,7 @@ describe('what the unchanged check has to get right', () => {
     // On disk, so the check gets far enough to re-record anything — see `writeDependency`.
     writeFileSync(CONSUMER, CONSUMER_CODE)
     await start()
-    expect(await foldFile(CONSUMER, CONSUMER_CODE)).toContain('"c_red.300"')
+    expect(withoutMergeCodes(await foldFile(CONSUMER, CONSUMER_CODE))).toContain('"c_red.300"')
 
     writeFileSync(DEPENDENCY, `declare const make: () => { color: string }\nexport const shared = make()\n`)
     change('update')
@@ -520,7 +529,7 @@ describe('what the unchanged check has to get right', () => {
     // On disk, because the check re-folds from there — see `writeDependency`.
     writeFileSync(CONSUMER, CONSUMER_CODE)
     await start()
-    expect(await foldFile(CONSUMER, CONSUMER_CODE)).toContain('"c_red.300"')
+    expect(withoutMergeCodes(await foldFile(CONSUMER, CONSUMER_CODE))).toContain('"c_red.300"')
 
     // Same value, reached through `base.ts` now. The consumer's bytes do not move.
     writeFileSync(DEPENDENCY, `export { shared } from './base'\n`)
@@ -573,7 +582,7 @@ export const d = (s: string) => badge({ size: s })
     writeSizes(SMALL)
     writeFileSync(CONSUMER, source)
     await start()
-    expect(await foldFile(CONSUMER, source)).toContain('"c_red.300"')
+    expect(withoutMergeCodes(await foldFile(CONSUMER, source))).toContain('"c_red.300"')
 
     // The dependency grows a variant axis past the limit. The consumer is untouched, and its
     // compile throws.
@@ -624,8 +633,9 @@ export const d = (s: string) => badge({ size: s })
     writeFileSync(CONSUMER, consumerOf('beta'))
     await start()
 
-    for (const file of moved) expect(await foldFile(file, consumerOf('alpha'))).toContain('"c_red.300"')
-    expect(await foldFile(CONSUMER, consumerOf('beta'))).toContain('"c_blue.500"')
+    for (const file of moved)
+      expect(withoutMergeCodes(await foldFile(file, consumerOf('alpha')))).toContain('"c_red.300"')
+    expect(withoutMergeCodes(await foldFile(CONSUMER, consumerOf('beta')))).toContain('"c_blue.500"')
 
     writeDep('red.400')
     change('update')

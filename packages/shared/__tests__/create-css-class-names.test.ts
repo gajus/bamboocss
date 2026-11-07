@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest'
+import { atomKey, atomKeyCode } from '../src/atom-name'
 import { createCss } from '../src/classname'
 import { mergeDeclarationValue } from '../src/merge-declarations'
 
@@ -9,7 +10,6 @@ const makeContext = (over: { prefix?: string; hash?: boolean } = {}) => ({
     hasShorthand: false,
     resolveShorthand: (p: string) => p,
     transform: (prop: string, value: any) => ({ className: `${prop}_${value}` }),
-    toHash: (path: string[], h: (s: string) => string) => h(path.join(':')),
   },
   conditions: {
     breakpoints: { keys: ['base', 'md'] },
@@ -29,44 +29,56 @@ const makeContext = (over: { prefix?: string; hash?: boolean } = {}) => ({
 
 const isCondition = (value: string) => value.startsWith('_') || value === 'base' || value === 'md'
 
+/** The name of an atom setting `property` under `conditions`: its merge code, then `readable`. */
+const named = (conditions: string[], property: string, readable: string) =>
+  `_${atomKeyCode(atomKey(conditions, property))}:${readable}`
+
 /**
- * The class name is assembled from a prefix, the conditions and the utility class, and each
- * piece is optional. Most configs set no prefix and most leaves carry no condition, so those
+ * The class name is assembled from a prefix, the merge code, the conditions and the utility class,
+ * and each piece but the code is optional. Most configs set no prefix and most leaves carry no condition, so those
  * are the paths that skip the assembly — and therefore the ones that have to agree with it.
  */
 describe('createCss class name assembly', () => {
-  test('no prefix and no condition is the bare utility class', () => {
-    expect(createCss(makeContext())({ color: 'red' })).toBe('color_red')
+  test('no prefix and no condition is the merge code and the utility class', () => {
+    expect(createCss(makeContext())({ color: 'red' })).toBe(named([], 'color', 'color_red'))
   })
 
   test('a prefix is joined with a dash', () => {
-    expect(createCss(makeContext({ prefix: 'bam' }))({ color: 'red' })).toBe('bam-color_red')
+    expect(createCss(makeContext({ prefix: 'bam' }))({ color: 'red' })).toBe(`bam-${named([], 'color', 'color_red')}`)
   })
 
-  test('conditions are joined with colons, ahead of the prefixed class', () => {
-    expect(createCss(makeContext())({ _hover: { color: 'red' } })).toBe('hover:color_red')
-    expect(createCss(makeContext({ prefix: 'bam' }))({ _hover: { color: 'red' } })).toBe('hover:bam-color_red')
+  test('conditions are joined with colons after the merge code, and the prefix comes first', () => {
+    expect(createCss(makeContext())({ _hover: { color: 'red' } })).toBe(named(['hover'], 'color', 'hover:color_red'))
+    expect(createCss(makeContext({ prefix: 'bam' }))({ _hover: { color: 'red' } })).toBe(
+      `bam-${named(['hover'], 'color', 'hover:color_red')}`,
+    )
   })
 
   test('several conditions keep their order', () => {
-    expect(createCss(makeContext())({ _hover: { _focus: { color: 'red' } } })).toBe('hover:focus:color_red')
+    expect(createCss(makeContext())({ _hover: { _focus: { color: 'red' } } })).toBe(
+      named(['hover', 'focus'], 'color', 'hover:focus:color_red'),
+    )
   })
 
   test('a base condition is dropped before assembly', () => {
-    expect(createCss(makeContext())({ color: { base: 'red' } })).toBe('color_red')
+    expect(createCss(makeContext())({ color: { base: 'red' } })).toBe(named([], 'color', 'color_red'))
   })
 
-  test('hashing folds the conditions into the hash, and the prefix stays outside', () => {
+  test('hashing folds the conditions and the value into five characters after the code, and the prefix stays outside', () => {
     const plain = createCss(makeContext({ hash: true }))({ _hover: { color: 'red' } })
     const prefixed = createCss(makeContext({ hash: true, prefix: 'bam' }))({ _hover: { color: 'red' } })
 
-    expect(plain).not.toContain(':')
+    expect(plain).toMatch(new RegExp(`^_${atomKeyCode(atomKey(['hover'], 'color'))}:[\\w-]{5}$`))
     expect(prefixed).toBe(`bam-${plain}`)
   })
 
   test('an important value keeps its marker after assembly', () => {
-    expect(createCss(makeContext({ prefix: 'bam' }))({ color: 'red !important' })).toBe('bam-color_red!')
-    expect(createCss(makeContext())({ _hover: { color: 'red !important' } })).toBe('hover:color_red!')
+    expect(createCss(makeContext({ prefix: 'bam' }))({ color: 'red !important' })).toBe(
+      `bam-${named([], 'color', 'color_red')}!`,
+    )
+    expect(createCss(makeContext())({ _hover: { color: 'red !important' } })).toBe(
+      `${named(['hover'], 'color', 'hover:color_red')}!`,
+    )
   })
 
   test('an empty utility class collapses to the prefix alone', () => {
@@ -87,12 +99,12 @@ describe('createCss class name assembly', () => {
 describe('createCss top-level base', () => {
   test('merges into the styles, so a condition block written in both keeps every declaration', () => {
     expect(createCss(makeContext())({ _hover: { color: 'red' }, base: { _hover: { bg: 'blue' } } })).toBe(
-      'hover:color_red hover:bg_blue',
+      `${named(['hover'], 'color', 'hover:color_red')} ${named(['hover'], 'bg', 'hover:bg_blue')}`,
     )
   })
 
   test('still overrides a declaration it repeats', () => {
-    expect(createCss(makeContext())({ color: 'red', base: { color: 'blue' } })).toBe('color_blue')
+    expect(createCss(makeContext())({ color: 'red', base: { color: 'blue' } })).toBe(named([], 'color', 'color_blue'))
   })
 })
 
@@ -109,6 +121,8 @@ describe('createCss with a shorthand and its longhand', () => {
       },
     }
 
-    expect(createCss(context)({ bg: 'red !important', background: 'blue' })).toBe('background_red!')
+    expect(createCss(context)({ bg: 'red !important', background: 'blue' })).toBe(
+      `${named([], 'background', 'background_red')}!`,
+    )
   })
 })

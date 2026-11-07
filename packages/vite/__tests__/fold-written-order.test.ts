@@ -1,3 +1,4 @@
+import { withoutMergeCodes } from '@bamboocss/fixture'
 import { describe, expect, test } from 'vitest'
 import { cascadeOrder } from '../../core/__tests__/cascade-oracle'
 import { createFoldFixture } from './fixture'
@@ -29,7 +30,7 @@ const colorWhileDarkAndActive = (files: Array<[string, string]>) => {
   for (const [path, code] of files) {
     classes = fixture.foldStyleSets(code, path).code.match(/export const A = "([^"]*)"/)?.[1] ?? classes
   }
-  expect(classes).toBe('dark:c_white [&[data-active]]:c_red')
+  expect(withoutMergeCodes(classes)).toBe('dark:c_white [&[data-active]]:c_red')
 
   // Both rules apply while dark and active, and only these two write color: the later wins.
   const ranking = cascadeOrder(fixture.getStyleSetCss()).color!.filter((selector) => /c_(white|red)/.test(selector))

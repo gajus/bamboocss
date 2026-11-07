@@ -1,4 +1,4 @@
-import { createContext } from '@bamboocss/fixture'
+import { createContext, withoutMergeCodes } from '@bamboocss/fixture'
 import { describe, expect, test } from 'vitest'
 
 /**
@@ -31,7 +31,7 @@ const sheetFor = (files: Record<string, string>) => {
   return ctx.getCss(sheet) as string
 }
 
-const colorOrder = (css: string) => css.match(COLOR) ?? []
+const colorOrder = (css: string) => withoutMergeCodes(css).match(COLOR) ?? []
 
 /** The benchmark's case: every variant its own `css()`, selected at the call site by `cx`. */
 const BUTTON = `

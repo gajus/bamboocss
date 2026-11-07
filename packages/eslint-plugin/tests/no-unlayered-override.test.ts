@@ -3,18 +3,15 @@ import { eslintTester } from '../test-utils'
 import multiline from 'multiline-ts'
 
 /**
- * Joining class names does not resolve conflicts between them. So a component that styles
- * itself with `css()` and joins a `className` it was handed has both classes in the `utilities`
- * layer, and which one applies is decided by stylesheet order rather than by the caller.
+ * Joining class names does not resolve conflicts between them, unless the join is Bamboo's `cx`,
+ * which keeps the last class passed for each property and conditions.
+ * So a component that styles itself with `css()` and joins a `className` it was handed any other
+ * way has both classes in the `utilities` layer, and which one applies is decided by stylesheet
+ * order rather than by the caller.
  *
- * Every way of joining them counts: `cx`, under its own name or an alias, the joiners projects
- * bring from npm, a template literal, `+` and an array's `join()`. A join outside `cx()` is worse,
- * since the build cannot see it at all: it does not keep the component's atoms in the entry sheet
- * when it splits the stylesheet per route, so the winner can change with the route opened first.
- *
- * The fix is a recipe variant for an override the caller chooses, or `cx()` over style calls when
- * the file owns both sides. Accepting a style object instead does not help: an arbitrary runtime
- * object is not something the compiler can read.
+ * A join outside `cx` is worse than an unresolved one: the build cannot see it at all, so it does
+ * not keep the component's atoms in the entry sheet when it splits the stylesheet per route, and
+ * the winner can change with the route opened first.
  *
  * Recipe calls are not reported, and that is a decision about this rule's scope rather than a claim
  * that they are safe: recipes compile to the same `utilities` atoms `css()` uses, and no `recipes`
@@ -24,42 +21,29 @@ eslintTester.run(RULE_NAME, rule, {
   invalid: [
     {
       code: multiline`
-  import { css, cx } from './bamboo/css';
-
-  const Card = (props) => <div className={cx(css({ padding: '4' }), props.className)} />`,
-      errors: [{ data: { join: '`cx`' }, messageId: 'unlayeredOverride' }],
-    },
-    {
-      // Order does not matter — neither can win by layer whichever way round they go.
-      code: multiline`
-  import { css, cx } from './bamboo/css';
-
-  const Card = ({ className }) => <div className={cx(className, css({ padding: '4' }))} />`,
-      errors: [{ messageId: 'unlayeredOverride' }],
-    },
-    {
-      // `cx` under another name is the same join.
-      code: multiline`
-  import { css, cx as join } from './bamboo/css';
-
-  const Card = (props) => <div className={join(css({ padding: '4' }), props.className)} />`,
-      errors: [{ data: { join: '`join`' }, messageId: 'unlayeredOverride' }],
-    },
-    {
-      // And so is `css` under another name.
-      code: multiline`
-  import { css as style, cx } from './bamboo/css';
-
-  const Card = (props) => <div className={cx(style({ padding: '4' }), props.className)} />`,
-      errors: [{ messageId: 'unlayeredOverride' }],
-    },
-    {
-      code: multiline`
   import clsx from 'clsx';
   import { css } from './bamboo/css';
 
   const Card = (props) => <div className={clsx(css({ padding: '4' }), props.className)} />`,
-      errors: [{ data: { join: '`clsx`' }, messageId: 'unlayeredOverride' }],
+      errors: [{ data: { join: '`clsx`' }, messageId: 'unmergedJoin' }],
+    },
+    {
+      // Order does not matter — neither can win by layer whichever way round they go.
+      code: multiline`
+  import clsx from 'clsx';
+  import { css } from './bamboo/css';
+
+  const Card = ({ className }) => <div className={clsx(className, css({ padding: '4' }))} />`,
+      errors: [{ messageId: 'unmergedJoin' }],
+    },
+    {
+      // And so is `css` under another name.
+      code: multiline`
+  import clsx from 'clsx';
+  import { css as style } from './bamboo/css';
+
+  const Card = (props) => <div className={clsx(style({ padding: '4' }), props.className)} />`,
+      errors: [{ messageId: 'unmergedJoin' }],
     },
     {
       code: multiline`
@@ -67,7 +51,7 @@ eslintTester.run(RULE_NAME, rule, {
   import { css } from './bamboo/css';
 
   const Card = ({ className }) => <div className={classNames(css({ padding: '4' }), className)} />`,
-      errors: [{ data: { join: '`classNames`' }, messageId: 'unlayeredOverride' }],
+      errors: [{ data: { join: '`classNames`' }, messageId: 'unmergedJoin' }],
     },
     {
       // A project's own `clsx` wrapper.
@@ -76,21 +60,39 @@ eslintTester.run(RULE_NAME, rule, {
   import { cn } from './utils';
 
   const Card = ({ className }) => <div className={cn(css({ padding: '4' }), className)} />`,
-      errors: [{ data: { join: '`cn`' }, messageId: 'unlayeredOverride' }],
+      errors: [{ data: { join: '`cn`' }, messageId: 'unmergedJoin' }],
+    },
+    {
+      // A `cx` that is not Bamboo's only joins, whatever it is called.
+      code: multiline`
+  import cx from 'classnames';
+  import { css } from './bamboo/css';
+
+  const Card = (props) => <div className={cx(css({ padding: '4' }), props.className)} />`,
+      errors: [{ data: { join: '`cx`' }, messageId: 'unmergedJoin' }],
+    },
+    {
+      // Nor is one the file defines for itself.
+      code: multiline`
+  import { css } from './bamboo/css';
+
+  const cx = (...names) => names.filter(Boolean).join(' ');
+  const Card = (props) => <div className={cx(css({ padding: '4' }), props.className)} />`,
+      errors: [{ data: { join: '`cx`' }, messageId: 'unmergedJoin' }],
     },
     {
       code: multiline`
   import { css } from './bamboo/css';
 
   const Card = (props) => <div className={\`\${css({ padding: '4' })} \${props.className}\`} />`,
-      errors: [{ data: { join: 'A template literal' }, messageId: 'unlayeredOverride' }],
+      errors: [{ data: { join: 'A template literal' }, messageId: 'unmergedJoin' }],
     },
     {
       code: multiline`
   import { css } from './bamboo/css';
 
   const Card = (props) => <div className={css({ padding: '4' }) + ' ' + props.className} />`,
-      errors: [{ data: { join: 'Concatenating with `+`' }, messageId: 'unlayeredOverride' }],
+      errors: [{ data: { join: 'Concatenating with `+`' }, messageId: 'unmergedJoin' }],
     },
     {
       // A chain is read whole, wherever its parentheses fall, and reported once.
@@ -98,34 +100,36 @@ eslintTester.run(RULE_NAME, rule, {
   import { css } from './bamboo/css';
 
   const Card = ({ className }) => <div className={css({ padding: '4' }) + (' ' + className)} />`,
-      errors: [{ messageId: 'unlayeredOverride' }],
+      errors: [{ messageId: 'unmergedJoin' }],
     },
     {
       code: multiline`
   import { css } from './bamboo/css';
 
   const Card = ({ className }) => <div className={[css({ padding: '4' }), className].join(' ')} />`,
-      errors: [{ data: { join: 'An array `join()`' }, messageId: 'unlayeredOverride' }],
+      errors: [{ data: { join: 'An array `join()`' }, messageId: 'unmergedJoin' }],
     },
     {
-      // The styles a component declares once and forwards a class beside, as the docs write it.
+      // The styles a component declares once and forwards a class beside.
       code: multiline`
-  import { css, cx } from './bamboo/css';
+  import clsx from 'clsx';
+  import { css } from './bamboo/css';
 
   const styles = css({ padding: '4' });
-  const Card = (props) => <div className={cx(styles, props.className)} />`,
-      errors: [{ messageId: 'unlayeredOverride' }],
+  const Card = (props) => <div className={clsx(styles, props.className)} />`,
+      errors: [{ messageId: 'unmergedJoin' }],
     },
     {
       // Declared inside the component, the binding is the file's own all the same.
       code: multiline`
-  import { css, cx } from './bamboo/css';
+  import clsx from 'clsx';
+  import { css } from './bamboo/css';
 
   const Card = ({ className }) => {
     const styles = css({ padding: '4' });
-    return <div className={cx(styles, className)} />
+    return <div className={clsx(styles, className)} />
   }`,
-      errors: [{ messageId: 'unlayeredOverride' }],
+      errors: [{ messageId: 'unmergedJoin' }],
     },
     {
       code: multiline`
@@ -133,34 +137,67 @@ eslintTester.run(RULE_NAME, rule, {
 
   const styles = css({ padding: '4' });
   const Card = ({ className }) => <div className={\`\${styles} \${className}\`} />`,
-      errors: [{ data: { join: 'A template literal' }, messageId: 'unlayeredOverride' }],
+      errors: [{ data: { join: 'A template literal' }, messageId: 'unmergedJoin' }],
     },
   ],
   valid: [
     {
+      // Bamboo's `cx` keeps the last class per property: the caller's padding replaces the
+      // component's, and the two never meet on one element.
+      code: multiline`
+  import { css, cx } from './bamboo/css';
+
+  const Card = (props) => <div className={cx(css({ padding: '4' }), props.className)} />`,
+    },
+    {
+      // Passed first, the caller's class is the one replaced. That is the order deciding, not the
+      // stylesheet.
+      code: multiline`
+  import { css, cx } from './bamboo/css';
+
+  const Card = ({ className }) => <div className={cx(className, css({ padding: '4' }))} />`,
+    },
+    {
+      // Under another name it is the same `cx`.
+      code: multiline`
+  import { css, cx as join } from './bamboo/css';
+
+  const Card = (props) => <div className={join(css({ padding: '4' }), props.className)} />`,
+    },
+    {
+      // The forwarding the docs show.
+      code: multiline`
+  import { css, cx } from './bamboo/css';
+
+  const styles = css({ padding: '4' });
+  const Card = (props) => <div className={cx(styles, props.className)} />`,
+    },
+    {
       // A config recipe compiles to the same atoms as css(), so this is the same collision; see the
       // note above for why recipe calls are left out regardless.
       code: multiline`
-  import { cx } from './bamboo/css';
+  import clsx from 'clsx';
   import { button } from './bamboo/recipes';
 
-  const Button = (props) => <button className={cx(button(), props.className)} />`,
+  const Button = (props) => <button className={clsx(button(), props.className)} />`,
     },
     {
       // So is an inline cva.
       code: multiline`
-  import { cva, cx } from './bamboo/css';
+  import clsx from 'clsx';
+  import { cva } from './bamboo/css';
 
   const button = cva({ base: { padding: '4' } });
-  const Button = (props) => <button className={cx(button(), props.className)} />`,
+  const Button = (props) => <button className={clsx(button(), props.className)} />`,
     },
     {
       // And an inline sva, per slot.
       code: multiline`
-  import { cx, sva } from './bamboo/css';
+  import clsx from 'clsx';
+  import { sva } from './bamboo/css';
 
   const card = sva({ slots: ['root'], base: { root: { padding: '4' } } });
-  const Card = (props) => <div className={cx(card().root, props.className)} />`,
+  const Card = (props) => <div className={clsx(card().root, props.className)} />`,
     },
     {
       // Not a join, so not this rule's question. A runtime style object is not one the compiler
@@ -173,49 +210,54 @@ eslintTester.run(RULE_NAME, rule, {
     {
       // Two calls this file owns. Both visible, so nothing is being joined blind.
       code: multiline`
-  import { css, cx } from './bamboo/css';
+  import clsx from 'clsx';
+  import { css } from './bamboo/css';
 
-  const styles = cx(css({ padding: '4' }), css({ color: 'red.300' }))`,
+  const styles = clsx(css({ padding: '4' }), css({ color: 'red.300' }))`,
     },
     {
       // And a call beside a binding holding another: the file's own twice over.
       code: multiline`
-  import { css, cx } from './bamboo/css';
+  import clsx from 'clsx';
+  import { css } from './bamboo/css';
 
   const loud = css({ color: 'red.300' });
-  const styles = cx(css({ padding: '4' }), loud)`,
+  const styles = clsx(css({ padding: '4' }), loud)`,
     },
     {
       // A parameter of the same name shadows the binding, so neither part is the file's own.
       code: multiline`
-  import { css, cx } from './bamboo/css';
+  import clsx from 'clsx';
+  import { css } from './bamboo/css';
 
   const styles = css({ padding: '4' });
-  const Card = ({ styles, className }) => <div className={cx(styles, className)} />`,
+  const Card = ({ styles, className }) => <div className={clsx(styles, className)} />`,
     },
     {
       // A binding that can be reassigned may hold anything by the time it is joined.
       code: multiline`
-  import { css, cx } from './bamboo/css';
+  import clsx from 'clsx';
+  import { css } from './bamboo/css';
 
   let styles = css({ padding: '4' });
-  const Card = ({ className }) => <div className={cx(styles, className)} />`,
+  const Card = ({ className }) => <div className={clsx(styles, className)} />`,
     },
     {
       // A static marker class carries no styles to conflict with.
       code: multiline`
-  import { css, cx } from './bamboo/css';
+  import clsx from 'clsx';
+  import { css } from './bamboo/css';
 
-  const styles = cx(css({ padding: '4' }), 'group')`,
+  const styles = clsx(css({ padding: '4' }), 'group')`,
     },
     {
       code: multiline`
-  import { cx } from './bamboo/css';
+  import clsx from 'clsx';
 
-  const styles = cx(a, b)`,
+  const styles = clsx(a, b)`,
     },
     {
-      // The same holds outside `cx`: a marker class in a template literal is part of its text.
+      // The same holds outside a call: a marker class in a template literal is part of its text.
       code: multiline`
   import { css } from './bamboo/css';
 

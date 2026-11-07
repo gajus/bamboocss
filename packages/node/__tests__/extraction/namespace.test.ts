@@ -30,13 +30,13 @@ describe('extract namespace', () => {
         @layer s010-c0-p3000, s010-c0-p4000;
 
         @layer s010-c0-p3000 {
-          .d_flex {
+          ._Fg8Gj5\\:d_flex {
             display: flex;
       }
         }
 
         @layer s010-c0-p4000 {
-          .mt_40px {
+          ._pFxUbJ\\:mt_40px {
             margin-top: 40px;
       }
         }
@@ -138,7 +138,7 @@ describe('extract namespace', () => {
         @layer s010-c0-p3000;
 
         @layer s010-c0-p3000 {
-          .c_red {
+          ._Btm_AK\\:c_red {
             color: red;
       }
         }

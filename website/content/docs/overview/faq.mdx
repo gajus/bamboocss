@@ -24,12 +24,12 @@ The utility rules are placed in ordered sublayers (shown here without minificati
   @layer s010-c0-p1000, s010-c0-p4000;
 
   @layer s010-c0-p1000 {
-    .p_10px {
+    ._DJEIKl\:p_10px {
       padding: 10px;
     }
   }
   @layer s010-c0-p4000 {
-    .pt_20px {
+    ._8vGfGg\:pt_20px {
       padding-top: 20px;
     }
   }
@@ -43,10 +43,15 @@ styles. When you compose two style objects, a later value for the same property 
 
 ## Why didn't my `className` override the component's styles?
 
-With Vite, `cx()` resolves conflicts only when the compiler can see every Bamboo argument. An arbitrary `className` prop
-remains a runtime string, so `cx(componentStyles, props.className)` is only a join. The browser applies the
-[cascade and utility sublayers](/docs/concepts/cascade-layers); the argument order of a string join does not set
-priority.
+`cx(componentStyles, props.className)` keeps the last class per property and conditions, so a Bamboo class passed in
+replaces the component's class for the same property under the same conditions. What it leaves to the
+[cascade and utility sublayers](/docs/concepts/cascade-layers):
+
+- a class for another property that overlaps, such as `paddingTop` against the component's `padding`. A longhand beats
+  its shorthand whatever the order, so override the property the component set.
+- the same property under other conditions: the component's `md` width still applies at `md` over a base width passed
+  in. Pass the override under the same condition.
+- a class Bamboo did not name, such as a hand-written one, which `cx` keeps as written.
 
 Use a declared recipe variant for finite component choices. When both style objects are statically available,
 `css(base, override)` merges their properties before class allocation. An arbitrary runtime style-object prop cannot be
@@ -269,9 +274,9 @@ The result is that a class name in Bamboo always comes from a function call you 
 
 These compile unchanged and do something else, so they are worth checking on migration.
 
-- **`cx` composes what the compiler can see.** Fully analyzable Bamboo arguments are merged as StyleSets before atom
-  allocation. With an arbitrary external class, `cx` remains a tiny string joiner and makes no semantic conflict
-  guarantee. See [`cx` joins external classes](/docs/migration/panda#cx-joins-in-both-tools).
+- **`cx` merges, where Panda's joins.** Fully analyzable Bamboo arguments are merged as StyleSets before atom
+  allocation, and a class the compiler cannot see is merged at runtime, keeping the last class per property and
+  conditions. See [`cx` merges at runtime](/docs/migration/panda#cx-merges-at-runtime).
 - **Vite compiles recipes to shared atoms.** An inline or config recipe selection resolves into the same declaration
   pool as `css()`. Recipe identity does not enter class identity, and analyzable `cx()` composition is resolved before
   classes are allocated. See
@@ -315,7 +320,7 @@ development and production:
 export const title = css({ fontSize: 'lg', fontWeight: 'bold' })
 
 // the bundle gets
-export const title = 'fs_lg fw_bold'
+export const title = '_Ocpc8R:fs_lg _0vvNua:fw_bold'
 ```
 
 A style that varies is expressed as a finite recipe axis. The build resolves compound variants and precedence for every
@@ -409,7 +414,7 @@ Yes. `@bamboocss/vite` compiles style calls to shared declaration atoms in devel
 
 ```tsx
 export const title = css({ fontSize: 'lg' })
-export const title = 'fs_lg'
+export const title = '_Ocpc8R:fs_lg'
 ```
 
 It covers `css()`, patterns, recipes, finite runtime recipe axes, tokens, static `viewTransition()` bags, and analyzable

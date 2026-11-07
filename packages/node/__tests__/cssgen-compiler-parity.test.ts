@@ -1,3 +1,4 @@
+import { withoutMergeCodes } from '@bamboocss/fixture'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -75,9 +76,9 @@ describe('cssgen compiled sheet', () => {
     const fromVite = builder.toCss({ layerParams: true })
 
     expect(fromCssgen).toBe(fromVite)
-    expect(fromCssgen).toContain('.d_flex')
-    expect(fromCssgen).toContain('.c_red\\.300')
-    expect(fromCssgen).toContain('.fs_14px')
+    expect(withoutMergeCodes(fromCssgen)).toContain('.d_flex')
+    expect(withoutMergeCodes(fromCssgen)).toContain('.c_red\\.300')
+    expect(withoutMergeCodes(fromCssgen)).toContain('.fs_14px')
     expect(fromCssgen).not.toContain('.chip')
     expect(fromCssgen).not.toMatch(/@layer recipes\b/)
   })
@@ -94,7 +95,7 @@ describe('cssgen compiled sheet', () => {
 
     expect(fromCssgen).toBe(builder.toCss({ layerParams: true }))
     expect(fromCssgen).toContain('display: flex')
-    expect(fromCssgen).not.toContain('.d_flex')
+    expect(withoutMergeCodes(fromCssgen)).not.toContain('.d_flex')
   })
 
   test('matches the CLI bamboo command', async () => {
@@ -120,7 +121,7 @@ describe('cssgen compiled sheet', () => {
     const index = readFileSync(join(cwd, 'styled-system/styles.css'), 'utf8')
     expect(index).toContain('@layer reset, base, tokens, utilities;')
     expect(index).not.toMatch(/recipes/)
-    expect(readFileSync(join(stylesDir, 'utilities.css'), 'utf8')).toContain('.d_flex')
+    expect(withoutMergeCodes(readFileSync(join(stylesDir, 'utilities.css'), 'utf8'))).toContain('.d_flex')
     expect(existsSync(join(stylesDir, 'recipes.css'))).toBe(false)
     expect(existsSync(join(stylesDir, 'recipes'))).toBe(false)
   })

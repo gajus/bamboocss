@@ -42,7 +42,8 @@ const artifactConfigDeps: Record<ArtifactId, ConfigPath[]> = {
   'css-fn': common,
   cva: [],
   sva: [],
-  cx: [],
+  // `cx` reads `prefix` to find where an atom's name starts.
+  cx: ['prefix'],
   'recipes-index': ['theme.recipes', 'theme.slotRecipes'],
   recipes: ['theme.recipes', 'theme.slotRecipes'],
   'patterns-index': ['patterns'],

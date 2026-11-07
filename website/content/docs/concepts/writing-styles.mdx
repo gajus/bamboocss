@@ -23,7 +23,7 @@ const styles = css({
 })
 
 // Generated className:
-// --> p_10px_15px bdr_9999px bg-c_gainsboro fs_13px
+// --> _DJEIKl:p_10px_15px _Cr_m0U:bdr_9999px _ZeI045:bg-c_gainsboro _Ocpc8R:fs_13px
 
 <div className={styles}>
   <p>Hello World</p>
@@ -34,23 +34,28 @@ The styles generated at build time end up like this:
 
 ```css
 @layer utilities {
-  .p_10px_15px {
+  ._DJEIKl\:p_10px_15px {
     padding: 10px 15px;
   }
 
-  .bdr_9999px {
+  ._Cr_m0U\:bdr_9999px {
     border-radius: 9999px;
   }
 
-  .bg-c_gainsboro {
+  ._ZeI045\:bg-c_gainsboro {
     background-color: gainsboro;
   }
 
-  .fs_13px {
+  ._Ocpc8R\:fs_13px {
     font-size: 13px;
   }
 }
 ```
+
+Each class starts with `_`, five characters coding the property and conditions it sets and a colon, `_Ocpc8R:` for
+`font-size` with no condition whatever its value, which the runtime `cx` reads to keep the last class of each
+([classname concatenation](#classname-concatenation)). A production build hashes the rest of the name: see
+[hashing](#hashing).
 
 ### Shorthand Properties
 
@@ -314,7 +319,7 @@ predictable way.
 import { css } from '../styled-system/css'
 
 const result = css({ mx: '3', paddingTop: '4' }, { mx: '10', pt: '6' })
-//    ^? result = "mx_10 pt_6"
+//    ^? result = "_0QmaUN:mx_10 _8vGfGg:pt_6"
 ```
 
 All objects passed to `css()` must be statically recoverable. For a component with runtime choices, declare the choices
@@ -365,11 +370,15 @@ composes the same way: `cx(card({ size }).root, css({ color: 'blue.400' }))`.
 
 ### Classname concatenation
 
-Bamboo provides a `cx` function for combining class names. Vite gives it two deliberately different contracts:
+Bamboo provides a `cx` function for combining class names, and the later argument wins wherever two set the same
+property under the same conditions:
 
 - when every Bamboo argument is analyzable, the compiler merges their StyleSets before allocating classes;
-- when an arbitrary runtime class is present, the other arguments are still merged at build time, and the generated
-  helper joins the runtime class to them — a tiny string join with no conflict guarantee between the two.
+- when an arbitrary runtime class is present — a `className` a component forwards, usually — the other arguments are
+  still merged at build time, and the generated helper merges the runtime class with them. Each class Bamboo names
+  carries the property and conditions it sets, and `cx` keeps the last class of each, so a `className` passed in
+  overrides what the component set itself, however many components forward it on the way, in development and production
+  alike.
 
 ```jsx
 import { css, cx } from '../styled-system/css'
@@ -398,8 +407,8 @@ A `const` holding a `css()` call is as analyzable as the call, declared beside t
 choice between such arguments with `&&` or `?:`: `cx(base, active && selected)` compiles to one complete class string
 per answer, chosen by a ternary.
 
-The compiler cannot infer the declarations behind `className` in the component example. When style objects are
-statically available, compose them before allocating classes:
+The compiler cannot see the declarations behind `className` in the component example, so that merge happens at runtime,
+once per distinct join. When style objects are statically available, compose them before allocating classes instead:
 
 ```jsx
 const base = { padding: '4' }
@@ -417,19 +426,21 @@ Use a declared recipe variant when a component needs a finite public choice. An 
 not statically available, so replacing `className` with `css(base, props.css)` does not make it compilable.
 
 <Callout type="warning">
-  Recipes and `css()` share utility atoms. An opaque runtime class cannot be composed by the compiler, and its position
-  in a `cx()` call does not give it override priority. Use analyzable composition or a declared variant for an
-  intentional override.
+  The runtime merge compares the property and the conditions, not the declarations. A class passed in replaces the
+  component's class for the same property under the same conditions; one for another property that overlaps it, such as
+  `paddingTop` beside the component's `padding`, is kept beside it, and the cascade layers rank the two — a longhand
+  over its shorthand, a condition over the base — whatever order they were passed in.
 </Callout>
 
-In practice a foreign class wins that race: everything Bamboo emits lives in a cascade layer, and unlayered CSS beats
-layered CSS whatever its specificity. The case to watch is an opaque class that is _itself_ a Bamboo class — one
-assembled at runtime, or arriving through a prop the compiler cannot follow — because then both sides are in
-`@layer utilities`, and the sublayer order decides rather than the `cx()` argument order.
+Important or not, the later class wins, as in `css(a, b)`: a component's `color: 'red.500!'` gives way to a `color`
+passed in.
 
-Which of the two you handed it is not something the compiler can see — an opaque string is opaque — so it reports every
-such mix under `opaque-composition`, apart from an ordinary rejected call, so
-[`reportSkipped`](/docs/guides/source-transformation) and the build summary can name them.
+A class that is not a utility atom is kept as written. A hand-written one, or one from another library, usually wins
+anyway: everything Bamboo emits lives in a cascade layer, and unlayered CSS beats layered CSS whatever its specificity.
+A recipe class `staticCss` emits sits in the `recipes` layer, below every utility.
+
+The compiler cannot see what an opaque string holds, so it reports every such mix under `opaque-composition`, apart from
+an ordinary rejected call, so [`reportSkipped`](/docs/guides/source-transformation) and the build summary can name them.
 
 ### Hashing
 
@@ -467,18 +478,21 @@ const styles = css({
 The hash generated css will look like:
 
 ```css
-.fPSBzf {
+._Fg8Gj5\:vasr3 {
   display: flex;
 }
 
-.ksWBqx {
+._AoNTSX\:2YiWp {
   flex-direction: row;
 }
 
-.btpEVp:is(:hover, [data-hover]) {
+._LjjoSS\:lfEKB:is(:hover, [data-hover]) {
   background: var(--bINrJX);
 }
 ```
+
+Each name starts with the code for its property and conditions and a colon, as a readable name does, so the runtime `cx`
+merges hashed classes as it merges readable ones.
 
 > We recommend that you use this in production builds only, as it can make debugging a bit harder.
 
@@ -533,7 +547,7 @@ css({
 
 ```css
 @layer utilities {
-  .h_fallback\(calc\(100dvh_-_100px\)\,_calc\(100vh_-_100px\)\) {
+  ._97NnCm\:h_fallback\(calc\(100dvh_-_100px\)\,_calc\(100vh_-_100px\)\) {
     height: calc(100vh - 100px);
     height: calc(100dvh - 100px);
   }
@@ -587,12 +601,12 @@ css({ width: 'stretch', color: 'oklch(70% 0.1 200)' })
 
 ```css
 /* LightningCSS, targeting older browsers */
-.w_stretch {
+._RO16FJ\:w_stretch {
   width: -webkit-fill-available;
   width: -moz-available;
   width: stretch;
 }
-.c_oklch\(70\%_0\.1_200\) {
+._Btm_AK\:c_oklch\(70\%_0\.1_200\) {
   color: #40b1b7;
   color: color(display-p3 0.381906 0.685023 0.710512);
   color: lab(66.1711% -31.3595 -12.905);
@@ -695,13 +709,13 @@ cascade wherever the two rules land in the stylesheet:
   @layer s010-c0-p1000, s010-c0-p4000;
 
   @layer s010-c0-p1000 {
-    .p_10px {
+    ._DJEIKl\:p_10px {
       padding: 10px;
     }
   }
 
   @layer s010-c0-p4000 {
-    .pt_20px {
+    ._8vGfGg\:pt_20px {
       padding-top: 20px;
     }
   }

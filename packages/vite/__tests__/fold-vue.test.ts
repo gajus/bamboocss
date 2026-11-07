@@ -1,3 +1,4 @@
+import { withoutMergeCodes } from '@bamboocss/fixture'
 import { describe, expect, test } from 'vitest'
 import { pluginVue } from '../../plugin-vue/src'
 import { compileVueSfc as compileSfc, createFoldFixture, selectorsFor } from './fixture'
@@ -45,7 +46,7 @@ describe.each(['build', 'dev'] as const)('a `<script setup>` template, compiled 
     const result = build(sfc(`<div :class="css({ color: 'red.300' })" />`), mode)
 
     expect(result.skipped).toEqual([])
-    expect(result.classes).toContain('c_red.300')
+    expect(withoutMergeCodes(result.classes)).toContain('c_red.300')
     expect(result.missing).toEqual([])
     expect(result.code).not.toMatch(/\bcss\(\{|\$setup\.css|_unref\(css\)/)
   })
@@ -67,7 +68,7 @@ describe.each(['build', 'dev'] as const)('a `<script setup>` template, compiled 
     )
 
     expect(result.skipped).toEqual([])
-    expect(result.classes).toEqual(expect.arrayContaining(['c_red.300', 'p_2']))
+    expect(withoutMergeCodes(result.classes)).toEqual(expect.arrayContaining(['c_red.300', 'p_2']))
     expect(result.missing).toEqual([])
   })
 
@@ -96,7 +97,7 @@ describe('plain JavaScript `<script setup>`, compiled for dev', () => {
     )
 
     expect(result.skipped).toEqual([])
-    expect(result.classes).toEqual(['p_2'])
+    expect(withoutMergeCodes(result.classes)).toEqual(['p_2'])
     expect(result.code).toMatch(/get css\(\) \{ return undefined \}/)
   })
 })

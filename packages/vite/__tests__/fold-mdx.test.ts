@@ -1,3 +1,4 @@
+import { withoutMergeCodes } from '@bamboocss/fixture'
 import { compile } from '@mdx-js/mdx'
 import { describe, expect, test } from 'vitest'
 import { pluginMdx } from '../../node/src/mdx-to-tsx'
@@ -54,7 +55,7 @@ describe.each([false, true])('an MDX document, compiled with development: %s', (
 
     expect(result.parsePath).toBe('/app/src/Doc.mdx.__bamboo__.tsx')
     expect(result.skipped).toEqual([])
-    expect(result.classes).toEqual(expect.arrayContaining(['c_blue.300', 'c_red.300', 'm_4']))
+    expect(withoutMergeCodes(result.classes)).toEqual(expect.arrayContaining(['c_blue.300', 'c_red.300', 'm_4']))
     expect(result.missing).toEqual([])
     for (const style of [`color: 'blue.300'`, `color: 'red.300'`, `margin: '4'`]) {
       expect(result.code, 'compiled away').not.toContain(style)

@@ -1,3 +1,4 @@
+import { withoutMergeCodes } from '@bamboocss/fixture'
 import { describe, expect, test } from 'vitest'
 import { createFoldFixture } from './fixture'
 
@@ -18,7 +19,7 @@ describe('callee shapes', () => {
     `)
 
     expect(result.folded).toHaveLength(1)
-    expect(result.code).toContain('export const cls = "c_red.300"')
+    expect(withoutMergeCodes(result.code)).toContain('export const cls = "c_red.300"')
   })
 
   test('a value containing the text ".raw" does not make a call look raw', () => {
@@ -160,7 +161,7 @@ describe('callee shapes', () => {
     `)
 
     expect(result.folded).toHaveLength(1)
-    expect(result.code).toContain('=> "c_red.300"')
+    expect(withoutMergeCodes(result.code)).toContain('=> "c_red.300"')
   })
 
   /**
@@ -205,7 +206,7 @@ describe('callee shapes', () => {
     `)
 
     expect(result.folded).toHaveLength(1)
-    expect(result.code).toContain('export const outer = "d_flex"')
+    expect(withoutMergeCodes(result.code)).toContain('export const outer = "d_flex"')
     expect(result.code).toContain(`return css({ color: 'red.300' })`)
   })
 })
@@ -255,7 +256,7 @@ describe('syntactic positions', () => {
     const result = fold(`import { css } from 'styled-system/css'\n${code}\n`)
 
     expect(result.folded.length).toBeGreaterThan(0)
-    expect(result.code).toContain(expected)
+    expect(withoutMergeCodes(result.code)).toContain(expected)
   })
 })
 
@@ -297,7 +298,7 @@ describe('offsets', () => {
     `)
 
     expect(result.folded).toHaveLength(1)
-    expect(result.code).toContain('export const cls = "c_red.300"')
+    expect(withoutMergeCodes(result.code)).toContain('export const cls = "c_red.300"')
     // Nothing either side may be clipped by an off-by-N offset.
     expect(result.code).toContain(`const label = '🎋 竹 emoji before the call'`)
     expect(result.code).toContain(`export const tail = '🌿 after'`)

@@ -24,13 +24,13 @@ describe('gradient utilities', () => {
     expect(css({ bgGradient: 'primary' })).toMatchInlineSnapshot(`
       {
         "className": [
-          "bg-grad_primary",
+          "_tMsygv\\:bg-grad_primary",
         ],
         "css": "@layer utilities {
         @layer s010-c0-p3000;
 
         @layer s010-c0-p3000 {
-          .bg-grad_primary {
+          ._tMsygv\\:bg-grad_primary {
             background-image: var(--gradients-primary);
       }
         }
@@ -43,13 +43,13 @@ describe('gradient utilities', () => {
     expect(css({ bgGradient: 'to-r' })).toMatchInlineSnapshot(`
       {
         "className": [
-          "bg-grad_to-r",
+          "_tMsygv\\:bg-grad_to-r",
         ],
         "css": "@layer utilities {
         @layer s010-c0-p3000;
 
         @layer s010-c0-p3000 {
-          .bg-grad_to-r {
+          ._tMsygv\\:bg-grad_to-r {
             --gradient-stops: var(--gradient-via-stops, var(--gradient-position), var(--gradient-from) var(--gradient-from-position, ), var(--gradient-to) var(--gradient-to-position, ));
             --gradient-position: to right;
             background-image: linear-gradient(var(--gradient-stops));
@@ -65,13 +65,13 @@ describe('gradient utilities', () => {
       .toMatchInlineSnapshot(`
         {
           "className": [
-            "bg-grad_linear-gradient\\(token\\(colors\\.red\\.200\\)\\,_token\\(colors\\.blue\\.300\\)\\)",
+            "_tMsygv\\:bg-grad_linear-gradient\\(token\\(colors\\.red\\.200\\)\\,_token\\(colors\\.blue\\.300\\)\\)",
           ],
           "css": "@layer utilities {
           @layer s010-c0-p3000;
 
           @layer s010-c0-p3000 {
-            .bg-grad_linear-gradient\\(token\\(colors\\.red\\.200\\)\\,_token\\(colors\\.blue\\.300\\)\\) {
+            ._tMsygv\\:bg-grad_linear-gradient\\(token\\(colors\\.red\\.200\\)\\,_token\\(colors\\.blue\\.300\\)\\) {
               background-image: linear-gradient(var(--colors-red-200), var(--colors-blue-300));
         }
           }
@@ -85,13 +85,13 @@ describe('gradient utilities', () => {
       .toMatchInlineSnapshot(`
         {
           "className": [
-            "txt-grad_linear-gradient\\(token\\(colors\\.red\\.200\\)\\,_token\\(colors\\.blue\\.300\\)\\)",
+            "_PWugOE\\:txt-grad_linear-gradient\\(token\\(colors\\.red\\.200\\)\\,_token\\(colors\\.blue\\.300\\)\\)",
           ],
           "css": "@layer utilities {
           @layer s010-c0-p3000;
 
           @layer s010-c0-p3000 {
-            .txt-grad_linear-gradient\\(token\\(colors\\.red\\.200\\)\\,_token\\(colors\\.blue\\.300\\)\\) {
+            ._PWugOE\\:txt-grad_linear-gradient\\(token\\(colors\\.red\\.200\\)\\,_token\\(colors\\.blue\\.300\\)\\) {
               background-image: linear-gradient(var(--colors-red-200), var(--colors-blue-300));
               -webkit-background-clip: text;
               color: transparent;

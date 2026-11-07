@@ -18,7 +18,6 @@ const context = {
     hasShorthand: false,
     resolveShorthand: (prop: string) => prop,
     transform: (prop: string, value: unknown) => ({ className: `${prop}_${withoutSpace(value as string)}` }),
-    toHash: (path: string[]) => path.join(':'),
   },
   conditions: { breakpoints: { keys: ['base', 'sm', 'md'] }, shift: (v: string[]) => v, finalize: (v: string[]) => v },
 }

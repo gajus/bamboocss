@@ -1,6 +1,7 @@
 import { createGeneratorContext } from '@bamboocss/fixture'
+import { logger } from '@bamboocss/logger'
 import type { Config, Dict, RecipeDefinition, SlotRecipeDefinition } from '@bamboocss/types'
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
 import { RuleProcessor } from '../src/rule-processor'
 import { createRuleProcessor } from './fixture'
 
@@ -55,10 +56,10 @@ describe('rule processor', () => {
     })
     expect(result.className).toMatchInlineSnapshot(`
       [
-        "m_2",
-        "mx_token\\(spacing\\.2\\)",
-        "my_-2",
-        "c_blue\\.300",
+        "_0OoTQY\\:m_2",
+        "_0QmaUN\\:mx_token\\(spacing\\.2\\)",
+        "_F2GXY7\\:my_-2",
+        "_Btm_AK\\:c_blue\\.300",
       ]
     `)
     expect(result.css).toMatchInlineSnapshot(`
@@ -66,23 +67,23 @@ describe('rule processor', () => {
         @layer s010-c0-p1000, s010-c0-p2000, s010-c0-p3000;
 
         @layer s010-c0-p1000 {
-          .m_2 {
+          ._0OoTQY\\:m_2 {
             margin: var(--spacing-2);
       }
         }
 
         @layer s010-c0-p2000 {
-          .mx_token\\(spacing\\.2\\) {
+          ._0QmaUN\\:mx_token\\(spacing\\.2\\) {
             margin-inline: var(--spacing-2);
       }
 
-          .my_-2 {
+          ._F2GXY7\\:my_-2 {
             margin-block: calc(var(--spacing-2) * -1);
       }
         }
 
         @layer s010-c0-p3000 {
-          .c_blue\\.300 {
+          ._Btm_AK\\:c_blue\\.300 {
             color: var(--colors-blue-300);
       }
         }
@@ -115,10 +116,10 @@ describe('rule processor', () => {
     )
     expect(result.className).toMatchInlineSnapshot(`
       [
-        "m_\\$2",
-        "mx_token\\(\\$spacing-2\\)",
-        "my_-\\$2",
-        "c_\\$blue-300",
+        "_0OoTQY\\:m_\\$2",
+        "_0QmaUN\\:mx_token\\(\\$spacing-2\\)",
+        "_F2GXY7\\:my_-\\$2",
+        "_Btm_AK\\:c_\\$blue-300",
       ]
     `)
     expect(result.css).toMatchInlineSnapshot(`
@@ -126,23 +127,23 @@ describe('rule processor', () => {
         @layer s010-c0-p1000, s010-c0-p2000, s010-c0-p3000;
 
         @layer s010-c0-p1000 {
-          .m_\\$2 {
+          ._0OoTQY\\:m_\\$2 {
             margin: var(--spacing-2);
       }
         }
 
         @layer s010-c0-p2000 {
-          .mx_token\\(\\$spacing-2\\) {
+          ._0QmaUN\\:mx_token\\(\\$spacing-2\\) {
             margin-inline: var(--spacing-2);
       }
 
-          .my_-\\$2 {
+          ._F2GXY7\\:my_-\\$2 {
             margin-block: calc(var(--spacing-2) * -1);
       }
         }
 
         @layer s010-c0-p3000 {
-          .c_\\$blue-300 {
+          ._Btm_AK\\:c_\\$blue-300 {
             color: var(--colors-blue-300);
       }
         }
@@ -172,7 +173,7 @@ describe('rule processor', () => {
     )
     expect(result.className).toMatchInlineSnapshot(`
       [
-        "mx_token\\(\\$spacing-2\\)",
+        "_0QmaUN\\:mx_token\\(\\$spacing-2\\)",
       ]
     `)
     expect(result.css).toMatchInlineSnapshot(`
@@ -180,7 +181,7 @@ describe('rule processor', () => {
         @layer s010-c0-p2000;
 
         @layer s010-c0-p2000 {
-          .mx_token\\(\\$spacing-2\\) {
+          ._0QmaUN\\:mx_token\\(\\$spacing-2\\) {
             margin-inline: var(--spacing-2);
       }
         }
@@ -200,10 +201,10 @@ describe('rule processor', () => {
     )
     expect(result.className).toMatchInlineSnapshot(`
       [
-        "AxiDH",
-        "hHAKfe",
-        "pWVwj",
-        "hDAFEs",
+        "_0OoTQY\\:0o9xc",
+        "_0QmaUN\\:saVJp",
+        "_F2GXY7\\:814sY",
+        "_Btm_AK\\:Me-Ah",
       ]
     `)
     expect(result.css).toMatchInlineSnapshot(`
@@ -211,23 +212,23 @@ describe('rule processor', () => {
         @layer s010-c0-p1000, s010-c0-p2000, s010-c0-p3000;
 
         @layer s010-c0-p1000 {
-          .AxiDH {
+          ._0OoTQY\\:0o9xc {
             margin: var(--ebuyxV);
       }
         }
 
         @layer s010-c0-p2000 {
-          .hHAKfe {
+          ._0QmaUN\\:saVJp {
             margin-inline: var(--ebuyxV);
       }
 
-          .pWVwj {
+          ._F2GXY7\\:814sY {
             margin-block: calc(var(--ebuyxV) * -1);
       }
         }
 
         @layer s010-c0-p3000 {
-          .hDAFEs {
+          ._Btm_AK\\:Me-Ah {
             color: var(--bMEoOM);
       }
         }
@@ -235,70 +236,74 @@ describe('rule processor', () => {
     `)
   })
 
-  test('simple - hash: true + custom toHash', () => {
-    const result = css(
+  // A utility class has the fixed shape the runtime `cx` merges by, so a hook's hash cannot name
+  // it. Ignoring the hook with nothing said would leave the config claiming otherwise; it is
+  // reported as the config's other problems are.
+  test('a custom toHash is reported, not used', () => {
+    const plugins: Config['plugins'] = [
       {
-        margin: 2,
-        mx: 'token(spacing.2)',
-        my: '-2',
-        color: 'blue.300',
-      },
-      {
-        hash: true,
-        plugins: [
-          {
-            name: 'test',
-            hooks: {
-              'utility:created': ({ configure }) => {
-                configure({
-                  toHash(paths, toHash) {
-                    const stringConds = paths.join(':')
-                    const splitConds = stringConds.split('_')
-                    const hashConds = splitConds.map(toHash)
-                    return hashConds.join('_')
-                  },
-                })
-              },
-            },
+        name: 'test',
+        hooks: {
+          'utility:created': ({ configure }) => {
+            configure({ toHash: (paths, toHash) => `x${toHash(paths.join(':'))}` })
           },
-        ],
+        },
       },
+    ]
+
+    expect(() => css({ color: 'blue.300' }, { hash: true, validation: 'error', plugins })).toThrow(
+      'configures `toHash`, which is no longer used',
     )
-    expect(result.className).toMatchInlineSnapshot(`
-      [
-        "bnJC_bnIF",
-        "PJOa_hhWZwA",
-        "PJOH_PIXg",
-        "bnJA_bNBgpA",
-      ]
-    `)
-    expect(result.css).toMatchInlineSnapshot(`
-      "@layer utilities {
-        @layer s010-c0-p1000, s010-c0-p2000, s010-c0-p3000;
+    expect(css({ color: 'blue.300' }, { hash: true, plugins }).className).toEqual(
+      css({ color: 'blue.300' }, { hash: true }).className,
+    )
+  })
 
-        @layer s010-c0-p1000 {
-          .bnJC_bnIF {
-            margin: var(--ebuyxV);
-      }
-        }
+  // Hooks of one name run in plugin order. Run across microtasks, a later plugin configured after
+  // the context had looked, and its `toHash` passed unreported even under `validation: 'error'`.
+  test('a custom toHash is reported whichever plugin configures it', () => {
+    const plugins: Config['plugins'] = [
+      { name: 'first', hooks: { 'utility:created': () => {} } },
+      {
+        name: 'second',
+        hooks: {
+          'utility:created': ({ configure }) => {
+            configure({ toHash: (paths, toHash) => `x${toHash(paths.join(':'))}` })
+          },
+        },
+      },
+    ]
 
-        @layer s010-c0-p2000 {
-          .PJOa_hhWZwA {
-            margin-inline: var(--ebuyxV);
-      }
+    expect(() => css({ color: 'blue.300' }, { validation: 'error', plugins })).toThrow(
+      'configures `toHash`, which is no longer used',
+    )
+  })
 
-          .PJOH_PIXg {
-            margin-block: calc(var(--ebuyxV) * -1);
-      }
-        }
+  test('a custom toHash configured past an await is still reported, as a warning', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {})
+    const plugins: Config['plugins'] = [
+      {
+        name: 'async',
+        hooks: {
+          'utility:created': async ({ configure }) => {
+            await Promise.resolve()
+            configure({ toHash: (paths, toHash) => `x${toHash(paths.join(':'))}` })
+          },
+        },
+      },
+    ]
 
-        @layer s010-c0-p3000 {
-          .bnJA_bNBgpA {
-            color: var(--bMEoOM);
-      }
-        }
-      }"
-    `)
+    try {
+      // Too late to fail: the context is built by then.
+      expect(() => css({ color: 'blue.300' }, { validation: 'error', plugins })).not.toThrow()
+      await new Promise((resolve) => setTimeout(resolve))
+      expect(warn).toHaveBeenCalledWith(
+        'config',
+        expect.stringContaining('configures `toHash`, which is no longer used'),
+      )
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   test('css', () => {
@@ -343,27 +348,27 @@ describe('rule processor', () => {
     expect(result.className).toMatchInlineSnapshot(
       `
       [
-        "bd_1px_solid_token\\(colors\\.red\\.100\\)",
-        "bg_blue\\.300",
-        "c_red",
-        "text-style_headline\\.h1",
-        "fs_xs",
-        "w_1",
-        "dark\\:fs_2xl",
-        "\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:c_green",
-        "hover\\:fs_md",
-        "\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:c_purple",
-        "hover\\:focus\\:fs_xl",
-        "\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:\\[\\.target_\\&\\]\\:c_cyan",
-        "\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:\\[\\.target_\\&\\]\\:open\\:c_orange",
-        "sm\\:fs_sm",
-        "sm\\:c_yellow",
-        "sm\\:bg-c_red",
-        "sm\\:w_2",
-        "sm\\:hover\\:bg-c_green",
-        "hover\\:md\\:fs_lg",
-        "xl\\:w_3",
-        "\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:\\[\\.target_\\&\\]\\:xl\\:c_pink",
+        "_Ucco6y\\:bd_1px_solid_token\\(colors\\.red\\.100\\)",
+        "_w1ddk4\\:bg_blue\\.300",
+        "_Btm_AK\\:c_red",
+        "_NCgunH\\:text-style_headline\\.h1",
+        "_Ocpc8R\\:fs_xs",
+        "_RO16FJ\\:w_1",
+        "_x8EGI-\\:dark\\:fs_2xl",
+        "_7PVsr_\\:\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:c_green",
+        "_4TVktq\\:hover\\:fs_md",
+        "_JmDpTb\\:\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:c_purple",
+        "_Pkd43n\\:hover\\:focus\\:fs_xl",
+        "_9RXBzD\\:\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:\\[\\.target_\\&\\]\\:c_cyan",
+        "_ox3CAu\\:\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:\\[\\.target_\\&\\]\\:open\\:c_orange",
+        "_EL8lrA\\:sm\\:fs_sm",
+        "_8AVSDl\\:sm\\:c_yellow",
+        "_esN9BA\\:sm\\:bg-c_red",
+        "_R1Rk0r\\:sm\\:w_2",
+        "_R_1T2h\\:sm\\:hover\\:bg-c_green",
+        "_O5rls-\\:hover\\:md\\:fs_lg",
+        "_gLb3Mu\\:xl\\:w_3",
+        "_b1qsXj\\:\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:\\[\\.target_\\&\\]\\:xl\\:c_pink",
       ]
     `,
     )
@@ -373,40 +378,40 @@ describe('rule processor', () => {
         @layer s010-c0-p1000, s010-c0-p3000, s010-c0-p4000, s010-c8-p3000, s010-c8-p4000, s010-c11-p4000, s020-c1-p3000, s020-c2-p3000, s020-c3-p3000, s020-c9-p3000, s020-c10-p3000, s030-c4-p3000, s030-c5-p3000, s040-c6-p3000, s040-c12-p3000, s050-c7-p3000, important;
 
         @layer s010-c0-p1000 {
-          .bd_1px_solid_token\\(colors\\.red\\.100\\) {
+          ._Ucco6y\\:bd_1px_solid_token\\(colors\\.red\\.100\\) {
             border: 1px solid var(--colors-red-100);
       }
 
-          .bg_blue\\.300 {
+          ._w1ddk4\\:bg_blue\\.300 {
             background: var(--colors-blue-300);
       }
         }
 
         @layer s010-c0-p3000 {
-          .text-style_headline\\.h1 {
+          ._NCgunH\\:text-style_headline\\.h1 {
             text-style: headline.h1;
       }
 
-          .fs_xs {
+          ._Ocpc8R\\:fs_xs {
             font-size: var(--font-sizes-xs);
       }
         }
 
         @layer s010-c0-p4000 {
-          .w_1 {
+          ._RO16FJ\\:w_1 {
             width: var(--sizes-1);
       }
         }
 
         @layer s010-c8-p3000 {
           @media (width >= 40rem) {
-            .sm\\:fs_sm {
+            ._EL8lrA\\:sm\\:fs_sm {
               font-size: var(--font-sizes-sm);
       }
-            .sm\\:c_yellow {
+            ._8AVSDl\\:sm\\:c_yellow {
               color: yellow;
       }
-            .sm\\:bg-c_red {
+            ._esN9BA\\:sm\\:bg-c_red {
               background-color: red;
       }
       }
@@ -414,7 +419,7 @@ describe('rule processor', () => {
 
         @layer s010-c8-p4000 {
           @media (width >= 40rem) {
-            .sm\\:w_2 {
+            ._R1Rk0r\\:sm\\:w_2 {
               width: var(--sizes-2);
       }
       }
@@ -422,7 +427,7 @@ describe('rule processor', () => {
 
         @layer s010-c11-p4000 {
           @media (width >= 80rem) {
-            .xl\\:w_3 {
+            ._gLb3Mu\\:xl\\:w_3 {
               width: var(--sizes-3);
       }
       }
@@ -430,26 +435,26 @@ describe('rule processor', () => {
 
         @layer s020-c1-p3000 {
 
-          [data-theme=dark] .dark\\:fs_2xl,.dark .dark\\:fs_2xl,.dark\\:fs_2xl.dark,.dark\\:fs_2xl[data-theme=dark] {
+          [data-theme=dark] ._x8EGI-\\:dark\\:fs_2xl,.dark ._x8EGI-\\:dark\\:fs_2xl,._x8EGI-\\:dark\\:fs_2xl.dark,._x8EGI-\\:dark\\:fs_2xl[data-theme=dark] {
             font-size: var(--font-sizes-2xl);
       }
         }
 
         @layer s020-c2-p3000 {
-          .\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:c_green[data-attr='test'] {
+          ._7PVsr_\\:\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:c_green[data-attr='test'] {
             color: green;
       }
         }
 
         @layer s020-c3-p3000 {
-          .hover\\:fs_md:is(:hover, [data-hover]) {
+          ._4TVktq\\:hover\\:fs_md:is(:hover, [data-hover]) {
             font-size: var(--font-sizes-md);
       }
         }
 
         @layer s020-c9-p3000 {
           @media (width >= 40rem) {
-            .sm\\:hover\\:bg-c_green:is(:hover, [data-hover]) {
+            ._R_1T2h\\:sm\\:hover\\:bg-c_green:is(:hover, [data-hover]) {
               background-color: green;
       }
       }
@@ -457,46 +462,46 @@ describe('rule processor', () => {
 
         @layer s020-c10-p3000 {
           @media (width >= 48rem) {
-            .hover\\:md\\:fs_lg:is(:hover, [data-hover]) {
+            ._O5rls-\\:hover\\:md\\:fs_lg:is(:hover, [data-hover]) {
               font-size: var(--font-sizes-lg);
       }
       }
         }
 
         @layer s030-c4-p3000 {
-          .\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:c_purple[data-attr='test']:is([aria-expanded=true], [data-expanded], [data-state="expanded"]) {
+          ._JmDpTb\\:\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:c_purple[data-attr='test']:is([aria-expanded=true], [data-expanded], [data-state="expanded"]) {
             color: purple;
       }
         }
 
         @layer s030-c5-p3000 {
-          .hover\\:focus\\:fs_xl:is(:hover, [data-hover]):is(:focus, [data-focus]) {
+          ._Pkd43n\\:hover\\:focus\\:fs_xl:is(:hover, [data-hover]):is(:focus, [data-focus]) {
             font-size: var(--font-sizes-xl);
       }
         }
 
         @layer s040-c6-p3000 {
-          .target .\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:\\[\\.target_\\&\\]\\:c_cyan[data-attr='test']:is([aria-expanded=true], [data-expanded], [data-state="expanded"]) {
+          .target ._9RXBzD\\:\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:\\[\\.target_\\&\\]\\:c_cyan[data-attr='test']:is([aria-expanded=true], [data-expanded], [data-state="expanded"]) {
             color: cyan;
       }
         }
 
         @layer s040-c12-p3000 {
           @media (width >= 80rem) {
-            .target .\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:\\[\\.target_\\&\\]\\:xl\\:c_pink[data-attr='test']:is([aria-expanded=true], [data-expanded], [data-state="expanded"]) {
+            .target ._b1qsXj\\:\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:\\[\\.target_\\&\\]\\:xl\\:c_pink[data-attr='test']:is([aria-expanded=true], [data-expanded], [data-state="expanded"]) {
               color: pink;
       }
       }
         }
 
         @layer s050-c7-p3000 {
-          .target .\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:\\[\\.target_\\&\\]\\:open\\:c_orange[data-attr='test']:is([aria-expanded=true], [data-expanded], [data-state="expanded"]):is([open], [data-open], [data-state="open"], :popover-open) {
+          .target ._ox3CAu\\:\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:\\[\\.target_\\&\\]\\:open\\:c_orange[data-attr='test']:is([aria-expanded=true], [data-expanded], [data-state="expanded"]):is([open], [data-open], [data-state="open"], :popover-open) {
             color: orange;
       }
         }
 
         @layer important {
-          .c_red\\! {
+          ._Btm_AK\\:c_red\\! {
             color: red !important;
       }
         }
@@ -971,13 +976,13 @@ describe('rule processor', () => {
         @layer s010-c0-p3000, s020-c1-p3000;
 
         @layer s010-c0-p3000 {
-          .c_blue\\.300 {
+          ._Btm_AK\\:c_blue\\.300 {
             color: var(--colors-blue-300);
       }
         }
 
         @layer s020-c1-p3000 {
-          .hover\\:c_red\\.400:is(:hover, [data-hover]) {
+          ._nRd69H\\:hover\\:c_red\\.400:is(:hover, [data-hover]) {
             color: var(--colors-red-400);
       }
         }
@@ -1003,11 +1008,11 @@ describe('rule processor', () => {
         @layer s010-c0-p3000;
 
         @layer s010-c0-p3000 {
-          .c_red {
+          ._Btm_AK\\:c_red {
             color: red;
       }
 
-          .c_blue {
+          ._Btm_AK\\:c_blue {
             color: blue;
       }
         }
@@ -1037,7 +1042,7 @@ describe('rule processor', () => {
           color: var(--colors-white);
       }
 
-        .variant_solid {
+        ._ilERhA\\:variant_solid {
           variant: solid;
       }
       }"
@@ -1102,43 +1107,43 @@ describe('rule processor', () => {
         @layer s010-c0-p2000, s010-c0-p3000, s010-c0-p4000, important;
 
         @layer s010-c0-p2000 {
-          .trs_all_0\\.3s_ease-in-out {
+          ._drhFNn\\:trs_all_0\\.3s_ease-in-out {
             transition: all 0.3s ease-in-out;
       }
         }
 
         @layer s010-c0-p3000 {
-          .d_none {
+          ._Fg8Gj5\\:d_none {
             display: none;
       }
 
-          .op_1 {
+          ._eEO7Qc\\:op_1 {
             opacity: 1;
       }
 
-          .bg-grad_to-b {
+          ._tMsygv\\:bg-grad_to-b {
             --gradient-stops: var(--gradient-via-stops, var(--gradient-position), var(--gradient-from) var(--gradient-from-position, ), var(--gradient-to) var(--gradient-to-position, ));
             --gradient-position: to bottom;
             background-image: linear-gradient(var(--gradient-stops));
       }
 
-          .grad-from_rgb\\(200_200_200_\\/_0\\.4\\) {
+          ._dkehTS\\:grad-from_rgb\\(200_200_200_\\/_0\\.4\\) {
             --gradient-from: rgb(200 200 200 / 0.4);
       }
         }
 
         @layer s010-c0-p4000 {
-          .h_100\\% {
+          ._97NnCm\\:h_100\\% {
             height: 100%;
       }
 
-          .h_10px {
+          ._97NnCm\\:h_10px {
             height: 10px;
       }
         }
 
         @layer important {
-          .op_0\\! {
+          ._eEO7Qc\\:op_0\\! {
             opacity: 0 !important;
       }
         }
@@ -1151,7 +1156,7 @@ describe('rule processor', () => {
     expect(result).toMatchInlineSnapshot(`
       {
         "className": [
-          "trunc_false",
+          "_ahCW1T\\:trunc_false",
         ],
         "css": "",
       }
@@ -1161,13 +1166,13 @@ describe('rule processor', () => {
     expect(result2).toMatchInlineSnapshot(`
       {
         "className": [
-          "trunc_true",
+          "_ahCW1T\\:trunc_true",
         ],
         "css": "@layer utilities {
         @layer s010-c0-p3000;
 
         @layer s010-c0-p3000 {
-          .trunc_true {
+          ._ahCW1T\\:trunc_true {
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
@@ -1250,23 +1255,23 @@ describe('js to css', () => {
         @layer s010-c0-p1, s010-c0-p3000, s010-c0-p4000;
 
         @layer s010-c0-p1 {
-          .\\--foo_42 {
+          ._xcmuKg\\:--foo_42 {
             --foo: 42;
       }
         }
 
         @layer s010-c0-p3000 {
-          .op_1 {
+          ._eEO7Qc\\:op_1 {
             opacity: 1;
       }
 
-          .z_0 {
+          ._Fmfkg3\\:z_0 {
             z-index: 0;
       }
         }
 
         @layer s010-c0-p4000 {
-          .w_42 {
+          ._RO16FJ\\:w_42 {
             width: 42px;
       }
         }
@@ -1286,15 +1291,15 @@ describe('js to css', () => {
         @layer s010-c0-p1;
 
         @layer s010-c0-p1 {
-          .\\--testVariable0_0 {
+          ._wgYpz2\\:--testVariable0_0 {
             --testVariable0: 0;
       }
 
-          .\\--test-Variable-1_1 {
+          ._ZoaNGs\\:--test-Variable-1_1 {
             --test-Variable-1: 1;
       }
 
-          .\\--test-variable-2_2 {
+          ._AiKdN4\\:--test-variable-2_2 {
             --test-variable-2: 2;
       }
         }
@@ -1315,21 +1320,21 @@ describe('js to css', () => {
         @layer s010-c0-p3000, important;
 
         @layer s010-c0-p3000 {
-          .ff_A {
+          ._XRP-xG\\:ff_A {
             font-family: A;
       }
         }
 
         @layer important {
-          .bg_white\\! {
+          ._w1ddk4\\:bg_white\\! {
             background: var(--colors-white) !important;
       }
 
-          .bd-c_red\\! {
+          ._3r1mEt\\:bd-c_red\\! {
             border-color: red !important;
       }
 
-          .c_pink\\! {
+          ._Btm_AK\\:c_pink\\! {
             color: pink !important;
       }
         }
@@ -1341,20 +1346,20 @@ describe('js to css', () => {
     expect(css({ bg: 'red.300/40', color: 'white' })).toMatchInlineSnapshot(`
       {
         "className": [
-          "bg_red\\.300\\/40",
-          "c_white",
+          "_w1ddk4\\:bg_red\\.300\\/40",
+          "_Btm_AK\\:c_white",
         ],
         "css": "@layer utilities {
         @layer s010-c0-p1000, s010-c0-p3000;
 
         @layer s010-c0-p1000 {
-          .bg_red\\.300\\/40 {
+          ._w1ddk4\\:bg_red\\.300\\/40 {
             background: color-mix(in srgb, var(--colors-red-300) 40%, transparent);
       }
         }
 
         @layer s010-c0-p3000 {
-          .c_white {
+          ._Btm_AK\\:c_white {
             color: var(--colors-white);
       }
         }
@@ -1375,11 +1380,11 @@ describe('js to css', () => {
     })
     expect(result.className).toMatchInlineSnapshot(`
       [
-        "bd-w_1px",
-        "ov_hidden",
-        "bd-w_2px",
-        "bdr-t_0px",
-        "bd-b-w_3px",
+        "_WSEF0_\\:bd-w_1px",
+        "_2EQUH3\\:ov_hidden",
+        "_WSEF0_\\:bd-w_2px",
+        "_-SUxCQ\\:bdr-t_0px",
+        "__XJ_UB\\:bd-b-w_3px",
       ]
     `)
     expect(result.css).toMatchInlineSnapshot(`
@@ -1387,28 +1392,28 @@ describe('js to css', () => {
         @layer s010-c0-p2000, s010-c0-p3000, s010-c0-p4000;
 
         @layer s010-c0-p2000 {
-          .bd-w_1px {
+          ._WSEF0_\\:bd-w_1px {
             border-width: 1px;
       }
 
-          .ov_hidden {
+          ._2EQUH3\\:ov_hidden {
             overflow: hidden;
       }
 
-          .bd-w_2px {
+          ._WSEF0_\\:bd-w_2px {
             border-width: 2px;
       }
         }
 
         @layer s010-c0-p3000 {
-          .bdr-t_0px {
+          ._-SUxCQ\\:bdr-t_0px {
             border-top-left-radius: 0px;
             border-top-right-radius: 0px;
       }
         }
 
         @layer s010-c0-p4000 {
-          .bd-b-w_3px {
+          .__XJ_UB\\:bd-b-w_3px {
             border-bottom-width: 3px;
       }
         }
@@ -1427,10 +1432,10 @@ describe('js to css', () => {
     })
     expect(result.className).toMatchInlineSnapshot(`
       [
-        "p_1px",
-        "p_2px",
-        "pt_3px",
-        "pb_4px",
+        "_DJEIKl\\:p_1px",
+        "_DJEIKl\\:p_2px",
+        "_8vGfGg\\:pt_3px",
+        "_JZNFJc\\:pb_4px",
       ]
     `)
     expect(result.css).toMatchInlineSnapshot(`
@@ -1438,21 +1443,21 @@ describe('js to css', () => {
         @layer s010-c0-p1000, s010-c0-p4000;
 
         @layer s010-c0-p1000 {
-          .p_1px {
+          ._DJEIKl\\:p_1px {
             padding: 1px;
       }
 
-          .p_2px {
+          ._DJEIKl\\:p_2px {
             padding: 2px;
       }
         }
 
         @layer s010-c0-p4000 {
-          .pt_3px {
+          ._8vGfGg\\:pt_3px {
             padding-top: 3px;
       }
 
-          .pb_4px {
+          ._JZNFJc\\:pb_4px {
             padding-bottom: 4px;
       }
         }
@@ -1499,24 +1504,24 @@ describe('js to css', () => {
     })
     expect(result.className).toMatchInlineSnapshot(`
       [
-        "bg_red",
-        "bg-c_blue",
-        "dark\\:bg_red",
-        "dark\\:bg-c_blue",
-        "focus\\:bg_red",
-        "focus\\:bg-c_blue",
-        "hover\\:bg_red",
-        "hover\\:bg-c_blue",
-        "md\\:bg_red",
-        "md\\:bg-c_blue",
-        "md\\:light\\:bg_red",
-        "md\\:light\\:bg-c_blue",
-        "md\\:light\\:focus\\:bg_red",
-        "md\\:light\\:focus\\:bg-c_blue",
-        "md\\:light\\:hover\\:bg_red",
-        "md\\:light\\:hover\\:bg-c_blue",
-        "md\\:light\\:active\\:bg_red",
-        "md\\:light\\:active\\:bg-c_blue",
+        "_w1ddk4\\:bg_red",
+        "_ZeI045\\:bg-c_blue",
+        "_NfyePv\\:dark\\:bg_red",
+        "_rRbOfZ\\:dark\\:bg-c_blue",
+        "_7e46V-\\:focus\\:bg_red",
+        "_9BodNj\\:focus\\:bg-c_blue",
+        "_LjjoSS\\:hover\\:bg_red",
+        "_HtlNuq\\:hover\\:bg-c_blue",
+        "_ehaG7M\\:md\\:bg_red",
+        "_CZ9EbT\\:md\\:bg-c_blue",
+        "_ryu-bb\\:md\\:light\\:bg_red",
+        "_hOaN1s\\:md\\:light\\:bg-c_blue",
+        "_I11Ywz\\:md\\:light\\:focus\\:bg_red",
+        "_hRzWme\\:md\\:light\\:focus\\:bg-c_blue",
+        "_ik0AdU\\:md\\:light\\:hover\\:bg_red",
+        "_1ILGkh\\:md\\:light\\:hover\\:bg-c_blue",
+        "_Egd0vX\\:md\\:light\\:active\\:bg_red",
+        "_K3hdWH\\:md\\:light\\:active\\:bg-c_blue",
       ]
     `)
     expect(result.css).toMatchInlineSnapshot(`
@@ -1524,20 +1529,20 @@ describe('js to css', () => {
         @layer s010-c0-p1000, s010-c0-p3000, s010-c4-p1000, s010-c4-p3000, s020-c1-p1000, s020-c1-p3000, s020-c2-p1000, s020-c2-p3000, s020-c3-p1000, s020-c3-p3000, s020-c5-p1000, s020-c5-p3000, s030-c6-p1000, s030-c6-p3000, s030-c7-p1000, s030-c7-p3000, s030-c8-p1000, s030-c8-p3000;
 
         @layer s010-c0-p1000 {
-          .bg_red {
+          ._w1ddk4\\:bg_red {
             background: red;
       }
         }
 
         @layer s010-c0-p3000 {
-          .bg-c_blue {
+          ._ZeI045\\:bg-c_blue {
             background-color: blue;
       }
         }
 
         @layer s010-c4-p1000 {
           @media (width >= 48rem) {
-            .md\\:bg_red {
+            ._ehaG7M\\:md\\:bg_red {
               background: red;
       }
       }
@@ -1545,7 +1550,7 @@ describe('js to css', () => {
 
         @layer s010-c4-p3000 {
           @media (width >= 48rem) {
-            .md\\:bg-c_blue {
+            ._CZ9EbT\\:md\\:bg-c_blue {
               background-color: blue;
       }
       }
@@ -1553,45 +1558,45 @@ describe('js to css', () => {
 
         @layer s020-c1-p1000 {
 
-          [data-theme=dark] .dark\\:bg_red,.dark .dark\\:bg_red,.dark\\:bg_red.dark,.dark\\:bg_red[data-theme=dark] {
+          [data-theme=dark] ._NfyePv\\:dark\\:bg_red,.dark ._NfyePv\\:dark\\:bg_red,._NfyePv\\:dark\\:bg_red.dark,._NfyePv\\:dark\\:bg_red[data-theme=dark] {
             background: red;
       }
         }
 
         @layer s020-c1-p3000 {
 
-          [data-theme=dark] .dark\\:bg-c_blue,.dark .dark\\:bg-c_blue,.dark\\:bg-c_blue.dark,.dark\\:bg-c_blue[data-theme=dark] {
+          [data-theme=dark] ._rRbOfZ\\:dark\\:bg-c_blue,.dark ._rRbOfZ\\:dark\\:bg-c_blue,._rRbOfZ\\:dark\\:bg-c_blue.dark,._rRbOfZ\\:dark\\:bg-c_blue[data-theme=dark] {
             background-color: blue;
       }
         }
 
         @layer s020-c2-p1000 {
-          .focus\\:bg_red:is(:focus, [data-focus]) {
+          ._7e46V-\\:focus\\:bg_red:is(:focus, [data-focus]) {
             background: red;
       }
         }
 
         @layer s020-c2-p3000 {
-          .focus\\:bg-c_blue:is(:focus, [data-focus]) {
+          ._9BodNj\\:focus\\:bg-c_blue:is(:focus, [data-focus]) {
             background-color: blue;
       }
         }
 
         @layer s020-c3-p1000 {
-          .hover\\:bg_red:is(:hover, [data-hover]) {
+          ._LjjoSS\\:hover\\:bg_red:is(:hover, [data-hover]) {
             background: red;
       }
         }
 
         @layer s020-c3-p3000 {
-          .hover\\:bg-c_blue:is(:hover, [data-hover]) {
+          ._HtlNuq\\:hover\\:bg-c_blue:is(:hover, [data-hover]) {
             background-color: blue;
       }
         }
 
         @layer s020-c5-p1000 {
           @media (width >= 48rem) {
-            [data-theme=light] .md\\:light\\:bg_red,.light .md\\:light\\:bg_red,.md\\:light\\:bg_red.light,.md\\:light\\:bg_red[data-theme=light] {
+            [data-theme=light] ._ryu-bb\\:md\\:light\\:bg_red,.light ._ryu-bb\\:md\\:light\\:bg_red,._ryu-bb\\:md\\:light\\:bg_red.light,._ryu-bb\\:md\\:light\\:bg_red[data-theme=light] {
               background: red;
       }
       }
@@ -1599,7 +1604,7 @@ describe('js to css', () => {
 
         @layer s020-c5-p3000 {
           @media (width >= 48rem) {
-            [data-theme=light] .md\\:light\\:bg-c_blue,.light .md\\:light\\:bg-c_blue,.md\\:light\\:bg-c_blue.light,.md\\:light\\:bg-c_blue[data-theme=light] {
+            [data-theme=light] ._hOaN1s\\:md\\:light\\:bg-c_blue,.light ._hOaN1s\\:md\\:light\\:bg-c_blue,._hOaN1s\\:md\\:light\\:bg-c_blue.light,._hOaN1s\\:md\\:light\\:bg-c_blue[data-theme=light] {
               background-color: blue;
       }
       }
@@ -1607,7 +1612,7 @@ describe('js to css', () => {
 
         @layer s030-c6-p1000 {
           @media (width >= 48rem) {
-            [data-theme=light] .md\\:light\\:focus\\:bg_red:is(:focus, [data-focus]),.light .md\\:light\\:focus\\:bg_red:is(:focus, [data-focus]),.md\\:light\\:focus\\:bg_red.light:is(:focus, [data-focus]),.md\\:light\\:focus\\:bg_red[data-theme=light]:is(:focus, [data-focus]) {
+            [data-theme=light] ._I11Ywz\\:md\\:light\\:focus\\:bg_red:is(:focus, [data-focus]),.light ._I11Ywz\\:md\\:light\\:focus\\:bg_red:is(:focus, [data-focus]),._I11Ywz\\:md\\:light\\:focus\\:bg_red.light:is(:focus, [data-focus]),._I11Ywz\\:md\\:light\\:focus\\:bg_red[data-theme=light]:is(:focus, [data-focus]) {
               background: red;
       }
       }
@@ -1615,7 +1620,7 @@ describe('js to css', () => {
 
         @layer s030-c6-p3000 {
           @media (width >= 48rem) {
-            [data-theme=light] .md\\:light\\:focus\\:bg-c_blue:is(:focus, [data-focus]),.light .md\\:light\\:focus\\:bg-c_blue:is(:focus, [data-focus]),.md\\:light\\:focus\\:bg-c_blue.light:is(:focus, [data-focus]),.md\\:light\\:focus\\:bg-c_blue[data-theme=light]:is(:focus, [data-focus]) {
+            [data-theme=light] ._hRzWme\\:md\\:light\\:focus\\:bg-c_blue:is(:focus, [data-focus]),.light ._hRzWme\\:md\\:light\\:focus\\:bg-c_blue:is(:focus, [data-focus]),._hRzWme\\:md\\:light\\:focus\\:bg-c_blue.light:is(:focus, [data-focus]),._hRzWme\\:md\\:light\\:focus\\:bg-c_blue[data-theme=light]:is(:focus, [data-focus]) {
               background-color: blue;
       }
       }
@@ -1623,7 +1628,7 @@ describe('js to css', () => {
 
         @layer s030-c7-p1000 {
           @media (width >= 48rem) {
-            [data-theme=light] .md\\:light\\:hover\\:bg_red:is(:hover, [data-hover]),.light .md\\:light\\:hover\\:bg_red:is(:hover, [data-hover]),.md\\:light\\:hover\\:bg_red.light:is(:hover, [data-hover]),.md\\:light\\:hover\\:bg_red[data-theme=light]:is(:hover, [data-hover]) {
+            [data-theme=light] ._ik0AdU\\:md\\:light\\:hover\\:bg_red:is(:hover, [data-hover]),.light ._ik0AdU\\:md\\:light\\:hover\\:bg_red:is(:hover, [data-hover]),._ik0AdU\\:md\\:light\\:hover\\:bg_red.light:is(:hover, [data-hover]),._ik0AdU\\:md\\:light\\:hover\\:bg_red[data-theme=light]:is(:hover, [data-hover]) {
               background: red;
       }
       }
@@ -1631,7 +1636,7 @@ describe('js to css', () => {
 
         @layer s030-c7-p3000 {
           @media (width >= 48rem) {
-            [data-theme=light] .md\\:light\\:hover\\:bg-c_blue:is(:hover, [data-hover]),.light .md\\:light\\:hover\\:bg-c_blue:is(:hover, [data-hover]),.md\\:light\\:hover\\:bg-c_blue.light:is(:hover, [data-hover]),.md\\:light\\:hover\\:bg-c_blue[data-theme=light]:is(:hover, [data-hover]) {
+            [data-theme=light] ._1ILGkh\\:md\\:light\\:hover\\:bg-c_blue:is(:hover, [data-hover]),.light ._1ILGkh\\:md\\:light\\:hover\\:bg-c_blue:is(:hover, [data-hover]),._1ILGkh\\:md\\:light\\:hover\\:bg-c_blue.light:is(:hover, [data-hover]),._1ILGkh\\:md\\:light\\:hover\\:bg-c_blue[data-theme=light]:is(:hover, [data-hover]) {
               background-color: blue;
       }
       }
@@ -1639,7 +1644,7 @@ describe('js to css', () => {
 
         @layer s030-c8-p1000 {
           @media (width >= 48rem) {
-            [data-theme=light] .md\\:light\\:active\\:bg_red:is(:active, [data-active]),.light .md\\:light\\:active\\:bg_red:is(:active, [data-active]),.md\\:light\\:active\\:bg_red.light:is(:active, [data-active]),.md\\:light\\:active\\:bg_red[data-theme=light]:is(:active, [data-active]) {
+            [data-theme=light] ._Egd0vX\\:md\\:light\\:active\\:bg_red:is(:active, [data-active]),.light ._Egd0vX\\:md\\:light\\:active\\:bg_red:is(:active, [data-active]),._Egd0vX\\:md\\:light\\:active\\:bg_red.light:is(:active, [data-active]),._Egd0vX\\:md\\:light\\:active\\:bg_red[data-theme=light]:is(:active, [data-active]) {
               background: red;
       }
       }
@@ -1647,7 +1652,7 @@ describe('js to css', () => {
 
         @layer s030-c8-p3000 {
           @media (width >= 48rem) {
-            [data-theme=light] .md\\:light\\:active\\:bg-c_blue:is(:active, [data-active]),.light .md\\:light\\:active\\:bg-c_blue:is(:active, [data-active]),.md\\:light\\:active\\:bg-c_blue.light:is(:active, [data-active]),.md\\:light\\:active\\:bg-c_blue[data-theme=light]:is(:active, [data-active]) {
+            [data-theme=light] ._K3hdWH\\:md\\:light\\:active\\:bg-c_blue:is(:active, [data-active]),.light ._K3hdWH\\:md\\:light\\:active\\:bg-c_blue:is(:active, [data-active]),._K3hdWH\\:md\\:light\\:active\\:bg-c_blue.light:is(:active, [data-active]),._K3hdWH\\:md\\:light\\:active\\:bg-c_blue[data-theme=light]:is(:active, [data-active]) {
               background-color: blue;
       }
       }
@@ -1682,10 +1687,10 @@ describe('js to css', () => {
     expect(result.className).toMatchInlineSnapshot(
       `
       [
-        "custom\\:w_3px",
-        "focus\\:w_2px",
-        "hover\\:w_1px",
-        "active\\:w_3px",
+        "_7QBfyy\\:custom\\:w_3px",
+        "_k8Ryfm\\:focus\\:w_2px",
+        "_dpwS-p\\:hover\\:w_1px",
+        "_2vPfAL\\:active\\:w_3px",
       ]
     `,
     )
@@ -1695,25 +1700,25 @@ describe('js to css', () => {
         @layer s020-c0-p4000, s020-c1-p4000, s020-c2-p4000, s020-c3-p4000;
 
         @layer s020-c0-p4000 {
-          .custom\\:w_3px[data-attr="custom"] {
+          ._7QBfyy\\:custom\\:w_3px[data-attr="custom"] {
             width: 3px;
       }
         }
 
         @layer s020-c1-p4000 {
-          .focus\\:w_2px:is(:focus, [data-focus]) {
+          ._k8Ryfm\\:focus\\:w_2px:is(:focus, [data-focus]) {
             width: 2px;
       }
         }
 
         @layer s020-c2-p4000 {
-          .hover\\:w_1px:is(:hover, [data-hover]) {
+          ._dpwS-p\\:hover\\:w_1px:is(:hover, [data-hover]) {
             width: 1px;
       }
         }
 
         @layer s020-c3-p4000 {
-          .active\\:w_3px:is(:active, [data-active]) {
+          ._2vPfAL\\:active\\:w_3px:is(:active, [data-active]) {
             width: 3px;
       }
         }
@@ -1749,10 +1754,10 @@ describe('js to css', () => {
     expect(result.className).toMatchInlineSnapshot(
       `
       [
-        "sm\\:custom\\:w_33px",
-        "sm\\:focus\\:w_22px",
-        "sm\\:hover\\:w_11px",
-        "sm\\:active\\:w_44px",
+        "_OBbnkj\\:sm\\:custom\\:w_33px",
+        "_378jBy\\:sm\\:focus\\:w_22px",
+        "_Cwx8uo\\:sm\\:hover\\:w_11px",
+        "_lphLFD\\:sm\\:active\\:w_44px",
       ]
     `,
     )
@@ -1763,7 +1768,7 @@ describe('js to css', () => {
 
         @layer s020-c0-p4000 {
           @media (width >= 40rem) {
-            .sm\\:custom\\:w_33px[data-attr="custom"] {
+            ._OBbnkj\\:sm\\:custom\\:w_33px[data-attr="custom"] {
               width: 33px;
       }
       }
@@ -1771,7 +1776,7 @@ describe('js to css', () => {
 
         @layer s020-c1-p4000 {
           @media (width >= 40rem) {
-            .sm\\:focus\\:w_22px:is(:focus, [data-focus]) {
+            ._378jBy\\:sm\\:focus\\:w_22px:is(:focus, [data-focus]) {
               width: 22px;
       }
       }
@@ -1779,7 +1784,7 @@ describe('js to css', () => {
 
         @layer s020-c2-p4000 {
           @media (width >= 40rem) {
-            .sm\\:hover\\:w_11px:is(:hover, [data-hover]) {
+            ._Cwx8uo\\:sm\\:hover\\:w_11px:is(:hover, [data-hover]) {
               width: 11px;
       }
       }
@@ -1787,7 +1792,7 @@ describe('js to css', () => {
 
         @layer s020-c3-p4000 {
           @media (width >= 40rem) {
-            .sm\\:active\\:w_44px:is(:active, [data-active]) {
+            ._lphLFD\\:sm\\:active\\:w_44px:is(:active, [data-active]) {
               width: 44px;
       }
       }
@@ -1824,10 +1829,10 @@ describe('js to css', () => {
     expect(result.className).toMatchInlineSnapshot(
       `
       [
-        "hover\\:custom\\:c_blue",
-        "hover\\:focus\\:w_2px",
-        "md\\:w_3px",
-        "hover\\:md\\:w_5px",
+        "_8Gs0Z9\\:hover\\:custom\\:c_blue",
+        "_wVJFpB\\:hover\\:focus\\:w_2px",
+        "_AQSe3b\\:md\\:w_3px",
+        "_ZT-h3A\\:hover\\:md\\:w_5px",
       ]
     `,
     )
@@ -1838,7 +1843,7 @@ describe('js to css', () => {
 
         @layer s010-c2-p4000 {
           @media (width >= 48rem) {
-            .md\\:w_3px {
+            ._AQSe3b\\:md\\:w_3px {
               width: 3px;
       }
       }
@@ -1846,20 +1851,20 @@ describe('js to css', () => {
 
         @layer s020-c3-p4000 {
           @media (width >= 48rem) {
-            .hover\\:md\\:w_5px:is(:hover, [data-hover]) {
+            ._ZT-h3A\\:hover\\:md\\:w_5px:is(:hover, [data-hover]) {
               width: 5px;
       }
       }
         }
 
         @layer s030-c0-p3000 {
-          .hover\\:custom\\:c_blue:is(:hover, [data-hover])[data-attr="custom"] {
+          ._8Gs0Z9\\:hover\\:custom\\:c_blue:is(:hover, [data-hover])[data-attr="custom"] {
             color: blue;
       }
         }
 
         @layer s030-c1-p4000 {
-          .hover\\:focus\\:w_2px:is(:hover, [data-hover]):is(:focus, [data-focus]) {
+          ._wVJFpB\\:hover\\:focus\\:w_2px:is(:hover, [data-hover]):is(:focus, [data-focus]) {
             width: 2px;
       }
         }
@@ -1897,10 +1902,10 @@ describe('js to css', () => {
     expect(result.className).toMatchInlineSnapshot(
       `
       [
-        "hover\\:mixed\\:c_green",
-        "hover\\:custom\\:c_blue",
-        "hover\\:md\\:w_5px",
-        "hover\\:mixedMd\\:c_6px",
+        "_bmi5pj\\:hover\\:mixed\\:c_green",
+        "_8Gs0Z9\\:hover\\:custom\\:c_blue",
+        "_ZT-h3A\\:hover\\:md\\:w_5px",
+        "_qHHjtY\\:hover\\:mixedMd\\:c_6px",
       ]
     `,
     )
@@ -1911,25 +1916,25 @@ describe('js to css', () => {
 
         @layer s020-c1-p4000 {
           @media (width >= 48rem) {
-            .hover\\:md\\:w_5px:is(:hover, [data-hover]) {
+            ._ZT-h3A\\:hover\\:md\\:w_5px:is(:hover, [data-hover]) {
               width: 5px;
       }
       }
         }
 
         @layer s030-c0-p3000 {
-          .hover\\:mixed\\:c_green:is(:hover, [data-hover])[data-attr="custom"] {
+          ._bmi5pj\\:hover\\:mixed\\:c_green:is(:hover, [data-hover])[data-attr="custom"] {
             color: green;
       }
 
-          .hover\\:custom\\:c_blue:is(:hover, [data-hover])[data-attr="custom"] {
+          ._8Gs0Z9\\:hover\\:custom\\:c_blue:is(:hover, [data-hover])[data-attr="custom"] {
             color: blue;
       }
         }
 
         @layer s030-c2-p3000 {
           @media screen and (min-width: 48em) {
-            .hover\\:mixedMd\\:c_6px:is(:hover, [data-hover])[data-attr="custom"] {
+            ._qHHjtY\\:hover\\:mixedMd\\:c_6px:is(:hover, [data-hover])[data-attr="custom"] {
               color: 6px;
       }
       }
@@ -1957,10 +1962,10 @@ describe('js to css', () => {
     expect(result.className).toMatchInlineSnapshot(
       `
       [
-        "sm\\:w_1px",
-        "md\\:c_3px",
-        "lg\\:c_2px",
-        "xl\\:w_4px",
+        "_R1Rk0r\\:sm\\:w_1px",
+        "_jFsXI8\\:md\\:c_3px",
+        "_rJOpRH\\:lg\\:c_2px",
+        "_gLb3Mu\\:xl\\:w_4px",
       ]
     `,
     )
@@ -1971,7 +1976,7 @@ describe('js to css', () => {
 
         @layer s010-c0-p4000 {
           @media (width >= 40rem) {
-            .sm\\:w_1px {
+            ._R1Rk0r\\:sm\\:w_1px {
               width: 1px;
       }
       }
@@ -1979,7 +1984,7 @@ describe('js to css', () => {
 
         @layer s010-c1-p3000 {
           @media (width >= 48rem) {
-            .md\\:c_3px {
+            ._jFsXI8\\:md\\:c_3px {
               color: 3px;
       }
       }
@@ -1987,7 +1992,7 @@ describe('js to css', () => {
 
         @layer s010-c2-p3000 {
           @media (width >= 64rem) {
-            .lg\\:c_2px {
+            ._rJOpRH\\:lg\\:c_2px {
               color: 2px;
       }
       }
@@ -1995,7 +2000,7 @@ describe('js to css', () => {
 
         @layer s010-c3-p4000 {
           @media (width >= 80rem) {
-            .xl\\:w_4px {
+            ._gLb3Mu\\:xl\\:w_4px {
               width: 4px;
       }
       }
@@ -2045,14 +2050,14 @@ describe('js to css', () => {
     expect(result.className).toMatchInlineSnapshot(
       `
       [
-        "sm\\:w_1px",
-        "mixedSm\\:c_red",
-        "mixedSupportSm\\:c_green",
-        "md\\:c_3px",
-        "mixedMd\\:c_blue",
-        "mixedSupportMd\\:c_yellow",
-        "lg\\:c_2px",
-        "xl\\:w_4px",
+        "_R1Rk0r\\:sm\\:w_1px",
+        "_64rnai\\:mixedSm\\:c_red",
+        "_8NpePD\\:mixedSupportSm\\:c_green",
+        "_jFsXI8\\:md\\:c_3px",
+        "_K6wVU0\\:mixedMd\\:c_blue",
+        "_g6l2If\\:mixedSupportMd\\:c_yellow",
+        "_rJOpRH\\:lg\\:c_2px",
+        "_gLb3Mu\\:xl\\:w_4px",
       ]
     `,
     )
@@ -2063,7 +2068,7 @@ describe('js to css', () => {
 
         @layer s010-c0-p4000 {
           @media (width >= 40rem) {
-            .sm\\:w_1px {
+            ._R1Rk0r\\:sm\\:w_1px {
               width: 1px;
       }
       }
@@ -2071,7 +2076,7 @@ describe('js to css', () => {
 
         @layer s010-c3-p3000 {
           @media (width >= 48rem) {
-            .md\\:c_3px {
+            ._jFsXI8\\:md\\:c_3px {
               color: 3px;
       }
       }
@@ -2079,7 +2084,7 @@ describe('js to css', () => {
 
         @layer s010-c6-p3000 {
           @media (width >= 64rem) {
-            .lg\\:c_2px {
+            ._rJOpRH\\:lg\\:c_2px {
               color: 2px;
       }
       }
@@ -2087,7 +2092,7 @@ describe('js to css', () => {
 
         @layer s010-c7-p4000 {
           @media (width >= 80rem) {
-            .xl\\:w_4px {
+            ._gLb3Mu\\:xl\\:w_4px {
               width: 4px;
       }
       }
@@ -2095,7 +2100,7 @@ describe('js to css', () => {
 
         @layer s020-c1-p3000 {
           @media screen and (min-width: 40em) {
-            .mixedSm\\:c_red[data-attr="custom"] {
+            ._64rnai\\:mixedSm\\:c_red[data-attr="custom"] {
               color: red;
       }
       }
@@ -2104,7 +2109,7 @@ describe('js to css', () => {
         @layer s020-c2-p3000 {
           @media screen and (min-width: 40em) {
             @support (display: flex) {
-              .mixedSupportSm\\:c_green[data-attr="custom"] {
+              ._8NpePD\\:mixedSupportSm\\:c_green[data-attr="custom"] {
                 color: green;
       }
       }
@@ -2113,7 +2118,7 @@ describe('js to css', () => {
 
         @layer s020-c4-p3000 {
           @media screen and (min-width: 48em) {
-            .mixedMd\\:c_blue[data-attr="custom"] {
+            ._K6wVU0\\:mixedMd\\:c_blue[data-attr="custom"] {
               color: blue;
       }
       }
@@ -2122,7 +2127,7 @@ describe('js to css', () => {
         @layer s020-c5-p3000 {
           @media screen and (min-width: 48em) {
             @support (display: flex) {
-              .mixedSupportMd\\:c_yellow[data-attr="custom"] {
+              ._g6l2If\\:mixedSupportMd\\:c_yellow[data-attr="custom"] {
                 color: yellow;
       }
       }
@@ -2153,9 +2158,9 @@ describe('js to css', () => {
     expect(result.className).toMatchInlineSnapshot(
       `
       [
-        "md\\:w_4\\.5px",
-        "hover\\:md\\:w_5px",
-        "mdHover\\:w_6px",
+        "_AQSe3b\\:md\\:w_4\\.5px",
+        "_ZT-h3A\\:hover\\:md\\:w_5px",
+        "_NfIquT\\:mdHover\\:w_6px",
       ]
     `,
     )
@@ -2166,7 +2171,7 @@ describe('js to css', () => {
 
         @layer s010-c0-p4000 {
           @media (width >= 48rem) {
-            .md\\:w_4\\.5px {
+            ._AQSe3b\\:md\\:w_4\\.5px {
               width: 4.5px;
       }
       }
@@ -2174,7 +2179,7 @@ describe('js to css', () => {
 
         @layer s020-c1-p4000 {
           @media (width >= 48rem) {
-            .hover\\:md\\:w_5px:is(:hover, [data-hover]) {
+            ._ZT-h3A\\:hover\\:md\\:w_5px:is(:hover, [data-hover]) {
               width: 5px;
       }
       }
@@ -2183,7 +2188,7 @@ describe('js to css', () => {
         @layer s020-c2-p4000 {
           @media screen and (min-width: 48em) {
             @supports (display: flex) {
-              .mdHover\\:w_6px:hover {
+              ._NfIquT\\:mdHover\\:w_6px:hover {
                 width: 6px;
       }
       }
@@ -2234,18 +2239,18 @@ describe('js to css', () => {
     expect(result.className).toMatchInlineSnapshot(
       `
       [
-        "w_0px",
-        "custom\\:c_red",
-        "dark\\:w_1px",
-        "hover\\:w_2px",
-        "hover\\:custom\\:c_blue",
-        "hover\\:focus\\:w_3px",
-        "sm\\:w_4px",
-        "smHover\\:w_7px",
-        "md\\:w_4\\.5px",
-        "hover\\:md\\:w_5px",
-        "mdHover\\:w_8px",
-        "supportHover\\:w_6px",
+        "_RO16FJ\\:w_0px",
+        "_5RdAUu\\:custom\\:c_red",
+        "_Zc7fYl\\:dark\\:w_1px",
+        "_dpwS-p\\:hover\\:w_2px",
+        "_8Gs0Z9\\:hover\\:custom\\:c_blue",
+        "_wVJFpB\\:hover\\:focus\\:w_3px",
+        "_R1Rk0r\\:sm\\:w_4px",
+        "_-COiun\\:smHover\\:w_7px",
+        "_AQSe3b\\:md\\:w_4\\.5px",
+        "_ZT-h3A\\:hover\\:md\\:w_5px",
+        "_NfIquT\\:mdHover\\:w_8px",
+        "_Mlkq2r\\:supportHover\\:w_6px",
       ]
     `,
     )
@@ -2255,14 +2260,14 @@ describe('js to css', () => {
         @layer s010-c0-p4000, s010-c6-p4000, s010-c8-p4000, s020-c1-p3000, s020-c2-p4000, s020-c3-p4000, s020-c7-p4000, s020-c9-p4000, s020-c10-p4000, s020-c11-p4000, s030-c4-p3000, s030-c5-p4000;
 
         @layer s010-c0-p4000 {
-          .w_0px {
+          ._RO16FJ\\:w_0px {
             width: 0px;
       }
         }
 
         @layer s010-c6-p4000 {
           @media (width >= 40rem) {
-            .sm\\:w_4px {
+            ._R1Rk0r\\:sm\\:w_4px {
               width: 4px;
       }
       }
@@ -2270,27 +2275,27 @@ describe('js to css', () => {
 
         @layer s010-c8-p4000 {
           @media (width >= 48rem) {
-            .md\\:w_4\\.5px {
+            ._AQSe3b\\:md\\:w_4\\.5px {
               width: 4.5px;
       }
       }
         }
 
         @layer s020-c1-p3000 {
-          .custom\\:c_red[data-attr="custom"] {
+          ._5RdAUu\\:custom\\:c_red[data-attr="custom"] {
             color: red;
       }
         }
 
         @layer s020-c2-p4000 {
 
-          [data-theme=dark] .dark\\:w_1px,.dark .dark\\:w_1px,.dark\\:w_1px.dark,.dark\\:w_1px[data-theme=dark] {
+          [data-theme=dark] ._Zc7fYl\\:dark\\:w_1px,.dark ._Zc7fYl\\:dark\\:w_1px,._Zc7fYl\\:dark\\:w_1px.dark,._Zc7fYl\\:dark\\:w_1px[data-theme=dark] {
             width: 1px;
       }
         }
 
         @layer s020-c3-p4000 {
-          .hover\\:w_2px:is(:hover, [data-hover]) {
+          ._dpwS-p\\:hover\\:w_2px:is(:hover, [data-hover]) {
             width: 2px;
       }
         }
@@ -2298,7 +2303,7 @@ describe('js to css', () => {
         @layer s020-c7-p4000 {
           @media screen and (min-width: 40em) {
             @supports (display: grid) {
-              .smHover\\:w_7px:hover {
+              ._-COiun\\:smHover\\:w_7px:hover {
                 width: 7px;
       }
       }
@@ -2307,7 +2312,7 @@ describe('js to css', () => {
 
         @layer s020-c9-p4000 {
           @media (width >= 48rem) {
-            .hover\\:md\\:w_5px:is(:hover, [data-hover]) {
+            ._ZT-h3A\\:hover\\:md\\:w_5px:is(:hover, [data-hover]) {
               width: 5px;
       }
       }
@@ -2316,7 +2321,7 @@ describe('js to css', () => {
         @layer s020-c10-p4000 {
           @media screen and (min-width: 48em) {
             @supports (display: flex) {
-              .mdHover\\:w_8px:hover {
+              ._NfIquT\\:mdHover\\:w_8px:hover {
                 width: 8px;
       }
       }
@@ -2326,7 +2331,7 @@ describe('js to css', () => {
         @layer s020-c11-p4000 {
           @media (hover: hover) and (pointer: fine) {
             @supports (display: table-cell) {
-              .supportHover\\:w_6px:hover {
+              ._Mlkq2r\\:supportHover\\:w_6px:hover {
                 width: 6px;
       }
       }
@@ -2334,13 +2339,13 @@ describe('js to css', () => {
         }
 
         @layer s030-c4-p3000 {
-          .hover\\:custom\\:c_blue:is(:hover, [data-hover])[data-attr="custom"] {
+          ._8Gs0Z9\\:hover\\:custom\\:c_blue:is(:hover, [data-hover])[data-attr="custom"] {
             color: blue;
       }
         }
 
         @layer s030-c5-p4000 {
-          .hover\\:focus\\:w_3px:is(:hover, [data-hover]):is(:focus, [data-focus]) {
+          ._wVJFpB\\:hover\\:focus\\:w_3px:is(:hover, [data-hover]):is(:focus, [data-focus]) {
             width: 3px;
       }
         }
@@ -2367,7 +2372,7 @@ describe('js to css', () => {
         @layer s020-c0-p3000;
 
         @layer s020-c0-p3000 {
-          .hover\\:\\[\\&_\\>_\\:where\\(svg\\)\\]\\:c_green:hover > :where(svg) {
+          ._ZgWWOD\\:hover\\:\\[\\&_\\>_\\:where\\(svg\\)\\]\\:c_green:hover > :where(svg) {
             color: green;
       }
         }
@@ -2397,7 +2402,7 @@ describe('js to css', () => {
 
         @layer s020-c0-p3000 {
           @media (hover: hover) {
-            .hoverMedia\\:\\[\\&_\\>_\\:where\\(svg\\)\\]\\:c_blue:hover > :where(svg) {
+            ._1a0-nT\\:hoverMedia\\:\\[\\&_\\>_\\:where\\(svg\\)\\]\\:c_blue:hover > :where(svg) {
               color: blue;
       }
       }
@@ -2435,13 +2440,13 @@ describe('multi-block conditions (object syntax with @slot)', () => {
 
         @layer s020-c0-p1000 {
           @media (hover: hover) {
-            .hoverActive\\:bg_red:is(:hover, [data-hover]) {
+            ._ugV3UM\\:hoverActive\\:bg_red:is(:hover, [data-hover]) {
               background: red;
       }
       }
 
           @media (hover: none) {
-            .hoverActive\\:bg_red:is(:active, [data-active]) {
+            ._ugV3UM\\:hoverActive\\:bg_red:is(:active, [data-active]) {
               background: red;
       }
       }
@@ -2474,7 +2479,7 @@ describe('multi-block conditions (object syntax with @slot)', () => {
 
         @layer s020-c0-p3000 {
           @media (hover: hover) {
-            .anyHover\\:c_blue:hover {
+            ._vtUPSo\\:anyHover\\:c_blue:hover {
               color: blue;
       }
       }
@@ -2511,13 +2516,13 @@ describe('multi-block conditions (object syntax with @slot)', () => {
 
         @layer s020-c0-p1000 {
           @media (hover: hover) {
-            .hoverActive\\:bg_red:is(:hover, [data-hover]) {
+            ._ugV3UM\\:hoverActive\\:bg_red:is(:hover, [data-hover]) {
               background: red;
       }
       }
 
           @media (hover: none) {
-            .hoverActive\\:bg_red:is(:active, [data-active]) {
+            ._ugV3UM\\:hoverActive\\:bg_red:is(:active, [data-active]) {
               background: red;
       }
       }
@@ -2525,13 +2530,13 @@ describe('multi-block conditions (object syntax with @slot)', () => {
 
         @layer s020-c0-p3000 {
           @media (hover: hover) {
-            .hoverActive\\:c_white:is(:hover, [data-hover]) {
+            ._az8_NL\\:hoverActive\\:c_white:is(:hover, [data-hover]) {
               color: var(--colors-white);
       }
       }
 
           @media (hover: none) {
-            .hoverActive\\:c_white:is(:active, [data-active]) {
+            ._az8_NL\\:hoverActive\\:c_white:is(:active, [data-active]) {
               color: var(--colors-white);
       }
       }
@@ -2586,13 +2591,13 @@ describe('multi-block conditions (object syntax with @slot)', () => {
 
         @layer s030-c0-p1000 {
           @media (hover: hover) {
-            .dark .dark\\:hoverActive\\:bg_red:is(:hover, [data-hover]) {
+            .dark ._UIk9Oq\\:dark\\:hoverActive\\:bg_red:is(:hover, [data-hover]) {
               background: red;
       }
       }
 
           @media (hover: none) {
-            .dark .dark\\:hoverActive\\:bg_red:is(:active, [data-active]) {
+            .dark ._UIk9Oq\\:dark\\:hoverActive\\:bg_red:is(:active, [data-active]) {
               background: red;
       }
       }
@@ -2624,13 +2629,13 @@ describe('multi-block conditions (object syntax with @slot)', () => {
 
         @layer s020-c0-p1000 {
           @media (hover: hover) {
-            .hoverActive\\:bg_red:is(:hover, [data-hover]) {
+            ._ugV3UM\\:hoverActive\\:bg_red:is(:hover, [data-hover]) {
               background: red;
       }
       }
 
           @media (hover: none) {
-            .hoverActive\\:bg_red:is(:active, [data-active]) {
+            ._ugV3UM\\:hoverActive\\:bg_red:is(:active, [data-active]) {
               background: red;
       }
       }
@@ -2670,7 +2675,7 @@ describe('multi-block conditions (object syntax with @slot)', () => {
         @layer s030-c0-p1000 {
           @media (hover: hover) {
             @media (prefers-color-scheme: light) {
-              .hoverActive\\:lightDark\\:bg_red:is(:hover, [data-hover])[data-mode="light"] {
+              ._uIVX3F\\:hoverActive\\:lightDark\\:bg_red:is(:hover, [data-hover])[data-mode="light"] {
                 background: red;
       }
       }
@@ -2678,7 +2683,7 @@ describe('multi-block conditions (object syntax with @slot)', () => {
 
           @media (hover: hover) {
             @media (prefers-color-scheme: dark) {
-              .hoverActive\\:lightDark\\:bg_red:is(:hover, [data-hover])[data-mode="dark"] {
+              ._uIVX3F\\:hoverActive\\:lightDark\\:bg_red:is(:hover, [data-hover])[data-mode="dark"] {
                 background: red;
       }
       }
@@ -2686,7 +2691,7 @@ describe('multi-block conditions (object syntax with @slot)', () => {
 
           @media (hover: none) {
             @media (prefers-color-scheme: light) {
-              .hoverActive\\:lightDark\\:bg_red:is(:active, [data-active])[data-mode="light"] {
+              ._uIVX3F\\:hoverActive\\:lightDark\\:bg_red:is(:active, [data-active])[data-mode="light"] {
                 background: red;
       }
       }
@@ -2694,7 +2699,7 @@ describe('multi-block conditions (object syntax with @slot)', () => {
 
           @media (hover: none) {
             @media (prefers-color-scheme: dark) {
-              .hoverActive\\:lightDark\\:bg_red:is(:active, [data-active])[data-mode="dark"] {
+              ._uIVX3F\\:hoverActive\\:lightDark\\:bg_red:is(:active, [data-active])[data-mode="dark"] {
                 background: red;
       }
       }

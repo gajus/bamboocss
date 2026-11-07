@@ -12,7 +12,9 @@ describe('generate classnames', () => {
       '--test-variable-2': '2',
     })
 
-    expect(result).toMatchInlineSnapshot('"--testVariable0_0 --test-Variable-1_1 --test-variable-2_2"')
+    expect(result).toMatchInlineSnapshot(
+      `"_wgYpz2:--testVariable0_0 _ZoaNGs:--test-Variable-1_1 _AiKdN4:--test-variable-2_2"`,
+    )
   })
 
   test('should convert object to class', () => {
@@ -22,19 +24,19 @@ describe('generate classnames', () => {
         color: { _light: 'red', _dark: 'green' },
         opacity: { _dark: 'slate400' },
       }),
-    ).toMatchInlineSnapshot(`"light:c_red dark:c_green dark:op_slate400"`)
+    ).toMatchInlineSnapshot(`"_IcPIb3:light:c_red _gtEApe:dark:c_green _aN2f-D:dark:op_slate400"`)
 
     expect(
       css({
         top: { sm: { _rtl: '20px', _hover: '50px' }, lg: '120px' },
       }),
-    ).toMatchInlineSnapshot('"sm:rtl:top_20px sm:hover:top_50px lg:top_120px"')
+    ).toMatchInlineSnapshot(`"_fYp5xA:sm:rtl:top_20px _n3U4vc:sm:hover:top_50px _rbF1Op:lg:top_120px"`)
 
     expect(
       css({
         left: { base: '20px', md: '40px' },
       }),
-    ).toMatchInlineSnapshot('"left_20px md:left_40px"')
+    ).toMatchInlineSnapshot(`"_3Cthvj:left_20px _QhKjJy:md:left_40px"`)
   })
 
   test('should expand shorthand before processing', () => {
@@ -44,7 +46,7 @@ describe('generate classnames', () => {
         w: '40px',
         width: '80px',
       }),
-    ).toMatchInlineSnapshot('"w_80px"')
+    ).toMatchInlineSnapshot(`"_RO16FJ:w_80px"`)
 
     // override even responsive values
     expect(
@@ -52,14 +54,14 @@ describe('generate classnames', () => {
         width: { base: '50px', md: '60px' },
         w: '70px',
       }),
-    ).toMatchInlineSnapshot('"w_70px"')
+    ).toMatchInlineSnapshot(`"_RO16FJ:w_70px"`)
 
     // override in nested condition
     expect(
       css({
         _hover: { width: '40px', w: '90px' },
       }),
-    ).toMatchInlineSnapshot('"hover:w_90px"')
+    ).toMatchInlineSnapshot(`"_dpwS-p:hover:w_90px"`)
   })
 
   test('should respect important', () => {
@@ -69,7 +71,7 @@ describe('generate classnames', () => {
         color: 'red !important',
         fontSize: '30px!',
       }),
-    ).toMatchInlineSnapshot(`"c_red! fs_30px!"`)
+    ).toMatchInlineSnapshot(`"_Btm_AK:c_red! _Ocpc8R:fs_30px!"`)
   })
 
   test('should omit spaces in nested selectors', () => {
@@ -87,12 +89,14 @@ describe('generate classnames', () => {
           fontSize: '40px',
         },
       }),
-    ).toMatchInlineSnapshot(`"[&_span]:fs_20px [.bold_&]:fw_bold sm:fs_50px [@media_print]:fs_40px"`)
+    ).toMatchInlineSnapshot(
+      `"_ATQPsE:[&_span]:fs_20px _6Iya86:[.bold_&]:fw_bold _EL8lrA:sm:fs_50px __-WJL5:[@media_print]:fs_40px"`,
+    )
   })
 
   test('should use dash for negative tokens', () => {
     const css = createCss(createGeneratorContext().baseSheetContext)
-    expect(css({ mx: '-2' })).toMatchInlineSnapshot('"mx_-2"')
+    expect(css({ mx: '-2' })).toMatchInlineSnapshot(`"_0QmaUN:mx_-2"`)
   })
 
   test('should not format the class name', () => {
@@ -124,7 +128,7 @@ describe('generate classnames', () => {
         background: '$pink.400',
         mx: '-$2',
       }),
-    ).toMatchInlineSnapshot(`"bg_$pink.400 mx_-$2"`)
+    ).toMatchInlineSnapshot(`"_w1ddk4:bg_$pink.400 _0QmaUN:mx_-$2"`)
   })
 
   test('should format the non-string values', () => {
@@ -156,6 +160,6 @@ describe('generate classnames', () => {
         debug: true,
         padding: 40,
       }),
-    ).toMatchInlineSnapshot('"debug_true p_40"')
+    ).toMatchInlineSnapshot(`"_apQiK1:debug_true _DJEIKl:p_40"`)
   })
 })

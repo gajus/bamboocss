@@ -66,7 +66,7 @@ describe('fallback values', () => {
         @layer s010-c0-p4000;
 
         @layer s010-c0-p4000 {
-          .h_fallback\\(calc\\(100dvh_-_100px\\)\\,_calc\\(100vh_-_100px\\)\\) {
+          ._97NnCm\\:h_fallback\\(calc\\(100dvh_-_100px\\)\\,_calc\\(100vh_-_100px\\)\\) {
             height: calc(100vh - 100px);
             height: calc(100dvh - 100px);
       }
@@ -81,7 +81,7 @@ describe('fallback values', () => {
         @layer s010-c0-p3000;
 
         @layer s010-c0-p3000 {
-          .cursor_fallback\\(-webkit-grab\\,_grab\\,_move\\) {
+          ._SlOY66\\:cursor_fallback\\(-webkit-grab\\,_grab\\,_move\\) {
             cursor: move;
             cursor: grab;
             cursor: -webkit-grab;
@@ -97,7 +97,7 @@ describe('fallback values', () => {
         @layer s010-c0-p3000;
 
         @layer s010-c0-p3000 {
-          .c_fallback\\(red\\.300\\,_red\\) {
+          ._Btm_AK\\:c_fallback\\(red\\.300\\,_red\\) {
             color: red;
             color: var(--colors-red-300);
       }
@@ -112,7 +112,7 @@ describe('fallback values', () => {
         @layer s010-c0-p4000;
 
         @layer s010-c0-p4000 {
-          .w_fallback\\(\\[stretch\\]\\,_\\[100\\%\\]\\) {
+          ._RO16FJ\\:w_fallback\\(\\[stretch\\]\\,_\\[100\\%\\]\\) {
             width: 100%;
             width: stretch;
       }
@@ -127,7 +127,7 @@ describe('fallback values', () => {
         @layer s010-c0-p2000;
 
         @layer s010-c0-p2000 {
-          .px_fallback\\(4\\,_2\\) {
+          ._pPyFaQ\\:px_fallback\\(4\\,_2\\) {
             padding-inline: var(--spacing-2);
             padding-inline: var(--spacing-4);
       }
@@ -142,7 +142,7 @@ describe('fallback values', () => {
         @layer s010-c0-p4000;
 
         @layer s010-c0-p4000 {
-          .h_fallback\\(100px\\,_100px\\) {
+          ._97NnCm\\:h_fallback\\(100px\\,_100px\\) {
             height: 100px;
       }
         }
@@ -156,7 +156,7 @@ describe('fallback values', () => {
         @layer s020-c0-p4000;
 
         @layer s020-c0-p4000 {
-          .hover\\:h_fallback\\(100dvh\\,_100vh\\):is(:hover, [data-hover]) {
+          ._yVKB9k\\:hover\\:h_fallback\\(100dvh\\,_100vh\\):is(:hover, [data-hover]) {
             height: 100vh;
             height: 100dvh;
       }
@@ -172,7 +172,7 @@ describe('fallback values', () => {
 
         @layer s010-c0-p4000 {
           @media (width >= 48rem) {
-            .md\\:h_fallback\\(100dvh\\,_100vh\\) {
+            ._0lQrcO\\:md\\:h_fallback\\(100dvh\\,_100vh\\) {
               height: 100vh;
               height: 100dvh;
       }
@@ -188,7 +188,7 @@ describe('fallback values', () => {
         @layer s010-c0-p4000;
 
         @layer s010-c0-p4000 {
-          .h_fallback\\(100dvh\\) {
+          ._97NnCm\\:h_fallback\\(100dvh\\) {
             height: 100dvh;
       }
         }
@@ -205,7 +205,7 @@ describe('fallback values', () => {
         @layer s010-c0-p3000;
 
         @layer s010-c0-p3000 {
-          .trs-prop_fallback\\(\\[color\\,_background-color\\]\\,_all\\) {
+          ._348YDv\\:trs-prop_fallback\\(\\[color\\,_background-color\\]\\,_all\\) {
             --transition-prop: color, background-color;
             transition-property: color, background-color;
       }
@@ -224,7 +224,7 @@ describe('fallback values', () => {
         @layer s010-c0-p3000;
 
         @layer s010-c0-p3000 {
-          .myNum_fallback\\(4\\,_8\\) {
+          ._-CD_3b\\:myNum_fallback\\(4\\,_8\\) {
             margin-top: 8px;
             margin-top: 4px;
       }
@@ -243,7 +243,7 @@ describe('fallback values', () => {
         @layer s010-c0-p4000;
 
         @layer s010-c0-p4000 {
-          .h_100px200px {
+          ._97NnCm\\:h_100px200px {
             height: 100px200px;
       }
         }
@@ -267,7 +267,7 @@ describe('fallback values', () => {
         @layer s010-c0-p3000;
 
         @layer s010-c0-p3000 {
-          .myFont_Inter {
+          ._RVue4I\\:myFont_Inter {
             font-family: Inter,sans-serif;
       }
         }
@@ -278,7 +278,7 @@ describe('fallback values', () => {
         @layer s010-c0-p3000;
 
         @layer s010-c0-p3000 {
-          .myFont_fallback\\(Inter\\,_Arial\\) {
+          ._RVue4I\\:myFont_fallback\\(Inter\\,_Arial\\) {
             font-family: Arial,sans-serif;
             font-family: Inter,sans-serif;
       }
@@ -305,12 +305,12 @@ describe('fallback values', () => {
         @layer s010-c0-p3000;
 
         @layer s010-c0-p3000 {
-          .myFont_fallback\\(Inter\\,_multi\\) {
+          ._RVue4I\\:myFont_fallback\\(Inter\\,_multi\\) {
             font-family: multi,sans-serif;
             font-family: Inter,sans-serif;
       }
 
-          .myFont_multi {
+          ._RVue4I\\:myFont_multi {
             font-family: multi,sans-serif;
       }
         }
@@ -326,7 +326,7 @@ describe('fallback values', () => {
         @layer s010-c0-p4000;
 
         @layer s010-c0-p4000 {
-          .lc_fallback\\(none\\,_3\\) {
+          ._phSH-Q\\:lc_fallback\\(none\\,_3\\) {
             -webkit-line-clamp: unset;
       }
         }
@@ -340,7 +340,7 @@ describe('fallback values', () => {
         @layer s030-c0-p3000;
 
         @layer s030-c0-p3000 {
-          .dvd-x_fallback\\(2px\\,_1px\\) > :not([hidden]) ~ :not([hidden]) {
+          ._Cua0ov\\:dvd-x_fallback\\(2px\\,_1px\\) > :not([hidden]) ~ :not([hidden]) {
             border-inline-start-width: 2px;
             border-inline-end-width: 0px;
       }
@@ -355,11 +355,11 @@ describe('fallback values', () => {
         @layer s010-c0-p3000;
 
         @layer s010-c0-p3000 {
-          .c_red {
+          ._Btm_AK\\:c_red {
             color: red;
       }
 
-          .d_flex {
+          ._Fg8Gj5\\:d_flex {
             display: flex;
       }
         }
@@ -373,7 +373,7 @@ describe('fallback values', () => {
         @layer important;
 
         @layer important {
-          .h_fallback\\(100dvh\\,_100vh\\)\\! {
+          ._97NnCm\\:h_fallback\\(100dvh\\,_100vh\\)\\! {
             height: 100vh !important;
             height: 100dvh !important;
       }
@@ -1036,7 +1036,7 @@ describe('fallback values', () => {
         @layer s010-c0-p4000;
 
         @layer s010-c0-p4000 {
-          .oFJfu {
+          ._97NnCm\\:hLzET {
             height: 100vh;
             height: 100dvh;
       }
@@ -1051,7 +1051,7 @@ describe('fallback values', () => {
         @layer s010-c0-p1000;
 
         @layer s010-c0-p1000 {
-          .bd_1px_solid_fallback\\(red\\,_blue\\) {
+          ._Ucco6y\\:bd_1px_solid_fallback\\(red\\,_blue\\) {
             border: 1px solid fallback(red, blue);
       }
         }

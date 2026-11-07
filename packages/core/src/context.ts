@@ -108,13 +108,21 @@ export class Context {
     this.tokens.init()
 
     this.utility = this.createUtility(config)
+    let hooksReturned = false
+    let ignoredToHash = false
     this.hooks['utility:created']?.({
       configure: (opts) => {
-        if (opts.toHash) {
-          this.utility.toHash = opts.toHash
-        }
+        if (!opts.toHash) return
+        // A utility class has the fixed shape the runtime `cx` reads to merge it, so a hook's hash
+        // cannot name it. Reported once the hooks return: thrown here, the hook runner would only
+        // log it as the plugin's own error. A hook configuring past an `await` calls this after
+        // that, when there is nothing left to fail, so it is said then. @see mergeableAtomName
+        if (hooksReturned) this.reportIgnoredToHash(config, true)
+        else ignoredToHash = true
       },
     })
+    hooksReturned = true
+    if (ignoredToHash) this.reportIgnoredToHash(config)
 
     this.conditions = this.createConditions(config)
 
@@ -393,6 +401,22 @@ export class Context {
 
     const errors = `⚠️ Invalid config:\n${mistakes.map((mistake) => `- [global.css] ${mistake}`).join('\n')}\n`
     if (config.validation === 'error') throw new BambooError('CONFIG_ERROR', errors)
+    logger.warn('config', errors)
+  }
+
+  /**
+   * A `toHash` a `utility:created` hook configures, which is no longer used, reported the way
+   * `checkGlobalCss` reports: a warning, a failure under `validation: 'error'`, and nothing under
+   * `'off'`. One configured `late`, once the context is built, can only be a warning: thrown then,
+   * it would reject a promise nothing awaits.
+   */
+  private reportIgnoredToHash = (config: UserConfig, late = false): void => {
+    if (config.validation === 'off') return
+
+    const errors =
+      '⚠️ Invalid config:\n- [plugins] A `utility:created` hook configures `toHash`, which is no longer used: a ' +
+      'utility class name has the fixed shape the runtime `cx` reads to merge it. Remove it from the hook.\n'
+    if (config.validation === 'error' && !late) throw new BambooError('CONFIG_ERROR', errors)
     logger.warn('config', errors)
   }
 

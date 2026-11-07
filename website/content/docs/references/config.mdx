@@ -200,7 +200,7 @@ Ex: when using a prefix of `bamboo`
 would result in:
 
 ```css
-.bamboo-text_blue\.500 {
+.bamboo-_Btm_AK\:c_blue\.500 {
   color: var(--bamboo-colors-blue-500);
 }
 ```
@@ -227,7 +227,7 @@ the [shared example](#prefix) would result in:
 
 ```css
 @layer bamboo_utilities {
-  .text_blue\.500 {
+  ._Btm_AK\:c_blue\.500 {
     color: var(--colors-blue-500);
   }
 }
@@ -246,7 +246,7 @@ The separator for the generated css classes.
 Using a `=`, the [shared example](#prefix) would result in:
 
 ```css
-.text\=blue\.500 {
+._Btm_AK\:c\=blue\.500 {
   color: var(--colors-blue-500);
 }
 ```
@@ -297,7 +297,8 @@ and hashed ones as fast as plain React. The gzipped stylesheet is about 4% large
 hashes do not.
 
 Set `hash: false` only if markup written by hand names Bamboo's classes — an HTML page, or a class
-[`staticCss`](#staticcss) emits for a name assembled at runtime. Nothing can write a hashed name by hand, and a build
+[`staticCss`](#staticcss) emits for a name assembled at runtime. Such markup spells a utility's code too, which is the
+same for every value of one property under one set of conditions. Nothing can write a hashed name by hand, and a build
 that hashes `staticCss` classes warns about it.
 
 ```ts
@@ -311,13 +312,19 @@ export default defineConfig({
 
 For the [shared example](#prefix), the emitted class and variable are:
 
-| setting                                      | class             | variable                 |
-| -------------------------------------------- | ----------------- | ------------------------ |
-| default, in the Vite dev server              | `.text_blue\.500` | `var(--colors-blue-500)` |
-| default, in a production build or CLI output | `.dOFUTE`         | `var(--colors-blue-500)` |
-| `false`                                      | `.text_blue\.500` | `var(--colors-blue-500)` |
-| `true`                                       | `.dOFUTE`         | `var(--cgpxvS)`          |
-| `{ cssVar: true, className: false }`         | `.text_blue\.500` | `var(--cgpxvS)`          |
+| setting                                      | class                   | variable                 |
+| -------------------------------------------- | ----------------------- | ------------------------ |
+| default, in the Vite dev server              | `._Btm_AK\:c_blue\.500` | `var(--colors-blue-500)` |
+| default, in a production build or CLI output | `._Btm_AK\:nk3zp`       | `var(--colors-blue-500)` |
+| `false`                                      | `._Btm_AK\:c_blue\.500` | `var(--colors-blue-500)` |
+| `true`                                       | `._Btm_AK\:nk3zp`       | `var(--cgpxvS)`          |
+| `{ cssVar: true, className: false }`         | `._Btm_AK\:c_blue\.500` | `var(--cgpxvS)`          |
+
+Readable or hashed, a utility class starts with `_`, six characters coding the property and conditions it sets, and `:`
+— `_Btm_AK` is `color` under no condition, whatever its value. The runtime `cx` reads that code to keep the last class
+of each property and conditions, so a `className` passed in overrides a component's own in development and production
+alike; see [classname concatenation](/docs/concepts/writing-styles#classname-concatenation). Recipe classes keep their
+names.
 
 This option applies to every build path, Vite included — it is the only thing that shortens class names. Vite's compiler
 composes StyleSets before naming and then emits the names the stylesheet is written under, so hashing changes what those
@@ -1291,8 +1298,8 @@ absent.
 ```text
 2 declaration(s) in the stylesheet are not valid CSS for their property:
 
-- `background-image: 65deg` in `.bg-linear_65deg`, `@layer utilities`
-- `width: 10px 20px` in `.w_\[10px_20px\]`, `@layer utilities`
+- `background-image: 65deg` in `._9TQ15r\:bg-linear_65deg`, `@layer utilities`
+- `width: 10px 20px` in `._RO16FJ\:w_\[10px_20px\]`, `@layer utilities`
 ```
 
 A value that reads a variable — `var()`, `env()`, `attr()`, `if()` — is not checked, because the grammar cannot see what

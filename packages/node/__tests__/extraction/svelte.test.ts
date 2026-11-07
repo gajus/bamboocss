@@ -293,51 +293,51 @@ describe('extract svelte templates', () => {
         @layer s010-c0-p3000;
 
         @layer s010-c0-p3000 {
-          .c_blue\\.400 {
+          ._Btm_AK\\:c_blue\\.400 {
             color: var(--colors-blue-400);
       }
 
-          .c_blue\\.100 {
+          ._Btm_AK\\:c_blue\\.100 {
             color: var(--colors-blue-100);
       }
 
-          .c_green\\.400 {
+          ._Btm_AK\\:c_green\\.400 {
             color: var(--colors-green-400);
       }
 
-          .c_purple\\.400 {
+          ._Btm_AK\\:c_purple\\.400 {
             color: var(--colors-purple-400);
       }
 
-          .c_red\\.500 {
+          ._Btm_AK\\:c_red\\.500 {
             color: var(--colors-red-500);
       }
 
-          .c_teal\\.100 {
+          ._Btm_AK\\:c_teal\\.100 {
             color: var(--colors-teal-100);
       }
 
-          .c_teal\\.200 {
+          ._Btm_AK\\:c_teal\\.200 {
             color: var(--colors-teal-200);
       }
 
-          .c_teal\\.300 {
+          ._Btm_AK\\:c_teal\\.300 {
             color: var(--colors-teal-300);
       }
 
-          .c_teal\\.400 {
+          ._Btm_AK\\:c_teal\\.400 {
             color: var(--colors-teal-400);
       }
 
-          .c_teal\\.500 {
+          ._Btm_AK\\:c_teal\\.500 {
             color: var(--colors-teal-500);
       }
 
-          .c_teal\\.600 {
+          ._Btm_AK\\:c_teal\\.600 {
             color: var(--colors-teal-600);
       }
 
-          .c_teal\\.700 {
+          ._Btm_AK\\:c_teal\\.700 {
             color: var(--colors-teal-700);
       }
         }

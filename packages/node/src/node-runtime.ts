@@ -151,8 +151,9 @@ const byWalk = (patterns: readonly string[], cwd: string | undefined) => {
  *
  * `fast-glob` hands back whatever `readdir` gave it, which is the filesystem's order and is not
  * the same on every machine. That order is not cosmetic: it is the order atoms enter the sheet,
- * and sheet order is what decides a conflict between two classes on one element — `cx` joins
- * them and the browser picks by position, not by the order they were passed. So an unsorted
+ * and sheet order is what decides between two classes on one element that `cx` does not merge —
+ * two of different properties that overlap, or a class it did not name — where the browser picks
+ * by position, not by the order they were passed. So an unsorted
  * glob lets two checkouts of the same commit build stylesheets that resolve the same conflict
  * differently, and makes the emitted bytes irreproducible, which is also what content-hashed
  * asset caching is keyed on.

@@ -1,3 +1,4 @@
+import { withoutMergeCodes } from '@bamboocss/fixture'
 import { describe, expect, test } from 'vitest'
 import { createFoldFixture } from './fixture'
 
@@ -11,6 +12,6 @@ describe('fold smoke', () => {
     `)
 
     expect(result.folded).toHaveLength(1)
-    expect(result.code).toContain('export const cls = "c_red.300"')
+    expect(withoutMergeCodes(result.code)).toContain('export const cls = "c_red.300"')
   })
 })

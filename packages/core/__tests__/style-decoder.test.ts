@@ -48,7 +48,7 @@ describe('style decoder', () => {
     expect(result).toMatchInlineSnapshot(`
       Set {
         {
-          "className": "bd_2px_solid_token\\(colors\\.red\\.300\\)",
+          "className": "_Ucco6y\\:bd_2px_solid_token\\(colors\\.red\\.300\\)",
           "conditions": undefined,
           "entry": {
             "prop": "border",
@@ -57,7 +57,7 @@ describe('style decoder', () => {
           "hash": "border]___[value:2px solid token(colors.red.300)",
           "layer": undefined,
           "result": {
-            ".bd_2px_solid_token\\(colors\\.red\\.300\\)": {
+            "._Ucco6y\\:bd_2px_solid_token\\(colors\\.red\\.300\\)": {
               "border": "2px solid var(--colors-red-300)",
             },
           },
@@ -76,7 +76,7 @@ describe('style decoder', () => {
     expect(result).toMatchInlineSnapshot(`
       Set {
         {
-          "className": "c_blue",
+          "className": "_Btm_AK\\:c_blue",
           "conditions": undefined,
           "entry": {
             "prop": "color",
@@ -85,14 +85,14 @@ describe('style decoder', () => {
           "hash": "color]___[value:blue",
           "layer": undefined,
           "result": {
-            ".c_blue": {
+            "._Btm_AK\\:c_blue": {
               "color": "blue",
             },
           },
           "scoped": false,
         },
         {
-          "className": "md\\:c_red",
+          "className": "_jFsXI8\\:md\\:c_red",
           "conditions": [
             {
               "name": "breakpoint",
@@ -110,7 +110,7 @@ describe('style decoder', () => {
           "hash": "color]___[value:red]___[cond:md",
           "layer": undefined,
           "result": {
-            ".md\\:c_red": {
+            "._jFsXI8\\:md\\:c_red": {
               "@media (width >= 48rem)": {
                 "color": "red",
               },
@@ -165,7 +165,7 @@ describe('style decoder', () => {
       `
       Set {
         {
-          "className": "bd_1px_solid_token\\(colors\\.red\\.100\\)",
+          "className": "_Ucco6y\\:bd_1px_solid_token\\(colors\\.red\\.100\\)",
           "conditions": undefined,
           "entry": {
             "prop": "border",
@@ -174,14 +174,14 @@ describe('style decoder', () => {
           "hash": "border]___[value:1px solid token(colors.red.100)",
           "layer": undefined,
           "result": {
-            ".bd_1px_solid_token\\(colors\\.red\\.100\\)": {
+            "._Ucco6y\\:bd_1px_solid_token\\(colors\\.red\\.100\\)": {
               "border": "1px solid var(--colors-red-100)",
             },
           },
           "scoped": false,
         },
         {
-          "className": "bg_blue\\.300",
+          "className": "_w1ddk4\\:bg_blue\\.300",
           "conditions": undefined,
           "entry": {
             "prop": "background",
@@ -190,14 +190,14 @@ describe('style decoder', () => {
           "hash": "background]___[value:blue.300",
           "layer": undefined,
           "result": {
-            ".bg_blue\\.300": {
+            "._w1ddk4\\:bg_blue\\.300": {
               "background": "var(--colors-blue-300)",
             },
           },
           "scoped": false,
         },
         {
-          "className": "c_red",
+          "className": "_Btm_AK\\:c_red",
           "conditions": undefined,
           "entry": {
             "prop": "color",
@@ -206,14 +206,14 @@ describe('style decoder', () => {
           "hash": "color]___[value:red !important",
           "layer": undefined,
           "result": {
-            ".c_red\\!": {
+            "._Btm_AK\\:c_red\\!": {
               "color": "red !important",
             },
           },
           "scoped": false,
         },
         {
-          "className": "text-style_headline\\.h1",
+          "className": "_NCgunH\\:text-style_headline\\.h1",
           "conditions": undefined,
           "entry": {
             "prop": "textStyle",
@@ -222,14 +222,14 @@ describe('style decoder', () => {
           "hash": "textStyle]___[value:headline.h1",
           "layer": undefined,
           "result": {
-            ".text-style_headline\\.h1": {
+            "._NCgunH\\:text-style_headline\\.h1": {
               "textStyle": "headline.h1",
             },
           },
           "scoped": false,
         },
         {
-          "className": "fs_xs",
+          "className": "_Ocpc8R\\:fs_xs",
           "conditions": undefined,
           "entry": {
             "prop": "fontSize",
@@ -238,14 +238,14 @@ describe('style decoder', () => {
           "hash": "fontSize]___[value:xs",
           "layer": undefined,
           "result": {
-            ".fs_xs": {
+            "._Ocpc8R\\:fs_xs": {
               "fontSize": "var(--font-sizes-xs)",
             },
           },
           "scoped": false,
         },
         {
-          "className": "w_1",
+          "className": "_RO16FJ\\:w_1",
           "conditions": undefined,
           "entry": {
             "prop": "width",
@@ -254,14 +254,14 @@ describe('style decoder', () => {
           "hash": "width]___[value:1",
           "layer": undefined,
           "result": {
-            ".w_1": {
+            "._RO16FJ\\:w_1": {
               "width": "var(--sizes-1)",
             },
           },
           "scoped": false,
         },
         {
-          "className": "dark\\:fs_2xl",
+          "className": "_x8EGI-\\:dark\\:fs_2xl",
           "conditions": [
             {
               "raw": "[data-theme=dark] &, .dark &, &.dark, &[data-theme=dark]",
@@ -277,7 +277,7 @@ describe('style decoder', () => {
           "hash": "fontSize]___[value:2xl]___[cond:_dark",
           "layer": undefined,
           "result": {
-            ".dark\\:fs_2xl": {
+            "._x8EGI-\\:dark\\:fs_2xl": {
               "[data-theme=dark] &, .dark &, &.dark, &[data-theme=dark]": {
                 "fontSize": "var(--font-sizes-2xl)",
               },
@@ -286,7 +286,7 @@ describe('style decoder', () => {
           "scoped": false,
         },
         {
-          "className": "\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:c_green",
+          "className": "_7PVsr_\\:\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:c_green",
           "conditions": [
             {
               "raw": "&[data-attr='test']",
@@ -302,7 +302,7 @@ describe('style decoder', () => {
           "hash": "color]___[value:green]___[cond:&[data-attr='test']",
           "layer": undefined,
           "result": {
-            ".\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:c_green": {
+            "._7PVsr_\\:\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:c_green": {
               "&[data-attr='test']": {
                 "color": "green",
               },
@@ -311,7 +311,7 @@ describe('style decoder', () => {
           "scoped": false,
         },
         {
-          "className": "hover\\:fs_md",
+          "className": "_4TVktq\\:hover\\:fs_md",
           "conditions": [
             {
               "raw": "&:is(:hover, [data-hover])",
@@ -327,7 +327,7 @@ describe('style decoder', () => {
           "hash": "fontSize]___[value:md]___[cond:_hover",
           "layer": undefined,
           "result": {
-            ".hover\\:fs_md": {
+            "._4TVktq\\:hover\\:fs_md": {
               "&:is(:hover, [data-hover])": {
                 "fontSize": "var(--font-sizes-md)",
               },
@@ -336,7 +336,7 @@ describe('style decoder', () => {
           "scoped": false,
         },
         {
-          "className": "\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:c_purple",
+          "className": "_JmDpTb\\:\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:c_purple",
           "conditions": [
             {
               "raw": "&[data-attr='test']",
@@ -357,7 +357,7 @@ describe('style decoder', () => {
           "hash": "color]___[value:purple]___[cond:&[data-attr='test']<___>_expanded",
           "layer": undefined,
           "result": {
-            ".\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:c_purple": {
+            "._JmDpTb\\:\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:c_purple": {
               "&[data-attr='test']": {
                 "&:is([aria-expanded=true], [data-expanded], [data-state="expanded"])": {
                   "color": "purple",
@@ -368,7 +368,7 @@ describe('style decoder', () => {
           "scoped": false,
         },
         {
-          "className": "hover\\:focus\\:fs_xl",
+          "className": "_Pkd43n\\:hover\\:focus\\:fs_xl",
           "conditions": [
             {
               "raw": "&:is(:hover, [data-hover])",
@@ -389,7 +389,7 @@ describe('style decoder', () => {
           "hash": "fontSize]___[value:xl]___[cond:_hover<___>_focus",
           "layer": undefined,
           "result": {
-            ".hover\\:focus\\:fs_xl": {
+            "._Pkd43n\\:hover\\:focus\\:fs_xl": {
               "&:is(:hover, [data-hover])": {
                 "&:is(:focus, [data-focus])": {
                   "fontSize": "var(--font-sizes-xl)",
@@ -400,7 +400,7 @@ describe('style decoder', () => {
           "scoped": false,
         },
         {
-          "className": "\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:\\[\\.target_\\&\\]\\:c_cyan",
+          "className": "_9RXBzD\\:\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:\\[\\.target_\\&\\]\\:c_cyan",
           "conditions": [
             {
               "raw": "&[data-attr='test']",
@@ -426,7 +426,7 @@ describe('style decoder', () => {
           "hash": "color]___[value:cyan]___[cond:&[data-attr='test']<___>_expanded<___>.target &",
           "layer": undefined,
           "result": {
-            ".\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:\\[\\.target_\\&\\]\\:c_cyan": {
+            "._9RXBzD\\:\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:\\[\\.target_\\&\\]\\:c_cyan": {
               "&[data-attr='test']": {
                 "&:is([aria-expanded=true], [data-expanded], [data-state="expanded"])": {
                   ".target &": {
@@ -439,7 +439,7 @@ describe('style decoder', () => {
           "scoped": false,
         },
         {
-          "className": "\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:\\[\\.target_\\&\\]\\:open\\:c_orange",
+          "className": "_ox3CAu\\:\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:\\[\\.target_\\&\\]\\:open\\:c_orange",
           "conditions": [
             {
               "raw": "&[data-attr='test']",
@@ -470,7 +470,7 @@ describe('style decoder', () => {
           "hash": "color]___[value:orange]___[cond:&[data-attr='test']<___>_expanded<___>.target &<___>_open",
           "layer": undefined,
           "result": {
-            ".\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:\\[\\.target_\\&\\]\\:open\\:c_orange": {
+            "._ox3CAu\\:\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:\\[\\.target_\\&\\]\\:open\\:c_orange": {
               "&[data-attr='test']": {
                 "&:is([aria-expanded=true], [data-expanded], [data-state="expanded"])": {
                   ".target &": {
@@ -485,7 +485,7 @@ describe('style decoder', () => {
           "scoped": false,
         },
         {
-          "className": "sm\\:fs_sm",
+          "className": "_EL8lrA\\:sm\\:fs_sm",
           "conditions": [
             {
               "name": "breakpoint",
@@ -503,7 +503,7 @@ describe('style decoder', () => {
           "hash": "fontSize]___[value:sm]___[cond:sm",
           "layer": undefined,
           "result": {
-            ".sm\\:fs_sm": {
+            "._EL8lrA\\:sm\\:fs_sm": {
               "@media (width >= 40rem)": {
                 "fontSize": "var(--font-sizes-sm)",
               },
@@ -512,7 +512,7 @@ describe('style decoder', () => {
           "scoped": false,
         },
         {
-          "className": "sm\\:c_yellow",
+          "className": "_8AVSDl\\:sm\\:c_yellow",
           "conditions": [
             {
               "name": "breakpoint",
@@ -530,7 +530,7 @@ describe('style decoder', () => {
           "hash": "color]___[value:yellow]___[cond:sm",
           "layer": undefined,
           "result": {
-            ".sm\\:c_yellow": {
+            "._8AVSDl\\:sm\\:c_yellow": {
               "@media (width >= 40rem)": {
                 "color": "yellow",
               },
@@ -539,7 +539,7 @@ describe('style decoder', () => {
           "scoped": false,
         },
         {
-          "className": "sm\\:bg-c_red",
+          "className": "_esN9BA\\:sm\\:bg-c_red",
           "conditions": [
             {
               "name": "breakpoint",
@@ -557,7 +557,7 @@ describe('style decoder', () => {
           "hash": "backgroundColor]___[value:red]___[cond:sm",
           "layer": undefined,
           "result": {
-            ".sm\\:bg-c_red": {
+            "._esN9BA\\:sm\\:bg-c_red": {
               "@media (width >= 40rem)": {
                 "backgroundColor": "red",
               },
@@ -566,7 +566,7 @@ describe('style decoder', () => {
           "scoped": false,
         },
         {
-          "className": "sm\\:w_2",
+          "className": "_R1Rk0r\\:sm\\:w_2",
           "conditions": [
             {
               "name": "breakpoint",
@@ -584,7 +584,7 @@ describe('style decoder', () => {
           "hash": "width]___[value:2]___[cond:sm",
           "layer": undefined,
           "result": {
-            ".sm\\:w_2": {
+            "._R1Rk0r\\:sm\\:w_2": {
               "@media (width >= 40rem)": {
                 "width": "var(--sizes-2)",
               },
@@ -593,7 +593,7 @@ describe('style decoder', () => {
           "scoped": false,
         },
         {
-          "className": "sm\\:hover\\:bg-c_green",
+          "className": "_R_1T2h\\:sm\\:hover\\:bg-c_green",
           "conditions": [
             {
               "name": "breakpoint",
@@ -616,7 +616,7 @@ describe('style decoder', () => {
           "hash": "backgroundColor]___[value:green]___[cond:sm<___>_hover",
           "layer": undefined,
           "result": {
-            ".sm\\:hover\\:bg-c_green": {
+            "._R_1T2h\\:sm\\:hover\\:bg-c_green": {
               "@media (width >= 40rem)": {
                 "&:is(:hover, [data-hover])": {
                   "backgroundColor": "green",
@@ -627,7 +627,7 @@ describe('style decoder', () => {
           "scoped": false,
         },
         {
-          "className": "hover\\:md\\:fs_lg",
+          "className": "_O5rls-\\:hover\\:md\\:fs_lg",
           "conditions": [
             {
               "name": "breakpoint",
@@ -650,7 +650,7 @@ describe('style decoder', () => {
           "hash": "fontSize]___[value:lg]___[cond:_hover<___>md",
           "layer": undefined,
           "result": {
-            ".hover\\:md\\:fs_lg": {
+            "._O5rls-\\:hover\\:md\\:fs_lg": {
               "@media (width >= 48rem)": {
                 "&:is(:hover, [data-hover])": {
                   "fontSize": "var(--font-sizes-lg)",
@@ -661,7 +661,7 @@ describe('style decoder', () => {
           "scoped": false,
         },
         {
-          "className": "xl\\:w_3",
+          "className": "_gLb3Mu\\:xl\\:w_3",
           "conditions": [
             {
               "name": "breakpoint",
@@ -679,7 +679,7 @@ describe('style decoder', () => {
           "hash": "width]___[value:3]___[cond:xl",
           "layer": undefined,
           "result": {
-            ".xl\\:w_3": {
+            "._gLb3Mu\\:xl\\:w_3": {
               "@media (width >= 80rem)": {
                 "width": "var(--sizes-3)",
               },
@@ -688,7 +688,7 @@ describe('style decoder', () => {
           "scoped": false,
         },
         {
-          "className": "\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:\\[\\.target_\\&\\]\\:xl\\:c_pink",
+          "className": "_b1qsXj\\:\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:\\[\\.target_\\&\\]\\:xl\\:c_pink",
           "conditions": [
             {
               "name": "breakpoint",
@@ -721,7 +721,7 @@ describe('style decoder', () => {
           "hash": "color]___[value:pink]___[cond:&[data-attr='test']<___>_expanded<___>.target &<___>xl",
           "layer": undefined,
           "result": {
-            ".\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:\\[\\.target_\\&\\]\\:xl\\:c_pink": {
+            "._b1qsXj\\:\\[\\&\\[data-attr\\=\\'test\\'\\]\\]\\:expanded\\:\\[\\.target_\\&\\]\\:xl\\:c_pink": {
               "@media (width >= 80rem)": {
                 "&[data-attr='test']": {
                   "&:is([aria-expanded=true], [data-expanded], [data-state="expanded"])": {
@@ -1388,7 +1388,7 @@ describe('style decoder', () => {
     expect(decoder.collect(encoder).atomic).toMatchInlineSnapshot(`
       Set {
         {
-          "className": "c_red",
+          "className": "_Btm_AK\\:c_red",
           "conditions": undefined,
           "entry": {
             "prop": "color",
@@ -1397,14 +1397,14 @@ describe('style decoder', () => {
           "hash": "color]___[value:red",
           "layer": undefined,
           "result": {
-            ".c_red": {
+            "._Btm_AK\\:c_red": {
               "color": "red",
             },
           },
           "scoped": false,
         },
         {
-          "className": "c_blue",
+          "className": "_Btm_AK\\:c_blue",
           "conditions": undefined,
           "entry": {
             "prop": "color",
@@ -1413,7 +1413,7 @@ describe('style decoder', () => {
           "hash": "color]___[value:blue",
           "layer": undefined,
           "result": {
-            ".c_blue": {
+            "._Btm_AK\\:c_blue": {
               "color": "blue",
             },
           },
@@ -1431,7 +1431,7 @@ describe('style decoder', () => {
       Map {
         "buttonStyle" => Set {
           {
-            "className": "variant_solid",
+            "className": "_ilERhA\\:variant_solid",
             "conditions": undefined,
             "entry": {
               "prop": "variant",
@@ -1440,7 +1440,7 @@ describe('style decoder', () => {
             "hash": "variant]___[value:solid",
             "layer": undefined,
             "result": {
-              ".variant_solid": {
+              "._ilERhA\\:variant_solid": {
                 "variant": "solid",
               },
             },
@@ -1605,7 +1605,7 @@ describe('style decoder', () => {
       {
         "atomic": Set {
           {
-            "className": "trs_all_0\\.3s_ease-in-out",
+            "className": "_drhFNn\\:trs_all_0\\.3s_ease-in-out",
             "conditions": undefined,
             "entry": {
               "prop": "transition",
@@ -1614,14 +1614,14 @@ describe('style decoder', () => {
             "hash": "transition]___[value:all .3s ease-in-out",
             "layer": undefined,
             "result": {
-              ".trs_all_0\\.3s_ease-in-out": {
+              "._drhFNn\\:trs_all_0\\.3s_ease-in-out": {
                 "transition": "all 0.3s ease-in-out",
               },
             },
             "scoped": false,
           },
           {
-            "className": "d_none",
+            "className": "_Fg8Gj5\\:d_none",
             "conditions": undefined,
             "entry": {
               "prop": "display",
@@ -1630,14 +1630,14 @@ describe('style decoder', () => {
             "hash": "display]___[value:none",
             "layer": undefined,
             "result": {
-              ".d_none": {
+              "._Fg8Gj5\\:d_none": {
                 "display": "none",
               },
             },
             "scoped": false,
           },
           {
-            "className": "op_0",
+            "className": "_eEO7Qc\\:op_0",
             "conditions": undefined,
             "entry": {
               "prop": "opacity",
@@ -1646,14 +1646,14 @@ describe('style decoder', () => {
             "hash": "opacity]___[value:0 !important",
             "layer": undefined,
             "result": {
-              ".op_0\\!": {
+              "._eEO7Qc\\:op_0\\!": {
                 "opacity": "0 !important",
               },
             },
             "scoped": false,
           },
           {
-            "className": "op_1",
+            "className": "_eEO7Qc\\:op_1",
             "conditions": undefined,
             "entry": {
               "prop": "opacity",
@@ -1662,14 +1662,14 @@ describe('style decoder', () => {
             "hash": "opacity]___[value:1",
             "layer": undefined,
             "result": {
-              ".op_1": {
+              "._eEO7Qc\\:op_1": {
                 "opacity": 1,
               },
             },
             "scoped": false,
           },
           {
-            "className": "bg-grad_to-b",
+            "className": "_tMsygv\\:bg-grad_to-b",
             "conditions": undefined,
             "entry": {
               "prop": "backgroundGradient",
@@ -1678,7 +1678,7 @@ describe('style decoder', () => {
             "hash": "backgroundGradient]___[value:to-b",
             "layer": undefined,
             "result": {
-              ".bg-grad_to-b": {
+              "._tMsygv\\:bg-grad_to-b": {
                 "--gradient-position": "to bottom",
                 "--gradient-stops": "var(--gradient-via-stops, var(--gradient-position), var(--gradient-from) var(--gradient-from-position, ), var(--gradient-to) var(--gradient-to-position, ))",
                 "backgroundImage": "linear-gradient(var(--gradient-stops))",
@@ -1687,7 +1687,7 @@ describe('style decoder', () => {
             "scoped": false,
           },
           {
-            "className": "grad-from_rgb\\(200_200_200_\\/_0\\.4\\)",
+            "className": "_dkehTS\\:grad-from_rgb\\(200_200_200_\\/_0\\.4\\)",
             "conditions": undefined,
             "entry": {
               "prop": "gradientFrom",
@@ -1696,14 +1696,14 @@ describe('style decoder', () => {
             "hash": "gradientFrom]___[value:rgb(200 200 200 / .4)",
             "layer": undefined,
             "result": {
-              ".grad-from_rgb\\(200_200_200_\\/_0\\.4\\)": {
+              "._dkehTS\\:grad-from_rgb\\(200_200_200_\\/_0\\.4\\)": {
                 "--gradient-from": "rgb(200 200 200 / 0.4)",
               },
             },
             "scoped": false,
           },
           {
-            "className": "h_100\\%",
+            "className": "_97NnCm\\:h_100\\%",
             "conditions": undefined,
             "entry": {
               "prop": "height",
@@ -1712,14 +1712,14 @@ describe('style decoder', () => {
             "hash": "height]___[value:100%",
             "layer": undefined,
             "result": {
-              ".h_100\\%": {
+              "._97NnCm\\:h_100\\%": {
                 "height": "100%",
               },
             },
             "scoped": false,
           },
           {
-            "className": "h_10px",
+            "className": "_97NnCm\\:h_10px",
             "conditions": undefined,
             "entry": {
               "prop": "height",
@@ -1728,7 +1728,7 @@ describe('style decoder', () => {
             "hash": "height]___[value:10px",
             "layer": undefined,
             "result": {
-              ".h_10px": {
+              "._97NnCm\\:h_10px": {
                 "height": "10px",
               },
             },
@@ -2058,7 +2058,7 @@ describe('style decoder', () => {
     expect(result).toMatchInlineSnapshot(`
       Set {
         {
-          "className": "trunc_false",
+          "className": "_ahCW1T\\:trunc_false",
           "conditions": undefined,
           "entry": {
             "prop": "truncate",
@@ -2067,7 +2067,7 @@ describe('style decoder', () => {
           "hash": "truncate]___[value:false",
           "layer": undefined,
           "result": {
-            ".trunc_false": {},
+            "._ahCW1T\\:trunc_false": {},
           },
           "scoped": false,
         },
@@ -2078,7 +2078,7 @@ describe('style decoder', () => {
     expect(result2).toMatchInlineSnapshot(`
       Set {
         {
-          "className": "trunc_true",
+          "className": "_ahCW1T\\:trunc_true",
           "conditions": undefined,
           "entry": {
             "prop": "truncate",
@@ -2087,7 +2087,7 @@ describe('style decoder', () => {
           "hash": "truncate]___[value:true",
           "layer": undefined,
           "result": {
-            ".trunc_true": {
+            "._ahCW1T\\:trunc_true": {
               "overflow": "hidden",
               "textOverflow": "ellipsis",
               "whiteSpace": "nowrap",

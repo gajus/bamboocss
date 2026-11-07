@@ -1,3 +1,4 @@
+import { withoutMergeCodes } from '@bamboocss/fixture'
 import { getRecipeIdentity, viewTransitionClassName } from '@bamboocss/shared'
 import { describe, expect, test } from 'vitest'
 import { createFoldFixture, selectorsFor } from './fixture'
@@ -204,11 +205,11 @@ describe('static style-set folding', () => {
 
     expect(result.skipped).not.toContainEqual(expect.objectContaining({ name: 'cx', reason: 'dynamic' }))
     const cx = result.folded.find((entry) => entry.name === 'cx')
-    expect(cx?.classNames).toContain('c_blue.500')
-    expect(cx?.classNames).not.toContain('c_gray.500')
+    expect(withoutMergeCodes(cx?.classNames)).toContain('c_blue.500')
+    expect(withoutMergeCodes(cx?.classNames)).not.toContain('c_gray.500')
     // The later static color makes every recipe state identical, so the reduced map itself
     // disappears instead of shipping a one-leaf runtime lookup.
-    expect(result.code).toContain('=> "c_blue.500"')
+    expect(withoutMergeCodes(result.code)).toContain('=> "c_blue.500"')
     expect(result.code).not.toContain('cvaMap(')
   })
 
@@ -234,7 +235,7 @@ describe('static style-set folding', () => {
     expect(result.code).toContain(JSON.stringify(fixture.runtimeCss({ display: 'flex', opacity: 0.8 })))
     expect(result.code).toContain('cvaMap([tone]')
     expect(result.code).not.toMatch(/sva_[a-z0-9]+__/)
-    expect(result.folded.some((entry) => entry.classNames.includes('d_flex'))).toBe(true)
+    expect(result.folded.some((entry) => withoutMergeCodes(entry.classNames).includes('d_flex'))).toBe(true)
   })
 
   test('a whole inline sva call becomes one slot object lookup', () => {
@@ -369,9 +370,9 @@ describe('inline recipes that differ only in key order', () => {
     // while the stylesheet pass failed on the file.
     expect(() => fixture.ctx.assertExtracted(fixture.ctx.parseFailures.keys())).not.toThrow()
     expect(result.skipped).toEqual([])
-    expect(result.code).toContain('export const x = "p_4px"')
-    expect(result.code).toContain('export const y = "p_1px"')
-    const css = fixture.getStyleSetCss()
+    expect(withoutMergeCodes(result.code)).toContain('export const x = "p_4px"')
+    expect(withoutMergeCodes(result.code)).toContain('export const y = "p_1px"')
+    const css = withoutMergeCodes(fixture.getStyleSetCss())
     expect(css).toMatch(/\.p_1px \{\s*padding: 1px/)
     expect(css).toMatch(/\.p_4px \{\s*padding: 4px/)
   })
@@ -398,8 +399,8 @@ describe('inline recipes that differ only in key order', () => {
     expect(() => fixture.ctx.assertExtracted(fixture.ctx.parseFailures.keys())).not.toThrow()
     expect(first.skipped).toEqual([])
     expect(second.skipped).toEqual([])
-    expect(first.code).toContain('export const x = "p_4px"')
-    expect(second.code).toContain('export const y = "p_1px"')
+    expect(withoutMergeCodes(first.code)).toContain('export const x = "p_4px"')
+    expect(withoutMergeCodes(second.code)).toContain('export const y = "p_1px"')
   })
 
   // Key order aside, one name still has one meaning: a declared name with other styles is a conflict.
@@ -465,7 +466,7 @@ describe('inline recipes that differ only in key order', () => {
 
     expect(() => fixture.ctx.assertExtracted(fixture.ctx.parseFailures.keys())).not.toThrow()
     expect(result.skipped).toEqual([])
-    expect(result.code).toContain('export const x = "p_8px"')
-    expect(result.code).toContain('export const y = "p_4px"')
+    expect(withoutMergeCodes(result.code)).toContain('export const x = "p_8px"')
+    expect(withoutMergeCodes(result.code)).toContain('export const y = "p_4px"')
   })
 })

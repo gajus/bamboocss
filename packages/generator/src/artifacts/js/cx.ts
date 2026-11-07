@@ -2,39 +2,34 @@ import type { Context } from '@bamboocss/core'
 import outdent from 'outdent'
 
 /**
- * `cx` joins class names. It does not resolve conflicts between them, in any build.
+ * `cx` joins class names and merges them: of the classes that set one property under the same
+ * conditions, it keeps the last.
  *
- * It used to, when the class names happened to carry a property to compare — atomic mode
- * with `hash.className` off. That made it a correctness tool in development and a plain
- * join in a hashed production build, from the same source, with no error either way. An
- * override that worked locally silently stopped working when it shipped.
+ * It once merged by reading the property off a readable class name — atomic mode with
+ * `hash.className` off. That made it a correctness tool in development and a plain join in a
+ * hashed production build, from the same source, with no error either way: an override that
+ * worked locally silently stopped working when it shipped, and the merge was removed. A hashed
+ * name was an opaque digest with no property to compare.
  *
- * The two could not be reconciled by teaching the matcher to read hashed names: under
- * `hash: true` a class is an opaque digest with no property to compare.
+ * A utility class's name now carries what the merge reads in every build, hashed or not: `_`, six
+ * characters coding the property and conditions, `:`, then the value. So development and
+ * production merge alike. @see mergeableAtomName
  *
- * So precedence is decided where it can be decided the same way everywhere: by the compiler,
- * which merges every Bamboo style a `cx()` call holds before a class exists, later arguments
- * winning. What reaches this join at runtime is only what the compiler could not see — a class
- * passed in, or one assembled at runtime — and no
- * {@link https://bamboocss.com/docs/concepts/cascade-layers cascade layer} ranks it above the
- * styles it is joined with: recipes compile to the same `utilities` atoms as `css()`, and the
- * named `recipes` layer is not emitted. An override a caller chooses belongs in a recipe variant.
+ * The compiler still merges every Bamboo style a `cx()` call holds before a class exists, later
+ * arguments winning. What reaches the runtime `cx` is what it could not see — a class passed in,
+ * or one assembled at runtime.
  */
 const declaration = outdent`
    type Argument = string | boolean | null | undefined | Argument[]
 
    /**
-    * Join classNames into a single string.
+    * Join classNames into a single string, keeping the last of the classes that set one property
+    * under the same conditions.
     *
-    * Bamboo styles passed here — a \`css()\` call, a recipe, or a binding holding either — are
-    * merged by the compiler before any class exists, later arguments winning:
-    * \`cx(css({ paddingX: '4' }), css({ paddingX: '2' }))\` compiles to the one class for
-    * \`paddingX: '2'\`.
-    *
-    * Anything else is only joined, such as a \`className\` prop or a class assembled at runtime, and
-    * the join does **not** resolve conflicts: recipes and \`css()\` share one cascade layer, so where
-    * such a class sets a property these styles set too, the browser picks by stylesheet order rather
-    * than by the order you passed them. For an override a caller chooses, expose a recipe variant.
+    * \`cx(css({ paddingX: '4' }), props.className)\` keeps the caller's \`paddingX\` wherever it
+    * passes one, as \`css(a, b)\` keeps the later declaration — at any depth, since a wrapper's own
+    * \`cx\` has already merged what it hands down. Any other class, a recipe's own or one written by
+    * hand, is kept as written.
     */
    export declare function cx(...args: Argument[]): string
 
@@ -63,39 +58,126 @@ const declaration = outdent`
    ): [Record<string, unknown>, Record<string, unknown>]
   `
 
-export function generateCx(ctx: Context) {
-  return {
-    js: outdent`
-  ${ctx.file.import('splitProps', '../helpers')}
+/**
+ * The `cx` every build emits: the join, keeping the last class per property and conditions.
+ * @see mergeableAtomName
+ *
+ * Every class a build hands out is a compiled literal, so the joins a page asks for are few and
+ * repeat render after render; each is merged once and looked up after that, which is what keeps a
+ * merging `cx` as cheap as the join it replaces. The bound is for classes assembled at runtime.
+ */
+const cxFunction = (prefix: string) => outdent`
+  // Where a class's name starts past the \`prefix\`, which every class this build names carries.
+  const cxPrefix = ${JSON.stringify(prefix ? `${prefix}-` : '')}
+
+  // The merge key a utility atom's name carries — the six characters between its \`_\` and its
+  // \`:\`, hashed or readable — or \`undefined\` for a class that is not one, which is kept as
+  // written. The colon is what tells an atom from a class written by hand that starts with \`_\`.
+  function cxKey(token) {
+    let start = 0
+    if (cxPrefix) {
+      if (!token.startsWith(cxPrefix)) return undefined
+      start = cxPrefix.length
+    }
+    if (token.charCodeAt(start) !== 95 || token.charCodeAt(start + 7) !== 58) return undefined
+    return token.slice(start + 1, start + 7)
+  }
+
+  // Adds each class of \`str\` to \`tokens\`, the last of each key in the place its first stood, so an
+  // override lands where the class it replaces sat. One that is not an atom is kept as written,
+  // duplicates and all. A few classes per element, so the keys are searched in order, not hashed.
+  function cxParse(str, tokens, keys) {
+    let start = 0
+    for (let i = 0; i <= str.length; i++) {
+      const code = i < str.length ? str.charCodeAt(i) : 32
+      // The class attribute splits on all ASCII whitespace, and a template literal spans lines.
+      if (code !== 32 && code !== 9 && code !== 10 && code !== 12 && code !== 13) continue
+      if (i > start) {
+        const token = str.slice(start, i)
+        const key = cxKey(token)
+        let slot = -1
+        if (key !== undefined) {
+          for (let j = 0; j < keys.length; j++) {
+            if (keys[j] === key) {
+              slot = j
+              break
+            }
+          }
+        }
+        if (slot === -1) {
+          tokens.push(token)
+          keys.push(key)
+        } else {
+          tokens[slot] = token
+        }
+      }
+      start = i + 1
+    }
+  }
+
+  // Per class string a component joins onto: its classes parsed once, and every join merged with
+  // it, so a miss parses only what was passed in.
+  const cxSeen = new Map()
+  let cxEntries = 0
+
+  function cxCached(a, b) {
+    let seen = cxSeen.get(a)
+    let merged = seen === undefined ? undefined : seen.joined.get(b)
+    if (merged !== undefined) return merged
+    if (cxEntries >= 4096) {
+      cxSeen.clear()
+      cxEntries = 0
+      seen = undefined
+    }
+    if (seen === undefined) {
+      seen = { tokens: [], keys: [], joined: new Map() }
+      cxParse(a, seen.tokens, seen.keys)
+      cxSeen.set(a, seen)
+    }
+    const tokens = seen.tokens.slice()
+    cxParse(b, tokens, seen.keys.slice())
+    merged = tokens.join(' ')
+    seen.joined.set(b, merged)
+    cxEntries++
+    return merged
+  }
 
   function cx(a, b) {
     const n = arguments.length
 
     // \`cx(<compiled class literal>, className)\` is what the transform emits at nearly every
     // call site it cannot fold, so it is the shape that actually runs per render — a wrapper
-    // forwarding a className down. Answering it here skips the rest-array allocation and the
-    // loop below. \`b\` covers the whole non-string tail \`cx\` ignores (null/undefined/booleans),
-    // which is the \`cond && cls\` idiom when the condition is false.
+    // forwarding a className down. \`b\` covers the whole non-string tail \`cx\` ignores
+    // (null/undefined/booleans), which is the \`cond && cls\` idiom when the condition is false.
     if (n === 2 && typeof a === 'string') {
-      if (typeof b === 'string') return a ? (b ? a + ' ' + b : a) : b
+      if (typeof b === 'string') return a ? (b ? cxCached(a, b) : a) : b
       if (b == null || b === false || b === true) return a
     }
 
     let str = ''
-    // \`arguments\` rather than a rest parameter: this is the variadic tail, and allocating an
-    // array per call to iterate it once is the cost the fast path above exists to avoid.
+    let parts = 0
+    // \`arguments\` rather than a rest parameter, as in the join: one pass, no array.
     for (let i = 0; i < n; i++) {
       const arg = arguments[i]
       if (!arg) continue
-      // Arrays are part of the declared type, so this branch has to handle them.
-      // Returning '' for \`cx(['a', 'b'])\` would be a lie.
       const part = Array.isArray(arg) ? cx(...arg) : typeof arg === 'string' ? arg : ''
       if (!part) continue
       str && (str += ' ')
       str += part
+      parts++
     }
-    return str
+    // A single part is returned as it came: a compiled class string holds one class per key, and
+    // another \`cx\`'s result is merged already. One joined by hand, a template literal or a
+    // \`join\`, is not, and \`no-unlayered-override\` reports the join. Two or more meet here.
+    return parts > 1 ? cxCached(str, '') : str
   }
+`
+export function generateCx(ctx: Context) {
+  return {
+    js: outdent`
+  ${ctx.file.import('splitProps', '../helpers')}
+
+  ${cxFunction(ctx.utility.prefix)}
 
   // Each node is [miss, undefined, [key, child, key, child, ...]]. Children are either
   // another non-negative node index or a negative leaf reference. Arrays avoid object-literal

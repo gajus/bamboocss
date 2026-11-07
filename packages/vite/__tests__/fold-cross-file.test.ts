@@ -1,3 +1,4 @@
+import { withoutMergeCodes } from '@bamboocss/fixture'
 import { describe, expect, test } from 'vitest'
 import { createFoldFixture, selectorsFor } from './fixture'
 
@@ -110,7 +111,7 @@ export const cls = css({ '& svg': { ...icon, color: 'red.300' } })
 
     expect(result.folded).toHaveLength(1)
     const className = result.folded[0]!.className
-    expect(className).toBe('[&_svg]:flex-sh_0 [&_svg]:c_red.300')
+    expect(withoutMergeCodes(className)).toBe('[&_svg]:flex-sh_0 [&_svg]:c_red.300')
     const css = getCss()
     for (const selector of selectorsFor(className)) expect(css).toContain(selector)
     expect(result.dependencies.some((file) => file.endsWith('/app/icon.ts'))).toBe(true)
@@ -140,7 +141,7 @@ describe('spreads', () => {
     `)
 
     expect(result.folded).toHaveLength(1)
-    expect(result.folded[0]!.className).toBe('c_red.300 p_4')
+    expect(withoutMergeCodes(result.folded[0]!.className)).toBe('c_red.300 p_4')
 
     const css = getCss()
     for (const selector of selectorsFor(result.folded[0]!.className)) expect(css).toContain(selector)
@@ -156,7 +157,7 @@ describe('spreads', () => {
     `)
 
     // The later spread wins, exactly as the runtime merge would have it.
-    expect(result.folded[0]!.className).toBe('c_blue.500')
+    expect(withoutMergeCodes(result.folded[0]!.className)).toBe('c_blue.500')
   })
 
   test('a spread from another module folds and reports that module', () => {
@@ -172,7 +173,7 @@ export const cls = css({ color: 'red.300', ...shared })
       'app/use.tsx',
     )
 
-    expect(result.folded[0]!.className).toBe('c_red.300 p_4')
+    expect(withoutMergeCodes(result.folded[0]!.className)).toBe('c_red.300 p_4')
 
     // The literal now depends on a file this module only imports. Without the edge, editing
     // it would leave the old class behind — which is the whole reason the fold reports
@@ -259,7 +260,7 @@ export const cls = css({ color: 'red.300', ...shared })
     `)
 
     // The audit is about what could not be resolved, not about the syntax used to write it.
-    expect(result.folded[0]!.className).toBe('c_red.300 p_4')
+    expect(withoutMergeCodes(result.folded[0]!.className)).toBe('c_red.300 p_4')
   })
 })
 
@@ -274,7 +275,7 @@ describe('pure local helpers', () => {
     `)
 
     expect(result.folded).toHaveLength(1)
-    expect(result.folded[0]!.className).toBe('p_4')
+    expect(withoutMergeCodes(result.folded[0]!.className)).toBe('p_4')
   })
 
   test('an IIFE argument folds', () => {
@@ -286,7 +287,7 @@ describe('pure local helpers', () => {
     `)
 
     expect(result.folded).toHaveLength(1)
-    expect(result.folded[0]!.className).toBe('p_4')
+    expect(withoutMergeCodes(result.folded[0]!.className)).toBe('p_4')
   })
 
   test('a helper reading a runtime argument does not fold', () => {
@@ -323,7 +324,7 @@ describe('pure local helpers', () => {
     `)
 
     expect(result.folded).toHaveLength(1)
-    expect(result.folded[0]!.className).toBe(expected)
+    expect(withoutMergeCodes(result.folded[0]!.className)).toBe(expected)
   })
 
   test('a helper returning conditions folds them too', () => {
@@ -335,7 +336,7 @@ describe('pure local helpers', () => {
       export const cls = css(hover('red.300'))
     `)
 
-    expect(result.folded[0]!.className).toBe('hover:c_red.300')
+    expect(withoutMergeCodes(result.folded[0]!.className)).toBe('hover:c_red.300')
   })
 })
 
@@ -394,7 +395,7 @@ export const El = () => _jsx('div', { className: css({ color: 'red.300' }) })
     )
 
     expect(result.folded).toHaveLength(1)
-    expect(result.code).toContain(`className: "c_red.300"`)
+    expect(withoutMergeCodes(result.code)).toContain(`className: "c_red.300"`)
   })
 })
 

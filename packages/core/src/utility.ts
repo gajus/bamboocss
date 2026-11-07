@@ -317,7 +317,7 @@ export class Utility {
           `Emitting both would give every element carrying that class a declaration it did not ask for.`,
         {
           hint:
-            'A rare accident of a 32-bit hash, not a mistake in your styles. Changing either value ' +
+            'A rare accident of the hash, not a mistake in your styles. Changing either value ' +
             'moves one of them off it. `prefix` will not: it is applied after hashing, so both ' +
             'names carry it and both still collide.',
         },
@@ -325,6 +325,41 @@ export class Utility {
     }
 
     return className
+  }
+
+  /** Merge key code -> the property and conditions that claimed it. */
+  private atomKeyCodes = new Map<string, string>()
+
+  /**
+   * Hand out the code a mergeable atom's name carries for its property and conditions, refusing to
+   * give one code to two of them.
+   *
+   * `cx` keeps the last class per code, so two keys sharing one would let a class setting one
+   * property drop a class setting another: a component losing its width to a class that sets its
+   * colour. Thirty-six bits make that about a 1 in 34,000 chance at 2,000 keys, and none of the keys
+   * a project writes without nesting conditions or defining its own collide at all
+   * (`ATOM_KEY_LENGTH`). It fails the build saying which two collided rather than shipping either.
+   */
+  claimAtomKeyCode = (key: string, code: string) => {
+    const claimed = this.atomKeyCodes.get(code)
+
+    if (claimed === undefined) {
+      this.atomKeyCodes.set(code, key)
+    } else if (claimed !== key) {
+      throw new BambooError(
+        'HASH_COLLISION',
+        `Two different property-and-condition pairs hash to the same merge code \`${code}\`:\n` +
+          `  ${claimed}\n  ${key}\n` +
+          `\`cx\` would let a class setting one drop a class setting the other.`,
+        {
+          hint:
+            'A rare accident of the hash, not a mistake in your styles: please report it with the two lines ' +
+            'above. Until a fix ships, writing either under an equivalent condition avoids it.',
+        },
+      )
+    }
+
+    return code
   }
 
   private normalizeConfig(config: UtilityConfig) {

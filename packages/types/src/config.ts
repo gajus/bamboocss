@@ -409,9 +409,14 @@ interface CodegenOptions {
    * everything else is production — and is fixed for the life of a context, so the emitted CSS
    * and the compiled class literals cannot disagree about a name.
    *
+   * Readable or hashed, a utility class starts with `_`, six characters coding the property and
+   * conditions it sets, and `:` — `_AQSe3b:md:w_480px`, `_AQSe3b:h5u26` — which the runtime `cx`
+   * reads to keep the last class of each. Recipe classes keep their names.
+   *
    * `false` keeps class names readable in production too. Only markup written by hand needs that:
-   * an HTML page, or a class `staticCss` emits for a name assembled at runtime. Variables are
-   * readable unless set, since hand-written CSS refers to them by name.
+   * an HTML page, or a class `staticCss` emits for a name assembled at runtime, which spell a
+   * utility's code as well. Variables are readable unless set, since hand-written CSS refers to
+   * them by name.
    *
    * @default { className: 'auto', cssVar: false }
    */

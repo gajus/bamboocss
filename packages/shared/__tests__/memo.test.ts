@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'vitest'
 import { createCssUncached, createMergeCss } from '../src/classname'
 import { memo } from '../src/memo'
+
+/** A class string without the merge code ahead of each name: what is counted here is reads. */
+const readable = (classes: string) => classes.replace(/(^| )_[\w-]{6}:/g, '$1')
 import { cloneStyles } from '../src/clone-styles'
 
 const makeContext = () => ({
@@ -10,7 +13,6 @@ const makeContext = () => ({
     hasShorthand: false,
     resolveShorthand: (p: string) => p,
     transform: (prop: string, value: any) => ({ className: `${prop}_${value}` }),
-    toHash: (path: string[], h: (s: string) => string) => h(path.join(':')),
   },
   conditions: { breakpoints: { keys: [] }, shift: (v: string[]) => v, finalize: (v: string[]) => v },
 })
@@ -291,7 +293,7 @@ describe('css runtime caching', () => {
     const css = buildCss()
     const probe = countingStyle()
 
-    expect(css(probe.style)).toBe('color_red')
+    expect(readable(css(probe.style))).toBe('color_red')
     expect(probe.reads()).toBe(4)
   })
 
@@ -321,7 +323,7 @@ describe('css runtime caching', () => {
 
     // `makeContext` stubs `shift` as identity, so the condition lands after the property
     // rather than before it. Irrelevant here — what is being counted is the reads.
-    expect(css(probe.style)).toBe('padding_4px color:_hover_blue')
+    expect(readable(css(probe.style))).toBe('padding_4px color:_hover_blue')
     expect(probe.reads()).toBe(2)
   })
 
@@ -331,7 +333,7 @@ describe('css runtime caching', () => {
     css(first.style)
 
     const second = countingStyle()
-    expect(css(second.style)).toBe('color_red')
+    expect(readable(css(second.style))).toBe('color_red')
     expect(second.reads()).toBe(2)
   })
 
@@ -366,7 +368,7 @@ describe('css runtime caching', () => {
     // mutating one caller's result must not corrupt anyone else
     a.color = 'MUTATED'
     expect(css.raw({ color: 'red' })).toEqual({ color: 'red' })
-    expect(css({ color: 'red' })).toBe('color_red')
+    expect(readable(css({ color: 'red' }))).toBe('color_red')
   })
 
   test('the raw boundary, not the merge, is what breaks aliasing', () => {
@@ -408,8 +410,8 @@ describe('css runtime caching', () => {
     const css = buildCss()
     const style = { color: 'red' }
 
-    expect(css(style)).toBe('color_red')
+    expect(readable(css(style))).toBe('color_red')
     style.color = 'blue'
-    expect(css(style)).toBe('color_blue')
+    expect(readable(css(style))).toBe('color_blue')
   })
 })

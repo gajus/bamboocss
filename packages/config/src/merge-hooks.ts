@@ -146,6 +146,10 @@ const reducers = {
 
 const syncHooks: Array<keyof BambooHooks> = [
   'context:created',
+  // The context reads what every plugin's hook configured as soon as the hooks return. Run one
+  // after another across microtasks, only the first had: a later plugin's `configure` arrived
+  // after that, and its `toHash` went unreported.
+  'utility:created',
   'parser:before',
   'parser:after',
   'cssgen:done',

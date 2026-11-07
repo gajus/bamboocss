@@ -1,3 +1,4 @@
+import { withoutMergeCodes } from '@bamboocss/fixture'
 import { createCss } from '@bamboocss/shared'
 import { describe, expect, test } from 'vitest'
 import { createCssContext } from '../src/runtime-css'
@@ -33,7 +34,9 @@ describe('why it is an error', () => {
     const { ctx, fold, getCss } = createFoldFixture()
     fold(withImport(`export const A = css({ '&::after': { content: '' } })`))
 
-    expect(createCss(createCssContext(ctx))({ '&::after': { content: '' } })).toBe('[&::after]:content_')
+    expect(withoutMergeCodes(createCss(createCssContext(ctx))({ '&::after': { content: '' } }))).toBe(
+      '[&::after]:content_',
+    )
     // Nor one for a value it is not: an empty string was read back as 0, `content: 0`.
     expect(getCss()).not.toContain('content_')
   })

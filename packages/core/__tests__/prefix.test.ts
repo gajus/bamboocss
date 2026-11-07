@@ -17,13 +17,13 @@ describe('atomic-rule / prefix', () => {
         @layer s010-c0-p3000;
 
         @layer s010-c0-p3000 {
-          .tw-wxtrg {
+          .tw-_Btm_AK\\:TkDIm {
             color: red;
       }
         }
       }"
     `)
-    expect(frontend({ color: 'red' })).toMatchInlineSnapshot(`"tw-wxtrg"`)
+    expect(frontend({ color: 'red' })).toMatchInlineSnapshot(`"tw-_Btm_AK:TkDIm"`)
 
     expect(backend({ color: { sm: 'red' } })).toMatchInlineSnapshot(`
       "@layer utilities {
@@ -31,13 +31,13 @@ describe('atomic-rule / prefix', () => {
 
         @layer s010-c0-p3000 {
           @media (width >= 40rem) {
-            .tw-eIFrkw {
+            .tw-_8AVSDl\\:XQ89d {
               color: red;
       }
       }
         }
       }"
     `)
-    expect(frontend({ color: { sm: 'red' } })).toMatchInlineSnapshot(`"tw-eIFrkw"`)
+    expect(frontend({ color: { sm: 'red' } })).toMatchInlineSnapshot(`"tw-_8AVSDl:XQ89d"`)
   })
 })

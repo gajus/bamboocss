@@ -1,4 +1,4 @@
-import { createContext } from '@bamboocss/fixture'
+import { createContext, withoutMergeCodes } from '@bamboocss/fixture'
 import type { Config } from '@bamboocss/types'
 import { describe, expect, test } from 'vitest'
 
@@ -25,7 +25,7 @@ type Context = ReturnType<typeof context>
 const stylesheet = (ctx: Context) => {
   const sheet = ctx.createSheet()
   ctx.appendParserCss(sheet)
-  return sheet.toCss()
+  return withoutMergeCodes(sheet.toCss())
 }
 
 /** Read a file's new text, as a watch rebuild does. */

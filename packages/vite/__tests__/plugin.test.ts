@@ -1,3 +1,4 @@
+import { withoutMergeCodes } from '@bamboocss/fixture'
 import { logger } from '@bamboocss/logger'
 import { isStaticCompilerActive } from '@bamboocss/node/static-compiler'
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
@@ -509,7 +510,7 @@ describe('compiler', () => {
             version: 7,
             moduleId: id,
             file: id,
-            classNames: ['c_red.300'],
+            classNames: [expect.stringMatching(/^_[\w-]{6}:c_red\.300$/)],
             integrity: expect.any(String),
           },
         },
@@ -1217,7 +1218,7 @@ describe('compiler', () => {
     `
 
     const code = await fold({}, source, 'src/static-composition.tsx')
-    expect(code).toContain('"d_flex c_blue.500"')
+    expect(withoutMergeCodes(code)).toContain('"d_flex c_blue.500"')
     expect(code).not.toContain('cx(badge()')
   })
 
@@ -1264,7 +1265,7 @@ describe('compiler', () => {
     )
 
     expect(result?.code).not.toContain('cvaMap(')
-    expect(result?.code).toContain('=> "c_blue.500"')
+    expect(withoutMergeCodes(result?.code)).toContain('=> "c_blue.500"')
     expect(result?.code).toContain('c_blue.500')
     await expect(Promise.resolve().then(() => buildEnd?.call({} as never, undefined as never))).resolves.toBeUndefined()
   })

@@ -116,27 +116,27 @@ describe('extract Vue templates', () => {
         @layer s010-c0-p3000;
 
         @layer s010-c0-p3000 {
-          .c_green\\.400 {
+          ._Btm_AK\\:c_green\\.400 {
             color: var(--colors-green-400);
       }
 
-          .c_purple\\.400 {
+          ._Btm_AK\\:c_purple\\.400 {
             color: var(--colors-purple-400);
       }
 
-          .c_red\\.500 {
+          ._Btm_AK\\:c_red\\.500 {
             color: var(--colors-red-500);
       }
 
-          .c_green {
+          ._Btm_AK\\:c_green {
             color: green;
       }
 
-          .c_red {
+          ._Btm_AK\\:c_red {
             color: red;
       }
 
-          .fw_bold {
+          ._0vvNua\\:fw_bold {
             font-weight: var(--font-weights-bold);
       }
         }
@@ -227,19 +227,19 @@ describe('extract Vue templates', () => {
         @layer s010-c0-p3000;
 
         @layer s010-c0-p3000 {
-          .text-style_overline {
+          ._NCgunH\\:text-style_overline {
             text-style: overline;
       }
 
-          .text-style_h7 {
+          ._NCgunH\\:text-style_h7 {
             text-style: h7;
       }
 
-          .text-style_text {
+          ._NCgunH\\:text-style_text {
             text-style: text;
       }
 
-          .c_grey\\.70 {
+          ._Btm_AK\\:c_grey\\.70 {
             color: grey.70;
       }
         }
@@ -346,27 +346,27 @@ describe('extract Vue templates', () => {
         @layer s010-c0-p3000;
 
         @layer s010-c0-p3000 {
-          .c_green\\.400 {
+          ._Btm_AK\\:c_green\\.400 {
             color: var(--colors-green-400);
       }
 
-          .c_purple\\.400 {
+          ._Btm_AK\\:c_purple\\.400 {
             color: var(--colors-purple-400);
       }
 
-          .c_red\\.500 {
+          ._Btm_AK\\:c_red\\.500 {
             color: var(--colors-red-500);
       }
 
-          .c_green {
+          ._Btm_AK\\:c_green {
             color: green;
       }
 
-          .c_red {
+          ._Btm_AK\\:c_red {
             color: red;
       }
 
-          .fw_bold {
+          ._0vvNua\\:fw_bold {
             font-weight: var(--font-weights-bold);
       }
         }

@@ -1,6 +1,6 @@
 import { css } from 'styled-system/css'
 
-export const fixed = "d_flex"
+export const fixed = "_Fg8Gj5:d_flex"
 
 export function tinted(tone: string) {
   return css({ color: tone, padding: '2' })

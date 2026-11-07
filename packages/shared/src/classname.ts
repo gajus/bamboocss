@@ -1,7 +1,7 @@
 import { isObject } from './assert'
+import { atomKey, atomKeyCode, mergeableAtomName } from './atom-name'
 import { filterBaseConditions } from './condition'
 import { BambooError } from './error'
-import { toHash } from './hash'
 import { isImportant, sanitize, withoutImportant } from './important'
 import { memo } from './memo'
 import { mergeProps } from './merge-props'
@@ -18,7 +18,6 @@ export interface CreateCssContext {
     hasShorthand: boolean
     resolveShorthand: (prop: string) => string
     transform: (prop: string, value: any) => { className: string }
-    toHash: (path: string[], toHash: (str: string) => string) => string
     /**
      * How two keys of one object writing one property merge, a shorthand and the property it
      * stands for. Given where the build names classes, which have to agree with the stylesheet.
@@ -73,17 +72,16 @@ export function createCssUncached(context: CreateCssContext) {
   const { prefix } = utility
   const formatClassName = prefix ? (str: string) => (str ? `${prefix}-${str}` : prefix) : (str: string) => str || ''
 
-  const hashFn = (conditions: string[], className: string) => {
-    if (hash) {
-      const baseArray = [...conds.finalize(conditions), className]
-      return formatClassName(utility.toHash(baseArray, toHash))
-    }
-
+  // What `StyleDecoder.formatSelector` names the rule, from the same three inputs: the code for
+  // the property and conditions, which the runtime `cx` merges by, then the value. @see mergeableAtomName
+  const hashFn = (conditions: string[], className: string, property: string) => {
+    // A transform naming no class names nothing, as it always has: the prefix alone, or nothing.
+    if (!className) return formatClassName(className)
     const finalized = conds.finalize(conditions)
-    // An unconditional style is the common case and needs neither the copy nor the join —
-    // `[x].join(':')` is `x`.
-    if (finalized.length === 0) return formatClassName(className)
-    return [...finalized, formatClassName(className)].join(':')
+    const keyCode = atomKeyCode(atomKey(finalized, utility.resolveShorthand(property)))
+    // An unconditional style is the common case and needs no join.
+    const identity = finalized.length === 0 ? className : `${finalized.join(':')}:${className}`
+    return formatClassName(mergeableAtomName(keyCode, identity, hash ? undefined : identity))
   }
 
   /**
@@ -95,7 +93,7 @@ export function createCssUncached(context: CreateCssContext) {
     const clean = sanitize(value)
     const important = isImportant(clean)
     const transformed = utility.transform(prop, withoutImportant(clean))
-    const className = hashFn(conditions, transformed.className)
+    const className = hashFn(conditions, transformed.className, prop)
     return important ? `${className}!` : className
   }
 

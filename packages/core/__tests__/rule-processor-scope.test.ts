@@ -24,12 +24,12 @@ describe('rule processor scoping', () => {
 
     expect(first.getClassNames()).toMatchInlineSnapshot(`
       [
-        "c_red\\.300",
+        "_Btm_AK\\:c_red\\.300",
       ]
     `)
     expect(second.getClassNames()).toMatchInlineSnapshot(`
       [
-        "d_flex",
+        "_Fg8Gj5\\:d_flex",
       ]
     `)
   })

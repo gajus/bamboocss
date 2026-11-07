@@ -1,4 +1,4 @@
-import { createRuleProcessor } from '@bamboocss/fixture'
+import { createRuleProcessor, withoutMergeCodes } from '@bamboocss/fixture'
 import { esc } from '@bamboocss/shared'
 import { describe, expect, test } from 'vitest'
 
@@ -11,8 +11,13 @@ import { describe, expect, test } from 'vitest'
 /** Each style's class, as the selector spells it. */
 const emit = (config: object, ...styles: object[]) => {
   const processor = createRuleProcessor(config as never)
-  const selectors = styles.map((style) => processor.css(style as never).getClassNames())
-  return { selectors: selectors.flat(), css: processor.toCss() }
+  const selectors = styles.map((style) =>
+    processor
+      .css(style as never)
+      .getClassNames()
+      .map(withoutMergeCodes),
+  )
+  return { selectors: selectors.flat(), css: withoutMergeCodes(processor.toCss()) }
 }
 
 /** The declarations of the rule written under a class, given as the selector spells it. */

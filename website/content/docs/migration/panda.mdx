@@ -138,12 +138,13 @@ pnpm bamboo codegen
 
 </Steps>
 
-## `cx` joins, in both tools
+## `cx` merges at runtime
 
-At runtime, both helpers join arbitrary class strings. Bamboo's Vite compiler additionally recognizes analyzable Bamboo
-style arguments: it composes their declarations in argument order before allocating atoms, so overridden declarations do
-not ship. A `cx()` containing an unknown external class remains the tiny joining helper. See
-[Merging styles](/docs/concepts/merging-styles).
+Panda's `cx` joins class strings. Bamboo's merges them: each utility class carries the property and conditions it sets,
+and `cx` keeps the last class of each, so a `className` passed in overrides the component's own for the same property
+under the same conditions. A class Bamboo did not name is kept as written. Bamboo's Vite compiler additionally
+recognizes analyzable Bamboo style arguments: it composes their declarations in argument order before allocating atoms,
+so overridden declarations do not ship. See [Merging styles](/docs/concepts/merging-styles).
 
 ## Vite compiles slot selections directly
 

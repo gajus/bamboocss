@@ -1,4 +1,4 @@
-import { createContext } from '@bamboocss/fixture'
+import { createContext, withoutMergeCodes } from '@bamboocss/fixture'
 import type { Config } from '@bamboocss/types'
 import { describe, expect, test } from 'vitest'
 import { generateThemes } from '../src/artifacts/js/themes'
@@ -311,7 +311,7 @@ describe('a parent condition after another, outside a theme', () => {
     ctx.decoder.collect(ctx.encoder)
     const atomic = ctx.createSheet()
     atomic.processDecoder(ctx.decoder)
-    expect(atomic.toCss()).toContain('.hc .dark .dark\\:hc\\:color_red')
+    expect(withoutMergeCodes(atomic.toCss())).toContain('.hc .dark .dark\\:hc\\:color_red')
     expect(css).toContain('.hc .dark, .dark.hc {')
   })
 

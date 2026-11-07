@@ -99,8 +99,10 @@ describe('source maps', () => {
 
     const result = fold(code)
 
-    const generatedLine = lineOf(result.code, `"c_red.300"`)
-    const column = result.code.split('\n')[generatedLine - 1]!.indexOf('"c_red.300"')
+    // The folded class string, merge code and all.
+    const literal = result.code.match(/"[^"\n]*c_red\.300"/)![0]
+    const generatedLine = lineOf(result.code, literal)
+    const column = result.code.split('\n')[generatedLine - 1]!.indexOf(literal)
 
     const tracer = new TraceMap(result.map as never)
     const mapped = originalPositionFor(tracer, { line: generatedLine, column })

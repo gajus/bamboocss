@@ -1,4 +1,4 @@
-import { createContext } from '@bamboocss/fixture'
+import { createContext, withoutMergeCodes } from '@bamboocss/fixture'
 import { logger } from '@bamboocss/logger'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
@@ -43,7 +43,8 @@ const styled = (value: string, prop = 'width') => `
   export const App = () => <div className={css({ ${prop}: '${value}' })} />
 `
 
-const messages = (spy: ReturnType<typeof vi.spyOn>) => spy.mock.calls.map((c: unknown[]) => String(c[1])).join('\n')
+const messages = (spy: ReturnType<typeof vi.spyOn>) =>
+  withoutMergeCodes(spy.mock.calls.map((c: unknown[]) => String(c[1])).join('\n'))
 const reports = (spy: ReturnType<typeof vi.spyOn>) =>
   spy.mock.calls.filter((c: unknown[]) => String(c[1]).includes('not valid CSS for their property'))
 

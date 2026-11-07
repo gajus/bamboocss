@@ -117,12 +117,12 @@ cx(css({ paddingX: '4' }), css({ paddingX: '2' }))
 // one atom for padding-inline: 2
 ```
 
-An opaque argument like `className` above removes that guarantee: `cx()` falls back to a plain string-join, and the
-opaque class's position in the call gives it no override priority over the compiled styles beside it. This does not fail
-the build — it is `cx()`'s documented second contract — but the two are worth telling apart. See
-[classname concatenation](/docs/concepts/writing-styles#classname-concatenation) for how the resulting cascade race
-resolves, and [source compilation](/docs/guides/source-transformation) for the `opaque-composition` diagnostic that
-flags it.
+An opaque argument like `className` above is merged at runtime instead: the generated `cx()` keeps the last class per
+property and conditions, so a Bamboo class passed in overrides the compiled styles beside it. This does not fail the
+build, but the two are worth telling apart. See
+[classname concatenation](/docs/concepts/writing-styles#classname-concatenation) for what the runtime merge compares and
+what it leaves to the cascade, and [source compilation](/docs/guides/source-transformation) for the `opaque-composition`
+diagnostic that names it.
 
 ## `css.raw()`
 

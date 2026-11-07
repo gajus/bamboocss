@@ -1,4 +1,4 @@
-import { createGeneratorContext, fixturePreset } from '@bamboocss/fixture'
+import { createGeneratorContext, fixturePreset, withoutMergeCodes } from '@bamboocss/fixture'
 import type { Dict } from '@bamboocss/types'
 import postcss from 'postcss'
 import { describe, expect, test } from 'vitest'
@@ -31,7 +31,7 @@ describe('custom utility', () => {
         @layer s010-c0-p3000;
 
         @layer s010-c0-p3000 {
-          .cb_red {
+          ._NUnYvp\\:cb_red {
             border: 1px solid red;
       }
         }
@@ -43,7 +43,7 @@ describe('custom utility', () => {
         @layer s010-c0-p3000;
 
         @layer s010-c0-p3000 {
-          .cb_red {
+          ._NUnYvp\\:cb_red {
             border: 1px solid red;
       }
         }
@@ -76,7 +76,7 @@ describe('custom utility', () => {
         @layer s010-c0-p3000;
 
         @layer s010-c0-p3000 {
-          .cbd_red {
+          ._NUnYvp\\:cbd_red {
             border: 1px solid red;
       }
         }
@@ -88,7 +88,7 @@ describe('custom utility', () => {
         @layer s010-c0-p3000;
 
         @layer s010-c0-p3000 {
-          .cbd_red {
+          ._NUnYvp\\:cbd_red {
             border: 1px solid red;
       }
         }
@@ -100,7 +100,7 @@ describe('custom utility', () => {
         @layer s010-c0-p3000;
 
         @layer s010-c0-p3000 {
-          .cbd_red {
+          ._NUnYvp\\:cbd_red {
             border: 1px solid red;
       }
         }
@@ -175,7 +175,7 @@ describe('a transform writing under a condition', () => {
   } as never
 
   const flat = (css: string) => css.replace(/\s+/g, ' ')
-  const css = (styles: Dict) => flat(createRuleProcessor(config).css(styles).toCss())
+  const css = (styles: Dict) => withoutMergeCodes(flat(createRuleProcessor(config).css(styles).toCss()))
 
   test('writes the selector the condition stands for', () => {
     const sheet = css({ hoverStack: true })
@@ -264,7 +264,7 @@ describe('a condition a transform writes ranks as written in a style', () => {
     },
   } as never
 
-  const sheet = (styles: Dict) => createRuleProcessor(config).css(styles).toCss()
+  const sheet = (styles: Dict) => withoutMergeCodes(createRuleProcessor(config).css(styles).toCss())
 
   /** The condition part of each rule's sublayer, `c1` of `s020-c1-p3000`, by its selector. */
   const conditionOf = (css: string) => {

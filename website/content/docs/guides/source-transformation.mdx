@@ -11,7 +11,7 @@ style APIs in application source are compile-time syntax. There is no switch tha
 export const title = css({ display: 'flex', color: 'red.300' })
 
 // transformed module
-export const title = 'd_flex c_red.300'
+export const title = '_Fg8Gj5:d_flex _Btm_AK:c_red.300'
 ```
 
 The virtual stylesheet contains the two shared declaration atoms. A second `css()` call or any recipe selecting either
@@ -173,14 +173,14 @@ const badge = css({ background: 'amber.500', color: 'white' })
 const badgeHigh = css({ background: 'red.600' })
 
 cx(badge, discount >= 30 && badgeHigh)
-// compiles to: (discount >= 30) ? "bg_red.600 c_white" : "bg_amber.500 c_white"
+// compiles to: (discount >= 30) ? "_w1ddk4:bg_red.600 _Btm_AK:c_white" : "_w1ddk4:bg_amber.500 _Btm_AK:c_white"
 ```
 
 Every condition still runs exactly when, and as often as, it did in the call. Up to five independent conditions —
 thirty-two combinations — are compiled this way; a call with more, a condition that reads a Bamboo import or a recipe,
-or a binding that is not a `const` whose call is static stays the runtime join it was written as. A join does not merge:
-where two of its arguments set the same property, the browser applies whichever rule the stylesheet holds later, not the
-later argument. A component choosing between that many styles is better written as a recipe.
+or a binding that is not a `const` whose call is static stays the runtime `cx` it was written as, which keeps the last
+class per property and conditions, so the later argument still wins. A component choosing between that many styles is
+better written as a recipe.
 
 For a finite dynamic recipe plus static Bamboo styles, the static styles are composed into every decision-table leaf.
 
@@ -192,10 +192,9 @@ cx(base, active && selected, className)
 // compiles to: cx((active) ? "…" : "…", className)
 ```
 
-The composed arguments still merge, later ones winning; the forwarded class is joined to them at runtime, and Bamboo
-makes no conflict-resolution guarantee between the two. Every argument still runs where it did, so a call with one the
-compiler cannot read standing between two conditions, or reading a Bamboo import or a recipe, stays the runtime join it
-was written as.
+The composed arguments still merge, later ones winning; the forwarded class is merged with them at runtime, keeping the
+last class per property and conditions. Every argument still runs where it did, so a call with one the compiler cannot
+read standing between two conditions, or reading a Bamboo import or a recipe, stays the runtime join it was written as.
 
 ### Tokens
 

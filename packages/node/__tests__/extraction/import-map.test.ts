@@ -96,60 +96,60 @@ describe('config.importMap', () => {
         @layer s010-c0-p1000, s010-c0-p2000, s010-c0-p3000, s010-c0-p4000, s010-c1-p3000, s010-c2-p2000, s010-c3-p2000, s010-c4-p3000, s010-c4-p4000;
 
         @layer s010-c0-p1000 {
-          .m_auto {
+          ._0OoTQY\\:m_auto {
             margin: auto;
       }
         }
 
         @layer s010-c0-p2000 {
-          .mx_auto {
+          ._0QmaUN\\:mx_auto {
             margin-inline: auto;
       }
 
-          .px_4 {
+          ._pPyFaQ\\:px_4 {
             padding-inline: var(--spacing-4);
       }
 
-          .flex_2 {
+          ._cM4iKr\\:flex_2 {
             flex: 2;
       }
 
-          .flex_1 {
+          ._cM4iKr\\:flex_1 {
             flex: 1 1 0%;
       }
         }
 
         @layer s010-c0-p3000 {
-          .pos_relative {
+          ._PHAS7x\\:pos_relative {
             position: relative;
       }
 
-          .page_A4 {
+          ._azwysZ\\:page_A4 {
             page: A4;
       }
 
-          .d_flex {
+          ._Fg8Gj5\\:d_flex {
             display: flex;
       }
 
-          .flex-d_column {
+          ._AoNTSX\\:flex-d_column {
             flex-direction: column;
       }
         }
 
         @layer s010-c0-p4000 {
-          .max-w_8xl {
+          ._29n7j_\\:max-w_8xl {
             max-width: var(--sizes-8xl);
       }
 
-          .h_600px {
+          ._97NnCm\\:h_600px {
             height: 600px;
       }
         }
 
         @layer s010-c1-p3000 {
           @media (width >= 40rem) {
-            .sm\\:flex-d_row {
+            ._deqOyw\\:sm\\:flex-d_row {
               flex-direction: row;
       }
       }
@@ -157,7 +157,7 @@ describe('config.importMap', () => {
 
         @layer s010-c2-p2000 {
           @media (width >= 48rem) {
-            .md\\:px_6 {
+            ._Db4OAM\\:md\\:px_6 {
               padding-inline: var(--spacing-6);
       }
       }
@@ -165,7 +165,7 @@ describe('config.importMap', () => {
 
         @layer s010-c3-p2000 {
           @media (width >= 64rem) {
-            .lg\\:px_8 {
+            ._Tuifi1\\:lg\\:px_8 {
               padding-inline: var(--spacing-8);
       }
       }
@@ -173,7 +173,7 @@ describe('config.importMap', () => {
 
         @layer s010-c4-p3000 {
           @media print {
-            .print\\:flex-d_row {
+            ._qDcXZF\\:print\\:flex-d_row {
               flex-direction: row;
       }
       }
@@ -181,10 +181,10 @@ describe('config.importMap', () => {
 
         @layer s010-c4-p4000 {
           @media print {
-            .print\\:w_210mm {
+            ._DrVVJo\\:print\\:w_210mm {
               width: 210mm;
       }
-            .print\\:h_297mm {
+            ._Qa01X-\\:print\\:h_297mm {
               height: 297mm;
       }
       }
@@ -282,7 +282,7 @@ describe('config.importMap', () => {
         @layer s010-c0-p3000;
 
         @layer s010-c0-p3000 {
-          .c_red {
+          ._Btm_AK\\:c_red {
             color: red;
       }
         }

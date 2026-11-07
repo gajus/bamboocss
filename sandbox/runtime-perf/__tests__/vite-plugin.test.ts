@@ -1,3 +1,4 @@
+import { withoutMergeCodes } from '@bamboocss/fixture'
 import {
   existsSync,
   mkdirSync,
@@ -601,10 +602,12 @@ describe.sequential('vite plugin, real rebuild', () => {
     // Whatever the build wrote, rather than a name derived from the format and the
     // package's `type` — the assertion is about the contents, not about Vite's naming.
     const output = (...extensions: string[]) =>
-      readdirSync(outDir)
-        .filter((file) => extensions.some((extension) => file.endsWith(extension)))
-        .map((file) => readFileSync(join(outDir, file), 'utf8'))
-        .join('\n')
+      withoutMergeCodes(
+        readdirSync(outDir)
+          .filter((file) => extensions.some((extension) => file.endsWith(extension)))
+          .map((file) => readFileSync(join(outDir, file), 'utf8'))
+          .join('\n'),
+      )
 
     try {
       await nextBuild()
@@ -849,7 +852,7 @@ describe.sequential('vite plugin, real rebuild', () => {
         }
         expect(artifact).toMatchObject({
           version: 7,
-          classNames: [`w_[${width}]`],
+          classNames: [expect.stringMatching(new RegExp(`^_[\\w-]{6}:w_\\[${width.replace('.', '\\.')}\\]$`))],
           integrity: expect.any(String),
         })
         const integrity = artifact.integrity
@@ -974,7 +977,7 @@ describe.sequential('vite plugin, real rebuild', () => {
         }
         expect(artifact).toMatchObject({
           version: 7,
-          classNames: [`w_[${width}]`],
+          classNames: [expect.stringMatching(new RegExp(`^_[\\w-]{6}:w_\\[${width.replace('.', '\\.')}\\]$`))],
           integrity: expect.any(String),
         })
         const signedClassNames = artifact.classNames
@@ -1485,10 +1488,12 @@ describe('vite 8 / rolldown', () => {
         watcher.on('event', onEvent)
       })
     const output = (...extensions: string[]) =>
-      readdirSync(outDir)
-        .filter((file) => extensions.some((extension) => file.endsWith(extension)))
-        .map((file) => readFileSync(join(outDir, file), 'utf8'))
-        .join('\n')
+      withoutMergeCodes(
+        readdirSync(outDir)
+          .filter((file) => extensions.some((extension) => file.endsWith(extension)))
+          .map((file) => readFileSync(join(outDir, file), 'utf8'))
+          .join('\n'),
+      )
 
     try {
       await nextBuild()
@@ -1865,7 +1870,7 @@ const runPartialEnvironmentWatchRebuild = async (
     expect(rebuiltCss).toContain(widths.cachedSsr)
     expect(rebuiltCss).toContain(widths.freshClient)
     expect(rebuiltCss).not.toContain(widths.freshSsr)
-    expect(rebuiltCss).toContain(`.${esc(`w_[${widths.cachedSsr}]`)}`)
+    expect(withoutMergeCodes(rebuiltCss)).toContain(`.${esc(`w_[${widths.cachedSsr}]`)}`)
 
     // The inverse partial rebuild must retain the client sheet's loss history. That sheet
     // pruned the third rule, and SSR emits no replacement asset, so requiring it fails closed.
@@ -2016,8 +2021,8 @@ const runClientFirstWatchRebuild = async (
 
     expect(calls).toEqual({ client: 1, ssr: 1 })
     const firstCss = readOutputFiles(clientOutDir, '.css')
-    expect(firstCss).toContain(`.${esc(`w_[${widths.ssr}]`)}`)
-    expect(firstCss).toContain(`.${esc(`w_[${widths.client}]`)}`)
+    expect(withoutMergeCodes(firstCss)).toContain(`.${esc(`w_[${widths.ssr}]`)}`)
+    expect(withoutMergeCodes(firstCss)).toContain(`.${esc(`w_[${widths.client}]`)}`)
     expect(firstCss).not.toContain(widths.edited)
 
     // The client alone, now compiling the class its first sheet pruned. Its sheet is written under
@@ -2034,8 +2039,8 @@ const runClientFirstWatchRebuild = async (
     await watchersQuiet([clientWatcher, ssrWatcher])
 
     const rebuiltCss = readOutputFiles(clientOutDir, '.css')
-    expect(rebuiltCss).toContain(`.${esc(`w_[${widths.ssr}]`)}`)
-    expect(rebuiltCss).toContain(`.${esc(`w_[${widths.edited}]`)}`)
+    expect(withoutMergeCodes(rebuiltCss)).toContain(`.${esc(`w_[${widths.ssr}]`)}`)
+    expect(withoutMergeCodes(rebuiltCss)).toContain(`.${esc(`w_[${widths.edited}]`)}`)
 
     // SSR alone, compiling the class it always had, which the client's sheet holds. Counted from
     // the edit, so a late cycle before it does not end the wait.
@@ -2048,7 +2053,7 @@ const runClientFirstWatchRebuild = async (
     await watchersQuiet([clientWatcher, ssrWatcher])
 
     expect(readOutputFiles(ssrOutDir, '.js')).toContain(`w_[${widths.ssr}]`)
-    expect(readOutputFiles(clientOutDir, '.css')).toContain(`.${esc(`w_[${widths.ssr}]`)}`)
+    expect(withoutMergeCodes(readOutputFiles(clientOutDir, '.css'))).toContain(`.${esc(`w_[${widths.ssr}]`)}`)
   } finally {
     await Promise.all([clientWatcher?.close(), ssrWatcher?.close()])
     rmSync(clientTrigger, { force: true })
@@ -2162,7 +2167,7 @@ const runRejectedCompletionWatchRebuild = async (
     await watchersQuiet([clientWatcher, ssrWatcher])
 
     // Finalized in SSR's early pass, before the rejection: the sheet on disk holds SSR's class.
-    expect(readOutputFiles(clientOutDir, '.css')).toContain(`.${esc(`w_[${widths.ssr}]`)}`)
+    expect(withoutMergeCodes(readOutputFiles(clientOutDir, '.css'))).toContain(`.${esc(`w_[${widths.ssr}]`)}`)
     expect(readOutputFiles(ssrOutDir, '.js')).toBe('')
 
     let beforeSsrEdit = Number.POSITIVE_INFINITY
@@ -2174,7 +2179,7 @@ const runRejectedCompletionWatchRebuild = async (
     await watchersQuiet([clientWatcher, ssrWatcher])
 
     expect(readOutputFiles(ssrOutDir, '.js')).toContain(`w_[${widths.ssr}]`)
-    expect(readOutputFiles(clientOutDir, '.css')).toContain(`.${esc(`w_[${widths.ssr}]`)}`)
+    expect(withoutMergeCodes(readOutputFiles(clientOutDir, '.css'))).toContain(`.${esc(`w_[${widths.ssr}]`)}`)
   } finally {
     await Promise.all([clientWatcher?.close(), ssrWatcher?.close()])
     rmSync(ssrTrigger, { force: true })
@@ -3486,7 +3491,7 @@ const runSiblingReplacementWatchRebuild = async (
       expect(ssrError).toBeUndefined()
       const used = shape === 'a new class' ? widths.fresh : widths.pruned
       expect(readOutputFiles(ssrOutDir, '.js')).toContain(`w_[${used}]`)
-      expect(css).toContain(`.${esc(`w_[${used}]`)}`)
+      expect(withoutMergeCodes(css)).toContain(`.${esc(`w_[${used}]`)}`)
     }
   } finally {
     release()
@@ -5232,9 +5237,13 @@ export const second = css({ width: '[913.1px]', height: '[913.2px]' })
     })
   }
 
-  /** 1-based line and 0-based column of the first `needle` in `text`. */
+  /**
+   * 1-based line and 0-based column of the first rule for `needle`, a class's readable selector,
+   * in `text`, where its name carries the merge code ahead of the readable part.
+   */
   const positionOf = (text: string, needle: string) => {
-    const index = text.indexOf(needle)
+    const readable = needle.slice(1).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const index = text.search(new RegExp(`\\._[\\w-]{6}\\\\:${readable}`))
     expect(index, `${needle} in the served sheet`).toBeGreaterThanOrEqual(0)
     const before = text.slice(0, index)
     return { line: before.split('\n').length, column: index - before.lastIndexOf('\n') - 1 }
@@ -5577,8 +5586,8 @@ describe('a project with no generated output yet', () => {
     const css = outputs.map((output) => ('source' in output ? String(output.source) : '')).join('\n')
     const className = js.match(/const cls = "([^"]+)"/)?.[1]
 
-    expect(className).toMatch(/^[a-zA-Z]+$/)
-    expect(css).toContain(`.${className}`)
+    expect(className).toMatch(/^_[\w-]{6}:[\w-]{5}$/)
+    expect(css).toContain(`.${esc(className!)}`)
     expect(css).toContain('display: flex')
   }, 120_000)
 
@@ -6014,14 +6023,19 @@ describe.sequential('composed mixins', () => {
       plugins: [bamboocss({ cwd, configPath, reportSummary: false })],
       build: { write: false, minify: false, rollupOptions: { input: html } },
     })) as Rollup.RollupOutput
-    const js = result.output
-      .filter((item): item is Rollup.OutputChunk => item.type === 'chunk')
-      .map((chunk) => chunk.code)
-      .join('\n')
-    const css = result.output
-      .filter((item): item is Rollup.OutputAsset => item.type === 'asset' && item.fileName.endsWith('.css'))
-      .map((asset) => String(asset.source))
-      .join('\n')
+    // Read without merge codes: this is about which declarations win, in names as written.
+    const js = withoutMergeCodes(
+      result.output
+        .filter((item): item is Rollup.OutputChunk => item.type === 'chunk')
+        .map((chunk) => chunk.code)
+        .join('\n'),
+    )
+    const css = withoutMergeCodes(
+      result.output
+        .filter((item): item is Rollup.OutputAsset => item.type === 'asset' && item.fileName.endsWith('.css'))
+        .map((asset) => String(asset.source))
+        .join('\n'),
+    )
 
     // The variant's mixin wins over the base, so the base colour is gone from the element.
     const variant = js.match(/document\.body\.className = "([^"]*)"/)?.[1]

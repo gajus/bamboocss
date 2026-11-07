@@ -3084,9 +3084,9 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
         continue
       }
       // `cx` is the one intentional runtime surface: with unknown external inputs it is a
-      // tiny class-string joiner, not a styling engine. Bamboo only promises semantic
-      // StyleSet composition when every argument is analyzable; nested Bamboo calls are
-      // still compiled independently before this runtime join.
+      // small class-string merge — the last class per property and conditions — not a styling
+      // engine. Bamboo only promises semantic StyleSet composition when every argument is
+      // analyzable; nested Bamboo calls are still compiled independently before this runtime merge.
       //
       // `opaque-composition` is the subset where the join also carries atoms Bamboo compiled.
       // It is reported apart so `reportSkipped` and the coverage summary can name it, and it

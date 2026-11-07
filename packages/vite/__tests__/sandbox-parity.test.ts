@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { createContext } from '@bamboocss/fixture'
+import { createContext, withoutMergeCodes } from '@bamboocss/fixture'
 import { describe, expect, test } from 'vitest'
 import { foldSource } from '../src/fold'
 import { createRuntimeCss } from '../src/runtime-css'
@@ -83,7 +83,7 @@ describe('sandbox/vite-ts parity', () => {
     const withFold = parseAll(true)
 
     expect(withFold.css.length).toBeGreaterThanOrEqual(withoutFold.css.length)
-    expect(withFold.css).toContain('.bg_gray\\.500')
+    expect(withoutMergeCodes(withFold.css)).toContain('.bg_gray\\.500')
   })
 
   test('the sandbox actually exercises the fold', () => {

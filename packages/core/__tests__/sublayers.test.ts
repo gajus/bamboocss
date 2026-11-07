@@ -1,4 +1,4 @@
-import { createRuleProcessor } from '@bamboocss/fixture'
+import { createRuleProcessor, withoutMergeCodes } from '@bamboocss/fixture'
 import postcss from 'postcss'
 import { describe, expect, test } from 'vitest'
 import { cascadeOrder } from './cascade-oracle'
@@ -12,7 +12,7 @@ import { cascadeOrder } from './cascade-oracle'
 const sheetFor = (...styles: Parameters<ReturnType<typeof createRuleProcessor>['css']>[0][]) => {
   const processor = createRuleProcessor()
   for (const style of styles) processor.css(style)
-  return processor.toCss()
+  return withoutMergeCodes(processor.toCss())
 }
 
 /** The sublayer statement inside `utilities`, and which sublayer each selector was written into. */

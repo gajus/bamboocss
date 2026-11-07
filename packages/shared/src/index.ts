@@ -1,6 +1,7 @@
 export * from './arbitrary-value'
 export * from './assert'
 export * from './assign'
+export * from './atom-name'
 export * from './cache-map'
 export * from './calc'
 export * from './camelcase-property'

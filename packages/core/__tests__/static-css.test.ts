@@ -145,60 +145,60 @@ describe('static-css', () => {
         @layer s010-c0-p1000, s010-c0-p3000, s010-c3-p1000, s010-c4-p1000, s020-c1-p3000, s020-c2-p3000;
 
         @layer s010-c0-p1000 {
-          .m_20px {
+          ._0OoTQY\\:m_20px {
             margin: 20px;
       }
 
-          .m_40px {
+          ._0OoTQY\\:m_40px {
             margin: 40px;
       }
 
-          .p_20px {
+          ._DJEIKl\\:p_20px {
             padding: 20px;
       }
 
-          .p_40px {
+          ._DJEIKl\\:p_40px {
             padding: 40px;
       }
 
-          .p_60px {
+          ._DJEIKl\\:p_60px {
             padding: 60px;
       }
         }
 
         @layer s010-c0-p3000 {
-          .c_red\\.200 {
+          ._Btm_AK\\:c_red\\.200 {
             color: var(--colors-red-200);
       }
 
-          .c_blue\\.200 {
+          ._Btm_AK\\:c_blue\\.200 {
             color: var(--colors-blue-200);
       }
 
-          .c_green\\.200 {
+          ._Btm_AK\\:c_green\\.200 {
             color: var(--colors-green-200);
       }
 
-          .c_colorPalette\\.200 {
+          ._Btm_AK\\:c_colorPalette\\.200 {
             color: var(--colors-color-palette-200);
       }
         }
 
         @layer s010-c3-p1000 {
           @media (width >= 40rem) {
-            .sm\\:m_20px {
+            ._pv27ho\\:sm\\:m_20px {
               margin: 20px;
       }
-            .sm\\:m_40px {
+            ._pv27ho\\:sm\\:m_40px {
               margin: 40px;
       }
-            .sm\\:p_20px {
+            ._v2fgvW\\:sm\\:p_20px {
               padding: 20px;
       }
-            .sm\\:p_40px {
+            ._v2fgvW\\:sm\\:p_40px {
               padding: 40px;
       }
-            .sm\\:p_60px {
+            ._v2fgvW\\:sm\\:p_60px {
               padding: 60px;
       }
       }
@@ -206,19 +206,19 @@ describe('static-css', () => {
 
         @layer s010-c4-p1000 {
           @media (width >= 48rem) {
-            .md\\:m_20px {
+            ._ncbIq-\\:md\\:m_20px {
               margin: 20px;
       }
-            .md\\:m_40px {
+            ._ncbIq-\\:md\\:m_40px {
               margin: 40px;
       }
-            .md\\:p_20px {
+            ._YjCOy4\\:md\\:p_20px {
               padding: 20px;
       }
-            .md\\:p_40px {
+            ._YjCOy4\\:md\\:p_40px {
               padding: 40px;
       }
-            .md\\:p_60px {
+            ._YjCOy4\\:md\\:p_60px {
               padding: 60px;
       }
       }
@@ -226,38 +226,38 @@ describe('static-css', () => {
 
         @layer s020-c1-p3000 {
 
-          [data-theme=light] .light\\:c_red\\.200,.light .light\\:c_red\\.200,.light\\:c_red\\.200.light,.light\\:c_red\\.200[data-theme=light] {
+          [data-theme=light] ._IcPIb3\\:light\\:c_red\\.200,.light ._IcPIb3\\:light\\:c_red\\.200,._IcPIb3\\:light\\:c_red\\.200.light,._IcPIb3\\:light\\:c_red\\.200[data-theme=light] {
             color: var(--colors-red-200);
       }
 
-          [data-theme=light] .light\\:c_blue\\.200,.light .light\\:c_blue\\.200,.light\\:c_blue\\.200.light,.light\\:c_blue\\.200[data-theme=light] {
+          [data-theme=light] ._IcPIb3\\:light\\:c_blue\\.200,.light ._IcPIb3\\:light\\:c_blue\\.200,._IcPIb3\\:light\\:c_blue\\.200.light,._IcPIb3\\:light\\:c_blue\\.200[data-theme=light] {
             color: var(--colors-blue-200);
       }
 
-          [data-theme=light] .light\\:c_green\\.200,.light .light\\:c_green\\.200,.light\\:c_green\\.200.light,.light\\:c_green\\.200[data-theme=light] {
+          [data-theme=light] ._IcPIb3\\:light\\:c_green\\.200,.light ._IcPIb3\\:light\\:c_green\\.200,._IcPIb3\\:light\\:c_green\\.200.light,._IcPIb3\\:light\\:c_green\\.200[data-theme=light] {
             color: var(--colors-green-200);
       }
 
-          [data-theme=light] .light\\:c_colorPalette\\.200,.light .light\\:c_colorPalette\\.200,.light\\:c_colorPalette\\.200.light,.light\\:c_colorPalette\\.200[data-theme=light] {
+          [data-theme=light] ._IcPIb3\\:light\\:c_colorPalette\\.200,.light ._IcPIb3\\:light\\:c_colorPalette\\.200,._IcPIb3\\:light\\:c_colorPalette\\.200.light,._IcPIb3\\:light\\:c_colorPalette\\.200[data-theme=light] {
             color: var(--colors-color-palette-200);
       }
         }
 
         @layer s020-c2-p3000 {
 
-          [data-theme=dark] .dark\\:c_red\\.200,.dark .dark\\:c_red\\.200,.dark\\:c_red\\.200.dark,.dark\\:c_red\\.200[data-theme=dark] {
+          [data-theme=dark] ._gtEApe\\:dark\\:c_red\\.200,.dark ._gtEApe\\:dark\\:c_red\\.200,._gtEApe\\:dark\\:c_red\\.200.dark,._gtEApe\\:dark\\:c_red\\.200[data-theme=dark] {
             color: var(--colors-red-200);
       }
 
-          [data-theme=dark] .dark\\:c_blue\\.200,.dark .dark\\:c_blue\\.200,.dark\\:c_blue\\.200.dark,.dark\\:c_blue\\.200[data-theme=dark] {
+          [data-theme=dark] ._gtEApe\\:dark\\:c_blue\\.200,.dark ._gtEApe\\:dark\\:c_blue\\.200,._gtEApe\\:dark\\:c_blue\\.200.dark,._gtEApe\\:dark\\:c_blue\\.200[data-theme=dark] {
             color: var(--colors-blue-200);
       }
 
-          [data-theme=dark] .dark\\:c_green\\.200,.dark .dark\\:c_green\\.200,.dark\\:c_green\\.200.dark,.dark\\:c_green\\.200[data-theme=dark] {
+          [data-theme=dark] ._gtEApe\\:dark\\:c_green\\.200,.dark ._gtEApe\\:dark\\:c_green\\.200,._gtEApe\\:dark\\:c_green\\.200.dark,._gtEApe\\:dark\\:c_green\\.200[data-theme=dark] {
             color: var(--colors-green-200);
       }
 
-          [data-theme=dark] .dark\\:c_colorPalette\\.200,.dark .dark\\:c_colorPalette\\.200,.dark\\:c_colorPalette\\.200.dark,.dark\\:c_colorPalette\\.200[data-theme=dark] {
+          [data-theme=dark] ._gtEApe\\:dark\\:c_colorPalette\\.200,.dark ._gtEApe\\:dark\\:c_colorPalette\\.200,._gtEApe\\:dark\\:c_colorPalette\\.200.dark,._gtEApe\\:dark\\:c_colorPalette\\.200[data-theme=dark] {
             color: var(--colors-color-palette-200);
       }
         }
@@ -481,31 +481,31 @@ describe('static-css', () => {
         @layer s010-c0-p1000;
 
         @layer s010-c0-p1000 {
-          .m_20 {
+          ._0OoTQY\\:m_20 {
             margin: var(--spacing-20);
       }
 
-          .m_40 {
+          ._0OoTQY\\:m_40 {
             margin: var(--spacing-40);
       }
 
-          .m_60 {
+          ._0OoTQY\\:m_60 {
             margin: var(--spacing-60);
       }
 
-          .m_auto {
+          ._0OoTQY\\:m_auto {
             margin: auto;
       }
 
-          .m_-20 {
+          ._0OoTQY\\:m_-20 {
             margin: calc(var(--spacing-20) * -1);
       }
 
-          .m_-40 {
+          ._0OoTQY\\:m_-40 {
             margin: calc(var(--spacing-40) * -1);
       }
 
-          .m_-60 {
+          ._0OoTQY\\:m_-60 {
             margin: calc(var(--spacing-60) * -1);
       }
         }
@@ -552,27 +552,27 @@ describe('static-css', () => {
         @layer s010-c0-p1000;
 
         @layer s010-c0-p1000 {
-          .p_20 {
+          ._DJEIKl\\:p_20 {
             padding: var(--spacing-20);
       }
 
-          .p_40 {
+          ._DJEIKl\\:p_40 {
             padding: var(--spacing-40);
       }
 
-          .p_60 {
+          ._DJEIKl\\:p_60 {
             padding: var(--spacing-60);
       }
 
-          .p_-20 {
+          ._DJEIKl\\:p_-20 {
             padding: calc(var(--spacing-20) * -1);
       }
 
-          .p_-40 {
+          ._DJEIKl\\:p_-40 {
             padding: calc(var(--spacing-40) * -1);
       }
 
-          .p_-60 {
+          ._DJEIKl\\:p_-60 {
             padding: calc(var(--spacing-60) * -1);
       }
         }
@@ -616,55 +616,55 @@ describe('static-css', () => {
         @layer s010-c0-p3000, s020-c1-p3000, s020-c2-p3000;
 
         @layer s010-c0-p3000 {
-          .c_red\\.200 {
+          ._Btm_AK\\:c_red\\.200 {
             color: var(--colors-red-200);
       }
 
-          .c_blue\\.200 {
+          ._Btm_AK\\:c_blue\\.200 {
             color: var(--colors-blue-200);
       }
 
-          .c_green\\.200 {
+          ._Btm_AK\\:c_green\\.200 {
             color: var(--colors-green-200);
       }
 
-          .c_colorPalette\\.200 {
+          ._Btm_AK\\:c_colorPalette\\.200 {
             color: var(--colors-color-palette-200);
       }
         }
 
         @layer s020-c1-p3000 {
-          .focus\\:c_red\\.200:is(:focus, [data-focus]) {
+          ._yZXLUJ\\:focus\\:c_red\\.200:is(:focus, [data-focus]) {
             color: var(--colors-red-200);
       }
 
-          .focus\\:c_blue\\.200:is(:focus, [data-focus]) {
+          ._yZXLUJ\\:focus\\:c_blue\\.200:is(:focus, [data-focus]) {
             color: var(--colors-blue-200);
       }
 
-          .focus\\:c_green\\.200:is(:focus, [data-focus]) {
+          ._yZXLUJ\\:focus\\:c_green\\.200:is(:focus, [data-focus]) {
             color: var(--colors-green-200);
       }
 
-          .focus\\:c_colorPalette\\.200:is(:focus, [data-focus]) {
+          ._yZXLUJ\\:focus\\:c_colorPalette\\.200:is(:focus, [data-focus]) {
             color: var(--colors-color-palette-200);
       }
         }
 
         @layer s020-c2-p3000 {
-          .hover\\:c_red\\.200:is(:hover, [data-hover]) {
+          ._nRd69H\\:hover\\:c_red\\.200:is(:hover, [data-hover]) {
             color: var(--colors-red-200);
       }
 
-          .hover\\:c_blue\\.200:is(:hover, [data-hover]) {
+          ._nRd69H\\:hover\\:c_blue\\.200:is(:hover, [data-hover]) {
             color: var(--colors-blue-200);
       }
 
-          .hover\\:c_green\\.200:is(:hover, [data-hover]) {
+          ._nRd69H\\:hover\\:c_green\\.200:is(:hover, [data-hover]) {
             color: var(--colors-green-200);
       }
 
-          .hover\\:c_colorPalette\\.200:is(:hover, [data-hover]) {
+          ._nRd69H\\:hover\\:c_colorPalette\\.200:is(:hover, [data-hover]) {
             color: var(--colors-color-palette-200);
       }
         }
@@ -883,332 +883,332 @@ describe('static-css', () => {
         @layer s010-c0-p1, s010-c0-p2000, s010-c0-p3000, s010-c0-p4000, s010-c1-p1000, s010-c1-p2000, s010-c1-p3000, s010-c1-p4000, s010-c4-p3000, s010-c5-p1000, s010-c5-p2000, s010-c5-p3000, s010-c5-p4000, s011-c2-p3000, s011-c3-p3000, s011-c2-p4000, s011-c6-p3000, s011-c7-p3000, s011-c6-p4000;
 
         @layer s010-c0-p1 {
-          .\\--bleed-x_var\\(--spacing-20\\) {
+          ._Mg_8tV\\:--bleed-x_var\\(--spacing-20\\) {
             --bleed-x: var(--spacing-20);
       }
 
-          .\\--bleed-y_0 {
+          ._b2NXtV\\:--bleed-y_0 {
             --bleed-y: 0;
       }
 
-          .\\--bleed-x_var\\(--spacing-40\\) {
+          ._Mg_8tV\\:--bleed-x_var\\(--spacing-40\\) {
             --bleed-x: var(--spacing-40);
       }
 
-          .\\--bleed-x_var\\(--spacing-60\\) {
+          ._Mg_8tV\\:--bleed-x_var\\(--spacing-60\\) {
             --bleed-x: var(--spacing-60);
       }
 
-          .\\--bleed-x_auto {
+          ._Mg_8tV\\:--bleed-x_auto {
             --bleed-x: auto;
       }
 
-          .\\--bleed-x_calc\\(var\\(--spacing-20\\)_\\*_-1\\) {
+          ._Mg_8tV\\:--bleed-x_calc\\(var\\(--spacing-20\\)_\\*_-1\\) {
             --bleed-x: calc(var(--spacing-20) * -1);
       }
 
-          .\\--bleed-x_calc\\(var\\(--spacing-40\\)_\\*_-1\\) {
+          ._Mg_8tV\\:--bleed-x_calc\\(var\\(--spacing-40\\)_\\*_-1\\) {
             --bleed-x: calc(var(--spacing-40) * -1);
       }
 
-          .\\--bleed-x_calc\\(var\\(--spacing-60\\)_\\*_-1\\) {
+          ._Mg_8tV\\:--bleed-x_calc\\(var\\(--spacing-60\\)_\\*_-1\\) {
             --bleed-x: calc(var(--spacing-60) * -1);
       }
 
-          .\\--thickness_1px {
+          ._XPmwuw\\:--thickness_1px {
             --thickness: 1px;
       }
 
-          .\\--thickness_20 {
+          ._XPmwuw\\:--thickness_20 {
             --thickness: 20;
       }
 
-          .\\--thickness_40 {
+          ._XPmwuw\\:--thickness_40 {
             --thickness: 40;
       }
 
-          .\\--thickness_60 {
+          ._XPmwuw\\:--thickness_60 {
             --thickness: 60;
       }
 
-          .\\--thickness_breakpoint-sm {
+          ._XPmwuw\\:--thickness_breakpoint-sm {
             --thickness: breakpoint-sm;
       }
 
-          .\\--thickness_breakpoint-md {
+          ._XPmwuw\\:--thickness_breakpoint-md {
             --thickness: breakpoint-md;
       }
 
-          .\\--thickness_breakpoint-lg {
+          ._XPmwuw\\:--thickness_breakpoint-lg {
             --thickness: breakpoint-lg;
       }
 
-          .\\--thickness_breakpoint-xl {
+          ._XPmwuw\\:--thickness_breakpoint-xl {
             --thickness: breakpoint-xl;
       }
 
-          .\\--thickness_breakpoint-2xl {
+          ._XPmwuw\\:--thickness_breakpoint-2xl {
             --thickness: breakpoint-2xl;
       }
         }
 
         @layer s010-c0-p2000 {
-          .flex_0_0_sm {
+          ._cM4iKr\\:flex_0_0_sm {
             flex: 0 0 sm;
       }
 
-          .flex_0_0_md {
+          ._cM4iKr\\:flex_0_0_md {
             flex: 0 0 md;
       }
 
-          .flex_0_0_lg {
+          ._cM4iKr\\:flex_0_0_lg {
             flex: 0 0 lg;
       }
 
-          .flex_0_0_auto {
+          ._cM4iKr\\:flex_0_0_auto {
             flex: 0 0 auto;
       }
 
-          .mx_calc\\(var\\(--bleed-x\\,_0\\)_\\*_-1\\) {
+          ._0QmaUN\\:mx_calc\\(var\\(--bleed-x\\,_0\\)_\\*_-1\\) {
             margin-inline: calc(var(--bleed-x, 0) * -1);
       }
 
-          .my_calc\\(var\\(--bleed-y\\,_0\\)_\\*_-1\\) {
+          ._F2GXY7\\:my_calc\\(var\\(--bleed-y\\,_0\\)_\\*_-1\\) {
             margin-block: calc(var(--bleed-y, 0) * -1);
       }
         }
 
         @layer s010-c0-p3000 {
-          .pos_relative {
+          ._PHAS7x\\:pos_relative {
             position: relative;
       }
 
-          .as_stretch {
+          ._a9lftO\\:as_stretch {
             align-self: stretch;
       }
 
-          .justify-self_stretch {
+          ._fDdPQa\\:justify-self_stretch {
             justify-self: stretch;
       }
 
-          .d_flex {
+          ._Fg8Gj5\\:d_flex {
             display: flex;
       }
 
-          .ai_center {
+          ._IS_uqi\\:ai_center {
             align-items: center;
       }
 
-          .jc_center {
+          ._syDQuH\\:jc_center {
             justify-content: center;
       }
 
-          .bd-be-w_var\\(--thickness\\) {
+          ._iDqfKY\\:bd-be-w_var\\(--thickness\\) {
             border-block-end-width: var(--thickness);
       }
 
-          .bd-e-w_var\\(--thickness\\) {
+          ._amUV18\\:bd-e-w_var\\(--thickness\\) {
             border-inline-end-width: var(--thickness);
       }
 
-          .d_inline-flex {
+          ._Fg8Gj5\\:d_inline-flex {
             display: inline-flex;
       }
 
-          .pos_absolute {
+          ._PHAS7x\\:pos_absolute {
             position: absolute;
       }
 
-          .inset-bs_0 {
+          ._7xURoC\\:inset-bs_0 {
             inset-block-start: 0;
       }
 
-          .inset-be_auto {
+          ._lFBHho\\:inset-be_auto {
             inset-block-end: auto;
       }
 
-          .inset-s_auto {
+          ._oCxt6h\\:inset-s_auto {
             inset-inline-start: auto;
       }
 
-          .inset-e_20 {
+          ._tikPb5\\:inset-e_20 {
             inset-inline-end: var(--spacing-20);
       }
 
-          .translate_50\\%_-50\\% {
+          ._nZtn2j\\:translate_50\\%_-50\\% {
             translate: 50% -50%;
       }
 
-          .inset-e_40 {
+          ._tikPb5\\:inset-e_40 {
             inset-inline-end: var(--spacing-40);
       }
 
-          .inset-e_60 {
+          ._tikPb5\\:inset-e_60 {
             inset-inline-end: var(--spacing-60);
       }
 
-          .inset-e_-20 {
+          ._tikPb5\\:inset-e_-20 {
             inset-inline-end: calc(var(--spacing-20) * -1);
       }
 
-          .inset-e_-40 {
+          ._tikPb5\\:inset-e_-40 {
             inset-inline-end: calc(var(--spacing-40) * -1);
       }
 
-          .inset-e_-60 {
+          ._tikPb5\\:inset-e_-60 {
             inset-inline-end: calc(var(--spacing-60) * -1);
       }
 
-          .inset-bs_20 {
+          ._7xURoC\\:inset-bs_20 {
             inset-block-start: var(--spacing-20);
       }
 
-          .inset-e_0 {
+          ._tikPb5\\:inset-e_0 {
             inset-inline-end: 0;
       }
 
-          .inset-bs_40 {
+          ._7xURoC\\:inset-bs_40 {
             inset-block-start: var(--spacing-40);
       }
 
-          .inset-bs_60 {
+          ._7xURoC\\:inset-bs_60 {
             inset-block-start: var(--spacing-60);
       }
 
-          .inset-bs_-20 {
+          ._7xURoC\\:inset-bs_-20 {
             inset-block-start: calc(var(--spacing-20) * -1);
       }
 
-          .inset-bs_-40 {
+          ._7xURoC\\:inset-bs_-40 {
             inset-block-start: calc(var(--spacing-40) * -1);
       }
 
-          .inset-bs_-60 {
+          ._7xURoC\\:inset-bs_-60 {
             inset-block-start: calc(var(--spacing-60) * -1);
       }
 
-          .inset-bs_auto {
+          ._7xURoC\\:inset-bs_auto {
             inset-block-start: auto;
       }
 
-          .inset-be_0 {
+          ._lFBHho\\:inset-be_0 {
             inset-block-end: 0;
       }
 
-          .translate_50\\%_50\\% {
+          ._nZtn2j\\:translate_50\\%_50\\% {
             translate: 50% 50%;
       }
 
-          .inset-s_0 {
+          ._oCxt6h\\:inset-s_0 {
             inset-inline-start: 0;
       }
 
-          .inset-e_auto {
+          ._tikPb5\\:inset-e_auto {
             inset-inline-end: auto;
       }
 
-          .translate_-50\\%_50\\% {
+          ._nZtn2j\\:translate_-50\\%_50\\% {
             translate: -50% 50%;
       }
 
-          .translate_-50\\%_-50\\% {
+          ._nZtn2j\\:translate_-50\\%_-50\\% {
             translate: -50% -50%;
       }
 
-          .inset-s_50\\% {
+          ._oCxt6h\\:inset-s_50\\% {
             inset-inline-start: 50%;
       }
 
-          .inset-e_50\\% {
+          ._tikPb5\\:inset-e_50\\% {
             inset-inline-end: 50%;
       }
 
-          .inset-bs_50\\% {
+          ._7xURoC\\:inset-bs_50\\% {
             inset-block-start: 50%;
       }
 
-          .inset-be_50\\% {
+          ._lFBHho\\:inset-be_50\\% {
             inset-block-end: 50%;
       }
         }
 
         @layer s010-c0-p4000 {
-          .w_sm {
+          ._RO16FJ\\:w_sm {
             width: sm;
       }
 
-          .h_sm {
+          ._97NnCm\\:h_sm {
             height: sm;
       }
 
-          .w_md {
+          ._RO16FJ\\:w_md {
             width: md;
       }
 
-          .h_md {
+          ._97NnCm\\:h_md {
             height: md;
       }
 
-          .w_lg {
+          ._RO16FJ\\:w_lg {
             width: lg;
       }
 
-          .h_lg {
+          ._97NnCm\\:h_lg {
             height: lg;
       }
 
-          .w_100\\% {
+          ._RO16FJ\\:w_100\\% {
             width: 100%;
       }
 
-          .h_100\\% {
+          ._97NnCm\\:h_100\\% {
             height: 100%;
       }
         }
 
         @layer s010-c1-p1000 {
-          .\\[\\&\\>\\*\\]\\:inset_0>* {
+          ._hmTE0v\\:\\[\\&\\>\\*\\]\\:inset_0>* {
             inset: 0;
       }
         }
 
         @layer s010-c1-p2000 {
-          .\\[\\&\\>\\*\\]\\:ov_hidden>* {
+          ._zrZbCi\\:\\[\\&\\>\\*\\]\\:ov_hidden>* {
             overflow: hidden;
       }
         }
 
         @layer s010-c1-p3000 {
-          .\\[\\&\\>\\*\\]\\:d_flex>* {
+          ._3fZ3gc\\:\\[\\&\\>\\*\\]\\:d_flex>* {
             display: flex;
       }
 
-          .\\[\\&\\>\\*\\]\\:jc_center>* {
+          .__FKBGf\\:\\[\\&\\>\\*\\]\\:jc_center>* {
             justify-content: center;
       }
 
-          .\\[\\&\\>\\*\\]\\:ai_center>* {
+          ._o2G1EI\\:\\[\\&\\>\\*\\]\\:ai_center>* {
             align-items: center;
       }
 
-          .\\[\\&\\>\\*\\]\\:pos_absolute>* {
+          ._SGTpQz\\:\\[\\&\\>\\*\\]\\:pos_absolute>* {
             position: absolute;
       }
         }
 
         @layer s010-c1-p4000 {
-          .\\[\\&\\>\\*\\]\\:w_100\\%>* {
+          ._EjoHtw\\:\\[\\&\\>\\*\\]\\:w_100\\%>* {
             width: 100%;
       }
 
-          .\\[\\&\\>\\*\\]\\:h_100\\%>* {
+          ._kZCYb_\\:\\[\\&\\>\\*\\]\\:h_100\\%>* {
             height: 100%;
       }
         }
 
         @layer s010-c4-p3000 {
           @media (width >= 48rem) {
-            .md\\:pos_relative {
+            ._q3xf4A\\:md\\:pos_relative {
               position: relative;
       }
       }
@@ -1216,7 +1216,7 @@ describe('static-css', () => {
 
         @layer s010-c5-p1000 {
           @media (width >= 48rem) {
-            .md\\:\\[\\&\\>\\*\\]\\:inset_0>* {
+            ._k-kWTu\\:md\\:\\[\\&\\>\\*\\]\\:inset_0>* {
               inset: 0;
       }
       }
@@ -1224,7 +1224,7 @@ describe('static-css', () => {
 
         @layer s010-c5-p2000 {
           @media (width >= 48rem) {
-            .md\\:\\[\\&\\>\\*\\]\\:ov_hidden>* {
+            ._p6WVVL\\:md\\:\\[\\&\\>\\*\\]\\:ov_hidden>* {
               overflow: hidden;
       }
       }
@@ -1232,16 +1232,16 @@ describe('static-css', () => {
 
         @layer s010-c5-p3000 {
           @media (width >= 48rem) {
-            .md\\:\\[\\&\\>\\*\\]\\:d_flex>* {
+            ._Dg_3Th\\:md\\:\\[\\&\\>\\*\\]\\:d_flex>* {
               display: flex;
       }
-            .md\\:\\[\\&\\>\\*\\]\\:jc_center>* {
+            ._hXSLRu\\:md\\:\\[\\&\\>\\*\\]\\:jc_center>* {
               justify-content: center;
       }
-            .md\\:\\[\\&\\>\\*\\]\\:ai_center>* {
+            ._Px00gC\\:md\\:\\[\\&\\>\\*\\]\\:ai_center>* {
               align-items: center;
       }
-            .md\\:\\[\\&\\>\\*\\]\\:pos_absolute>* {
+            ._WqiaCC\\:md\\:\\[\\&\\>\\*\\]\\:pos_absolute>* {
               position: absolute;
       }
       }
@@ -1249,48 +1249,48 @@ describe('static-css', () => {
 
         @layer s010-c5-p4000 {
           @media (width >= 48rem) {
-            .md\\:\\[\\&\\>\\*\\]\\:w_100\\%>* {
+            ._ua3rr9\\:md\\:\\[\\&\\>\\*\\]\\:w_100\\%>* {
               width: 100%;
       }
-            .md\\:\\[\\&\\>\\*\\]\\:h_100\\%>* {
+            ._EuT1Bs\\:md\\:\\[\\&\\>\\*\\]\\:h_100\\%>* {
               height: 100%;
       }
       }
         }
 
         @layer s011-c2-p3000 {
-          .before\\:content_\\"\\"::before {
+          ._vya0vI\\:before\\:content_\\"\\"::before {
             content: "";
       }
 
-          .before\\:d_block::before {
+          ._qGXZ6L\\:before\\:d_block::before {
             display: block;
       }
         }
 
         @layer s011-c3-p3000 {
 
-          .\\[\\&\\>img\\,_\\&\\>video\\]\\:obj-f_cover>img,.\\[\\&\\>img\\,_\\&\\>video\\]\\:obj-f_cover>video {
+          ._nwhM1X\\:\\[\\&\\>img\\,_\\&\\>video\\]\\:obj-f_cover>img,._nwhM1X\\:\\[\\&\\>img\\,_\\&\\>video\\]\\:obj-f_cover>video {
             object-fit: cover;
       }
         }
 
         @layer s011-c2-p4000 {
-          .before\\:h_0::before {
+          ._LlFmNu\\:before\\:h_0::before {
             height: 0;
       }
 
-          .before\\:pb_NaN\\%::before {
+          ._XLvIYN\\:before\\:pb_NaN\\%::before {
             padding-bottom: NaN%;
       }
         }
 
         @layer s011-c6-p3000 {
           @media (width >= 48rem) {
-            .md\\:before\\:content_\\"\\"::before {
+            ._hSnCzV\\:md\\:before\\:content_\\"\\"::before {
               content: "";
       }
-            .md\\:before\\:d_block::before {
+            ._vusJpS\\:md\\:before\\:d_block::before {
               display: block;
       }
       }
@@ -1298,7 +1298,7 @@ describe('static-css', () => {
 
         @layer s011-c7-p3000 {
           @media (width >= 48rem) {
-            .md\\:\\[\\&\\>img\\,_\\&\\>video\\]\\:obj-f_cover>img,.md\\:\\[\\&\\>img\\,_\\&\\>video\\]\\:obj-f_cover>video {
+            ._UcZw4h\\:md\\:\\[\\&\\>img\\,_\\&\\>video\\]\\:obj-f_cover>img,._UcZw4h\\:md\\:\\[\\&\\>img\\,_\\&\\>video\\]\\:obj-f_cover>video {
               object-fit: cover;
       }
       }
@@ -1306,10 +1306,10 @@ describe('static-css', () => {
 
         @layer s011-c6-p4000 {
           @media (width >= 48rem) {
-            .md\\:before\\:h_0::before {
+            ._OEc4P_\\:md\\:before\\:h_0::before {
               height: 0;
       }
-            .md\\:before\\:pb_NaN\\%::before {
+            ._h64Bfy\\:md\\:before\\:pb_NaN\\%::before {
               padding-bottom: NaN%;
       }
       }
@@ -2062,7 +2062,7 @@ describe('static-css', () => {
         @layer s010-c0-p3000;
 
         @layer s010-c0-p3000 {
-          .c_ButtonHighlight {
+          ._Btm_AK\\:c_ButtonHighlight {
             color: ButtonHighlight;
       }
         }
@@ -2237,20 +2237,20 @@ describe('static-css', () => {
         @layer s010-c0-p3000, s020-c1-p3000, s030-c2-p3000;
 
         @layer s010-c0-p3000 {
-          .fs_3px {
+          ._Ocpc8R\\:fs_3px {
             font-size: 3px;
       }
         }
 
         @layer s020-c1-p3000 {
-          .hover\\:fs_4px:is(:hover, [data-hover]) {
+          ._4TVktq\\:hover\\:fs_4px:is(:hover, [data-hover]) {
             font-size: 4px;
       }
         }
 
         @layer s030-c2-p3000 {
 
-          [data-theme=dark] .hover\\:dark\\:fs_5px:is(:hover, [data-hover]),.dark .hover\\:dark\\:fs_5px:is(:hover, [data-hover]),.hover\\:dark\\:fs_5px:is(:hover, [data-hover]).dark,.hover\\:dark\\:fs_5px:is(:hover, [data-hover])[data-theme=dark] {
+          [data-theme=dark] ._r4zVNZ\\:hover\\:dark\\:fs_5px:is(:hover, [data-hover]),.dark ._r4zVNZ\\:hover\\:dark\\:fs_5px:is(:hover, [data-hover]),._r4zVNZ\\:hover\\:dark\\:fs_5px:is(:hover, [data-hover]).dark,._r4zVNZ\\:hover\\:dark\\:fs_5px:is(:hover, [data-hover])[data-theme=dark] {
             font-size: 5px;
       }
         }
@@ -2319,84 +2319,84 @@ describe('static-css', () => {
         @layer s010-c0-p3000, s010-c1-p3000, s010-c2-p3000;
 
         @layer s010-c0-p3000 {
-          .fs_7xl {
+          ._Ocpc8R\\:fs_7xl {
             font-size: var(--font-sizes-7xl);
       }
 
-          .fs_8xl {
+          ._Ocpc8R\\:fs_8xl {
             font-size: var(--font-sizes-8xl);
       }
 
-          .fw_thin {
+          ._0vvNua\\:fw_thin {
             font-weight: var(--font-weights-thin);
       }
 
-          .fw_extralight {
+          ._0vvNua\\:fw_extralight {
             font-weight: var(--font-weights-extralight);
       }
 
-          .fw_light {
+          ._0vvNua\\:fw_light {
             font-weight: var(--font-weights-light);
       }
 
-          .fw_normal {
+          ._0vvNua\\:fw_normal {
             font-weight: var(--font-weights-normal);
       }
 
-          .fw_medium {
+          ._0vvNua\\:fw_medium {
             font-weight: var(--font-weights-medium);
       }
 
-          .fw_semibold {
+          ._0vvNua\\:fw_semibold {
             font-weight: var(--font-weights-semibold);
       }
 
-          .fw_bold {
+          ._0vvNua\\:fw_bold {
             font-weight: var(--font-weights-bold);
       }
 
-          .fw_extrabold {
+          ._0vvNua\\:fw_extrabold {
             font-weight: var(--font-weights-extrabold);
       }
 
-          .fw_black {
+          ._0vvNua\\:fw_black {
             font-weight: var(--font-weights-black);
       }
         }
 
         @layer s010-c1-p3000 {
           @container pb (inline-size >= 24rem) {
-            .\\@pb\\/sm\\:fs_7xl {
+            ._4XMPHy\\:\\@pb\\/sm\\:fs_7xl {
               font-size: var(--font-sizes-7xl);
       }
-            .\\@pb\\/sm\\:fs_8xl {
+            ._4XMPHy\\:\\@pb\\/sm\\:fs_8xl {
               font-size: var(--font-sizes-8xl);
       }
-            .\\@pb\\/sm\\:fw_thin {
+            ._CTn_Dx\\:\\@pb\\/sm\\:fw_thin {
               font-weight: var(--font-weights-thin);
       }
-            .\\@pb\\/sm\\:fw_extralight {
+            ._CTn_Dx\\:\\@pb\\/sm\\:fw_extralight {
               font-weight: var(--font-weights-extralight);
       }
-            .\\@pb\\/sm\\:fw_light {
+            ._CTn_Dx\\:\\@pb\\/sm\\:fw_light {
               font-weight: var(--font-weights-light);
       }
-            .\\@pb\\/sm\\:fw_normal {
+            ._CTn_Dx\\:\\@pb\\/sm\\:fw_normal {
               font-weight: var(--font-weights-normal);
       }
-            .\\@pb\\/sm\\:fw_medium {
+            ._CTn_Dx\\:\\@pb\\/sm\\:fw_medium {
               font-weight: var(--font-weights-medium);
       }
-            .\\@pb\\/sm\\:fw_semibold {
+            ._CTn_Dx\\:\\@pb\\/sm\\:fw_semibold {
               font-weight: var(--font-weights-semibold);
       }
-            .\\@pb\\/sm\\:fw_bold {
+            ._CTn_Dx\\:\\@pb\\/sm\\:fw_bold {
               font-weight: var(--font-weights-bold);
       }
-            .\\@pb\\/sm\\:fw_extrabold {
+            ._CTn_Dx\\:\\@pb\\/sm\\:fw_extrabold {
               font-weight: var(--font-weights-extrabold);
       }
-            .\\@pb\\/sm\\:fw_black {
+            ._CTn_Dx\\:\\@pb\\/sm\\:fw_black {
               font-weight: var(--font-weights-black);
       }
       }
@@ -2404,37 +2404,37 @@ describe('static-css', () => {
 
         @layer s010-c2-p3000 {
           @container pb (inline-size >= 28rem) {
-            .\\@pb\\/md\\:fs_7xl {
+            ._WFkQvz\\:\\@pb\\/md\\:fs_7xl {
               font-size: var(--font-sizes-7xl);
       }
-            .\\@pb\\/md\\:fs_8xl {
+            ._WFkQvz\\:\\@pb\\/md\\:fs_8xl {
               font-size: var(--font-sizes-8xl);
       }
-            .\\@pb\\/md\\:fw_thin {
+            ._eQsZkm\\:\\@pb\\/md\\:fw_thin {
               font-weight: var(--font-weights-thin);
       }
-            .\\@pb\\/md\\:fw_extralight {
+            ._eQsZkm\\:\\@pb\\/md\\:fw_extralight {
               font-weight: var(--font-weights-extralight);
       }
-            .\\@pb\\/md\\:fw_light {
+            ._eQsZkm\\:\\@pb\\/md\\:fw_light {
               font-weight: var(--font-weights-light);
       }
-            .\\@pb\\/md\\:fw_normal {
+            ._eQsZkm\\:\\@pb\\/md\\:fw_normal {
               font-weight: var(--font-weights-normal);
       }
-            .\\@pb\\/md\\:fw_medium {
+            ._eQsZkm\\:\\@pb\\/md\\:fw_medium {
               font-weight: var(--font-weights-medium);
       }
-            .\\@pb\\/md\\:fw_semibold {
+            ._eQsZkm\\:\\@pb\\/md\\:fw_semibold {
               font-weight: var(--font-weights-semibold);
       }
-            .\\@pb\\/md\\:fw_bold {
+            ._eQsZkm\\:\\@pb\\/md\\:fw_bold {
               font-weight: var(--font-weights-bold);
       }
-            .\\@pb\\/md\\:fw_extrabold {
+            ._eQsZkm\\:\\@pb\\/md\\:fw_extrabold {
               font-weight: var(--font-weights-extrabold);
       }
-            .\\@pb\\/md\\:fw_black {
+            ._eQsZkm\\:\\@pb\\/md\\:fw_black {
               font-weight: var(--font-weights-black);
       }
       }
@@ -2460,32 +2460,32 @@ describe('static-css', () => {
         @layer s010-c0-p3000, s010-c2-p3000, s020-c1-p3000;
 
         @layer s010-c0-p3000 {
-          .fs_7xl {
+          ._Ocpc8R\\:fs_7xl {
             font-size: var(--font-sizes-7xl);
       }
 
-          .fs_8xl {
+          ._Ocpc8R\\:fs_8xl {
             font-size: var(--font-sizes-8xl);
       }
         }
 
         @layer s010-c2-p3000 {
           @media (min-width: 24rem) {
-            .\\[\\@media_\\(min-width\\:_24rem\\)\\]\\:fs_7xl {
+            ._Q5Xn0-\\:\\[\\@media_\\(min-width\\:_24rem\\)\\]\\:fs_7xl {
               font-size: var(--font-sizes-7xl);
       }
-            .\\[\\@media_\\(min-width\\:_24rem\\)\\]\\:fs_8xl {
+            ._Q5Xn0-\\:\\[\\@media_\\(min-width\\:_24rem\\)\\]\\:fs_8xl {
               font-size: var(--font-sizes-8xl);
       }
       }
         }
 
         @layer s020-c1-p3000 {
-          .mobile .\\[\\.mobile_\\&\\]\\:fs_7xl {
+          .mobile ._Z0R2SH\\:\\[\\.mobile_\\&\\]\\:fs_7xl {
             font-size: var(--font-sizes-7xl);
       }
 
-          .mobile .\\[\\.mobile_\\&\\]\\:fs_8xl {
+          .mobile ._Z0R2SH\\:\\[\\.mobile_\\&\\]\\:fs_8xl {
             font-size: var(--font-sizes-8xl);
       }
         }

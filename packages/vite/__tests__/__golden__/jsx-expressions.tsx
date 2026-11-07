@@ -1,7 +1,7 @@
 import { css } from 'styled-system/css'
 
 export const Button = () => (
-  <button className={"px_4 py_2"}>
-    <span className={"fw_bold"}>Hello</span>
+  <button className={"_pPyFaQ:px_4 _gCInGu:py_2"}>
+    <span className={"_0vvNua:fw_bold"}>Hello</span>
   </button>
 )

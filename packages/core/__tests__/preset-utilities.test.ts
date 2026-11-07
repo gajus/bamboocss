@@ -1,4 +1,4 @@
-import { createRuleProcessor } from '@bamboocss/fixture'
+import { createRuleProcessor, withoutMergeCodes } from '@bamboocss/fixture'
 import { describe, expect, test } from 'vitest'
 
 /**
@@ -14,7 +14,7 @@ import { describe, expect, test } from 'vitest'
  */
 type Styles = Parameters<ReturnType<typeof createRuleProcessor>['css']>[0]
 
-const css = (styles: Styles) => createRuleProcessor().css(styles).toCss().replace(/\s+/g, ' ').trim()
+const css = (styles: Styles) => withoutMergeCodes(createRuleProcessor().css(styles).toCss()).replace(/\s+/g, ' ').trim()
 
 /** The value a declaration was given, with whitespace normalized. */
 const value = (styles: Styles, property: string) =>

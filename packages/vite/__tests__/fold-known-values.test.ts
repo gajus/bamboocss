@@ -1,3 +1,4 @@
+import { withoutMergeCodes } from '@bamboocss/fixture'
 import { describe, expect, test } from 'vitest'
 import { createFoldFixture } from './fixture'
 
@@ -17,9 +18,9 @@ const foldOf = (code: string, files?: Record<string, string>) => {
   if (files) fixture.addFiles(files)
   const result = fixture.fold(code)
   return {
-    classes: result.folded.map((entry) => entry.className),
+    classes: result.folded.map((entry) => withoutMergeCodes(entry.className)),
     skipped: result.skipped.map((entry) => entry.reason),
-    css: fixture.getCss(),
+    css: withoutMergeCodes(fixture.getCss()),
   }
 }
 

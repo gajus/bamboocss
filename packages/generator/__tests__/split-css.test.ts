@@ -1,4 +1,4 @@
-import { fixtureDefaults } from '@bamboocss/fixture'
+import { fixtureDefaults, withoutMergeCodes } from '@bamboocss/fixture'
 import type { LoadConfigResult, StaticCssOptions } from '@bamboocss/types'
 import { describe, expect, test } from 'vitest'
 import { Generator } from '../src'
@@ -26,7 +26,7 @@ describe('split CSS generation', () => {
     const { sheet, artifacts } = createSplitCssContext({ recipes: '*' })
     const utilities = artifacts.layers.find((artifact) => artifact.name === 'utilities')
 
-    expect(utilities?.code).toContain('.d_flex')
+    expect(withoutMergeCodes(utilities?.code)).toContain('.d_flex')
     expect(sheet.getLayerCss('recipes').trim()).toBe('')
   })
 

@@ -1,4 +1,4 @@
-import { createContext, createRuleProcessor } from '@bamboocss/fixture'
+import { createContext, createRuleProcessor, withoutMergeCodes } from '@bamboocss/fixture'
 import { describe, expect, test } from 'vitest'
 
 /**
@@ -56,7 +56,7 @@ describe('one spelling per value', () => {
     ctx.parseFiles()
     const sheet = ctx.createSheet()
     ctx.appendParserCss(sheet)
-    const css = ctx.getCss(sheet) as string
+    const css = withoutMergeCodes(ctx.getCss(sheet) as string)
 
     // One rule for white, and it keeps the position its declaring files agree on: both write
     // it before `#6b7280`, so the base still precedes the variant that overrides it.
@@ -100,7 +100,7 @@ describe('a value read back from its atom', () => {
     const ctx = createContext() as any
     ctx.encoder.processAtomic({ content: value, width: value })
     ctx.decoder.collect(ctx.encoder)
-    const names = [...ctx.decoder.atomic].map((result: any) => result.className)
+    const names = [...ctx.decoder.atomic].map((result: any) => withoutMergeCodes(result.className))
 
     expect(names).toEqual(['content_', 'w_'])
   })

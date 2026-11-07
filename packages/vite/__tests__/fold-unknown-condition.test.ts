@@ -1,3 +1,4 @@
+import { withoutMergeCodes } from '@bamboocss/fixture'
 import { createCss } from '@bamboocss/shared'
 import { describe, expect, test } from 'vitest'
 import { createCssContext } from '../src/runtime-css'
@@ -37,9 +38,9 @@ describe('why it is an error', () => {
     fold(withImport(`export const A = css({ _hovr: { color: 'red.300' } })`))
     const named = createCss(createCssContext(ctx))({ _hovr: { color: 'red.300' } })
 
-    expect(named).toBe('_hovr:c_red.300')
+    expect(withoutMergeCodes(named)).toBe('_hovr:c_red.300')
     expect(getCss()).not.toContain(selectorsFor(named)[0])
-    expect(getCss()).toContain('.c_red\\.300')
+    expect(withoutMergeCodes(getCss())).toContain('.c_red\\.300')
   })
 })
 

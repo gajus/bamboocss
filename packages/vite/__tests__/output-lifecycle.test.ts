@@ -1,3 +1,4 @@
+import { withoutMergeCodes } from '@bamboocss/fixture'
 import {
   existsSync,
   mkdirSync,
@@ -349,7 +350,7 @@ describe('a watch round with a sibling replacing its output', () => {
       imports: 'sheet',
       between: () => run.round(ssr, [{ id: serverId, code: source(false, widths.kept, widths.both) }]),
     })
-    expect(run.sheets('client')).toContain('.w_\\[81\\.2px\\]')
+    expect(withoutMergeCodes(run.sheets('client'))).toContain('.w_\\[81\\.2px\\]')
   })
 
   /**
@@ -375,10 +376,10 @@ describe('a watch round with a sibling replacing its output', () => {
       'a later plugin rejected the client output',
     )
     await finishSsr()
-    expect(run.sheets('client')).toContain('.w_\\[82\\.2px\\]')
+    expect(withoutMergeCodes(run.sheets('client'))).toContain('.w_\\[82\\.2px\\]')
 
     await run.round(ssr, [{ id: serverId, code: source(false, widths.kept, widths.fresh, widths.later) }])
-    expect(run.sheets('client')).toContain('.w_\\[82\\.4px\\]')
+    expect(withoutMergeCodes(run.sheets('client'))).toContain('.w_\\[82\\.4px\\]')
   })
 
   /**
@@ -442,7 +443,7 @@ describe('a watch round with a sibling replacing its output', () => {
     })
     await run.round(client, clientModules(widths.kept), { imports: 'sheet' })
     await finishSsr()
-    expect(run.sheets('client')).toContain('.w_\\[84\\.2px\\]')
+    expect(withoutMergeCodes(run.sheets('client'))).toContain('.w_\\[84\\.2px\\]')
   })
 
   /**
@@ -470,7 +471,7 @@ describe('a watch round with a sibling replacing its output', () => {
     await run.round(ssr, [{ id: serverId, code: source(false, widths.kept, widths.added) }])
     await expect(finishStaleClient()).rejects.toThrow('NOT extracted')
     await run.round(client, clientModules, { imports: 'sheet' })
-    expect(run.sheets('client')).toContain('.w_\\[88\\.2px\\]')
+    expect(withoutMergeCodes(run.sheets('client'))).toContain('.w_\\[88\\.2px\\]')
   })
 
   /**
@@ -495,7 +496,7 @@ describe('a watch round with a sibling replacing its output', () => {
     const finishClient = await run.start(client, clientModules, { imports: 'sheet' })
     await run.round(ssr, [{ id: serverId, code: source(false, widths.kept, widths.added) }])
     await finishClient()
-    expect(run.sheets('client')).toContain('.w_\\[93\\.2px\\]')
+    expect(withoutMergeCodes(run.sheets('client'))).toContain('.w_\\[93\\.2px\\]')
   })
 
   /**
@@ -547,7 +548,7 @@ describe('a watch round with a sibling replacing its output', () => {
     await run.round(ssr, [{ id: serverId, code: source(false, widths.kept, widths.later) }], {
       between: () => run.round(edge, [{ id: edgeId, code: source(false, widths.edgeOnly) }]),
     })
-    expect(run.sheets('client')).toContain('.w_\\[92\\.2px\\]')
+    expect(withoutMergeCodes(run.sheets('client'))).toContain('.w_\\[92\\.2px\\]')
   })
 
   /**
@@ -579,7 +580,7 @@ describe('a watch round with a sibling replacing its output', () => {
     await finishClient()
     const linked = readFileSync(join(cwd, 'out-client/entry-2.js'), 'utf8').match(/assets\/[\w.-]+\.css/)![0]
     expect(existsSync(join(cwd, 'out-client', linked)), `the client links ${linked}, which is not there`).toBe(true)
-    expect(readFileSync(join(cwd, 'out-client', linked), 'utf8')).toContain('.w_\\[89\\.2px\\]')
+    expect(withoutMergeCodes(readFileSync(join(cwd, 'out-client', linked), 'utf8'))).toContain('.w_\\[89\\.2px\\]')
   })
 
   /**
@@ -604,7 +605,7 @@ describe('a watch round with a sibling replacing its output', () => {
     const bundle = await run.round(client, app, { imports: 'url', between: finishSsr })
     const sheet = Object.values(bundle).find((output) => output.type === 'asset')!.fileName as string
     expect(bundle['entry.js']!.code).toContain(`/${sheet}`)
-    expect(readFileSync(join(cwd, 'out-client', sheet), 'utf8')).toContain('.w_\\[90\\.2px\\]')
+    expect(withoutMergeCodes(readFileSync(join(cwd, 'out-client', sheet), 'utf8'))).toContain('.w_\\[90\\.2px\\]')
   })
 
   /**
@@ -656,8 +657,8 @@ describe('a watch round with a sibling replacing its output', () => {
 
     await run.round(ssr, [{ id: serverId, code: source(false, widths.kept, widths.later) }])
     await run.round(edge, [{ id: edgeId, code: source(false, widths.edgeOnly) }])
-    expect(run.sheets('client')).toContain('.w_\\[94\\.2px\\]')
-    expect(run.sheets('client')).toContain('.w_\\[94\\.3px\\]')
+    expect(withoutMergeCodes(run.sheets('client'))).toContain('.w_\\[94\\.2px\\]')
+    expect(withoutMergeCodes(run.sheets('client'))).toContain('.w_\\[94\\.3px\\]')
   })
 
   /** A sheet written again with the same bytes after it was recorded is the same sheet, pruned again. */
@@ -680,7 +681,7 @@ describe('a watch round with a sibling replacing its output', () => {
     const assets = join(cwd, 'out-client/assets')
     for (const file of readdirSync(assets)) writeFileSync(join(assets, file), readFileSync(join(assets, file)))
     await finishSsr()
-    expect(run.sheets('client')).toContain('.w_\\[95\\.2px\\]')
+    expect(withoutMergeCodes(run.sheets('client'))).toContain('.w_\\[95\\.2px\\]')
   })
 })
 

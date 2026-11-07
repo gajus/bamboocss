@@ -158,49 +158,49 @@ describe('{fn}.raw', () => {
         @layer s010-c0-p1000, s010-c0-p2000, s010-c0-p3000, s010-c0-p4000;
 
         @layer s010-c0-p1000 {
-          .bg_red\\.400 {
+          ._w1ddk4\\:bg_red\\.400 {
             background: var(--colors-red-400);
       }
         }
 
         @layer s010-c0-p2000 {
-          .mx_3 {
+          ._0QmaUN\\:mx_3 {
             margin-inline: var(--spacing-3);
       }
 
-          .mx_10 {
+          ._0QmaUN\\:mx_10 {
             margin-inline: var(--spacing-10);
       }
         }
 
         @layer s010-c0-p3000 {
-          .c_amber\\.100 {
+          ._Btm_AK\\:c_amber\\.100 {
             color: var(--colors-amber-100);
       }
 
-          .c_blue\\.950 {
+          ._Btm_AK\\:c_blue\\.950 {
             color: var(--colors-blue-950);
       }
 
-          .d_flex {
+          ._Fg8Gj5\\:d_flex {
             display: flex;
       }
 
-          .flex-d_column {
+          ._AoNTSX\\:flex-d_column {
             flex-direction: column;
       }
 
-          .flex-d_row {
+          ._AoNTSX\\:flex-d_row {
             flex-direction: row;
       }
         }
 
         @layer s010-c0-p4000 {
-          .pt_4 {
+          ._8vGfGg\\:pt_4 {
             padding-top: var(--spacing-4);
       }
 
-          .pt_6 {
+          ._8vGfGg\\:pt_6 {
             padding-top: var(--spacing-6);
       }
         }

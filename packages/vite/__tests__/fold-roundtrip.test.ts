@@ -1,3 +1,4 @@
+import { withoutMergeCodes } from '@bamboocss/fixture'
 import { describe, expect, test } from 'vitest'
 import { createFoldFixture, selectorsFor } from './fixture'
 
@@ -94,7 +95,7 @@ describe('a shorthand and its longhand in one call', () => {
     `)
 
     expect(result.folded).toHaveLength(1)
-    expect(result.folded[0]!.className).toBe('bg_red.300!')
+    expect(withoutMergeCodes(result.folded[0]!.className)).toBe('bg_red.300!')
     expect(getCss()).toContain('background: var(--colors-red-300) !important')
   })
 })

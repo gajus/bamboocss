@@ -66,7 +66,7 @@ describe('compositions', () => {
     expect(css({ mixin: 'headline.h1' })).toMatchInlineSnapshot(`
       "@layer utilities {
         @layer compositions {
-          .mixin_headline\\.h1 {
+          ._p2474p\\:mixin_headline\\.h1 {
             font-size: 2rem;
             font-weight: var(--font-weights-bold);
       }
@@ -77,13 +77,13 @@ describe('compositions', () => {
     expect(css({ mixin: 'headline.h2' })).toMatchInlineSnapshot(`
       "@layer utilities {
         @layer compositions {
-          .mixin_headline\\.h2 {
+          ._p2474p\\:mixin_headline\\.h2 {
             font-size: 1.5rem;
             font-weight: var(--font-weights-bold);
       }
 
           @media (width >= 64rem) {
-            .mixin_headline\\.h2 {
+            ._p2474p\\:mixin_headline\\.h2 {
               font-size: 2rem;
       }
       }
@@ -96,7 +96,7 @@ describe('compositions', () => {
     expect(css({ mixin: 'headline' })).toMatchInlineSnapshot(`
       "@layer utilities {
         @layer compositions {
-          .mixin_headline {
+          ._p2474p\\:mixin_headline {
             font-size: 1.5rem;
             font-weight: var(--font-weights-bold);
       }
@@ -109,7 +109,7 @@ describe('compositions', () => {
     expect(css({ mixin: 'scale-fade-in' })).toMatchInlineSnapshot(`
       "@layer utilities {
         @layer compositions {
-          .mixin_scale-fade-in {
+          ._p2474p\\:mixin_scale-fade-in {
             transform-origin: var(--transform-origin);
             animation-name: scale-in, fade-in;
       }

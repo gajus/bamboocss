@@ -1,3 +1,4 @@
+import { withoutMergeCodes } from '@bamboocss/fixture'
 import { describe, expect, test } from 'vitest'
 import { createFoldFixture } from './fixture'
 
@@ -123,7 +124,7 @@ describe('callee spellings that should still fold', () => {
   // these are the forms that walk differently.
   test('an optional-chained css call folds', () => {
     const result = expectFolded(withImport(`export const s = css?.({ color: 'red.300' })`))
-    expect(result.code).toContain('"c_red.300"')
+    expect(withoutMergeCodes(result.code)).toContain('"c_red.300"')
   })
 
   test('a namespace import member call folds', () => {
@@ -133,26 +134,26 @@ describe('callee spellings that should still fold', () => {
     )
 
     expect(result.folded).toHaveLength(1)
-    expect(result.code).toContain('"c_red.300"')
+    expect(withoutMergeCodes(result.code)).toContain('"c_red.300"')
   })
 
   test('a static template literal value folds', () => {
     const result = expectFolded(withImport('export const s = css({ color: `red.300` })'))
-    expect(result.code).toContain('"c_red.300"')
+    expect(withoutMergeCodes(result.code)).toContain('"c_red.300"')
   })
 
   test('a satisfies-annotated argument folds', () => {
     const result = expectFolded(
       withImport(`export const s = css({ color: 'red.300' } satisfies Record<string, string>)`),
     )
-    expect(result.code).toContain('"c_red.300"')
+    expect(withoutMergeCodes(result.code)).toContain('"c_red.300"')
   })
 
   test('an unknown utility property folds to its fallback class name', () => {
     // Matches upstream `rewrites_unknown_utility_property_using_fallback_class_name`:
     // an unconfigured property still hyphenates into a class rather than bailing.
     const result = expectFolded(withImport(`export const s = css({ someUnknownProp: 'value' })`))
-    expect(result.code).toContain('"some-unknown-prop_value"')
+    expect(withoutMergeCodes(result.code)).toContain('"some-unknown-prop_value"')
   })
 })
 
@@ -247,14 +248,14 @@ describe('destructuring defaults', () => {
    */
   test('a call written inside a default still folds', () => {
     const result = expectFolded(withImport(`export const K = ({ cls = css({ color: 'red.300' }) }) => cls`))
-    expect(result.code).toContain('"c_red.300"')
+    expect(withoutMergeCodes(result.code)).toContain('"c_red.300"')
   })
 
   test('a call inside a local destructure default still folds', () => {
     const result = expectFolded(
       withImport(`const o = {}\nconst { cls = css({ color: 'red.300' }) } = o\nexport const M = cls`),
     )
-    expect(result.code).toContain('"c_red.300"')
+    expect(withoutMergeCodes(result.code)).toContain('"c_red.300"')
   })
 
   test('a call inside a default arrow still folds', () => {
@@ -280,7 +281,7 @@ describe('destructuring defaults', () => {
     const result = expectFolded(
       withImport(`const source = { tone: 'blue.500' }\nconst { tone } = source\nexport const F = css({ color: tone })`),
     )
-    expect(result.folded[0]!.className).toBe('c_blue.500')
+    expect(withoutMergeCodes(result.folded[0]!.className)).toBe('c_blue.500')
   })
 
   // Nothing about a defaulted destructure elsewhere in the module may reach an unrelated call.
@@ -288,7 +289,7 @@ describe('destructuring defaults', () => {
     const result = expectFolded(
       withImport(`export const P = ({ tone = 'red.300' }) => tone\nexport const Q = css({ color: 'blue.500' })`),
     )
-    expect(result.code).toContain('"c_blue.500"')
+    expect(withoutMergeCodes(result.code)).toContain('"c_blue.500"')
   })
 })
 
@@ -392,7 +393,7 @@ describe('code the evaluator can follow beside it', () => {
         `const tone = (t) => { if (!t) throw new Error('tone')\nreturn { color: t } }\nexport const A = css(tone('red.300'))`,
       ),
     )
-    expect(result.code).toContain('"c_red.300"')
+    expect(withoutMergeCodes(result.code)).toContain('"c_red.300"')
   })
 
   test('a guard that throws when it is reached declines', () => {
@@ -409,12 +410,12 @@ describe('code the evaluator can follow beside it', () => {
         `const tone = (t: string) => { type Tone = string; function pick(value: Tone) { return value };\nreturn { color: pick(t) } }\nexport const A = css(tone('red.300'))`,
       ),
     )
-    expect(result.code).toContain('"c_red.300"')
+    expect(withoutMergeCodes(result.code)).toContain('"c_red.300"')
   })
 
   test('a let nothing reassigns', () => {
     const result = expectFolded(withImport(`let tone = 'red.300'\nexport const A = css({ color: tone })`))
-    expect(result.code).toContain('"c_red.300"')
+    expect(withoutMergeCodes(result.code)).toContain('"c_red.300"')
   })
 
   test('a binding only read, including by methods that leave it alone', () => {

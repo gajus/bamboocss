@@ -16,13 +16,15 @@ const css = createCss({
     // `withoutSpace` included because the generated `transform` applies it, and leaving it
     // out here would have this fixture disagree with every real runtime.
     transform: (prop, value) => ({ className: `${prop}_${withoutSpace(value)}` }),
-    toHash: (path) => path.join(':'),
   },
   conditions: { shift: (v) => v, finalize: (v) => v },
 })
 
-/** What the fold resolves at build time: the class for a value that survives untouched. */
-const PREFIX = 'color_'
+/**
+ * What a caller resolves once: everything of the class but the value — the merge code for the
+ * property and conditions, and the utility's class prefix — read off `css()` itself.
+ */
+const PREFIX = css({ color: 'x' }).slice(0, -1)
 const viaLeaf = (value: unknown) => leafClass(PREFIX, value)
 const viaCss = (value: unknown) => css({ color: value })
 
@@ -107,7 +109,7 @@ describe('leafClass', () => {
 
   describe('the fast path is only taken where it changes nothing', () => {
     test('a value with no whitespace and no bang concatenates', () => {
-      expect(viaLeaf('red.300')).toBe('color_red.300')
+      expect(viaLeaf('red.300')).toBe(`${PREFIX}red.300`)
     })
 
     test('every character `\\s` matches routes to the slow path', () => {
@@ -120,9 +122,9 @@ describe('leafClass', () => {
     })
 
     test('an underscore or a backslash routes to the slow path, where the name spells it', () => {
-      expect(viaLeaf('a_b')).toBe('color_a\\_b')
-      expect(viaLeaf('a\\_b')).toBe('color_a\\\\\\_b')
-      expect(viaLeaf('a\\.b')).toBe('color_a\\.b')
+      expect(viaLeaf('a_b')).toBe(`${PREFIX}a\\_b`)
+      expect(viaLeaf('a\\_b')).toBe(`${PREFIX}a\\\\\\_b`)
+      expect(viaLeaf('a\\.b')).toBe(`${PREFIX}a\\.b`)
     })
   })
 })

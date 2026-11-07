@@ -43,13 +43,13 @@ describe('color-mix', () => {
     expect(css({ bg: 'red/30' })).toMatchInlineSnapshot(`
       {
         "className": [
-          "bg_red\\/30",
+          "_w1ddk4\\:bg_red\\/30",
         ],
         "css": "@layer utilities {
         @layer s010-c0-p1000;
 
         @layer s010-c0-p1000 {
-          .bg_red\\/30 {
+          ._w1ddk4\\:bg_red\\/30 {
             background: color-mix(in srgb, red 30%, transparent);
       }
         }
@@ -62,13 +62,13 @@ describe('color-mix', () => {
     expect(css({ bg: 'red/30' })).toMatchInlineSnapshot(`
       {
         "className": [
-          "bg_red\\/30",
+          "_w1ddk4\\:bg_red\\/30",
         ],
         "css": "@layer utilities {
         @layer s010-c0-p1000;
 
         @layer s010-c0-p1000 {
-          .bg_red\\/30 {
+          ._w1ddk4\\:bg_red\\/30 {
             background: color-mix(in srgb, red 30%, transparent);
       }
         }
@@ -81,13 +81,13 @@ describe('color-mix', () => {
     expect(css({ bg: 'red.300/30' })).toMatchInlineSnapshot(`
       {
         "className": [
-          "bg_red\\.300\\/30",
+          "_w1ddk4\\:bg_red\\.300\\/30",
         ],
         "css": "@layer utilities {
         @layer s010-c0-p1000;
 
         @layer s010-c0-p1000 {
-          .bg_red\\.300\\/30 {
+          ._w1ddk4\\:bg_red\\.300\\/30 {
             background: color-mix(in srgb, var(--colors-red-300) 30%, transparent);
       }
         }
@@ -100,13 +100,13 @@ describe('color-mix', () => {
     expect(css({ bg: 'red/0.33' })).toMatchInlineSnapshot(`
       {
         "className": [
-          "bg_red\\/0\\.33",
+          "_w1ddk4\\:bg_red\\/0\\.33",
         ],
         "css": "@layer utilities {
         @layer s010-c0-p1000;
 
         @layer s010-c0-p1000 {
-          .bg_red\\/0\\.33 {
+          ._w1ddk4\\:bg_red\\/0\\.33 {
             background: color-mix(in srgb, red 0.33%, transparent);
       }
         }
@@ -119,13 +119,13 @@ describe('color-mix', () => {
     expect(css({ bg: 'red/33' })).toMatchInlineSnapshot(`
       {
         "className": [
-          "bg_red\\/33",
+          "_w1ddk4\\:bg_red\\/33",
         ],
         "css": "@layer utilities {
         @layer s010-c0-p1000;
 
         @layer s010-c0-p1000 {
-          .bg_red\\/33 {
+          ._w1ddk4\\:bg_red\\/33 {
             background: color-mix(in srgb, red 33%, transparent);
       }
         }
@@ -138,13 +138,13 @@ describe('color-mix', () => {
     expect(css({ gradientFrom: 'red/33' })).toMatchInlineSnapshot(`
       {
         "className": [
-          "from_red\\/33",
+          "_dkehTS\\:from_red\\/33",
         ],
         "css": "@layer utilities {
         @layer s010-c0-p3000;
 
         @layer s010-c0-p3000 {
-          .from_red\\/33 {
+          ._dkehTS\\:from_red\\/33 {
             --gradient-from: color-mix(in srgb, red 33%, transparent);
       }
         }
@@ -157,13 +157,13 @@ describe('color-mix', () => {
     expect(css({ bg: 'token(colors.pink.400/30)' })).toMatchInlineSnapshot(`
       {
         "className": [
-          "bg_token\\(colors\\.pink\\.400\\/30\\)",
+          "_w1ddk4\\:bg_token\\(colors\\.pink\\.400\\/30\\)",
         ],
         "css": "@layer utilities {
         @layer s010-c0-p1000;
 
         @layer s010-c0-p1000 {
-          .bg_token\\(colors\\.pink\\.400\\/30\\) {
+          ._w1ddk4\\:bg_token\\(colors\\.pink\\.400\\/30\\) {
             background: color-mix(in srgb, var(--colors-pink-400) 30%, transparent);
       }
         }
@@ -210,13 +210,13 @@ describe('color-mix', () => {
     expect(css({ bg: 'xx1x//30' })).toMatchInlineSnapshot(`
       {
         "className": [
-          "bg_xx1x\\/\\/30",
+          "_w1ddk4\\:bg_xx1x\\/\\/30",
         ],
         "css": "@layer utilities {
         @layer s010-c0-p1000;
 
         @layer s010-c0-p1000 {
-          .bg_xx1x\\/\\/30 {
+          ._w1ddk4\\:bg_xx1x\\/\\/30 {
             background: xx1x//30;
       }
         }
@@ -229,13 +229,13 @@ describe('color-mix', () => {
     expect(css({ bg: 'red/abc' })).toMatchInlineSnapshot(`
       {
         "className": [
-          "bg_red\\/abc",
+          "_w1ddk4\\:bg_red\\/abc",
         ],
         "css": "@layer utilities {
         @layer s010-c0-p1000;
 
         @layer s010-c0-p1000 {
-          .bg_red\\/abc {
+          ._w1ddk4\\:bg_red\\/abc {
             background: red/abc;
       }
         }
@@ -248,13 +248,13 @@ describe('color-mix', () => {
     expect(css({ bg: 'red/0,4' })).toMatchInlineSnapshot(`
       {
         "className": [
-          "bg_red\\/0\\,4",
+          "_w1ddk4\\:bg_red\\/0\\,4",
         ],
         "css": "@layer utilities {
         @layer s010-c0-p1000;
 
         @layer s010-c0-p1000 {
-          .bg_red\\/0\\,4 {
+          ._w1ddk4\\:bg_red\\/0\\,4 {
             background: red/0,4;
       }
         }
@@ -267,13 +267,13 @@ describe('color-mix', () => {
     expect(css({ bg: 'red/0..,4' })).toMatchInlineSnapshot(`
       {
         "className": [
-          "bg_red\\/0\\.\\.\\,4",
+          "_w1ddk4\\:bg_red\\/0\\.\\.\\,4",
         ],
         "css": "@layer utilities {
         @layer s010-c0-p1000;
 
         @layer s010-c0-p1000 {
-          .bg_red\\/0\\.\\.\\,4 {
+          ._w1ddk4\\:bg_red\\/0\\.\\.\\,4 {
             background: red/0..,4;
       }
         }
@@ -286,13 +286,13 @@ describe('color-mix', () => {
     expect(css({ bg: 'red/half' })).toMatchInlineSnapshot(`
       {
         "className": [
-          "bg_red\\/half",
+          "_w1ddk4\\:bg_red\\/half",
         ],
         "css": "@layer utilities {
         @layer s010-c0-p1000;
 
         @layer s010-c0-p1000 {
-          .bg_red\\/half {
+          ._w1ddk4\\:bg_red\\/half {
             background: color-mix(in srgb, red 50%, transparent);
       }
         }
@@ -310,13 +310,13 @@ describe('color-mix', () => {
     expect(css({ WebkitTextFillColor: 'red.300' })).toMatchInlineSnapshot(`
       {
         "className": [
-          "wktf-c_red\\.300",
+          "_OCRJKN\\:wktf-c_red\\.300",
         ],
         "css": "@layer utilities {
         @layer s010-c0-p3000;
 
         @layer s010-c0-p3000 {
-          .wktf-c_red\\.300 {
+          ._OCRJKN\\:wktf-c_red\\.300 {
             -webkit-text-fill-color: var(--colors-red-300);
       }
         }

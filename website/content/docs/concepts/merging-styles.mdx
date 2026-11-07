@@ -19,7 +19,7 @@ const style2 = {
   bg: 'blue',
 }
 
-const className = css(style1, style2) // => 'bg_blue c_white'
+const className = css(style1, style2) // => '_w1ddk4:bg_blue _Btm_AK:c_white'
 ```
 
 In some cases though, the style object might not be colocated in the same file as the component. In this case, you can
@@ -44,7 +44,7 @@ const style2 = css.raw({
   bg: 'blue',
 })
 
-const className = css(style1, style2) // => 'bg_blue c_white'
+const className = css(style1, style2) // => '_w1ddk4:bg_blue _Btm_AK:c_white'
 ```
 
 ## Spreading `css.raw` objects
@@ -109,7 +109,7 @@ const className = cx(
   css({ bg: 'red', color: 'white' }),
 )
 
-// => 'bg_red bd_1px_solid_black fs_12px c_white'
+// => '_w1ddk4:bg_red _Ucco6y:bd_1px_solid_black _Ocpc8R:fs_12px _Btm_AK:c_white'
 ```
 
 A recipe's `.raw()` is not a way to do this: the compiler erases the recipe, so reading `buttonStyles.raw` fails the
@@ -145,7 +145,7 @@ const className = cx(
   css({ bg: 'red', color: 'white' }),
 )
 
-// => 'bg_red bd_1px_solid_black fs_12px c_white'
+// => '_w1ddk4:bg_red _Ucco6y:bd_1px_solid_black _Ocpc8R:fs_12px _Btm_AK:c_white'
 ```
 
 ## Merging config recipe and style object
@@ -161,14 +161,14 @@ const className = cx(
   // resolves the selected recipe declarations
   button({ size: 'small' }),
   // add the override styles
-  css({ bg: 'red' }), // => 'bg_red'
+  css({ bg: 'red' }), // => '_w1ddk4:bg_red'
 )
 
 // => a shared atom string containing the final red background
 ```
 
 That override works because Vite can see and compose both Bamboo StyleSets. If one argument is an arbitrary runtime
-class, `cx` remains a string join and makes no conflict guarantee — see
+class, the generated `cx` merges it at runtime instead, keeping the last class per property and conditions — see
 [Classname concatenation](/docs/concepts/writing-styles#classname-concatenation).
 
 ## Merging within JSX component

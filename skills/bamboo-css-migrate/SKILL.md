@@ -143,8 +143,12 @@ These differences are deliberate. Check them before calling something a regressi
   `reset, base, tokens, utilities`.
 - **Precedence lives in sublayers of `utilities`**, not in rule order. At the same condition a longhand beats its
   shorthand whatever the order, so an override that relied on coming later now has to set the same property.
-- **`cx()`** merges calls the compiler can see before allocating classes, later wins. Joined with a class it cannot see,
-  it is a plain join with no override guarantee.
+- **`cx()`** merges calls the compiler can see before allocating classes, later wins, and merges a class it cannot see
+  at runtime the same way when Bamboo named it. A hand-written class is only joined.
+- **Utility class names carry a merge code**: `_`, six characters and `:` ahead of the readable name in development
+  (`_AQSe3b:md:w_480px`), and ahead of a five-character hash when hashed (`_AQSe3b:h5u26`). A class name written by hand
+  to match a utility has to spell the code too; it is the same for every value of one property under one set of
+  conditions.
 - **Breakpoints are range queries**, `@media (width >= 40rem)`, with no media type, so they also apply when printing.
 - **Unused tokens and keyframes are pruned** from the stylesheet by default. A token read only from outside `include`
   needs `prune.keepTokens`.

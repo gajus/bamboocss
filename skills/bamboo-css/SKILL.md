@@ -157,8 +157,10 @@ Not failures: `not-imported` (a local function with the same name), `overlapping
 - `css(a, b)` merges style objects, and the later value wins per property.
 - `cx()` of calls the compiler can see merges them before allocating classes, so the later argument wins:
   `cx(button({ size: 'sm' }), css({ bg: 'red.500' }))` overrides the recipe's `bg`.
-- A class the compiler cannot see, such as a forwarded `className`, turns `cx()` into a plain join with no override
-  guarantee. Use a variant, or composition it can see, for an override you mean.
+- A class the compiler cannot see, such as a forwarded `className`, is merged at runtime: of two Bamboo classes setting
+  one property under the same conditions, the later argument wins, so `cx(styles, className)` lets the caller override.
+  A class Bamboo did not name is only joined. The merge compares property and conditions only: `paddingTop` passed
+  against a component's `padding` is ranked by the cascade, so override the property that was set.
 - At the same condition a longhand beats its shorthand, whatever the order: `css({ paddingTop: '2' }, { padding: '4' })`
   keeps the top at `2`. Override the property that was set.
 - A recipe component splits its variant props off and passes the rest through:

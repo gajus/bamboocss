@@ -1,4 +1,4 @@
-import { createContext } from '@bamboocss/fixture'
+import { createContext, withoutMergeCodes } from '@bamboocss/fixture'
 import { allCssProperties } from '@bamboocss/is-valid-prop'
 import { getPropertyPriority } from '@bamboocss/shared'
 import { describe, expect, test } from 'vitest'
@@ -80,7 +80,9 @@ describe('a longhand wins over the shorthand that sets it, whichever arrives fir
       for (const styles of arrival) ctx.encoder.processAtomic(styles)
       const sheet = ctx.createSheet()
       ctx.appendParserCss(sheet)
-      const ranked = cascadeOrder((ctx.getCss(sheet) as string).replace(names, 'one-property:'))['one-property']
+      const ranked = cascadeOrder(withoutMergeCodes(ctx.getCss(sheet) as string).replace(names, 'one-property:'))[
+        'one-property'
+      ]
 
       expect(ranked?.at(-1)).toBe(winner)
     }

@@ -98,6 +98,10 @@ export interface TokenCreatedHookArgs {
  * -----------------------------------------------------------------------------*/
 
 export interface UtilityConfigureOptions {
+  /**
+   * @deprecated Not used: a utility class name has the fixed shape the runtime `cx` reads to merge
+   * it, so no hook can hash it differently. A config whose hook sets this is reported.
+   */
   toHash?(path: string[], toHash: (str: string) => string): string
 }
 

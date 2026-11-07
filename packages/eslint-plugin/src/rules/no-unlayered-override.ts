@@ -13,8 +13,8 @@ import {
 export const RULE_NAME = 'no-unlayered-override'
 
 /**
- * Functions from npm that, like the runtime `cx`, put class names side by side and resolve
- * nothing between them. `cn` is the name projects give a `clsx` wrapper.
+ * Functions from npm that put class names side by side and resolve nothing between them, unlike
+ * Bamboo's runtime `cx`. `cn` is the name projects give a `clsx` wrapper.
  */
 const CLASS_JOINERS = new Set(['clsx', 'classnames', 'classNames', 'cn'])
 
@@ -25,13 +25,19 @@ const operandsOf = (node: TSESTree.Node): TSESTree.Node[] =>
     : [node]
 
 /**
- * A class this file styled with `css()`, joined with one it cannot see.
+ * A class this file styled with `css()`, joined with one it cannot see by a join that does not
+ * decide which of them applies.
  *
- * Both are in the `utilities` layer, so which applies is decided by stylesheet order. The Vite
- * compiler merges the styles a `cx()` call holds and keeps the atoms it joins with an outside class
- * in the entry sheet when it splits the stylesheet per route. A join it does not see — a template
- * literal, `+`, `clsx` — gets neither, and can resolve differently depending on the route the
- * visitor opened first. So every one of them is reported, and `cx` under an alias as well.
+ * Both are in the `utilities` layer, so unless the join decides, stylesheet order does. Bamboo's
+ * runtime `cx` decides: it keeps the last class passed for each property and conditions, so the
+ * caller's class replaces the component's own and the two never meet on one element. Any other
+ * join — a template literal, `+`, `clsx` — puts both on the element, and the Vite compiler does not
+ * see it either, so it cannot keep the component's atoms in the entry sheet when it splits the
+ * stylesheet per route: which class applies can change with the route the visitor opened first.
+ * So every one of those is reported.
+ *
+ * Only a `cx` imported from Bamboo is known to merge: one from `classnames`, or one the file
+ * defines, is a join like any other.
  *
  * Styles this file owns are a `css()` call, or a `const` this file declares holding one:
  * `cx(styles, className)` is the forwarding a component does, and `cx(css(…), styles)` joins two
@@ -79,6 +85,16 @@ const rule = createRule({
       return definition?.type === 'Variable' && definition.parent.kind === 'const' && isStyleCall(definition.node.init)
     }
 
+    /** Bamboo's own `cx`, read as the code reads the name: an import of `cx` from a Bamboo module. */
+    const isBambooCx = (node: TSESTree.Identifier) => {
+      const variable = resolveReference(node, context)
+      const definition = variable?.defs.length === 1 ? variable.defs[0] : undefined
+      if (definition?.type !== 'ImportBinding' || !isImportSpecifier(definition.node)) return false
+      const { imported } = definition.node
+      const name = isIdentifier(imported) ? imported.name : String(imported.value)
+      return name === 'cx' && isImportDeclaration(definition.parent) && isBambooImport(definition.parent, context)
+    }
+
     const isOwnStyles = (node: TSESTree.Node) =>
       isIdentifier(node) ? node.name !== 'undefined' && isStyleBinding(node) : isStyleCall(node)
 
@@ -95,7 +111,7 @@ const rule = createRule({
       const own = candidates.find(isOwnStyles)
       if (!own) return
       if (!parts.some((part) => part !== null && part !== own && isOpaque(part))) return
-      context.report({ data: { join }, messageId: 'unlayeredOverride', node: own })
+      context.report({ data: { join }, messageId: 'unmergedJoin', node: own })
     }
 
     return {
@@ -111,6 +127,8 @@ const rule = createRule({
           if (node.arguments.length < 2 || !node.arguments.some(isCandidate)) return
           const { name } = callee
           if (!CLASS_JOINERS.has(name) && !bambooNames().cx.has(name)) return
+          // The caller's class replaces the component's own, by the order they were passed.
+          if (isBambooCx(callee)) return
           check(node.arguments, `\`${name}\``)
           return
         }
@@ -135,13 +153,13 @@ const rule = createRule({
   meta: {
     docs: {
       description:
-        'Disallow joining a class this file styled with a class it cannot see, where neither can win by cascade layer.',
+        'Disallow joining a class this file styled with a class it cannot see, by a join that does not decide which of them applies.',
     },
     messages: {
-      unlayeredOverride: [
+      unmergedJoin: [
         '{{join}} joins class names, it does not resolve conflicts between them.',
         'These styles and the ones being joined are both in the `utilities` layer, so which applies is decided by stylesheet order rather than by the caller.',
-        'For an override the caller chooses, expose a recipe variant instead of accepting a class name; to combine styles this file owns, pass them all to `cx()` as style calls, which the compiler merges per property.',
+        'Join them with `cx()` from Bamboo instead, which keeps the last class passed for each property.',
       ].join(' '),
     },
     schema: [],

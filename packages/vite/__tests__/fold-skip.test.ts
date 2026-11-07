@@ -1,3 +1,4 @@
+import { withoutMergeCodes } from '@bamboocss/fixture'
 import { describe, expect, test } from 'vitest'
 import { createFoldFixture } from './fixture'
 
@@ -37,7 +38,7 @@ describe('calls the compiler rejects', () => {
     `)
 
     expect(classes(result)).toHaveLength(1)
-    expect(result.code).toContain('export const fixed = "c_red.300"')
+    expect(withoutMergeCodes(result.code)).toContain('export const fixed = "c_red.300"')
     expect(result.code).toContain('css({ color: { base: tone } })')
   })
 

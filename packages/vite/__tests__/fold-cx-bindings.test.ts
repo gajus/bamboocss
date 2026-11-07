@@ -1,3 +1,4 @@
+import { withoutMergeCodes } from '@bamboocss/fixture'
 import { describe, expect, test } from 'vitest'
 import { MAX_CX_COMBINATIONS } from '../src/fold'
 import { createFoldFixture, selectorsFor } from './fixture'
@@ -54,7 +55,7 @@ describe('cx() over module-scope style bindings', () => {
     expect(pick!(true)).toBe(fixture.runtimeCss({ display: 'flex', color: 'blue.500' }))
     expect(pick!(false)).toBe(fixture.runtimeCss({ display: 'flex', color: 'red.300' }))
     // The overridden color is not joined beside the one that wins it.
-    expect(pick!(true).split(' ')).not.toContain('c_red.300')
+    expect(pick!(true).split(' ')).not.toContain(fixture.runtimeCss({ color: 'red.300' }))
   })
 
   test('a ternary chooses between its arms', () => {
@@ -150,7 +151,9 @@ export const pick = (active, size, full) => cx(base, !active && muted, size === 
 
     const cx = result.folded.find((entry) => entry.name === 'cx')
     expect(cx?.className).toBe('')
-    expect(cx?.classNames).toEqual(expect.arrayContaining(['d_flex', 'c_red.300', 'c_blue.500', 'fs_sm', 'fs_lg']))
+    expect(withoutMergeCodes(cx?.classNames)).toEqual(
+      expect.arrayContaining(['d_flex', 'c_red.300', 'c_blue.500', 'fs_sm', 'fs_lg']),
+    )
     const css = fixture.getStyleSetCss()
     for (const className of cx!.classNames) {
       for (const selector of selectorsFor(className)) expect(css).toContain(selector)

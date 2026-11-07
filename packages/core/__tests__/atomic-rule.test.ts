@@ -18,11 +18,11 @@ describe('atomic / with basic style object', () => {
         @layer important;
 
         @layer important {
-          .c_red\\! {
+          ._Btm_AK\\:c_red\\! {
             color: red !important;
       }
 
-          .fs_30px\\! {
+          ._Ocpc8R\\:fs_30px\\! {
             font-size: 30px !important;
       }
         }
@@ -37,11 +37,11 @@ describe('atomic / with basic style object', () => {
         @layer s010-c0-p3000;
 
         @layer s010-c0-p3000 {
-          .content_\\"\\!\\" {
+          ._PuFan8\\:content_\\"\\!\\" {
             content: "!";
       }
 
-          .ff_\\"Foo\\!Bar\\"\\,_sans-serif {
+          ._XRP-xG\\:ff_\\"Foo\\!Bar\\"\\,_sans-serif {
             font-family: "Foo!Bar", sans-serif;
       }
         }
@@ -55,7 +55,7 @@ describe('atomic / with basic style object', () => {
         @layer important;
 
         @layer important {
-          .pos_\\[absolute\\]\\! {
+          ._PHAS7x\\:pos_\\[absolute\\]\\! {
             position: absolute !important;
       }
         }
@@ -71,7 +71,7 @@ describe('atomic / with basic style object', () => {
         @layer important;
 
         @layer important {
-          .c_red\\! {
+          ._Btm_AK\\:c_red\\! {
             color: red !important;
       }
         }
@@ -93,7 +93,7 @@ describe('atomic / with basic style object', () => {
         @layer s010-c0-p3000;
 
         @layer s010-c0-p3000 {
-          .c_red_\\!important_\\/\\*_c_\\*\\/ {
+          ._Btm_AK\\:c_red_\\!important_\\/\\*_c_\\*\\/ {
             color: red !important /* c */;
       }
         }
@@ -107,7 +107,7 @@ describe('atomic / with basic style object', () => {
         @layer important;
 
         @layer important {
-          .content_\\"hello\\!\\"\\! {
+          ._PuFan8\\:content_\\"hello\\!\\"\\! {
             content: "hello!" !important;
       }
         }
@@ -121,7 +121,7 @@ describe('atomic / with basic style object', () => {
         @layer s010-c0-p1000;
 
         @layer s010-c0-p1000 {
-          .bg_red\\.300 {
+          ._w1ddk4\\:bg_red\\.300 {
             background: var(--colors-red-300);
       }
         }
@@ -135,7 +135,7 @@ describe('atomic / with basic style object', () => {
         @layer s010-c0-p4000;
 
         @layer s010-c0-p4000 {
-          .w_20px {
+          ._RO16FJ\\:w_20px {
             width: 20px;
       }
         }
@@ -147,7 +147,7 @@ describe('atomic / with basic style object', () => {
         @layer s010-c0-p4000;
 
         @layer s010-c0-p4000 {
-          .w_70px {
+          ._RO16FJ\\:w_70px {
             width: 70px;
       }
         }
@@ -161,7 +161,7 @@ describe('atomic / with basic style object', () => {
         @layer s010-c0-p2000;
 
         @layer s010-c0-p2000 {
-          .mx_-2 {
+          ._0QmaUN\\:mx_-2 {
             margin-inline: calc(var(--spacing-2) * -1);
       }
         }
@@ -185,14 +185,14 @@ describe('atomic / with basic style object', () => {
         @layer s010-c0-p4000, s010-c1-p4000;
 
         @layer s010-c0-p4000 {
-          :where([dir=rtl], :dir(rtl)) .rtl\\:ml_-4 {
+          :where([dir=rtl], :dir(rtl)) ._wYq9Qs\\:rtl\\:ml_-4 {
             margin-left: calc(var(--spacing-4) * -1);
       }
         }
 
         @layer s010-c1-p4000 {
           @media (width >= 40rem) {
-            :where([dir=ltr], :dir(ltr)) .ltr\\:sm\\:ml_4 {
+            :where([dir=ltr], :dir(ltr)) ._-HzOWT\\:ltr\\:sm\\:ml_4 {
               margin-left: var(--spacing-4);
       }
       }
@@ -213,18 +213,18 @@ describe('atomic / with basic style object', () => {
 
         @layer s020-c0-p3000 {
 
-          [data-theme=light] .light\\:c_red,.light .light\\:c_red,.light\\:c_red.light,.light\\:c_red[data-theme=light] {
+          [data-theme=light] ._IcPIb3\\:light\\:c_red,.light ._IcPIb3\\:light\\:c_red,._IcPIb3\\:light\\:c_red.light,._IcPIb3\\:light\\:c_red[data-theme=light] {
             color: red;
       }
         }
 
         @layer s020-c1-p3000 {
 
-          [data-theme=dark] .dark\\:c_green,.dark .dark\\:c_green,.dark\\:c_green.dark,.dark\\:c_green[data-theme=dark] {
+          [data-theme=dark] ._gtEApe\\:dark\\:c_green,.dark ._gtEApe\\:dark\\:c_green,._gtEApe\\:dark\\:c_green.dark,._gtEApe\\:dark\\:c_green[data-theme=dark] {
             color: green;
       }
 
-          [data-theme=dark] .dark\\:op_slate400,.dark .dark\\:op_slate400,.dark\\:op_slate400.dark,.dark\\:op_slate400[data-theme=dark] {
+          [data-theme=dark] ._aN2f-D\\:dark\\:op_slate400,.dark ._aN2f-D\\:dark\\:op_slate400,._aN2f-D\\:dark\\:op_slate400.dark,._aN2f-D\\:dark\\:op_slate400[data-theme=dark] {
             opacity: slate400;
       }
         }
@@ -243,7 +243,7 @@ describe('atomic / with basic style object', () => {
 
         @layer s010-c0-p4000 {
           @media (width >= 40rem) {
-            :where([dir=rtl], :dir(rtl)) .sm\\:rtl\\:top_20px {
+            :where([dir=rtl], :dir(rtl)) ._fYp5xA\\:sm\\:rtl\\:top_20px {
               top: 20px;
       }
       }
@@ -251,7 +251,7 @@ describe('atomic / with basic style object', () => {
 
         @layer s010-c2-p4000 {
           @media (width >= 64rem) {
-            .lg\\:top_120px {
+            ._rbF1Op\\:lg\\:top_120px {
               top: 120px;
       }
       }
@@ -259,7 +259,7 @@ describe('atomic / with basic style object', () => {
 
         @layer s020-c1-p4000 {
           @media (width >= 40rem) {
-            .sm\\:hover\\:top_50px:is(:hover, [data-hover]) {
+            ._n3U4vc\\:sm\\:hover\\:top_50px:is(:hover, [data-hover]) {
               top: 50px;
       }
       }
@@ -278,14 +278,14 @@ describe('atomic / with basic style object', () => {
         @layer s010-c0-p4000, s010-c1-p4000;
 
         @layer s010-c0-p4000 {
-          .left_20px {
+          ._3Cthvj\\:left_20px {
             left: 20px;
       }
         }
 
         @layer s010-c1-p4000 {
           @media (width >= 48rem) {
-            .md\\:left_40px {
+            ._QhKjJy\\:md\\:left_40px {
               left: 40px;
       }
       }
@@ -310,20 +310,20 @@ describe('atomic / with nesting scope', () => {
         @layer s011-c0-p4000, s011-c1-p1000, s011-c5-p4000, s021-c2-p1000, s021-c3-p1000, s031-c4-p1000;
 
         @layer s011-c0-p4000 {
-          .\\[\\&_\\>_p\\]\\:left_20px > p {
+          ._fGbBm9\\:\\[\\&_\\>_p\\]\\:left_20px > p {
             left: 20px;
       }
         }
 
         @layer s011-c1-p1000 {
-          :where([dir=rtl], :dir(rtl)) .\\[\\&_\\>_p\\]\\:rtl\\:font_sans > p {
+          :where([dir=rtl], :dir(rtl)) ._0F8RSS\\:\\[\\&_\\>_p\\]\\:rtl\\:font_sans > p {
             font: sans;
       }
         }
 
         @layer s011-c5-p4000 {
           @media (width >= 48rem) {
-            .\\[\\&_\\>_p\\]\\:md\\:left_40px > p {
+            ._KA0QXk\\:\\[\\&_\\>_p\\]\\:md\\:left_40px > p {
               left: 40px;
       }
       }
@@ -331,21 +331,21 @@ describe('atomic / with nesting scope', () => {
 
         @layer s021-c2-p1000 {
 
-          [data-theme=light] .\\[\\&_\\>_p\\]\\:light\\:bg_red400 > p,.light .\\[\\&_\\>_p\\]\\:light\\:bg_red400 > p,.\\[\\&_\\>_p\\]\\:light\\:bg_red400 > p.light,.\\[\\&_\\>_p\\]\\:light\\:bg_red400 > p[data-theme=light] {
+          [data-theme=light] ._6y0x8Y\\:\\[\\&_\\>_p\\]\\:light\\:bg_red400 > p,.light ._6y0x8Y\\:\\[\\&_\\>_p\\]\\:light\\:bg_red400 > p,._6y0x8Y\\:\\[\\&_\\>_p\\]\\:light\\:bg_red400 > p.light,._6y0x8Y\\:\\[\\&_\\>_p\\]\\:light\\:bg_red400 > p[data-theme=light] {
             background: red400;
       }
         }
 
         @layer s021-c3-p1000 {
 
-          [data-theme=dark] .\\[\\&_\\>_p\\]\\:dark\\:bg_green500 > p,.dark .\\[\\&_\\>_p\\]\\:dark\\:bg_green500 > p,.\\[\\&_\\>_p\\]\\:dark\\:bg_green500 > p.dark,.\\[\\&_\\>_p\\]\\:dark\\:bg_green500 > p[data-theme=dark] {
+          [data-theme=dark] ._dw8M1w\\:\\[\\&_\\>_p\\]\\:dark\\:bg_green500 > p,.dark ._dw8M1w\\:\\[\\&_\\>_p\\]\\:dark\\:bg_green500 > p,._dw8M1w\\:\\[\\&_\\>_p\\]\\:dark\\:bg_green500 > p.dark,._dw8M1w\\:\\[\\&_\\>_p\\]\\:dark\\:bg_green500 > p[data-theme=dark] {
             background: green500;
       }
         }
 
         @layer s031-c4-p1000 {
           @media (width >= 40rem) {
-            [data-theme=dark] :where([dir=ltr], :dir(ltr)) .\\[\\&_\\>_p\\]\\:ltr\\:dark\\:sm\\:hover\\:font_serif > p:is(:hover, [data-hover]),.dark :where([dir=ltr], :dir(ltr)) .\\[\\&_\\>_p\\]\\:ltr\\:dark\\:sm\\:hover\\:font_serif > p:is(:hover, [data-hover]),:where([dir=ltr], :dir(ltr)) .\\[\\&_\\>_p\\]\\:ltr\\:dark\\:sm\\:hover\\:font_serif > p.dark:is(:hover, [data-hover]),:where([dir=ltr], :dir(ltr)) .\\[\\&_\\>_p\\]\\:ltr\\:dark\\:sm\\:hover\\:font_serif > p[data-theme=dark]:is(:hover, [data-hover]) {
+            [data-theme=dark] :where([dir=ltr], :dir(ltr)) ._hE2LnL\\:\\[\\&_\\>_p\\]\\:ltr\\:dark\\:sm\\:hover\\:font_serif > p:is(:hover, [data-hover]),.dark :where([dir=ltr], :dir(ltr)) ._hE2LnL\\:\\[\\&_\\>_p\\]\\:ltr\\:dark\\:sm\\:hover\\:font_serif > p:is(:hover, [data-hover]),:where([dir=ltr], :dir(ltr)) ._hE2LnL\\:\\[\\&_\\>_p\\]\\:ltr\\:dark\\:sm\\:hover\\:font_serif > p.dark:is(:hover, [data-hover]),:where([dir=ltr], :dir(ltr)) ._hE2LnL\\:\\[\\&_\\>_p\\]\\:ltr\\:dark\\:sm\\:hover\\:font_serif > p[data-theme=dark]:is(:hover, [data-hover]) {
               font: serif;
       }
       }
@@ -367,14 +367,14 @@ describe('atomic / with nesting scope', () => {
         @layer s021-c0-p1000, s021-c1-p3000, s021-c2-p3000;
 
         @layer s021-c0-p1000 {
-          input:hover .\\[input\\:hover_\\&\\]\\:bg_red400 {
+          input:hover ._G7dGRZ\\:\\[input\\:hover_\\&\\]\\:bg_red400 {
             background: red400;
       }
         }
 
         @layer s021-c1-p3000 {
           @media (width >= 40rem) {
-            input:hover .\\[input\\:hover_\\&\\]\\:sm\\:fs_14px {
+            input:hover ._MTZu34\\:\\[input\\:hover_\\&\\]\\:sm\\:fs_14px {
               font-size: 14px;
       }
       }
@@ -382,7 +382,7 @@ describe('atomic / with nesting scope', () => {
 
         @layer s021-c2-p3000 {
           @media (width >= 64rem) {
-            input:hover .\\[input\\:hover_\\&\\]\\:lg\\:fs_18px {
+            input:hover ._csM17A\\:\\[input\\:hover_\\&\\]\\:lg\\:fs_18px {
               font-size: 18px;
       }
       }
@@ -405,20 +405,20 @@ describe('atomic / with nesting scope', () => {
         @layer s011-c0-p1000, s011-c0-p4000, s011-c1-p3000;
 
         @layer s011-c0-p1000 {
-          .\\[\\&\\:\\:placeholder\\]\\:bg_red400::placeholder {
+          ._vA00Pp\\:\\[\\&\\:\\:placeholder\\]\\:bg_red400::placeholder {
             background: red400;
       }
         }
 
         @layer s011-c0-p4000 {
-          .\\[\\&\\:\\:placeholder\\]\\:left_40px::placeholder {
+          ._vESk5a\\:\\[\\&\\:\\:placeholder\\]\\:left_40px::placeholder {
             left: 40px;
       }
         }
 
         @layer s011-c1-p3000 {
           @media (width >= 40rem) {
-            .\\[\\&\\:\\:placeholder\\]\\:sm\\:ta_left::placeholder {
+            ._3kGt-v\\:\\[\\&\\:\\:placeholder\\]\\:sm\\:ta_left::placeholder {
               text-align: left;
       }
       }
@@ -441,7 +441,7 @@ describe('atomic / with nesting scope', () => {
 
         @layer s010-c0-p4000 {
           @media base {
-            .\\[\\@media_base\\]\\:left_40px {
+            ._g1I_pc\\:\\[\\@media_base\\]\\:left_40px {
               left: 40px;
       }
       }
@@ -450,7 +450,7 @@ describe('atomic / with nesting scope', () => {
         @layer s010-c1-p3000 {
           @media base {
             @media (width >= 40rem) {
-              .\\[\\@media_base\\]\\:sm\\:ta_left {
+              ._st3qWI\\:\\[\\@media_base\\]\\:sm\\:ta_left {
                 text-align: left;
       }
       }
@@ -472,7 +472,7 @@ describe('atomic / with grouped conditions styles', () => {
         @layer s020-c0-p1000;
 
         @layer s020-c0-p1000 {
-          .hover\\:bg_pink\\.400:is(:hover, [data-hover]) {
+          ._LjjoSS\\:hover\\:bg_pink\\.400:is(:hover, [data-hover]) {
             background: var(--colors-pink-400);
       }
         }
@@ -490,14 +490,14 @@ describe('atomic / with grouped conditions styles', () => {
         @layer s020-c0-p3000, s030-c1-p1000;
 
         @layer s020-c0-p3000 {
-          .hover\\:c_pink\\.400:is(:hover, [data-hover]) {
+          ._nRd69H\\:hover\\:c_pink\\.400:is(:hover, [data-hover]) {
             color: var(--colors-pink-400);
       }
         }
 
         @layer s030-c1-p1000 {
           @media (width >= 40rem) {
-            [data-theme=dark] .hover\\:sm\\:dark\\:bg_red\\.300:is(:hover, [data-hover]),.dark .hover\\:sm\\:dark\\:bg_red\\.300:is(:hover, [data-hover]),.hover\\:sm\\:dark\\:bg_red\\.300:is(:hover, [data-hover]).dark,.hover\\:sm\\:dark\\:bg_red\\.300:is(:hover, [data-hover])[data-theme=dark] {
+            [data-theme=dark] ._guzfpL\\:hover\\:sm\\:dark\\:bg_red\\.300:is(:hover, [data-hover]),.dark ._guzfpL\\:hover\\:sm\\:dark\\:bg_red\\.300:is(:hover, [data-hover]),._guzfpL\\:hover\\:sm\\:dark\\:bg_red\\.300:is(:hover, [data-hover]).dark,._guzfpL\\:hover\\:sm\\:dark\\:bg_red\\.300:is(:hover, [data-hover])[data-theme=dark] {
               background: var(--colors-red-300);
       }
       }
@@ -517,7 +517,7 @@ describe('atomic / with grouped conditions styles', () => {
 
         @layer s030-c0-p1000 {
           @media (width >= 40rem) {
-            .hover\\:disabled\\:sm\\:bg_red\\.300:is(:hover, [data-hover]):is(:disabled, [disabled], [data-disabled], [aria-disabled=true]) {
+            ._LQ6w3U\\:hover\\:disabled\\:sm\\:bg_red\\.300:is(:hover, [data-hover]):is(:disabled, [disabled], [data-disabled], [aria-disabled=true]) {
               background: var(--colors-red-300);
       }
       }
@@ -542,7 +542,7 @@ describe('atomic / with grouped conditions styles', () => {
 
         @layer s020-c0-p4000 {
           @media base {
-            .\\[\\@media_base\\]\\:\\[\\&\\:hover\\]\\:left_40px:hover {
+            ._VgRPz6\\:\\[\\@media_base\\]\\:\\[\\&\\:hover\\]\\:left_40px:hover {
               left: 40px;
       }
       }
@@ -551,7 +551,7 @@ describe('atomic / with grouped conditions styles', () => {
         @layer s020-c1-p3000 {
           @media base {
             @media (width >= 40rem) {
-              .\\[\\@media_base\\]\\:\\[\\&\\:hover\\]\\:sm\\:ta_left:hover {
+              ._bZfrlw\\:\\[\\@media_base\\]\\:\\[\\&\\:hover\\]\\:sm\\:ta_left:hover {
                 text-align: left;
       }
       }
@@ -576,7 +576,7 @@ describe('atomic / with direct nesting', () => {
 
         @layer s010-c0-p3000 {
           @media (min-width: 768px) {
-            .\\[\\@media_\\(min-width\\:_768px\\)\\]\\:bg-c_green {
+            ._Zbj95N\\:\\[\\@media_\\(min-width\\:_768px\\)\\]\\:bg-c_green {
               background-color: green;
       }
       }
@@ -626,92 +626,92 @@ describe('atomic / with direct nesting', () => {
         @layer s010-c0-p0, s010-c0-p1000, s010-c0-p2000, s010-c0-p3000, s010-c7-p3000, s011-c1-p3000, s011-c2-p4000, s020-c3-p3000, s020-c4-p3000, s020-c5-p3000, s020-c6-p3000, s020-c8-p3000;
 
         @layer s010-c0-p0 {
-          .all_unset {
+          ._ZCJ8no\\:all_unset {
             all: unset;
       }
         }
 
         @layer s010-c0-p1000 {
-          .bd_none {
+          ._Ucco6y\\:bd_none {
             border: var(--borders-none);
       }
 
-          .p_\\$3_\\$3 {
+          ._DJEIKl\\:p_\\$3_\\$3 {
             padding: $3 $3;
       }
         }
 
         @layer s010-c0-p2000 {
-          .bdr_\\$button {
+          ._Cr_m0U\\:bdr_\\$button {
             border-radius: $button;
       }
         }
 
         @layer s010-c0-p3000 {
-          .bg-c_red {
+          ._ZeI045\\:bg-c_red {
             background-color: red;
       }
 
-          .fs_\\$xsmall {
+          ._Ocpc8R\\:fs_\\$xsmall {
             font-size: $xsmall;
       }
 
-          .cursor_pointer {
+          ._SlOY66\\:cursor_pointer {
             cursor: pointer;
       }
         }
 
         @layer s010-c7-p3000 {
           @media (min-width: 768px) {
-            .\\[\\@media_\\(min-width\\:_768px\\)\\]\\:bg-c_green {
+            ._Zbj95N\\:\\[\\@media_\\(min-width\\:_768px\\)\\]\\:bg-c_green {
               background-color: green;
       }
-            .\\[\\@media_\\(min-width\\:_768px\\)\\]\\:fs_\\$small {
+            ._1PY-70\\:\\[\\@media_\\(min-width\\:_768px\\)\\]\\:fs_\\$small {
               font-size: $small;
       }
       }
         }
 
         @layer s011-c1-p3000 {
-          .\\[\\&_span\\]\\:c_red span {
+          ._cDwqoY\\:\\[\\&_span\\]\\:c_red span {
             color: red;
       }
         }
 
         @layer s011-c2-p4000 {
-          .\\[\\&_\\+_span\\]\\:ml_\\$2 + span {
+          ._3MlZS5\\:\\[\\&_\\+_span\\]\\:ml_\\$2 + span {
             margin-left: $2;
       }
         }
 
         @layer s020-c3-p3000 {
-          .test .\\[\\.test_\\&\\]\\:bg-c_blue {
+          .test ._4qTkfp\\:\\[\\.test_\\&\\]\\:bg-c_blue {
             background-color: blue;
       }
         }
 
         @layer s020-c4-p3000 {
-          .\\[\\&_\\.my-class\\]\\:c_red .my-class {
+          ._iQ4KkS\\:\\[\\&_\\.my-class\\]\\:c_red .my-class {
             color: red;
       }
         }
 
         @layer s020-c5-p3000 {
-          :focus > .\\[\\:focus_\\>_\\&\\]\\:c_white {
+          :focus > ._NvGzD1\\:\\[\\:focus_\\>_\\&\\]\\:c_white {
             color: var(--colors-white);
       }
         }
 
         @layer s020-c6-p3000 {
 
-          .\\[\\&\\:focus\\,_\\&\\:hover\\]\\:bx-sh_none:focus,.\\[\\&\\:focus\\,_\\&\\:hover\\]\\:bx-sh_none:hover {
+          ._4T1sBV\\:\\[\\&\\:focus\\,_\\&\\:hover\\]\\:bx-sh_none:focus,._4T1sBV\\:\\[\\&\\:focus\\,_\\&\\:hover\\]\\:bx-sh_none:hover {
             box-shadow: none;
       }
         }
 
         @layer s020-c8-p3000 {
           @media (min-width: 768px) {
-            .\\[\\@media_\\(min-width\\:_768px\\)\\]\\:\\[\\&\\:hover\\]\\:bg-c_yellow:hover {
+            ._Qw9aOP\\:\\[\\@media_\\(min-width\\:_768px\\)\\]\\:\\[\\&\\:hover\\]\\:bg-c_yellow:hover {
               background-color: yellow;
       }
       }
@@ -732,7 +732,7 @@ describe('atomic / with direct nesting', () => {
         @layer s011-c0-p3000;
 
         @layer s011-c0-p3000 {
-          .\\[\\&_kbd\\]\\:c_red kbd {
+          ._WFue4w\\:\\[\\&_kbd\\]\\:c_red kbd {
             color: red;
       }
         }
@@ -783,7 +783,7 @@ describe('atomic / with direct nesting', () => {
 
         @layer s010-c0-p1000 {
           @media screen and (min-width: 640px) {
-            .\\[\\@media_screen_and_\\(min-width\\:_640px\\)\\]\\:m_1 {
+            ._7KqYQ_\\:\\[\\@media_screen_and_\\(min-width\\:_640px\\)\\]\\:m_1 {
               margin: var(--spacing-1);
       }
       }
@@ -791,7 +791,7 @@ describe('atomic / with direct nesting', () => {
 
         @layer s010-c1-p1000 {
           @media screen and (min-width: 768px) {
-            .\\[\\@media_screen_and_\\(min-width\\:_768px\\)\\]\\:m_2 {
+            ._QIihfG\\:\\[\\@media_screen_and_\\(min-width\\:_768px\\)\\]\\:m_2 {
               margin: var(--spacing-2);
       }
       }
@@ -799,7 +799,7 @@ describe('atomic / with direct nesting', () => {
 
         @layer s010-c2-p1000 {
           @media screen and (min-width: 980px) {
-            .\\[\\@media_screen_and_\\(min-width\\:_980px\\)\\]\\:m_3 {
+            ._KYXAms\\:\\[\\@media_screen_and_\\(min-width\\:_980px\\)\\]\\:m_3 {
               margin: var(--spacing-3);
       }
       }
@@ -807,7 +807,7 @@ describe('atomic / with direct nesting', () => {
 
         @layer s010-c3-p1000 {
           @media screen and (min-width: 1280px) {
-            .\\[\\@media_screen_and_\\(min-width\\:_1280px\\)\\]\\:m_4 {
+            ._DHFX8A\\:\\[\\@media_screen_and_\\(min-width\\:_1280px\\)\\]\\:m_4 {
               margin: var(--spacing-4);
       }
       }
@@ -815,7 +815,7 @@ describe('atomic / with direct nesting', () => {
 
         @layer s010-c4-p1000 {
           @media screen and (max-width: 1280px) {
-            .\\[\\@media_screen_and_\\(max-width\\:_1280px\\)\\]\\:m_5 {
+            ._Xl5h31\\:\\[\\@media_screen_and_\\(max-width\\:_1280px\\)\\]\\:m_5 {
               margin: var(--spacing-5);
       }
       }
@@ -823,7 +823,7 @@ describe('atomic / with direct nesting', () => {
 
         @layer s010-c5-p1000 {
           @media screen and (max-width: 980px) {
-            .\\[\\@media_screen_and_\\(max-width\\:_980px\\)\\]\\:m_6 {
+            ._V_SQZp\\:\\[\\@media_screen_and_\\(max-width\\:_980px\\)\\]\\:m_6 {
               margin: var(--spacing-6);
       }
       }
@@ -831,7 +831,7 @@ describe('atomic / with direct nesting', () => {
 
         @layer s010-c6-p1000 {
           @media screen and (max-width: 768px) {
-            .\\[\\@media_screen_and_\\(max-width\\:_768px\\)\\]\\:m_7 {
+            ._YMlRMV\\:\\[\\@media_screen_and_\\(max-width\\:_768px\\)\\]\\:m_7 {
               margin: var(--spacing-7);
       }
       }
@@ -839,7 +839,7 @@ describe('atomic / with direct nesting', () => {
 
         @layer s010-c7-p1000 {
           @media screen and (max-width: 640px) {
-            .\\[\\@media_screen_and_\\(max-width\\:_640px\\)\\]\\:m_8 {
+            ._eyMwDj\\:\\[\\@media_screen_and_\\(max-width\\:_640px\\)\\]\\:m_8 {
               margin: var(--spacing-8);
       }
       }
@@ -847,7 +847,7 @@ describe('atomic / with direct nesting', () => {
 
         @layer s010-c8-p3000 {
           @supports (display: flex) {
-            .\\[\\@supports_\\(display\\:_flex\\)\\]\\:bg-c_blue {
+            ._xW4KYs\\:\\[\\@supports_\\(display\\:_flex\\)\\]\\:bg-c_blue {
               background-color: blue;
       }
       }
@@ -855,7 +855,7 @@ describe('atomic / with direct nesting', () => {
 
         @layer s010-c9-p3000 {
           @supports (display: grid) {
-            .\\[\\@supports_\\(display\\:_grid\\)\\]\\:bg-c_red {
+            ._yxgpaF\\:\\[\\@supports_\\(display\\:_grid\\)\\]\\:bg-c_red {
               background-color: red;
       }
       }
@@ -863,7 +863,7 @@ describe('atomic / with direct nesting', () => {
 
         @layer s010-c10-p3000 {
           @supports not (display: grid) {
-            .\\[\\@supports_not_\\(display\\:_grid\\)\\]\\:bg-c_green {
+            ._DqbR3A\\:\\[\\@supports_not_\\(display\\:_grid\\)\\]\\:bg-c_green {
               background-color: green;
       }
       }
@@ -903,7 +903,7 @@ describe('atomic / with direct nesting', () => {
         @layer s010-c0-p1000;
 
         @layer s010-c0-p1000 {
-          .bg_\\$blue-400 {
+          ._w1ddk4\\:bg_\\$blue-400 {
             background: var(--colors---blue---400);
       }
         }
@@ -920,7 +920,7 @@ describe('atomic / with direct nesting', () => {
 
         @layer s010-c0-p3000 {
           @media (width >= 40rem) {
-            .sm\\:d_none {
+            ._8YYGIJ\\:sm\\:d_none {
               display: none;
       }
       }
@@ -934,7 +934,7 @@ describe('atomic / with direct nesting', () => {
 
         @layer s010-c0-p3000 {
           @media (width < 64rem) {
-            .lgDown\\:d_none {
+            ._OQ1uPB\\:lgDown\\:d_none {
               display: none;
       }
       }
@@ -956,7 +956,7 @@ describe('atomic / a selector with a quoted attribute value', () => {
         @layer s020-c0-p3000;
 
         @layer s020-c0-p3000 {
-          .\\[\\&\\[data-label\\=\\"a_\\&_b\\"\\]\\]\\:c_red\\.300[data-label="a & b"] {
+          ._n0Pys5\\:\\[\\&\\[data-label\\=\\"a_\\&_b\\"\\]\\]\\:c_red\\.300[data-label="a & b"] {
             color: var(--colors-red-300);
       }
         }
@@ -967,7 +967,7 @@ describe('atomic / a selector with a quoted attribute value', () => {
         @layer s030-c0-p3000;
 
         @layer s030-c0-p3000 {
-          .\\[\\&\\[title\\=\\'a_\\&_b\\'\\]\\:hover\\]\\:c_red\\.300[title='a & b']:hover {
+          ._QhpSYV\\:\\[\\&\\[title\\=\\'a_\\&_b\\'\\]\\:hover\\]\\:c_red\\.300[title='a & b']:hover {
             color: var(--colors-red-300);
       }
         }
@@ -978,7 +978,7 @@ describe('atomic / a selector with a quoted attribute value', () => {
         @layer s020-c0-p3000;
 
         @layer s020-c0-p3000 {
-          [data-label="&"] .\\[\\[data-label\\=\\"\\&\\"\\]_\\&\\]\\:c_red\\.300 {
+          [data-label="&"] ._cEKOso\\:\\[\\[data-label\\=\\"\\&\\"\\]_\\&\\]\\:c_red\\.300 {
             color: var(--colors-red-300);
       }
         }
@@ -994,7 +994,7 @@ describe('atomic / a selector with a quoted attribute value', () => {
         @layer s030-c0-p3000;
 
         @layer s030-c0-p3000 {
-          .\\[\\.x_\\[data-label\\=\\"\\&\\"\\]\\]\\:c_red\\.300 .x [data-label="&"] {
+          ._2Z0BrF\\:\\[\\.x_\\[data-label\\=\\"\\&\\"\\]\\]\\:c_red\\.300 .x [data-label="&"] {
             color: var(--colors-red-300);
       }
         }
@@ -1008,7 +1008,7 @@ describe('atomic / a selector with a quoted attribute value', () => {
         @layer s020-c0-p3000;
 
         @layer s020-c0-p3000 {
-          .\\[\\&\\[data-label\\=\\"x\\,y\\"\\]\\]\\:c_red\\.300[data-label="x,y"] {
+          ._b6VDDb\\:\\[\\&\\[data-label\\=\\"x\\,y\\"\\]\\]\\:c_red\\.300[data-label="x,y"] {
             color: var(--colors-red-300);
       }
         }

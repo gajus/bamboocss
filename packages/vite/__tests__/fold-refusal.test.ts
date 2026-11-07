@@ -1,3 +1,4 @@
+import { withoutMergeCodes } from '@bamboocss/fixture'
 import { describe, expect, test } from 'vitest'
 import { createFoldFixture } from './fixture'
 
@@ -183,7 +184,7 @@ describe('a refused call says why', () => {
   ])('a `var` declared in %s, read where it has run, compiles', (_, body) => {
     const result = createFoldFixture().fold(withImport(body))
 
-    expect(result.folded.map((entry) => entry.className)).toEqual(['c_red.300'])
+    expect(withoutMergeCodes(result.folded.map((entry) => entry.className))).toEqual(['c_red.300'])
   })
 
   // Called where the block may not have run, it may hold no function: called anyway, `extra?.()`
@@ -217,7 +218,7 @@ describe('a refused call says why', () => {
       ),
     )
 
-    expect(result.folded.map((entry) => entry.className)).toEqual(['c_blue.300 fw_bold'])
+    expect(withoutMergeCodes(result.folded.map((entry) => entry.className))).toEqual(['c_blue.300 fw_bold'])
   })
 
   test('an array written into, then joined', () => {
@@ -321,7 +322,7 @@ describe('a recursion with no end the build can see', () => {
     )
 
     expect(refused.folded).toEqual([])
-    expect(result.folded.map((entry) => entry.className)).toEqual(['c_red.300'])
+    expect(withoutMergeCodes(result.folded.map((entry) => entry.className))).toEqual(['c_red.300'])
   })
 
   test('branching, as surely', () => {
@@ -822,7 +823,7 @@ describe('a helper a barrel exports by name', () => {
       'app/use.tsx',
     )
 
-    expect(result.folded.map((entry) => entry.className)).toEqual(['c_red.300'])
+    expect(withoutMergeCodes(result.folded.map((entry) => entry.className))).toEqual(['c_red.300'])
   })
 })
 
@@ -853,7 +854,7 @@ describe('what an `export *` gives', () => {
       style,
     )
 
-    expect(result.folded.map((entry) => entry.className)).toEqual(['c_red.300'])
+    expect(withoutMergeCodes(result.folded.map((entry) => entry.className))).toEqual(['c_red.300'])
   })
 
   // `custom`'s own `export default` is not followed; `base`'s is never the answer.
@@ -929,7 +930,7 @@ describe('what an `export *` gives', () => {
       `tone('red.300')`,
     )
 
-    expect(result.folded.map((entry) => entry.className)).toEqual(['c_red.300'])
+    expect(withoutMergeCodes(result.folded.map((entry) => entry.className))).toEqual(['c_red.300'])
   })
 
   // A declaration file says what the code beside it holds, and holds none of it: the `.js` is read.
@@ -967,7 +968,7 @@ describe('what an `export *` gives', () => {
       'app/use.tsx',
     )
 
-    expect(result.folded.map((entry) => entry.className)).toEqual(classes)
+    expect(withoutMergeCodes(result.folded.map((entry) => entry.className))).toEqual(classes)
   })
 
   // After a directory's index too, as Vite resolves `./lib` to `lib/index.ts`: read in its place,
@@ -983,7 +984,7 @@ describe('what an `export *` gives', () => {
       'app/use.tsx',
     )
 
-    expect(result.folded.map((entry) => entry.className)).toEqual(['c_red.300'])
+    expect(withoutMergeCodes(result.folded.map((entry) => entry.className))).toEqual(['c_red.300'])
   })
 
   // A recipe a star member exports is not what a barrel exporting the name itself gives.
@@ -1018,7 +1019,7 @@ describe('what an `export *` gives', () => {
       style,
     )
 
-    expect(result.folded.map((entry) => entry.className)).toEqual(classes)
+    expect(withoutMergeCodes(result.folded.map((entry) => entry.className))).toEqual(classes)
   })
 })
 
@@ -1033,6 +1034,6 @@ describe('carrying the reason changes nothing that compiles', () => {
     )
 
     expect(result.skipped).toEqual([])
-    expect(result.folded.map((entry) => entry.className)).toEqual(['c_red.300'])
+    expect(withoutMergeCodes(result.folded.map((entry) => entry.className))).toEqual(['c_red.300'])
   })
 })

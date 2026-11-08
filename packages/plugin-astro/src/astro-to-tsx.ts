@@ -2,7 +2,7 @@ import { logger } from '@bamboocss/logger'
 import type { BambooPlugin } from '@bamboocss/types'
 import { createRequire } from 'node:module'
 import { prepareAstroTemplate } from './astro-template'
-import { loadNativeExtractor } from './native-extractor'
+import { isValidTsx } from '@bamboocss/node/syntax'
 
 /** What a `<script>` Astro reports converting: `processed-module` is one it bundles. */
 interface AstroScript {
@@ -73,9 +73,7 @@ export const loadAstroCompiler = (require: NodeJS.Require = createRequire(import
 }
 
 /**
- * Loaded the first time a `.astro` file is actually parsed. Every build carries this hook, so a
- * static import would make every build pay to load a compiler most projects never call — the
- * reason the Vue and Svelte plugins load theirs lazily too.
+ * Loaded the first time a `.astro` file is parsed after the plugin is explicitly registered.
  */
 let compiler: AstroCompiler | null | undefined
 const loaded = () => (compiler === undefined ? (compiler = loadAstroCompiler()) : compiler)
@@ -114,7 +112,7 @@ const withScripts = (code: string, scripts: string[]) =>
 /** Whether code parses as extraction will parse it: a parse error there fails the whole file. */
 const parses = (code: string) => {
   try {
-    return loadNativeExtractor().analyze('component.tsx', code, []).errors.length === 0
+    return isValidTsx(code)
   } catch {
     return true
   }
@@ -185,9 +183,9 @@ export const astroToTsx = (code: string, filename?: string, astro = loaded()) =>
   return retried !== undefined && parses(retried) ? retried : tsx
 }
 
-/** Built in, rather than a plugin package: Astro support is part of the Vite integration. */
+/** Register Astro component extraction in the Bamboo config. */
 export const pluginAstro = (): BambooPlugin => ({
-  name: '@bamboocss/node:astro',
+  name: '@bamboocss/plugin-astro',
   hooks: {
     'parser:before': ({ filePath, content }) => {
       if (filePath.endsWith('.astro')) return astroToTsx(content, filePath)

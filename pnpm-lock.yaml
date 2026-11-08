@@ -462,12 +462,6 @@ importers:
       '@bamboocss/logger':
         specifier: workspace:*
         version: link:../logger
-      '@bamboocss/plugin-svelte':
-        specifier: workspace:*
-        version: link:../plugin-svelte
-      '@bamboocss/plugin-vue':
-        specifier: workspace:*
-        version: link:../plugin-vue
       '@bamboocss/reporter':
         specifier: workspace:*
         version: link:../reporter
@@ -523,15 +517,15 @@ importers:
         specifier: 5.9.0
         version: 5.9.0
     devDependencies:
-      '@astrojs/compiler':
-        specifier: 3.0.1
-        version: 3.0.1
-      '@astrojs/compiler-rs':
-        specifier: 0.5.1
-        version: 0.5.1
       '@bamboocss/native-extractor':
         specifier: workspace:*
         version: link:../native-extractor
+      '@bamboocss/plugin-svelte':
+        specifier: workspace:*
+        version: link:../plugin-svelte
+      '@bamboocss/plugin-vue':
+        specifier: workspace:*
+        version: link:../plugin-vue
       '@types/fs-extra':
         specifier: 11.0.4
         version: 11.0.4
@@ -541,6 +535,25 @@ importers:
       boxen:
         specifier: 8.0.1
         version: 8.0.1
+
+  packages/plugin-astro:
+    dependencies:
+      '@bamboocss/logger':
+        specifier: workspace:*
+        version: link:../logger
+      '@bamboocss/node':
+        specifier: workspace:*
+        version: link:../node
+      '@bamboocss/types':
+        specifier: workspace:*
+        version: link:../types
+    devDependencies:
+      '@astrojs/compiler':
+        specifier: 3.0.1
+        version: 3.0.1
+      '@astrojs/compiler-rs':
+        specifier: 0.5.1
+        version: 0.5.1
 
   packages/plugin-lightningcss:
     dependencies:
@@ -556,6 +569,19 @@ importers:
       lightningcss:
         specifier: 1.33.0
         version: 1.33.0
+
+  packages/plugin-mdx:
+    dependencies:
+      '@bamboocss/logger':
+        specifier: workspace:*
+        version: link:../logger
+      '@bamboocss/types':
+        specifier: workspace:*
+        version: link:../types
+    devDependencies:
+      '@bamboocss/node':
+        specifier: workspace:*
+        version: link:../node
 
   packages/plugin-svelte:
     dependencies:
@@ -754,6 +780,9 @@ importers:
       '@bamboocss/dev':
         specifier: workspace:*
         version: link:../../packages/cli
+      '@bamboocss/plugin-astro':
+        specifier: workspace:*
+        version: link:../../packages/plugin-astro
       '@bamboocss/vite':
         specifier: workspace:*
         version: link:../../packages/vite
@@ -861,6 +890,9 @@ importers:
       '@bamboocss/dev':
         specifier: workspace:*
         version: link:../../../../../packages/cli
+      '@bamboocss/plugin-vue':
+        specifier: workspace:*
+        version: link:../../../../../packages/plugin-vue
       '@bamboocss/vite':
         specifier: workspace:*
         version: link:../../../../../packages/vite
@@ -881,6 +913,9 @@ importers:
       '@bamboocss/dev':
         specifier: workspace:*
         version: link:../../packages/cli
+      '@bamboocss/plugin-vue':
+        specifier: workspace:*
+        version: link:../../packages/plugin-vue
       '@bamboocss/vite':
         specifier: workspace:*
         version: link:../../packages/vite
@@ -1108,6 +1143,9 @@ importers:
       '@bamboocss/dev':
         specifier: workspace:*
         version: link:../../packages/cli
+      '@bamboocss/plugin-svelte':
+        specifier: workspace:*
+        version: link:../../packages/plugin-svelte
       '@bamboocss/vite':
         specifier: workspace:*
         version: link:../../packages/vite

@@ -40,14 +40,25 @@
         "default": "./dist/static-compiler.cjs"
       }
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./syntax": {
+      "source": "./src/syntax.ts",
+      "import": {
+        "types": "./dist/syntax.d.mts",
+        "default": "./dist/syntax.mjs"
+      },
+      "require": {
+        "types": "./dist/syntax.d.cts",
+        "default": "./dist/syntax.cjs"
+      }
+    }
   },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "build": "tsdown --tsconfig tsconfig.build.json src/index.ts src/static-compiler.ts --format=cjs,esm --shims --dts",
-    "build-fast": "tsdown --dts=false --tsconfig tsconfig.build.json src/index.ts src/static-compiler.ts --format=cjs,esm --shims",
+    "build": "tsdown --tsconfig tsconfig.build.json src/index.ts src/static-compiler.ts src/syntax.ts --format=cjs,esm --shims --dts",
+    "build-fast": "tsdown --dts=false --tsconfig tsconfig.build.json src/index.ts src/static-compiler.ts src/syntax.ts --format=cjs,esm --shims",
     "dev": "pnpm build-fast --watch"
   },
   "dependencies": {
@@ -55,8 +66,6 @@
     "@bamboocss/core": "workspace:*",
     "@bamboocss/generator": "workspace:*",
     "@bamboocss/logger": "workspace:*",
-    "@bamboocss/plugin-svelte": "workspace:*",
-    "@bamboocss/plugin-vue": "workspace:*",
     "@bamboocss/reporter": "workspace:*",
     "@bamboocss/shared": "workspace:*",
     "@bamboocss/token-dictionary": "workspace:*",
@@ -77,24 +86,12 @@
     "ts-pattern": "5.9.0"
   },
   "devDependencies": {
-    "@astrojs/compiler": "3.0.1",
-    "@astrojs/compiler-rs": "0.5.1",
     "@bamboocss/native-extractor": "workspace:*",
+    "@bamboocss/plugin-svelte": "workspace:*",
+    "@bamboocss/plugin-vue": "workspace:*",
     "@types/fs-extra": "11.0.4",
     "@types/picomatch": "4.0.2",
     "boxen": "8.0.1"
-  },
-  "peerDependencies": {
-    "@astrojs/compiler": ">=2",
-    "@astrojs/compiler-rs": ">=0.5"
-  },
-  "peerDependenciesMeta": {
-    "@astrojs/compiler": {
-      "optional": true
-    },
-    "@astrojs/compiler-rs": {
-      "optional": true
-    }
   },
   "engines": {
     "node": ">=22.12.0"

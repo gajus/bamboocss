@@ -94,25 +94,25 @@ Install bamboo and create your `bamboo.config.ts` file.
   {/* <!-- prettier-ignore-start --> */}
   <Tab>
     ```bash
-    pnpm install -D @bamboocss/dev @bamboocss/vite
+    pnpm install -D @bamboocss/dev @bamboocss/vite @bamboocss/plugin-vue
     pnpm bamboo init
     ```
   </Tab>
   <Tab>
     ```bash
-    npm install -D @bamboocss/dev @bamboocss/vite
+    npm install -D @bamboocss/dev @bamboocss/vite @bamboocss/plugin-vue
     npx bamboo init
     ```
   </Tab>
   <Tab>
     ```bash
-    yarn add -D @bamboocss/dev @bamboocss/vite
+    yarn add -D @bamboocss/dev @bamboocss/vite @bamboocss/plugin-vue
     yarn bamboo init
     ```
   </Tab>
   <Tab>
     ```bash
-    bun add -D @bamboocss/dev @bamboocss/vite
+    bun add -D @bamboocss/dev @bamboocss/vite @bamboocss/plugin-vue
     bun bamboo init
     ```
   </Tab>
@@ -144,10 +144,14 @@ after `@vitejs/plugin-vue`.
 Make sure that all of the paths of your Vue components are included in the `include` section of the `bamboo.config.ts`
 file.
 
-```js {8, 17} filename="bamboo.config.ts"
+Install and register `@bamboocss/plugin-vue` explicitly to extract styles from `.vue` source files.
+
+```js filename="bamboo.config.ts"
 import { defineConfig } from '@bamboocss/dev'
+import { pluginVue } from '@bamboocss/plugin-vue'
 
 export default defineConfig({
+  plugins: [pluginVue()],
   // Whether to use css reset
   preflight: true,
 

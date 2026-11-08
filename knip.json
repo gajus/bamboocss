@@ -87,6 +87,12 @@
     },
     "packages/plugin-vue": {
       "project": ["src/**/*.ts"]
+    },
+    "packages/plugin-astro": {
+      "project": ["src/**/*.ts"]
+    },
+    "packages/plugin-mdx": {
+      "project": ["src/**/*.ts"]
     }
   },
   "ignoreWorkspaces": ["sandbox/*", "sandbox/component-lib/**"],

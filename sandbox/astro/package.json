@@ -20,6 +20,7 @@
   },
   "devDependencies": {
     "@bamboocss/dev": "workspace:*",
+    "@bamboocss/plugin-astro": "workspace:*",
     "@bamboocss/vite": "workspace:*"
   }
 }

@@ -13,6 +13,7 @@
   },
   "devDependencies": {
     "@bamboocss/dev": "workspace:*",
+    "@bamboocss/plugin-vue": "workspace:*",
     "@bamboocss/vite": "workspace:*",
     "@sandbox-nuxt-lib-source/css-lib": "workspace:*",
     "nuxt": "4.2.1",

@@ -8,7 +8,7 @@ description: Compile Bamboo styles in Nuxt through its Vite configuration.
 ### Install and initialize Bamboo
 
 ```bash
-pnpm install -D @bamboocss/dev @bamboocss/vite
+pnpm install -D @bamboocss/dev @bamboocss/vite @bamboocss/plugin-vue
 pnpm bamboo init
 ```
 
@@ -17,10 +17,14 @@ them.
 
 ### Include Vue sources
 
+Install and register `@bamboocss/plugin-vue` explicitly to extract styles from `.vue` source files.
+
 ```ts filename="bamboo.config.ts"
 import { defineConfig } from '@bamboocss/dev'
+import { pluginVue } from '@bamboocss/plugin-vue'
 
 export default defineConfig({
+  plugins: [pluginVue()],
   include: ['./app.vue', './components/**/*.{js,jsx,ts,tsx,vue}', './pages/**/*.{js,jsx,ts,tsx,vue}'],
   outdir: 'styled-system',
 })

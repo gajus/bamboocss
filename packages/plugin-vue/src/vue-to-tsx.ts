@@ -3,9 +3,8 @@ import { createRequire } from 'node:module'
 /**
  * Vue's SFC compiler, loaded the first time a `.vue` file is actually parsed.
  *
- * This plugin is auto-injected into every project, so a static import made every build of every
- * project — Vue or not — pay 55ms to load a compiler most of them never call. The `parser:before`
- * hook is synchronous, so this is a lazy `require` rather than a dynamic import.
+ * Keep compiler loading lazy so registering the plugin only loads the compiler when a component
+ * is parsed. The `parser:before` hook is synchronous, so this uses `require`.
  */
 let parseSfc: typeof import('@vue/compiler-sfc').parse | undefined
 const parse: typeof import('@vue/compiler-sfc').parse = (...args) => {

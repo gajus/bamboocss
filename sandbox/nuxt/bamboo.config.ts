@@ -1,6 +1,8 @@
 import { defineConfig } from '@bamboocss/dev'
+import { pluginVue } from '@bamboocss/plugin-vue'
 
 export default defineConfig({
+  plugins: [pluginVue()],
   preflight: true,
   include: ['./pages/**/*.{vue,ts,tsx}', './components/**/*.{vue,ts,tsx}'],
   exclude: [],

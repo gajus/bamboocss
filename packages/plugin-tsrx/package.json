@@ -1,0 +1,58 @@
+{
+  "name": "@bamboocss/plugin-tsrx",
+  "version": "1.60.2",
+  "description": "Bamboo CSS plugin for TSRX template syntax support",
+  "homepage": "https://bamboocss.com",
+  "license": "MIT",
+  "author": "Gajus Kuizinas <gajus@gajus.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gajus/bamboocss.git",
+    "directory": "packages/plugin-tsrx"
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "main": "dist/index.cjs",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.cts",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.cts",
+      "require": "./dist/index.cjs",
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown src/index.ts --format=esm,cjs --dts",
+    "build-fast": "tsdown --dts=false src/index.ts --format=esm,cjs",
+    "dev": "pnpm build-fast --watch"
+  },
+  "dependencies": {
+    "@bamboocss/logger": "workspace:*",
+    "@bamboocss/types": "workspace:*"
+  },
+  "devDependencies": {
+    "@tsrx/core": "0.5.5"
+  },
+  "peerDependencies": {
+    "@tsrx/core": ">=0.5"
+  },
+  "peerDependenciesMeta": {
+    "@tsrx/core": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

@@ -57,8 +57,10 @@
   "devDependencies": {
     "@bamboocss/fixture": "workspace:*",
     "@bamboocss/native-extractor": "workspace:*",
+    "@bamboocss/plugin-tsrx": "workspace:*",
     "@jridgewell/trace-mapping": "^0.3.31",
     "@mdx-js/mdx": "3.1.1",
+    "@tsrx/react": "0.4.5",
     "vite": "7.2.6"
   },
   "peerDependencies": {

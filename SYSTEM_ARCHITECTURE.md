@@ -82,7 +82,9 @@ bamboo/
     `token.value()` are evaluated in place
   - Reporting what it could not evaluate as losses rather than guessing
 - **Not here**: Vue and Svelte SFCs are not parsed natively. `@bamboocss/plugin-vue` / `@bamboocss/plugin-svelte`
-  convert them to TSX in the `parser:before` hook before the source reaches Rust
+  convert them to TSX in the `parser:before` hook before the source reaches Rust. TSRX (`.tsrx`) is the same arrangement
+  through the opt-in `@bamboocss/plugin-tsrx` (parsing with `@tsrx/core`). Astro is built into `@bamboocss/node`
+  (`astro-to-tsx.ts`)
 
 #### `@bamboocss/generator` (packages/generator)
 
@@ -209,10 +211,10 @@ which pre-generates rules with no call site.
 
 - **Purpose**: Lint rules (e.g. `no-dynamic-styling`, `no-config-function-in-source`, `require-literal-token-path`)
 
-#### `@bamboocss/plugin-*` (packages/plugin-lightningcss, plugin-vue, plugin-svelte)
+#### `@bamboocss/plugin-*` (packages/plugin-lightningcss, plugin-vue, plugin-svelte, plugin-tsrx)
 
 - **Purpose**: Optional plugins. `vue` and `svelte` are auto-injected for their file types; `lightningcss` is installed
-  and listed by the user.
+  and listed by the user, as is `tsrx`.
 
 #### `@bamboocss/fixture` (packages/fixture)
 
@@ -595,6 +597,9 @@ the source-compilation guide.
 - **React/Preact**: Standard JSX
 - **Vue**: `@bamboocss/plugin-vue` converts the SFC to TSX (`@vue/compiler-sfc`) in `parser:before`
 - **Svelte**: `@bamboocss/plugin-svelte` converts the component to TSX in `parser:before`
+- **TSRX**: `@bamboocss/plugin-tsrx` (explicitly configured in `plugins`) lowers `.tsrx` template syntax (`@{ }` bodies,
+  `@if`/`@for`/`@switch`/`@try`, `<style>`, shorthand attributes, expression tags) to TSX by text edits in
+  `parser:before`, parsing with the optional `@tsrx/core` peer
 - **Solid**: JSX with Solid-specific patterns
 
 ## Plugin System

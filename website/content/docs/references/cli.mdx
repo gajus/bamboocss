@@ -79,6 +79,10 @@ pnpm bamboo "./src/components/**"
 
 Generate new CSS utilities for your project based on the configuration file.
 
+With the [Vite plugin](/docs/installation/vite), a build doesn't need this command: the plugin generates the same
+`styled-system/` in `buildStart`. Run it from `prepare`, so `tsc` and your editor have the generated types, rather than
+as a build step.
+
 ```bash
 pnpm bamboo codegen
 
@@ -98,6 +102,10 @@ pnpm bamboo codegen --watch
 ## cssgen
 
 Generate the CSS from files.
+
+With the [Vite plugin](/docs/installation/vite), a build doesn't need this command either: the plugin emits the
+stylesheet itself. `cssgen` is for builds without the plugin, or for a stylesheet file that something outside the build
+reads.
 
 ```bash
 bamboo cssgen

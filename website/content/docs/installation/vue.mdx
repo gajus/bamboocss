@@ -122,7 +122,9 @@ Install bamboo and create your `bamboo.config.ts` file.
 ### Update package.json scripts
 
 Add `"prepare": "bamboo codegen"` to `scripts`. It runs [codegen](/docs/references/cli#codegen) after every dependency
-install, so the output directory can stay in `.gitignore`.
+install, so the output directory can stay in `.gitignore`. The build needs neither it nor `bamboo cssgen`: the Vite
+plugin generates `styled-system/` and the stylesheet itself, so running either as a build step only repeats that work in
+another process.
 
 ### Add the Vite plugin
 

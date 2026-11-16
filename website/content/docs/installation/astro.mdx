@@ -15,7 +15,8 @@ pnpm bamboo init
 ```
 
 Keep `"prepare": "bamboo codegen"` in `package.json` so generated types exist before the editor or TypeScript reads
-them.
+them. The build needs neither it nor `bamboo cssgen`: the Vite plugin generates `styled-system/` and the stylesheet
+itself, so running either as a build step only repeats that work in another process.
 
 ### Include Astro sources
 

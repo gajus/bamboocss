@@ -4,6 +4,7 @@
   "private": true,
   "description": "",
   "license": "MIT",
+  "type": "module",
   "scripts": {
     "prepare": "bamboo codegen",
     "dev": "vite",
@@ -13,13 +14,14 @@
     "css:dev": "BAMBOO_DEBUG=* bamboo -w"
   },
   "dependencies": {
-    "solid-js": "1.9.10"
+    "@solidjs/web": "2.0.0-rc.23",
+    "solid-js": "2.0.0-rc.23"
   },
   "devDependencies": {
     "@bamboocss/dev": "workspace:*",
     "@bamboocss/vite": "workspace:*",
+    "@solidjs/vite-plugin": "3.0.0-next.57",
     "typescript": "7.0.2",
-    "vite": "7.2.6",
-    "vite-plugin-solid": "2.11.10"
+    "vite": "8.2.2"
   }
 }

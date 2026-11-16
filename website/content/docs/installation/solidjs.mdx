@@ -170,6 +170,26 @@ export default App
 
 </Steps>
 
+## Solid 2
+
+Bamboo works with Solid 2 unchanged. It uses no Solid API, and listed before Solid's plugin it compiles every `css()`
+call before Solid compiles the JSX. Only Solid's own packages change:
+
+- The Vite plugin is `@solidjs/vite-plugin`, in place of `vite-plugin-solid` and still after `bamboocss()`. It needs
+  Vite 8 or later.
+- `render` and `hydrate` come from `@solidjs/web` rather than `solid-js/web`.
+- `jsxImportSource` in `tsconfig.json` is `@solidjs/web`.
+
+```ts filename="vite.config.ts"
+import bamboocss from '@bamboocss/vite'
+import solid from '@solidjs/vite-plugin'
+import { defineConfig } from 'vite'
+
+export default defineConfig({
+  plugins: [bamboocss(), solid()],
+})
+```
+
 ## Troubleshooting
 
 If your IDE does not autocomplete `styled-system` imports, add that directory to `include` in `tsconfig.json`. See

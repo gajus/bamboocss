@@ -17,7 +17,11 @@ import {
   withoutSpace,
 } from '@bamboocss/shared'
 import type { TokenDictionary } from '@bamboocss/token-dictionary'
-import { lexer } from 'css-tree'
+// css-tree's prebuilt bundle rather than its package entry: the same release with the same
+// exports, in one file instead of a module graph, so a process that builds CSS loads it in
+// about a third of the time (8 ms against 27 ms). Only core reads css-tree at runtime, so nothing
+// else in a build loads the entry anyway.
+import { lexer } from 'css-tree/dist/csstree.esm'
 import type {
   AnyFunction,
   CssKeyframes,

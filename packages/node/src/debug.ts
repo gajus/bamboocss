@@ -27,13 +27,18 @@ export async function debug(ctx: BambooContext, options: DebugOptions) {
   // Into the archive, under the folder the files would have been written to, or to disk.
   const entries: ZipEntry[] = []
   const writes: Array<Promise<unknown>> = []
+  // Twenty at a time, as codegen writes. There is a file per source file, and the runtime's
+  // `writeFile` is `node:fs`'s, which fails a write that runs out of file handles where
+  // `fs-extra`'s queued it and tried again.
+  const { default: pLimit } = await import('p-limit')
+  const limit = pLimit(20)
   const write = (name: string, content: string) => {
     if (options.zip) {
       entries.push({ name: `${basename(path.resolve(outdir))}/${name}`, data: content })
       return
     }
     logger.info('cli', `Writing ${colors.bold(`${outdir}/${name}`)}`)
-    writes.push(fs.writeFile(`${outdir}${path.sep}${name}`, content))
+    writes.push(limit(() => fs.writeFile(`${outdir}${path.sep}${name}`, content)))
   }
   const finish = async () => {
     // A file that could not be written fails the command, rather than ending in a count of files

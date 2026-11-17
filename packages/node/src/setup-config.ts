@@ -3,9 +3,9 @@ import { messages } from '@bamboocss/core'
 import { logger, quote } from '@bamboocss/logger'
 import { BambooError } from '@bamboocss/shared'
 import type { Config } from '@bamboocss/types'
-import fsExtra from 'fs-extra'
 import { lookItUpSync } from 'look-it-up'
 import { outdent } from 'outdent'
+import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
 
@@ -81,7 +81,7 @@ ${
     `
 
     const filePath = join(cwd, file)
-    await fsExtra.writeFile(filePath, content)
+    await writeFile(filePath, content)
     try {
       execFileSync('oxfmt', [filePath], { stdio: 'ignore' })
     } catch {

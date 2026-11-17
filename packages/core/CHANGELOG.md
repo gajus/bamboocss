@@ -1,5 +1,20 @@
 # @bamboocss/core
 
+## 1.64.2
+
+### Patch Changes
+
+- 33bec68: Load css-tree's prebuilt bundle, `css-tree/dist/csstree.esm`, rather than its package entry, so a process
+  that builds CSS starts faster: the bundle is the same release with the same exports in one file, where the entry is a
+  graph of modules, and imports in about 8 ms against 27 ms. Loading the engine in a fresh process dropped from 98 ms to
+  85 ms. Core is the only package in a build that reads css-tree, and the declarations it validates against are the
+  same.
+  - @bamboocss/is-valid-prop@1.64.2
+  - @bamboocss/logger@1.64.2
+  - @bamboocss/shared@1.64.2
+  - @bamboocss/token-dictionary@1.64.2
+  - @bamboocss/types@1.64.2
+
 ## 1.64.1
 
 ### Patch Changes

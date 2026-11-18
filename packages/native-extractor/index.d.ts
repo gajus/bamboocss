@@ -184,6 +184,12 @@ export interface FoldCxArgument {
   readsBamboo: boolean
 }
 
+export interface FoldStyleBranch {
+  test: FoldSpan
+  consequent: Record<string, unknown>
+  alternate: Record<string, unknown>
+}
+
 export interface FoldCall {
   name: string
   kind:
@@ -207,6 +213,8 @@ export interface FoldCall {
   calleeProperty?: string
   data: unknown[]
   exact: boolean
+  /** Two exact `css()` style objects chosen by the test at the call site. */
+  styleBranch?: FoldStyleBranch
   /** Why the call is not exact, when the evaluator refused code it does not run. */
   refusal?: FoldRefusal
   argumentCount: number
@@ -224,7 +232,7 @@ export interface FoldCall {
    */
   guarded: boolean
   /**
-   * A `token.value()` or `cx()` call written first in an expression statement. What replaces it there
+   * A `token.value()`, `cx()`, or conditional `css()` call written first in an expression statement. What replaces it there
    * cannot open with `(` or `-`, which would continue the line before it where that line has no
    * semicolon.
    */

@@ -2,6 +2,7 @@
 
 pub mod exact;
 pub mod model;
+mod style_branch;
 
 use std::{
     collections::{HashMap, HashSet},
@@ -1039,6 +1040,7 @@ fn analyze_facts<'a>(
                     callee_property: None,
                     data: Vec::new(),
                     exact: false,
+                    style_branch: None,
                     refusal: None,
                     argument_count: call.arguments.len() as u32,
                     trailing_arguments_inert: true,
@@ -1074,6 +1076,7 @@ fn analyze_facts<'a>(
                 callee_property: None,
                 data,
                 exact: true,
+                style_branch: None,
                 refusal: None,
                 argument_count: call.arguments.len() as u32,
                 trailing_arguments_inert: true,
@@ -1125,6 +1128,7 @@ fn analyze_facts<'a>(
                 callee_property: None,
                 data: Vec::new(),
                 exact: false,
+                style_branch: None,
                 refusal: None,
                 argument_count: call.arguments.len() as u32,
                 trailing_arguments_inert: true,
@@ -1193,7 +1197,19 @@ fn analyze_facts<'a>(
             .map(|stops| project.keyframes_name(stops));
         let guarded = (kind == "token" || kind == "tokenValue")
             && crate::result_guarded(semantic.nodes(), node.id());
-        let statement_start = kind == "tokenValue" && is_statement_start(semantic, node.id());
+        let style_branch =
+            if kind == "css" && !raw && property.is_none() && !exact && data.len() > 1 {
+                match call.arguments.as_slice() {
+                    [argument] => argument.as_expression().and_then(|expression| {
+                        style_branch::analyze(&mut evaluator, expression, &utf16)
+                    }),
+                    _ => None,
+                }
+            } else {
+                None
+            };
+        let statement_start = (kind == "tokenValue" || style_branch.is_some())
+            && is_statement_start(semantic, node.id());
         calls.push(FoldCall {
             name,
             kind,
@@ -1206,6 +1222,7 @@ fn analyze_facts<'a>(
             callee_property: property,
             data,
             exact,
+            style_branch,
             refusal: refusal
                 .filter(|_| !exact)
                 .map(|refusal| fold_refusal(&refusal)),
@@ -1624,6 +1641,7 @@ fn recipe_invocation<'a>(
         callee_property: None,
         data,
         exact: true,
+        style_branch: None,
         refusal: None,
         argument_count: call.arguments.len() as u32,
         trailing_arguments_inert: true,

@@ -50,6 +50,8 @@ pub struct FoldCall {
     /// leaf, no branch collapsed to one arm, no destructuring default standing in for a value,
     /// no spread or computed key the value cannot account for.
     pub exact: bool,
+    /// For `css()`, two exact style objects chosen by the test at the call site.
+    pub style_branch: Option<FoldStyleBranch>,
     /// For a call that is not exact because the evaluator refused code it does not run: what,
     /// and where. Absent when it is not exact for any other reason.
     pub refusal: Option<FoldRefusal>,
@@ -72,10 +74,17 @@ pub struct FoldCall {
     /// `token('colors.brand') ?? '#fff'`: a path naming no token is a case its author handled,
     /// and the call is compiled to the `undefined` it returns. See `result_guarded`.
     pub guarded: bool,
-    /// A `token.value()` or `cx()` call written first in an expression statement,
+    /// A `token.value()`, `cx()` or conditional `css()` call written first in an expression statement,
     /// `token.value('zIndex.hide').toFixed()` standing as one. What replaces it there cannot open
     /// with `(` or `-`, which would continue the line before it where that line has no semicolon.
     pub statement_start: bool,
+}
+
+#[napi(object)]
+pub struct FoldStyleBranch {
+    pub test: FoldSpan,
+    pub consequent: serde_json::Value,
+    pub alternate: serde_json::Value,
 }
 
 /// Code the evaluator does not run, which is why a call's arguments are not known.

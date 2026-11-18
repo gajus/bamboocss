@@ -40,7 +40,16 @@ An ordinary branch between complete calls is also finite:
 const className = compact ? css({ px: '2' }) : css({ px: '4' })
 ```
 
-The compiler can rewrite both calls independently. Moving the branch inside a style value is open-ended and rejected:
+The compiler can rewrite both calls independently. It can also lower a single choice within a `css()` argument when both
+styles are known. The test can read a local `const` initialized by a ternary of literals or compare it to a literal with
+`===` or `!==`:
+
+```tsx
+const tone = loud ? 'loud' : 'quiet'
+const className = css({ color: tone === 'quiet' ? 'blue.500' : 'orange.500' })
+```
+
+An open-ended style value is rejected:
 
 ```tsx
 // Rejected: `color` is a runtime style value.

@@ -488,6 +488,8 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     name: string
     /** Symbolic declarations this candidate contributes, before class allocation. */
     styleSet?: Dict
+    /** A `css()` choice that can also compose with the other arguments in an enclosing `cx()`. */
+    styleBranch?: { test: FoldSpan; consequent: Dict; alternate: Dict }
     className?: string
     /** Every class literal emitted, when that is more than `className` — see FoldedCall. */
     classNames?: string[]
@@ -549,6 +551,9 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     skipped.push({ name, reason: error.reason, start, end, detail: error.message })
   }
 
+  const branchClassNames = ({ consequent, alternate }: NonNullable<Candidate['styleBranch']>) =>
+    [styleCompiler.className(consequent), styleCompiler.className(alternate)] as const
+
   /**
    * Report what no rule can be written for, found composing `parts` in `composition`, by the parts
    * it is written in.
@@ -566,9 +571,11 @@ export const foldSource = (options: FoldOptions): FoldResult => {
   ) => {
     let reported = false
     for (const part of parts) {
-      const unknown = unwritableIn(() =>
-        part.styleMap ? part.styleMap.compile() : styleCompiler.className(part.styleSet ?? {}),
-      )
+      const unknown = unwritableIn(() => {
+        if (part.styleMap) return part.styleMap.compile()
+        if (part.styleBranch) return branchClassNames(part.styleBranch)
+        return styleCompiler.className(part.styleSet ?? {})
+      })
       if (!unknown) continue
       reportUnwritable(part.name, part.start, part.end, unknown)
       part.failed = true
@@ -827,6 +834,22 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       continue
     }
 
+    if (call.styleBranch) {
+      const { test, consequent, alternate } = call.styleBranch
+      candidates.push({
+        call,
+        name,
+        start,
+        end,
+        styleBranch: {
+          test,
+          consequent: styleCompiler.compose(consequent),
+          alternate: styleCompiler.compose(alternate),
+        },
+      })
+      continue
+    }
+
     if (!call.exact || !hasStyles(call.data)) {
       skipped.push({ name, reason: 'dynamic', start, end, ...(call.refusal && { refusal: call.refusal }) })
       continue
@@ -843,6 +866,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
   for (const candidate of candidates) {
     if (
       candidate.styleSet ||
+      candidate.styleBranch ||
       candidate.value !== undefined ||
       candidate.missing ||
       candidate.replacement ||
@@ -1011,6 +1035,18 @@ export const foldSource = (options: FoldOptions): FoldResult => {
         into.push({ kind: 'style', candidate })
         return true
       }
+      if (candidate?.styleBranch) {
+        const { test, consequent, alternate } = candidate.styleBranch
+        matched.push(candidate)
+        tests.push(test)
+        into.push({
+          kind: 'branch',
+          test,
+          then: [{ kind: 'style', candidate: { ...candidate, styleSet: consequent } }],
+          otherwise: [{ kind: 'style', candidate: { ...candidate, styleSet: alternate } }],
+        })
+        return true
+      }
       if (candidate?.call.kind === 'viewTransition' && candidate.replacement && candidate.className) {
         constantCandidates.push(candidate)
         into.push({ kind: 'class', value: candidate.className, candidate })
@@ -1135,7 +1171,13 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       const composesStyleSet = (arg: FoldCxArgument): boolean => {
         if (arg.kind === 'binding') return true
         const candidate = byRange.get(`${arg.span.start}:${arg.span.end}`)
-        if (candidate?.styleSet || candidate?.styleMap?.outputKind === 'class' || candidate?.replacement) return true
+        if (
+          candidate?.styleSet ||
+          candidate?.styleBranch ||
+          candidate?.styleMap?.outputKind === 'class' ||
+          candidate?.replacement
+        )
+          return true
         return (
           (arg.kind === 'array' || arg.kind === 'when' || arg.kind === 'choose') &&
           (arg.elements ?? []).some(composesStyleSet)
@@ -1457,8 +1499,10 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     }
 
     let className: string
+    let alternate: string | undefined
     try {
-      className = styleCompiler.className(candidate.styleSet ?? {})
+      if (candidate.styleBranch) [className, alternate] = branchClassNames(candidate.styleBranch)
+      else className = styleCompiler.className(candidate.styleSet ?? {})
     } catch (error) {
       if (error instanceof UnwritableStyleError) reportUnwritable(name, start, end, error)
       else skipped.push({ name, reason: 'dynamic', start, end, ...styleErrorDetail(error) })
@@ -1467,9 +1511,18 @@ export const foldSource = (options: FoldOptions): FoldResult => {
 
     // JSON.stringify escapes the backslashes bamboo puts in class names for escaped
     // characters, and any quote an arbitrary value introduced.
-    magic.overwrite(start, end, JSON.stringify(className))
+    let replacement = JSON.stringify(className)
+    const classNames = className ? [className] : []
+    if (candidate.styleBranch) {
+      const { test } = candidate.styleBranch
+      const condition = code.slice(test.start, test.end)
+      replacement = `${candidate.call.statementStart ? 'void 0, ' : ''}((${condition}) ? ${replacement} : ${JSON.stringify(alternate)})`
+      if (alternate && alternate !== className) classNames.push(alternate)
+      className = ''
+    }
+    magic.overwrite(start, end, replacement)
     applied.push([start, end])
-    folded.push({ name, kind: 'class', className, classNames: className ? [className] : [], start, end })
+    folded.push({ name, kind: 'class', className, classNames, start, end })
   }
 
   // `input.splitVariantProps(props)` — the other way a wrapper reaches its recipe. Lowered to

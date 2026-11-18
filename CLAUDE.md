@@ -89,9 +89,15 @@ returns plain facts — calls, their evaluated data and exactness, imports, refe
 with UTF-16 offsets. `packages/vite/src/fold.ts` keeps what is policy: class allocation, recipe decision tables, `cx`
 composition and the MagicString edits. Rules deciding whether an evaluated value may _replace_ source live in
 `fold/exact.rs`; extraction is deliberately optimistic and the fold is not, so a change to the evaluator has to be read
-against both. Modules outside `include`/`exclude`, and framework rewrites that reach nothing bamboo, are still skipped
-before analysis (`packages/vite/src/plugin.ts`, `compileModule`). A single-file component's compiled script is held as a
-project overlay under `X.__bamboo__.ts[x]` so an importer resolves the same text; nothing is written to disk.
+against both. A module that reaches nothing bamboo is skipped before analysis: one naming no entrypoint and importing
+nothing the project holds, whether `include` holds it as it is, a framework rewrote it first or it lies outside
+`include`/`exclude` (`importsSourceModule` in `packages/vite/src/plugin.ts`). An import is followed the ways the native
+evaluator's `resolve` follows one — a relative path, tsconfig `paths` and `baseUrl`, a `#` import, and a package the
+inventory holds files of, as it holds a workspace design system imported as `@acme/ds`; skipping that caller leaves a
+call to a recipe the compiler removed. Never ask the bundler there: the specifiers are read out of text, which cannot
+tell a type from a value, and Vite fails the build resolving `import type … from 'type-fest'`, a package with no
+JavaScript. A single-file component's compiled script is held as a project overlay under `X.__bamboo__.ts[x]` so an
+importer resolves the same text; nothing is written to disk.
 
 **Cross-file answers are cached across native calls.** Each transform builds a fresh `ProjectEvaluator`, so without it a
 module importing from a large barrel re-parsed the barrel's members every time. `evaluate_export`, the imported-recipe

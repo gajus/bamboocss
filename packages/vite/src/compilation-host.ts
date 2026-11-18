@@ -71,6 +71,8 @@ export interface CompilationHost {
   setDevSourcemap(enabled: boolean): void
   /** Whether `include` covers this path and `exclude` does not. `true` before a Builder exists. */
   isSourceFile(filePath: string): boolean
+  /** Whether the inventory holds files of a package, by name. `true` before a Builder exists. */
+  isSourcePackage(name: string): boolean
   /** The current generation, without loading anything. `undefined` before the first setup. */
   current(): CompilationGeneration | undefined
   /**
@@ -247,6 +249,10 @@ export const createCompilationHost = (options: CompilationHostOptions = {}): Com
 
     isSourceFile(filePath) {
       return builder?.context ? builder.isPotentialSourceFile(filePath) : true
+    },
+
+    isSourcePackage(name) {
+      return builder?.context ? builder.isSourcePackage(name) : true
     },
 
     current: () => generation,

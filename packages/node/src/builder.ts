@@ -3,7 +3,7 @@ import { logger } from '@bamboocss/logger'
 import { BambooError, uniq } from '@bamboocss/shared'
 import type { DiffConfigResult } from '@bamboocss/types'
 import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs'
-import { normalize, resolve } from 'node:path'
+import { dirname, normalize, resolve } from 'node:path'
 import { artifactsToRebuild, codegen } from './codegen'
 import { loadConfigAndCreateContext } from './config'
 import { BambooContext } from './create-context'
@@ -257,6 +257,51 @@ export class Builder {
         bases.some((base) => source === base.path || source.startsWith(base.prefix)) &&
         isSource(this.sourcePath(ctx.runtime.path.relative(ctx.config.cwd, source))),
     )
+  }
+
+  /** The packages the inventory holds files of, by name, for one inventory. @see isSourcePackage */
+  private sourcePackages: { inventory: readonly string[]; names: ReadonlySet<string> } | undefined
+
+  /**
+   * @internal Whether a package is one the inventory holds files of — a workspace package `include`
+   * reaches, such as a design system imported as `@acme/ds`. `true` before an inventory exists.
+   *
+   * What the Vite compiler asks of a module importing a package by name. A published package ships
+   * its own output, but a call into this one folds against its source, and the compiled source no
+   * longer defines what a module left uncompiled would call. Named as a workspace links a package:
+   * by the nearest `package.json` above each file that has a name.
+   */
+  isSourcePackage = (name: string): boolean => {
+    const ctx = this.getContextOrThrow()
+    const inventory = this.sourceInventory
+    if (!inventory) return true
+    if (this.sourcePackages?.inventory !== inventory) {
+      const nameByDirectory = new Map<string, string | undefined>()
+      const packageNameOf = (directory: string): string | undefined => {
+        if (nameByDirectory.has(directory)) return nameByDirectory.get(directory)
+        let packageName: string | undefined
+        const manifest = resolve(directory, 'package.json')
+        if (existsSync(manifest)) {
+          try {
+            const parsed = JSON.parse(readFileSync(manifest, 'utf8')) as { name?: unknown }
+            if (typeof parsed.name === 'string') packageName = parsed.name
+          } catch {
+            // Not a manifest a package manager could link a name from.
+          }
+        }
+        const parent = dirname(directory)
+        if (packageName === undefined && parent !== directory) packageName = packageNameOf(parent)
+        nameByDirectory.set(directory, packageName)
+        return packageName
+      }
+      const names = new Set<string>()
+      for (const file of inventory) {
+        const packageName = packageNameOf(dirname(this.absOwner(ctx, file)))
+        if (packageName) names.add(packageName)
+      }
+      this.sourcePackages = { inventory, names }
+    }
+    return this.sourcePackages.names.has(name)
   }
 
   /** The folders each context's `include` is globbed from. @see isPotentialSourceFile */

@@ -223,22 +223,45 @@ const SPECIFIER_SUFFIXES = [
   '/index.js',
 ]
 
+/** What `importsSourceModule` answers a specifier from. */
+export interface SourceResolution {
+  /** Whether a path is a module the inventory covers — or one the compiler holds an overlay of. */
+  isSourceModule: (filePath: string) => boolean
+  /** Where a tsconfig `paths` mapping sends a specifier, when one matches. */
+  resolveAlias: (specifier: string) => string | undefined
+  /** The tsconfig `baseUrl`, absolute, which a bare specifier is tried against too. */
+  baseUrl: string | undefined
+  /** Whether the inventory holds files of a package, by name. */
+  isSourcePackage: (name: string) => boolean
+}
+
+/** The package a bare specifier names: its scope and name, or its first segment. */
+const packageNameOf = (specifier: string) => {
+  const segments = specifier.split('/')
+  return specifier.startsWith('@') ? segments.slice(0, 2).join('/') : segments[0]!
+}
+
 /**
  * Whether a module imports a module the extraction inventory covers.
  *
  * Answered from `include`, the filesystem and the compiler's overlays — no parse — which is
- * what makes it affordable to ask of every module outside the inventory. A relative specifier
- * is tried against the file names a bundler would, and an aliased one through `resolveAlias`,
- * which the caller supplies from the fold chunk so the tsconfig-path resolver stays out of the
- * public entry. A package name is not followed: a published package ships its own output.
+ * what makes it affordable to ask of every module. A specifier is followed the ways the native
+ * evaluator follows one (`resolve` in `evaluator.rs`), since a call the compiler can fold is one
+ * whose import that evaluator reaches: a relative or absolute path tried against the file names
+ * a bundler would, a tsconfig `paths` mapping through `resolveAlias` — supplied from the fold
+ * chunk so the tsconfig-path resolver stays out of the public entry — the `baseUrl`, and a
+ * package by name, when the inventory holds its files. A workspace design system imported as
+ * `@acme/ds` is compiled from source, so a module calling it has to be compiled too; a published
+ * package ships its own output. A subpath import (`#…`) resolves through the importer's
+ * `package.json`, which this does not read, so one counts.
+ *
+ * The bundler is not asked. The specifiers here are read out of text, which cannot tell a type
+ * from a value, and a type-only one is an import nothing else resolves: Vite fails the build
+ * resolving `import type { Simplify } from 'type-fest'`, a package with no JavaScript, and in dev
+ * pre-bundles a package with some for a browser that never loads it.
  */
-export const importsSourceModule = (
-  /** Whether a path is a module the inventory covers — or one the compiler holds an overlay of. */
-  isSourceModule: (filePath: string) => boolean,
-  resolveAlias: (specifier: string) => string | undefined,
-  filePath: string,
-  code: string,
-) => {
+export const importsSourceModule = (resolution: SourceResolution, filePath: string, code: string) => {
+  const { isSourceModule, resolveAlias, baseUrl, isSourcePackage } = resolution
   const directory = dirname(filePath)
   const covered = (base: string) => SPECIFIER_SUFFIXES.some((suffix) => isSourceModule(base + suffix))
   for (const match of code.matchAll(MODULE_SPECIFIER)) {
@@ -247,8 +270,17 @@ export const importsSourceModule = (
       if (covered(specifier.startsWith('/') ? specifier : resolve(directory, specifier))) return true
       continue
     }
+    // A protocol — `node:`, `virtual:`, a URL — names no file the evaluator could follow.
+    if (specifier.includes(':')) continue
     const aliased = resolveAlias(specifier)
     if (aliased && covered(resolve(aliased))) return true
+    if (specifier.startsWith('#')) {
+      // The evaluator reads the importer's `imports` only where no `paths` mapping matched.
+      if (!aliased) return true
+      continue
+    }
+    if (baseUrl && covered(resolve(baseUrl, specifier))) return true
+    if (isSourcePackage(packageNameOf(specifier))) return true
   }
   return false
 }
@@ -2983,25 +3015,38 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     //
     // The same test decides for a module the inventory holds under different text — a framework
     // plugin's rewrite of an included file, such as the export-name stubs a router derives from
-    // its page modules. A stub that names nothing bamboo compiles to nothing.
-    const heldAsIs = host.isSourceFile(filePath) && ctx.project.getSourceText(filePath) === code
+    // its page modules, or every component when plugin-react's babel pass runs ahead of this
+    // plugin. A stub that names nothing bamboo compiles to nothing.
+    //
+    // And for one it holds as it is: an included module that names no entrypoint and imports no
+    // module the inventory covers has no call the compiler could fold, so parsing it finds
+    // nothing. Parsing one cost about 0.6 ms, and 1.5 ms once it imported packages, which on an
+    // app where most modules hold no styles was most of the compiler's time.
+    const { baseUrl } = ctx.project.resolutionOptions
     if (
-      !heldAsIs &&
       !namesEntrypoint(ctx, code) &&
       !importsSourceModule(
-        (path) => ctx!.project.sourceIsOverridden(path) || (host.isSourceFile(path) && existsSync(path)),
-        (specifier) => {
-          const mappings = ctx!.conf.tsOptions?.pathMappings
-          return mappings ? resolveTsPathImpl?.(mappings, specifier) : undefined
+        {
+          isSourceModule: (path) =>
+            ctx!.project.sourceIsOverridden(path) || (host.isSourceFile(path) && existsSync(path)),
+          resolveAlias: (specifier) => {
+            const mappings = ctx!.conf.tsOptions?.pathMappings
+            return mappings ? resolveTsPathImpl?.(mappings, specifier) : undefined
+          },
+          // Against the working directory, as the native evaluator joins it.
+          baseUrl: baseUrl === undefined ? undefined : resolve(ctx.config.cwd, baseUrl),
+          isSourcePackage: (name) => host.isSourcePackage(name),
         },
         filePath,
         code,
       )
     ) {
-      logger.debug(
-        'vite:transform',
-        `Skipped ${filePath}: ${host.isSourceFile(filePath) ? 'rewritten before bamboo' : 'outside `include`'}, and it reaches nothing bamboo`,
-      )
+      const where = !host.isSourceFile(filePath)
+        ? 'outside `include`'
+        : ctx.project.getSourceText(filePath) === code
+          ? 'included'
+          : 'rewritten before bamboo'
+      logger.debug('vite:transform', `Skipped ${filePath}: ${where}, and it reaches nothing bamboo`)
       return null
     }
 

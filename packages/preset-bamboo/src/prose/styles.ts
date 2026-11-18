@@ -42,6 +42,8 @@ export function createSizeStyles(size: ProseSize): ProseStyleParts {
 // Rhythm and scale
 // ---------------------------------------------------------------------------
 
+const BLOCK_FALLBACK = '> *'
+
 // Leading is line height; flow is the gap between blocks, in body-ems. Elements measure in `em`.
 export function createScaleStyles(prefix: string): ProseStyleParts {
   const leading = cssVar(prefix, 'leading')
@@ -57,8 +59,11 @@ export function createScaleStyles(prefix: string): ProseStyleParts {
   return {
     root,
     elements: {
+      [BLOCK_FALLBACK]: { marginBlockStart: raw(flow.ref) },
       p: { marginBlockStart: raw(flow.ref) },
       '.lead': {
+        color: color(prefix, 'lead'),
+        fontWeight: 'normal',
         fontSize: raw('1.125em'),
         marginBlockStart: flowTimes(1, 1.125),
       },
@@ -119,6 +124,7 @@ export function createScaleStyles(prefix: string): ProseStyleParts {
         fontSize: raw('0.875em'),
         lineHeight: raw('1.5'),
       },
+      '> :first-child': { marginBlockStart: '0' },
     },
   }
 }
@@ -259,13 +265,6 @@ export function createBaseStyles(prefix: string): ProseStyleParts {
       figcaption: {
         color: color(prefix, 'caption'),
       },
-      '.lead': {
-        color: color(prefix, 'lead'),
-        fontWeight: 'normal',
-      },
-      ' > :first-child': {
-        marginBlockStart: '0',
-      },
     },
   }
 }
@@ -305,9 +304,11 @@ function mergeParts(first: ProseStyleParts, second: ProseStyleParts): ProseStyle
 }
 
 function nestSelector(part: string, notProseClass?: string): string {
-  if (!notProseClass) return `& ${part}`
+  const notProse = notProseClass ? `:not(:where([class~="${notProseClass}"],[class~="${notProseClass}"] *))` : ''
+  // Keep even the recipe's own class at zero specificity so the child's own margin wins.
+  if (part === BLOCK_FALLBACK) return `:where(& > *)${notProse}`
+  if (!notProse) return `& ${part}`
 
-  const notProse = `:not(:where([class~="${notProseClass}"],[class~="${notProseClass}"] *))`
   // A part that opens with a combinator, `> :first-child`, stays outside `:where()`, which takes no
   // combinator first: inside it, as Panda writes it, the rule matched nothing.
   return /^[>+~]/.test(part) ? `& ${part}${notProse}` : `& :where(${part})${notProse}`

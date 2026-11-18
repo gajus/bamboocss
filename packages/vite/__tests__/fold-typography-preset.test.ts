@@ -1,5 +1,6 @@
 import { typographyPreset } from '../../preset-bamboo/src'
 import { describe, expect, test } from 'vitest'
+import { cascadeOrder, specificity } from '../../core/__tests__/cascade-oracle'
 import { createFoldFixture, selectorsFor } from './fixture'
 
 /**
@@ -42,6 +43,29 @@ describe('the typography preset, compiled', () => {
     expect(fixture.getStyleSetCss()).toContain(
       ' > :first-child:not(:where([class~="not-prose"],[class~="not-prose"] *)) {',
     )
+  })
+
+  test.each([false, true])('orders block spacing with notProse set to %s', (notProse) => {
+    const fixture = fixtureWith({ notProse }, { invalidDeclaration: 'error' })
+    fixture.foldStyleSets(
+      `${SOURCE}\nimport { css } from 'styled-system/css'\nexport const child = css({ marginBlockStart: '8' })`,
+    )
+    const rules = cascadeOrder(fixture.getStyleSetCss())['margin-block-start']!
+    const exclusion = notProse ? ':not(:where([class~="not-prose"],[class~="not-prose"] *))' : ''
+    const fallback = rules.find((selector) => selector.startsWith(':where(') && selector.endsWith(` > *)${exclusion}`))!
+    const paragraph = rules.find((selector) => selector.endsWith(notProse ? ` :where(p)${exclusion}` : ' p'))!
+    const lead = rules.find((selector) => selector.endsWith(notProse ? ` :where(.lead)${exclusion}` : ' .lead'))!
+    const first = rules.find((selector) => selector.endsWith(` > :first-child${exclusion}`))!
+    const child = rules.find((selector) => selector.endsWith('mbs_8'))!
+
+    expect(specificity(fallback)).toEqual([0, 0, 0])
+    expect(rules.filter((rule) => [fallback, paragraph, lead, first].includes(rule))).toEqual([
+      fallback,
+      paragraph,
+      lead,
+      first,
+    ])
+    expect(rules.indexOf(child)).toBeGreaterThan(rules.indexOf(fallback))
   })
 
   // The same key, merged by `cx`, so only the override ships for it — a heading of its own too,

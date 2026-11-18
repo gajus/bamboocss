@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use evaluator::{
     EvalResult, FileEvaluator, Fragments, ProjectEvaluator, spread_value, write_property,
@@ -100,12 +100,45 @@ pub struct NativeToken {
     pub variable: Option<String>,
 }
 
+/// The project's token table, converted once for every call after it. See `tokenTable`.
+#[napi]
+pub struct NativeTokenTable {
+    table: Arc<evaluator::TokenTable>,
+}
+
+/// Convert the project's token table once, for `compileModules` and `analyzeMany` to be handed
+/// with each call in place of the tokens themselves.
+///
+/// `compileModules` runs once per transformed module, and the tokens crossed into Rust with each
+/// call: about 0.44 µs a token, 0.9 ms a module under `preset-atlaskit`, which is more than
+/// analyzing most modules takes.
+#[napi(catch_unwind)]
+pub fn token_table(tokens: Vec<NativeToken>) -> NativeTokenTable {
+    panic_if_asked();
+    NativeTokenTable {
+        table: Arc::new(evaluator::TokenTable::new(tokens)),
+    }
+}
+
+/// The table a call evaluates `token()` against: the project's, when it is handed one, or else
+/// one made of the tokens it was given.
+fn call_tokens(
+    table: Option<&NativeTokenTable>,
+    tokens: Option<Vec<NativeToken>>,
+) -> Arc<evaluator::TokenTable> {
+    table.map_or_else(
+        || Arc::new(evaluator::TokenTable::new(tokens.unwrap_or_default())),
+        |table| Arc::clone(&table.table),
+    )
+}
+
 #[napi(object)]
 pub struct NativeProjectOptions {
     pub cwd: Option<String>,
     pub base_url: Option<String>,
     pub paths: Vec<NativePathMapping>,
-    pub tokens: Vec<NativeToken>,
+    /// The token table, for a call handed no `NativeTokenTable`.
+    pub tokens: Option<Vec<NativeToken>>,
     pub jsx: bool,
     /// The class prefix a `keyframes()` name is written after: `app-kf_feVUdh`.
     pub class_prefix: Option<String>,
@@ -963,7 +996,7 @@ fn panic_if_asked() {
 }
 
 /// For the tests, and not part of the API: the next call into `analyze`, `analyzeMany`,
-/// `accountTokens` or `compileModules` panics, as a bug in it would.
+/// `accountTokens`, `compileModules` or `tokenTable` panics, as a bug in it would.
 #[napi(catch_unwind, js_name = "__panicNext")]
 pub fn panic_next() {
     PANIC_NEXT.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -994,25 +1027,34 @@ pub fn analyze(
         std::iter::once((filename.as_str(), source.as_str())),
         &entrypoints,
         None,
+        call_tokens(None, None),
     );
     analyze_source(&project, &filename, &source, &entrypoints, false)
 }
 
 /// Analyze a cold or incremental inventory in one N-API call. ASTs and expression graphs stay
 /// in Rust; only compact extraction records cross into JavaScript.
+///
+/// `tokens` is the project's table from `tokenTable`, which answers in place of `options.tokens`.
 #[napi(catch_unwind)]
 pub fn analyze_many(
     sources: Vec<NativeSource>,
     entrypoints: Vec<NativeEntrypoint>,
-    options: Option<NativeProjectOptions>,
+    mut options: Option<NativeProjectOptions>,
+    tokens: Option<&NativeTokenTable>,
 ) -> Result<Vec<NativeFileAnalysis>> {
     panic_if_asked();
+    let tokens = call_tokens(
+        tokens,
+        options.as_mut().and_then(|options| options.tokens.take()),
+    );
     let project = ProjectEvaluator::new(
         sources
             .iter()
             .map(|source| (source.filename.as_str(), source.source.as_str())),
         &entrypoints,
         options.as_ref(),
+        tokens,
     );
     sources
         .iter()
@@ -1095,7 +1137,8 @@ pub struct NativeFoldOptions {
     pub cwd: Option<String>,
     pub base_url: Option<String>,
     pub paths: Vec<NativePathMapping>,
-    pub tokens: Vec<NativeToken>,
+    /// The token table, for a call handed no `NativeTokenTable`.
+    pub tokens: Option<Vec<NativeToken>>,
     pub css_modules: Vec<String>,
     pub token_modules: Vec<String>,
     pub recipe_modules: Vec<String>,
@@ -1112,13 +1155,16 @@ pub struct NativeFoldOptions {
 ///
 /// `sources` are the modules to analyze; `auxiliary` are modules whose bytes differ from disk
 /// (a `parser:before` output, an unsaved buffer) and which a cross-module read must see as-is.
+/// `tokens` is the project's table from `tokenTable`, which answers in place of `options.tokens`.
 #[napi(catch_unwind)]
 pub fn compile_modules(
     sources: Vec<NativeSource>,
     auxiliary: Vec<NativeSource>,
-    options: NativeFoldOptions,
+    mut options: NativeFoldOptions,
+    tokens: Option<&NativeTokenTable>,
 ) -> Result<Vec<fold::model::FoldAnalysis>> {
     panic_if_asked();
+    let tokens = call_tokens(tokens, options.tokens.take());
     let entrypoints = vec![
         NativeEntrypoint {
             kind: "css".into(),
@@ -1160,15 +1206,7 @@ pub fn compile_modules(
                 paths: mapping.paths.clone(),
             })
             .collect(),
-        tokens: options
-            .tokens
-            .iter()
-            .map(|token| NativeToken {
-                path: token.path.clone(),
-                value: token.value.clone(),
-                variable: token.variable.clone(),
-            })
-            .collect(),
+        tokens: None,
         jsx: false,
         class_prefix: options.class_prefix.clone(),
     };
@@ -1179,6 +1217,7 @@ pub fn compile_modules(
             .map(|source| (source.filename.as_str(), source.source.as_str())),
         &entrypoints,
         Some(&project_options),
+        tokens,
     );
     let recipe_names: std::collections::HashSet<String> =
         options.recipe_names.iter().cloned().collect();

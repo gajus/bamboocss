@@ -5,8 +5,8 @@ import type {
   NativeFileAnalysis,
   NativeProjectOptions,
   NativeSource,
-  NativeToken,
   NativeTokenAccounting,
+  NativeTokenTable,
 } from '@bamboocss/native-extractor'
 import { filesReadBy, getConfigDependencies } from '@bamboocss/config'
 import { checkNamingAgreement, formatNamingDisagreement } from '@bamboocss/core'
@@ -469,38 +469,47 @@ export class BambooContext extends Generator {
       const prepared = this.auxiliarySource(filename, this.project.sourceIsOverridden(filename))
       if (prepared) auxiliary.push(prepared)
     }
-    return this.loadNativeExtractor().compileModules(sources, auxiliary, {
-      cwd: this.config.cwd,
-      baseUrl,
-      paths: Object.entries(paths).map(([pattern, values]) => ({ pattern, paths: values })),
-      tokens: this.nativeTokens,
-      cssModules: this.imports.value.css,
-      tokenModules: this.imports.value.tokens,
-      recipeModules: this.imports.value.recipe,
-      patternModules: this.imports.value.pattern,
-      recipeNames: this.recipes.keys,
-      patternNames: this.patterns.keys,
-      references: options.references,
-      classPrefix: this.utility.prefix || undefined,
-    })
+    return this.loadNativeExtractor().compileModules(
+      sources,
+      auxiliary,
+      {
+        cwd: this.config.cwd,
+        baseUrl,
+        paths: Object.entries(paths).map(([pattern, values]) => ({ pattern, paths: values })),
+        cssModules: this.imports.value.css,
+        tokenModules: this.imports.value.tokens,
+        recipeModules: this.imports.value.recipe,
+        patternModules: this.imports.value.pattern,
+        recipeNames: this.recipes.keys,
+        patternNames: this.patterns.keys,
+        references: options.references,
+        classPrefix: this.utility.prefix || undefined,
+      },
+      this.nativeTokens,
+    )
   }
 
   /**
-   * The token table as the native evaluator reads it.
+   * The token table as the native evaluator reads it, converted into the native engine once per
+   * context and handed to each call from then on.
    *
-   * Built once per context rather than per call: `compileModules` runs once per transformed
-   * module, and the table is every token in the project — rebuilding it priced the whole
-   * dictionary into every file, most of which never call `token()`.
+   * `compileModules` runs once per transformed module, and the table is every token in the
+   * project. Rebuilding it priced the whole dictionary into every file, most of which never call
+   * `token()`, and so did handing it over built: each call converted it into Rust again, about
+   * 0.44 µs a token — 0.9 ms a module under `preset-atlaskit`'s 1,655 tokens, several times what
+   * analyzing most modules takes.
    */
-  private get nativeTokens(): NativeToken[] {
-    this.nativeTokenTable ??= this.tokens.allTokens.map((token) => ({
-      path: token.name,
-      value: this.tokens.view.get(token.name),
-      variable: this.tokens.view.getVar(token.name),
-    }))
+  private get nativeTokens(): NativeTokenTable {
+    this.nativeTokenTable ??= this.loadNativeExtractor().tokenTable(
+      this.tokens.allTokens.map((token) => ({
+        path: token.name,
+        value: this.tokens.view.get(token.name),
+        variable: this.tokens.view.getVar(token.name),
+      })),
+    )
     return this.nativeTokenTable
   }
-  private nativeTokenTable: NativeToken[] | undefined
+  private nativeTokenTable: NativeTokenTable | undefined
 
   /**
    * One auxiliary module as the native engine has to be handed it, or `undefined` when the
@@ -646,13 +655,12 @@ export class BambooContext extends Generator {
       cwd: this.config.cwd,
       baseUrl,
       paths: Object.entries(paths).map(([pattern, values]) => ({ pattern, paths: values })),
-      tokens: this.nativeTokens,
       jsx: this.jsx.isEnabled,
       classPrefix: this.utility.prefix || undefined,
     }
     let analyses: NativeFileAnalysis[]
     try {
-      analyses = this.loadNativeExtractor().analyzeMany(sources, entrypoints, options)
+      analyses = this.loadNativeExtractor().analyzeMany(sources, entrypoints, options, this.nativeTokens)
     } finally {
       this.nativePreparedSources.clear()
     }

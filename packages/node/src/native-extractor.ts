@@ -7,7 +7,9 @@ import type {
   NativePathMapping,
   NativeProjectOptions,
   NativeSource,
+  NativeToken,
   NativeTokenAccounting,
+  NativeTokenTable,
 } from '@bamboocss/native-extractor'
 import { BambooError } from '@bamboocss/shared'
 import { readFileSync } from 'node:fs'
@@ -21,6 +23,7 @@ export type NativeExtractor = {
     sources: NativeSource[],
     entrypoints: NativeEntrypoint[],
     options?: NativeProjectOptions,
+    tokens?: NativeTokenTable,
   ): NativeFileAnalysis[]
   accountTokens(
     filename: string,
@@ -28,7 +31,13 @@ export type NativeExtractor = {
     tokenModules: string[],
     pathMappings?: NativePathMapping[],
   ): NativeTokenAccounting
-  compileModules(sources: NativeSource[], auxiliary: NativeSource[], options: NativeFoldOptions): FoldAnalysis[]
+  compileModules(
+    sources: NativeSource[],
+    auxiliary: NativeSource[],
+    options: NativeFoldOptions,
+    tokens?: NativeTokenTable,
+  ): FoldAnalysis[]
+  tokenTable(tokens: NativeToken[]): NativeTokenTable
 }
 
 /**

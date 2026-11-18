@@ -58,6 +58,7 @@ describe('a panic in the native extractor', () => {
     ['analyzeMany', () => native.analyzeMany([{ filename: '/a.ts', source: SOURCE }], ENTRYPOINTS)],
     ['accountTokens', () => native.accountTokens('/a.ts', SOURCE, ['styled-system/tokens'])],
     ['compileModules', () => native.compileModules([{ filename: '/a.tsx', source: SOURCE }], [], fold('/'))],
+    ['tokenTable', () => native.tokenTable([{ path: 'colors.brand', variable: 'var(--colors-brand)' }])],
   ])('is thrown from %s as an error, and the next call runs', (_, call) => {
     native.__panicNext()
 

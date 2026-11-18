@@ -654,13 +654,47 @@ impl ExportFrame {
     }
 }
 
+/// The project's tokens as `token()` reads them, and the hash a cached answer is keyed by.
+///
+/// Made once per config load and shared by the calls after it, through `NativeTokenTable`.
+/// `compileModules` runs once per transformed module, and taking the table with each call —
+/// converted from JavaScript, copied twice and hashed — cost about 0.44 µs a token a module:
+/// 0.9 ms a module under `preset-atlaskit`'s 1,655 tokens, several times what analyzing one takes.
+pub(crate) struct TokenTable {
+    values: HashMap<String, (Option<serde_json::Value>, Option<String>)>,
+    /// Of every token's path, value and variable, in path order.
+    hash: u64,
+}
+
+impl TokenTable {
+    pub fn new(tokens: Vec<NativeToken>) -> Self {
+        let values: HashMap<String, (Option<serde_json::Value>, Option<String>)> = tokens
+            .into_iter()
+            .map(|token| (token.path, (token.value, token.variable)))
+            .collect();
+        let mut keys: Vec<_> = values
+            .iter()
+            .map(|(path, (value, variable))| {
+                (path, value.as_ref().map(ToString::to_string), variable)
+            })
+            .collect();
+        keys.sort();
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        keys.hash(&mut hasher);
+        Self {
+            values,
+            hash: hasher.finish(),
+        }
+    }
+}
+
 pub(crate) struct ProjectEvaluator<'a> {
     sources: HashMap<String, &'a str>,
     entrypoints: &'a [NativeEntrypoint],
     cwd: PathBuf,
     base_url: Option<PathBuf>,
     paths: Vec<(String, Vec<String>)>,
-    tokens: HashMap<String, (Option<serde_json::Value>, Option<String>)>,
+    tokens: Arc<TokenTable>,
     /// The class prefix a `keyframes()` name is written after.
     class_prefix: Option<String>,
     /// Exports being evaluated or called right now, and for a called one what a call re-entering
@@ -670,8 +704,9 @@ pub(crate) struct ProjectEvaluator<'a> {
     dependencies: RefCell<HashMap<String, HashSet<String>>>,
     pending_candidates: RefCell<HashMap<String, HashSet<String>>>,
     configuration_files: RefCell<HashMap<String, HashSet<String>>>,
-    /// Options an exported value depends on besides the files it read. Computed on first use:
-    /// hashing the token table costs more than a module with no imports takes to analyze.
+    /// Options an exported value depends on besides the files it read. Computed on first use,
+    /// from the token table's hash, which the table holds rather than each call working it out:
+    /// hashing the tokens cost more than a module with no imports takes to analyze.
     fingerprint: std::cell::OnceCell<u64>,
     frames: RefCell<Vec<ExportFrame>>,
     /// Helper calls being evaluated right now, nested — across files, since a helper may call
@@ -695,6 +730,7 @@ impl<'a> ProjectEvaluator<'a> {
         sources: impl IntoIterator<Item = (&'a str, &'a str)>,
         entrypoints: &'a [NativeEntrypoint],
         options: Option<&NativeProjectOptions>,
+        tokens: Arc<TokenTable>,
     ) -> Self {
         let mut source_map = HashMap::new();
         for (filename, source) in sources {
@@ -715,20 +751,6 @@ impl<'a> ProjectEvaluator<'a> {
                     .paths
                     .iter()
                     .map(|mapping| (mapping.pattern.clone(), mapping.paths.clone()))
-                    .collect()
-            })
-            .unwrap_or_default();
-        let tokens: HashMap<String, (Option<serde_json::Value>, Option<String>)> = options
-            .map(|options| {
-                options
-                    .tokens
-                    .iter()
-                    .map(|token| {
-                        (
-                            token.path.clone(),
-                            (token.value.clone(), token.variable.clone()),
-                        )
-                    })
                     .collect()
             })
             .unwrap_or_default();
@@ -853,19 +875,7 @@ impl<'a> ProjectEvaluator<'a> {
             self.cwd.hash(&mut hasher);
             self.base_url.hash(&mut hasher);
             self.paths.hash(&mut hasher);
-            let mut token_keys: Vec<_> = self
-                .tokens
-                .iter()
-                .map(|(path, (value, variable))| {
-                    (
-                        path.clone(),
-                        value.as_ref().map(ToString::to_string),
-                        variable.clone(),
-                    )
-                })
-                .collect();
-            token_keys.sort();
-            token_keys.hash(&mut hasher);
+            self.tokens.hash.hash(&mut hasher);
             // A name `keyframes()` folded to under another prefix is not the one this project writes.
             self.class_prefix.hash(&mut hasher);
             for entrypoint in self.entrypoints {
@@ -893,7 +903,7 @@ impl<'a> ProjectEvaluator<'a> {
     }
 
     fn token(&self, path: &str, value: bool) -> Option<serde_json::Value> {
-        let (literal, variable) = self.tokens.get(path)?;
+        let (literal, variable) = self.tokens.values.get(path)?;
         if value {
             literal.clone()
         } else {

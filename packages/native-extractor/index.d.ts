@@ -68,11 +68,24 @@ export interface NativeToken {
   variable?: string
 }
 
+/**
+ * The project's token table, converted into the native engine once. Made by `tokenTable` and
+ * handed to `compileModules` and `analyzeMany` in place of their `tokens` option: the tokens
+ * crossed into Rust with each call otherwise, about 0.44 µs a token, which on a large design
+ * system is more than analyzing a module takes.
+ */
+export declare class NativeTokenTable {
+  private constructor()
+}
+
+export function tokenTable(tokens: NativeToken[]): NativeTokenTable
+
 export interface NativeProjectOptions {
   cwd?: string
   baseUrl?: string
   paths: NativePathMapping[]
-  tokens: NativeToken[]
+  /** The token table, for a call handed no `NativeTokenTable`. */
+  tokens?: NativeToken[]
   jsx: boolean
   /** The class prefix a `keyframes()` name is written after. */
   classPrefix?: string
@@ -87,6 +100,7 @@ export function analyzeMany(
   sources: NativeSource[],
   entrypoints: NativeEntrypoint[],
   options?: NativeProjectOptions,
+  tokens?: NativeTokenTable,
 ): NativeFileAnalysis[]
 
 export interface NativeTokenDecline {
@@ -306,7 +320,8 @@ export interface NativeFoldOptions {
   cwd?: string
   baseUrl?: string
   paths: NativePathMapping[]
-  tokens: NativeToken[]
+  /** The token table, for a call handed no `NativeTokenTable`. */
+  tokens?: NativeToken[]
   cssModules: string[]
   tokenModules: string[]
   recipeModules: string[]
@@ -322,4 +337,5 @@ export function compileModules(
   sources: NativeSource[],
   auxiliary: NativeSource[],
   options: NativeFoldOptions,
+  tokens?: NativeTokenTable,
 ): FoldAnalysis[]

@@ -1,5 +1,15 @@
 # @bamboocss/preset-bamboo
 
+## 1.64.5
+
+### Patch Changes
+
+- fb17a9c: Give unstyled direct children in `prose()` the default block gap, with lower precedence than element and
+  component styles. Keep `.lead` and first-child margins ahead of the default paragraph gap, and respect `notProse` on
+  opted-out blocks.
+- Updated dependencies [2dbbbc3]
+  - @bamboocss/types@1.64.5
+
 ## 1.64.4
 
 ### Patch Changes

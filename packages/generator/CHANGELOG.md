@@ -1,5 +1,20 @@
 # @bamboocss/generator
 
+## 1.64.5
+
+### Patch Changes
+
+- 2dbbbc3: Add generated keyword completions for `baselineSource`, `dynamicRangeLimit`, and physical and logical corner
+  shape properties. Re-export config, theme, and utility authoring types such as `PropertyTransform` and `TransformArgs`
+  from `@bamboocss/dev`.
+- Updated dependencies [2dbbbc3]
+  - @bamboocss/types@1.64.5
+  - @bamboocss/core@1.64.5
+  - @bamboocss/logger@1.64.5
+  - @bamboocss/token-dictionary@1.64.5
+  - @bamboocss/is-valid-prop@1.64.5
+  - @bamboocss/shared@1.64.5
+
 ## 1.64.4
 
 ### Patch Changes

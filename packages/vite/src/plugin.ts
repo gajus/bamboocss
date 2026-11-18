@@ -3020,8 +3020,8 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     //
     // And for one it holds as it is: an included module that names no entrypoint and imports no
     // module the inventory covers has no call the compiler could fold, so parsing it finds
-    // nothing. Parsing one cost about 0.6 ms, and 1.5 ms once it imported packages, which on an
-    // app where most modules hold no styles was most of the compiler's time.
+    // nothing. Parsing one cost about 0.25 ms, and 0.43 ms once it imported packages, which on
+    // an app where most modules hold no styles was most of the compiler's time.
     const { baseUrl } = ctx.project.resolutionOptions
     if (
       !namesEntrypoint(ctx, code) &&

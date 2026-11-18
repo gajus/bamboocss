@@ -226,10 +226,12 @@ export interface FoldCall {
  * than it follows, `module` when the helper is called again through another module while it runs;
  * `helper` and the location are the recursive helper: for `loop` the first to run of those its
  * cycle goes through, for `calls` the same of the cycle the innermost recurring call closes, for
- * `depth` the one most of the calls running are of. `line` is 1-based; `column` too, in UTF-16.
+ * `depth` the one most of the calls running are of. `compiled`: a call the compiler replaces,
+ * `css()` or a recipe, whose value only it knows — `subject` is the name it imports, `excerpt` and
+ * the location the call. `line` is 1-based; `column` too, in UTF-16.
  */
 export interface FoldRefusal {
-  kind: 'statement' | 'write' | 'recursion'
+  kind: 'statement' | 'write' | 'recursion' | 'compiled'
   subject: string
   helper?: string
   excerpt: string

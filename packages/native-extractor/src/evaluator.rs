@@ -58,15 +58,19 @@ pub(crate) struct Refusal {
     /// `statement`: a helper's body uses one the evaluator does not run.
     /// `write`: a binding is reassigned or written into after its declaration.
     /// `recursion`: a helper call it does not follow — see `FileEvaluator::enter_call`.
+    /// `compiled`: a call the compiler replaces, `css()` or a recipe, which only that knows the
+    /// value of — see `FileEvaluator::evaluate_call`.
     pub kind: &'static str,
     /// For `statement`, its keyword — `switch`, `for…of`, `throw` — or `expression` for one run
     /// for its effect. For `write`, the binding's name. For `recursion`, why: `loop`, `depth` or
     /// `calls` — see `FileEvaluator::enter_call` — or `module`, see `ProjectEvaluator::call_export`.
+    /// For `compiled`, the name the call imports.
     pub subject: String,
     /// For `statement`, the helper whose body it is in, when it has a name. For `recursion`, the
     /// recursive helper, which is also where the refusal points.
     pub helper: Option<String>,
-    /// The statement, or the one making the write, as written: its first line, shortened.
+    /// The statement, the one making the write, or the call, as written: its first line,
+    /// shortened.
     pub excerpt: String,
     pub file_path: String,
     pub line: u32,
@@ -3660,6 +3664,25 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
                             1 => styles.remove(0),
                             _ => merged_styles(styles),
                         };
+                    }
+                    // Not run: what bamboo generates for a call it compiles. `css`, `cva`, `sva`,
+                    // `viewTransition`, a recipe and a pattern throw until the compiler replaces
+                    // them, or make a recipe that does, and `cx` reads `arguments`, which the
+                    // evaluator holds no value for, so running one gave no value — at most a
+                    // refusal pointing into the generated helpers. It also parsed the entrypoint
+                    // afresh at every call, and once a recipe turns on JSX capture, which
+                    // evaluates every attribute, that was most of what extracting an app took.
+                    // Refused at the call the program wrote instead.
+                    if let [name] = path.as_slice()
+                        && entrypoint.names.contains(name)
+                    {
+                        return EvalResult::refused(self.refusal(
+                            "compiled",
+                            name.clone(),
+                            None,
+                            call.span,
+                            call.span,
+                        ));
                     }
                 }
                 if members.is_empty() {

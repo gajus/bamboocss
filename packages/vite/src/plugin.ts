@@ -413,6 +413,9 @@ export const describeRefusal = (refusal: FoldRefusal, root: string) => {
       ? `${called} makes more helper calls than the compiler follows for one value`
       : `${called} recurses more deeply than the compiler follows`
   }
+  if (refusal.kind === 'compiled') {
+    return `\`${refusal.excerpt}\` at ${at} is a call the compiler replaces, so what it returns is not known at build time`
+  }
   const helper = refusal.helper ? `\`${refusal.helper}\`` : 'a function it calls'
   if (refusal.subject === 'expression') {
     return `${helper} runs \`${refusal.excerpt}\` for its effect at ${at}, which the compiler does not run`

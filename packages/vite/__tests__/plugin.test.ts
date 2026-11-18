@@ -348,6 +348,14 @@ describe('a refusal, as the error says it', () => {
       '`tone` uses a `switch` statement at /elsewhere/theme.ts:4:3, which the compiler does not run',
     )
   })
+
+  // As written, under whatever name it was imported as.
+  test('a call the compiler replaces, quoted', () => {
+    expect(describeRefusal({ ...statement('button'), kind: 'compiled', excerpt: "b({ size: 'sm' })" }, root)).toBe(
+      "`b({ size: 'sm' })` at src/theme.ts:4:3 is a call the compiler replaces, so what it returns is not known at " +
+        'build time',
+    )
+  })
 })
 
 describe('file filtering', () => {

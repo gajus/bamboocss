@@ -793,7 +793,7 @@ describe('generate property types', () => {
          * | **1**  |   No    | **4**  | **79** | No  |
          */
       baselineShift?: ConditionalValue<CssProperties["baselineShift"] | AnyString> | undefined
-       baselineSource?: ConditionalValue<string | number | AnyString> | undefined
+       baselineSource?: ConditionalValue<CssProperties["baselineSource"] | AnyString> | undefined
        /**
          * This feature is well established and works across many devices and browser versions. It’s been available across browsers since January 2020.
          *
@@ -2177,23 +2177,23 @@ describe('generate property types', () => {
          * @see https://developer.mozilla.org/docs/Web/CSS/Reference/Properties/content-visibility
          */
       contentVisibility?: ConditionalValue<CssVars | CssProperties["contentVisibility"] | AnyString> | undefined
-       cornerBlockEndShape?: ConditionalValue<string | number | AnyString> | undefined
-       cornerBlockStartShape?: ConditionalValue<string | number | AnyString> | undefined
-       cornerBottomShape?: ConditionalValue<string | number | AnyString> | undefined
-       cornerBottomLeftShape?: ConditionalValue<string | number | AnyString> | undefined
-       cornerBottomRightShape?: ConditionalValue<string | number | AnyString> | undefined
-       cornerEndEndShape?: ConditionalValue<string | number | AnyString> | undefined
-       cornerEndStartShape?: ConditionalValue<string | number | AnyString> | undefined
-       cornerInlineEndShape?: ConditionalValue<string | number | AnyString> | undefined
-       cornerInlineStartShape?: ConditionalValue<string | number | AnyString> | undefined
-       cornerLeftShape?: ConditionalValue<string | number | AnyString> | undefined
-       cornerRightShape?: ConditionalValue<string | number | AnyString> | undefined
+       cornerBlockEndShape?: ConditionalValue<CssProperties["cornerBlockEndShape"] | AnyString> | undefined
+       cornerBlockStartShape?: ConditionalValue<CssProperties["cornerBlockStartShape"] | AnyString> | undefined
+       cornerBottomShape?: ConditionalValue<CssProperties["cornerBottomShape"] | AnyString> | undefined
+       cornerBottomLeftShape?: ConditionalValue<CssProperties["cornerBottomLeftShape"] | AnyString> | undefined
+       cornerBottomRightShape?: ConditionalValue<CssProperties["cornerBottomRightShape"] | AnyString> | undefined
+       cornerEndEndShape?: ConditionalValue<CssProperties["cornerEndEndShape"] | AnyString> | undefined
+       cornerEndStartShape?: ConditionalValue<CssProperties["cornerEndStartShape"] | AnyString> | undefined
+       cornerInlineEndShape?: ConditionalValue<CssProperties["cornerInlineEndShape"] | AnyString> | undefined
+       cornerInlineStartShape?: ConditionalValue<CssProperties["cornerInlineStartShape"] | AnyString> | undefined
+       cornerLeftShape?: ConditionalValue<CssProperties["cornerLeftShape"] | AnyString> | undefined
+       cornerRightShape?: ConditionalValue<CssProperties["cornerRightShape"] | AnyString> | undefined
        cornerShape?: ConditionalValue<CssProperties["cornerShape"] | AnyString> | undefined
-       cornerStartStartShape?: ConditionalValue<string | number | AnyString> | undefined
-       cornerStartEndShape?: ConditionalValue<string | number | AnyString> | undefined
-       cornerTopShape?: ConditionalValue<string | number | AnyString> | undefined
-       cornerTopLeftShape?: ConditionalValue<string | number | AnyString> | undefined
-       cornerTopRightShape?: ConditionalValue<string | number | AnyString> | undefined
+       cornerStartStartShape?: ConditionalValue<CssProperties["cornerStartStartShape"] | AnyString> | undefined
+       cornerStartEndShape?: ConditionalValue<CssProperties["cornerStartEndShape"] | AnyString> | undefined
+       cornerTopShape?: ConditionalValue<CssProperties["cornerTopShape"] | AnyString> | undefined
+       cornerTopLeftShape?: ConditionalValue<CssProperties["cornerTopLeftShape"] | AnyString> | undefined
+       cornerTopRightShape?: ConditionalValue<CssProperties["cornerTopRightShape"] | AnyString> | undefined
        /**
          * This feature is well established and works across many devices and browser versions. It’s been available across browsers since July 2015.
          *
@@ -2334,7 +2334,7 @@ describe('generate property types', () => {
          * @see https://developer.mozilla.org/docs/Web/CSS/Reference/Properties/dominant-baseline
          */
       dominantBaseline?: ConditionalValue<CssProperties["dominantBaseline"] | AnyString> | undefined
-       dynamicRangeLimit?: ConditionalValue<string | number | AnyString> | undefined
+       dynamicRangeLimit?: ConditionalValue<CssProperties["dynamicRangeLimit"] | AnyString> | undefined
        /**
          * This feature is well established and works across many devices and browser versions. It’s been available across browsers since July 2015.
          *

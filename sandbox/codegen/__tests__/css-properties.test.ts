@@ -17,7 +17,6 @@ test('takes the css properties mdn-data lists, whether csstype types them yet or
     viewTransitionClass: 'card',
     // Not in csstype yet, so any value; the build's grammar check judges it.
     readingFlow: 'grid-rows',
-    cornerTopLeftShape: 'squircle',
   })
 
   expect(styles).toEqual({
@@ -27,8 +26,26 @@ test('takes the css properties mdn-data lists, whether csstype types them yet or
     speakAs: 'spell-out',
     viewTransitionClass: 'card',
     readingFlow: 'grid-rows',
-    cornerTopLeftShape: 'squircle',
   })
+})
+
+test('types baseline, HDR and corner shape values in generated styles', () => {
+  const styles = {
+    baselineSource: 'last',
+    dynamicRangeLimit: 'dynamic-range-limit-mix(standard 60%, no-limit 40%)',
+    cornerShape: 'round bevel round bevel',
+    cornerTopLeftShape: 'squircle',
+    cornerEndStartShape: 'superellipse(-infinity)',
+    cornerBlockEndShape: 'round scoop',
+  }
+  expect(css.raw(styles)).toEqual(styles)
+
+  // @ts-expect-error baseline-source takes a keyword or string expression
+  expect(css.raw({ baselineSource: 2 })).toEqual({ baselineSource: 2 })
+  // @ts-expect-error dynamic-range-limit takes a keyword or string expression
+  expect(css.raw({ dynamicRangeLimit: 2 })).toEqual({ dynamicRangeLimit: 2 })
+  // @ts-expect-error corner-top-left-shape takes a keyword or string expression
+  expect(css.raw({ cornerTopLeftShape: 2 })).toEqual({ cornerTopLeftShape: 2 })
 })
 
 test('still checks the value of one csstype types', () => {

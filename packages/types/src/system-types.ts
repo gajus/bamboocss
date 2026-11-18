@@ -21,7 +21,16 @@ export type Assign<T, U> = {
  * Native css properties
  * -----------------------------------------------------------------------------*/
 
-type CornerShapeValue = 'round' | 'square' | 'bevel' | 'scoop' | 'notch' | 'squircle' | `superellipse(${number})`
+type CornerShapeValue =
+  | 'round'
+  | 'square'
+  | 'bevel'
+  | 'scoop'
+  | 'notch'
+  | 'squircle'
+  | `superellipse(${number | 'infinity' | '-infinity'})`
+type CornerShape = Globals | CornerShapeValue | String
+type CornerShapePair = CornerShape | `${CornerShapeValue} ${CornerShapeValue}`
 
 export interface ModernCssProperties {
   /**
@@ -49,22 +58,50 @@ export interface ModernCssProperties {
    */
   WebkitTextSecurity?: Globals | 'none' | 'circle' | 'disc' | 'square' | undefined
 
+  /** Chooses which baseline an inline box exposes for alignment. */
+  baselineSource?: Globals | 'auto' | 'first' | 'last' | String | undefined
+
+  /** Limits the peak luminance of HDR content. */
+  dynamicRangeLimit?:
+    | Globals
+    | 'standard'
+    | 'constrained'
+    | 'no-limit'
+    | `dynamic-range-limit-mix(${string})`
+    | String
+    | undefined
+
   /**
    * Specifies the shape of a box's corners within the area defined by the border-radius property.
    * @experimental
    * @see https://developer.mozilla.org/en-US/docs/Web/CSS/corner-shape
    */
   cornerShape?:
-    | Globals
-    | CornerShapeValue
-    | `${CornerShapeValue} ${CornerShapeValue}`
+    | CornerShapePair
     | `${CornerShapeValue} ${CornerShapeValue} ${CornerShapeValue}`
     | `${CornerShapeValue} ${CornerShapeValue} ${CornerShapeValue} ${CornerShapeValue}`
-    | String
     | undefined
+
+  cornerTopLeftShape?: CornerShape | undefined
+  cornerTopRightShape?: CornerShape | undefined
+  cornerBottomLeftShape?: CornerShape | undefined
+  cornerBottomRightShape?: CornerShape | undefined
+  cornerStartStartShape?: CornerShape | undefined
+  cornerStartEndShape?: CornerShape | undefined
+  cornerEndStartShape?: CornerShape | undefined
+  cornerEndEndShape?: CornerShape | undefined
+
+  cornerTopShape?: CornerShapePair | undefined
+  cornerRightShape?: CornerShapePair | undefined
+  cornerBottomShape?: CornerShapePair | undefined
+  cornerLeftShape?: CornerShapePair | undefined
+  cornerBlockStartShape?: CornerShapePair | undefined
+  cornerBlockEndShape?: CornerShapePair | undefined
+  cornerInlineStartShape?: CornerShapePair | undefined
+  cornerInlineEndShape?: CornerShapePair | undefined
 }
 
-export type CssProperty = keyof Properties
+export type CssProperty = keyof Properties | keyof ModernCssProperties
 
 export interface CssProperties extends Properties<String | Number>, CssVarProperties, ModernCssProperties {}
 

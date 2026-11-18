@@ -52,6 +52,8 @@ exports[`export every name they did 1`] = `
   "ConfigResolvedHookUtils",
   "ConfigTsOptions",
   "ContextCreatedHookArgs",
+  "CornerShape",
+  "CornerShapePair",
   "CornerShapeValue",
   "CssArtifactType",
   "CssKeyframes",

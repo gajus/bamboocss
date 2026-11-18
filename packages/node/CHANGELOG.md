@@ -1,5 +1,24 @@
 # @bamboocss/node
 
+## 1.64.3
+
+### Patch Changes
+
+- f777cff: Drop `fs-extra`: `node:fs` does every file operation the runtime used it for, so a build no longer loads it
+  and the packages it depends on, and loading the engine in a fresh process takes about 80 ms where it took 85.
+  `bamboo debug` writes its files twenty at a time, as codegen does, because `node:fs` fails a write that runs out of
+  file handles where `fs-extra` queued it and tried again.
+  - @bamboocss/config@1.64.3
+  - @bamboocss/core@1.64.3
+  - @bamboocss/generator@1.64.3
+  - @bamboocss/logger@1.64.3
+  - @bamboocss/plugin-svelte@1.64.3
+  - @bamboocss/plugin-vue@1.64.3
+  - @bamboocss/reporter@1.64.3
+  - @bamboocss/shared@1.64.3
+  - @bamboocss/token-dictionary@1.64.3
+  - @bamboocss/types@1.64.3
+
 ## 1.64.2
 
 ### Patch Changes

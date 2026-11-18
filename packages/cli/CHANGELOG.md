@@ -1,5 +1,18 @@
 # @bamboocss/dev
 
+## 1.64.3
+
+### Patch Changes
+
+- Updated dependencies [f777cff]
+  - @bamboocss/node@1.64.3
+  - @bamboocss/logger@1.64.3
+  - @bamboocss/preset-bamboo@1.64.3
+  - @bamboocss/preset-base@1.64.3
+  - @bamboocss/shared@1.64.3
+  - @bamboocss/token-dictionary@1.64.3
+  - @bamboocss/types@1.64.3
+
 ## 1.64.2
 
 ### Patch Changes

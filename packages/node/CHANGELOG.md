@@ -1,5 +1,42 @@
 # @bamboocss/node
 
+## 1.64.5
+
+### Patch Changes
+
+- 2c3be23: Compile a finite ternary inside `css()` when its test reads a local `const` initialized by a ternary of
+  literals and both style branches are known. The compiled call selects between precomputed class strings, including
+  when it composes with other styles in `cx()`.
+- f1eafd4: Extraction no longer runs what bamboo generates for `css()`, `cx()`, `cva()`, `sva()`, a recipe or a pattern
+  when it evaluates a value holding a call to one. None of them can give the build a value, yet every call parsed its
+  module afresh. Once a project has a recipe, extraction evaluates every JSX attribute, `className={css(…)}` among them,
+  and that was most of its time: a 1,000-module app whose components make those calls in JSX builds in 392 ms where it
+  took 1,306, and the docs site extracts in 12–18 ms where it took 104.
+  - A call the compiler cannot compile because a style reads such a call's result, as `css(flex({ gap: '2' }))` does,
+    now says so at that call: "`flex({ gap: '2' })` at src/card.ts:7:22 is a call the compiler replaces, so what it
+    returns is not known at build time". It pointed at the `throw` in the generated helpers for `css()` and a pattern,
+    and gave no reason for a recipe.
+  - Output is unchanged: the docs site's client and server builds, 676 files, are byte-identical.
+
+- 2f924ea: The token table crosses into the native engine once per config load, instead of with every module the
+  compiler transforms. Each call converted every token again, about 0.44 µs a token: 0.2 ms a module with the default
+  preset and 0.8 ms with `preset-atlaskit`'s 1,655 tokens, more than compiling most modules takes, in every build and on
+  every dev-server transform. A call now costs the same whatever the design system holds: a 1,000-module app builds in
+  289 ms where it took 422 with the default preset, and in 318 ms where it took 763 with 1,651 tokens.
+  - Output is unchanged: the docs site's client and server builds, 676 files, are byte-identical.
+
+- Updated dependencies [2dbbbc3]
+  - @bamboocss/generator@1.64.5
+  - @bamboocss/types@1.64.5
+  - @bamboocss/reporter@1.64.5
+  - @bamboocss/config@1.64.5
+  - @bamboocss/core@1.64.5
+  - @bamboocss/logger@1.64.5
+  - @bamboocss/plugin-svelte@1.64.5
+  - @bamboocss/plugin-vue@1.64.5
+  - @bamboocss/token-dictionary@1.64.5
+  - @bamboocss/shared@1.64.5
+
 ## 1.64.4
 
 ### Patch Changes

@@ -1,6 +1,13 @@
-import { definePreset, defineUtility } from '@bamboocss/dev'
-import type { BambooPlugin, PropertyTransform, TransformArgs, UserConfig, UtilityConfig } from '@bamboocss/dev'
 import { expect, expectTypeOf, test } from 'vitest'
+import {
+  definePreset,
+  defineUtility,
+  type BambooPlugin,
+  type PropertyTransform,
+  type TransformArgs,
+  type UserConfig,
+  type UtilityConfig,
+} from '../src'
 
 test('exports authoring types from the CLI package entry point', () => {
   const transform: PropertyTransform = (value, args) => {

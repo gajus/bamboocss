@@ -81,6 +81,29 @@ describe.each(['build', 'dev'] as const)('a `<script setup>` template, compiled 
     expect(result.skipped).toContainEqual(['css', 'dynamic'])
   })
 
+  test('a choice inside a value compiles, its test asked as the template asks it', () => {
+    const result = build(
+      sfc(`<div :class="css({ padding: compact ? '2' : '4' })" />`, {
+        script: `const { compact } = defineProps<{ compact: boolean }>()\n`,
+      }),
+      mode,
+    )
+
+    expect(result.skipped).toEqual([])
+    expect(withoutMergeCodes(result.classes)).toEqual(['p_2', 'p_4'])
+    expect(result.missing).toEqual([])
+    expect(result.code).not.toMatch(/\$setup\.css|_unref\(css\)/)
+  })
+
+  // For dev, the inner call is `$setup.css(…)`: a call compiled on its own, which copying the test
+  // would copy as written, though it reads no binding of Bamboo's.
+  test('a choice whose test holds a call compiled on its own is not compiled', () => {
+    const result = build(sfc(`<div :class="css({ padding: css({ color: 'red.300' }) ? '2' : '4' })" />`), mode)
+
+    expect(result.skipped).toContainEqual(['css', 'dynamic'])
+    expect(result.code).not.toMatch(/\? "[^"]*p_2[^"]*" :/)
+  })
+
   test('`css.raw` is reported, not compiled', () => {
     const result = build(sfc(`<div :style="css.raw({ color: 'red.300' })" />`), mode)
 

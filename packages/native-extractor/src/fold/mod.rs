@@ -877,10 +877,22 @@ fn analyze_facts<'a>(
                 .map(|symbol| (symbol, style.local.clone()))
         })
         .collect();
-    // Reads a `cx()` condition may not hold, by byte span, sorted. The fold copies a condition
-    // into what it writes, so one reading a Bamboo import would keep the import alive, and one
-    // reading a recipe would read the `undefined` the recipe's declaration is erased to.
+    // Reads a condition the fold copies may not hold — a `cx()` condition, or the test choosing
+    // between a `css()` call's two styles — by byte span, sorted. The fold copies a condition into
+    // what it writes, so one reading a Bamboo import would keep the import alive, and one reading a
+    // recipe would read the `undefined` the recipe's declaration is erased to.
     let mut guarded_reads: Option<Vec<Span>> = None;
+    let read_spans = || {
+        let mut reads: Vec<Span> = bindings
+            .keys()
+            .chain(definition_symbols.keys())
+            .chain(imported_recipe_symbols.keys())
+            .flat_map(|symbol| scoping.get_resolved_references(*symbol))
+            .map(|reference| semantic.nodes().get_node(reference.node_id()).kind().span())
+            .collect();
+        reads.sort_unstable_by_key(|span| span.start);
+        reads
+    };
     // Of `imported_styles`, those a `cx()` argument names: the only ones the fold reads.
     let mut cx_imported_styles: HashSet<String> = HashSet::new();
 
@@ -1092,17 +1104,7 @@ fn analyze_facts<'a>(
         }
 
         if kind == "cx" {
-            let guarded_reads = guarded_reads.get_or_insert_with(|| {
-                let mut reads: Vec<Span> = bindings
-                    .keys()
-                    .chain(definition_symbols.keys())
-                    .chain(imported_recipe_symbols.keys())
-                    .flat_map(|symbol| scoping.get_resolved_references(*symbol))
-                    .map(|reference| semantic.nodes().get_node(reference.node_id()).kind().span())
-                    .collect();
-                reads.sort_unstable_by_key(|span| span.start);
-                reads
-            });
+            let guarded_reads = guarded_reads.get_or_insert_with(read_spans);
             let scope = CxScope {
                 utf16: &utf16,
                 scoping,
@@ -1201,7 +1203,8 @@ fn analyze_facts<'a>(
             if kind == "css" && !raw && property.is_none() && !exact && data.len() > 1 {
                 match call.arguments.as_slice() {
                     [argument] => argument.as_expression().and_then(|expression| {
-                        style_branch::analyze(&mut evaluator, expression, &utf16)
+                        let guarded_reads = guarded_reads.get_or_insert_with(read_spans);
+                        style_branch::analyze(&mut evaluator, expression, &utf16, guarded_reads)
                     }),
                     _ => None,
                 }
@@ -1670,13 +1673,17 @@ struct CxScope<'s> {
 impl CxScope<'_> {
     /// Whether the condition at `span` reads something the fold may not copy.
     fn holds_guarded_read(&self, span: Span) -> bool {
-        let first = self
-            .guarded_reads
-            .partition_point(|read| read.start < span.start);
-        self.guarded_reads[first..]
-            .first()
-            .is_some_and(|read| read.start < span.end)
+        holds_guarded_read(self.guarded_reads, span)
     }
+}
+
+/// Whether any of `reads`, sorted by start, is inside `span`: a condition there reads something
+/// the fold may not copy.
+fn holds_guarded_read(reads: &[Span], span: Span) -> bool {
+    let first = reads.partition_point(|read| read.start < span.start);
+    reads[first..]
+        .first()
+        .is_some_and(|read| read.start < span.end)
 }
 
 fn cx_argument<'a>(argument: &'a Argument<'a>, scope: &CxScope<'_>) -> FoldCxArgument {

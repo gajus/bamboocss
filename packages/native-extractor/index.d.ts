@@ -185,6 +185,10 @@ export interface FoldCxArgument {
 }
 
 export interface FoldStyleBranch {
+  /**
+   * The test, as written: anything but one reading a Bamboo binding or a recipe, since the fold
+   * copies it into what it writes, to choose between the two styles where the call was.
+   */
   test: FoldSpan
   consequent: Record<string, unknown>
   alternate: Record<string, unknown>

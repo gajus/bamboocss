@@ -1350,9 +1350,6 @@ describe('what is still not known', () => {
       'a hole a later spread may have replaced',
       'const o = { a: [, 2][0], ...unknown() }\nconst p = { b: o.a }\nconst f = () => p.b - 1\nexport const A = css({ zIndex: f() })',
     ],
-    // A missing property is `undefined` unless the prototype has it.
-    ['a property every object has', 'const o = {}\nexport const A = css({ zIndex: o.toString ? 1 : 2 })'],
-    ['an array method', 'const s = [1, 2]\nexport const A = css({ zIndex: s.includes ? 1 : 2 })'],
     // The audit does not walk an operator's operands; the evaluator refuses these itself.
     ['`+` on a binding written later', `let base = 10\nbase = 20\nexport const A = css({ zIndex: base + 1 })`],
     ['`*` on a binding written later', `let base = 10\nbase = 20\nexport const A = css({ zIndex: base * 2 })`],
@@ -1489,6 +1486,18 @@ describe('what is still not known', () => {
     ],
   ])('%s', (_, body) => {
     expect(foldOf(withImport(body))).toMatchObject({ classes: [], skipped: ['dynamic'] })
+  })
+
+  // A missing property is `undefined` unless the prototype has it, so the build decides neither
+  // test: each is asked where the call was, choosing between the classes of its two answers.
+  test.each([
+    ['a property every object has', 'const o = {}\nexport const A = css({ zIndex: o.toString ? 1 : 2 })', 'o.toString'],
+    ['an array method', 'const s = [1, 2]\nexport const A = css({ zIndex: s.includes ? 1 : 2 })', 's.includes'],
+  ])('%s, asked at runtime', (_, body, condition) => {
+    const result = createFoldFixture().fold(withImport(body))
+
+    expect(result.skipped).toEqual([])
+    expect(withoutMergeCodes(result.code)).toContain(`((${condition}) ? "z_1" : "z_2")`)
   })
 
   // Read as one in the module itself is, so not known where that one is not.

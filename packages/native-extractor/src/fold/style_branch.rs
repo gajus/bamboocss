@@ -1,27 +1,31 @@
 //! One finite choice in an otherwise exact `css()` argument.
 
-use oxc_ast::{
-    AstKind,
-    ast::{BindingPattern, Expression, ObjectPropertyKind, PropertyKind, VariableDeclarationKind},
-};
+use oxc_ast::ast::{Expression, ObjectPropertyKind, PropertyKind};
 use oxc_span::{GetSpan, Span};
-use oxc_syntax::operator::BinaryOperator;
 use serde_json::{Map, Value};
 
 use crate::{evaluator::FileEvaluator, offsets::Utf16};
 
-use super::{Exactness, literal_json, model::FoldStyleBranch, unwrap};
+use super::{Exactness, holds_guarded_read, model::FoldStyleBranch, unwrap};
 
+/// The two styles a `css()` argument holding one ternary gives, and its test, which the fold
+/// copies into what it writes: the test choosing between two class strings, asked where the call
+/// was, once, as the call asked it.
+///
+/// Only the two answers have to be known, so the test can be anything a copied condition can be —
+/// `compact`, `props.size === 'sm'` — reading neither a Bamboo import nor a recipe:
+/// `guarded_reads`, sorted by start. Every other value in the argument has to be exact.
 pub(super) fn analyze<'a>(
     evaluator: &mut FileEvaluator<'a, '_, '_>,
     expression: &'a Expression<'a>,
     utf16: &Utf16,
+    guarded_reads: &[Span],
 ) -> Option<FoldStyleBranch> {
     let mut test = None;
     let [
         Some(consequent @ Value::Object(_)),
         Some(alternate @ Value::Object(_)),
-    ] = branch_values(evaluator, expression, &mut test)?
+    ] = branch_values(evaluator, expression, guarded_reads, &mut test)?
     else {
         return None;
     };
@@ -35,10 +39,11 @@ pub(super) fn analyze<'a>(
 fn branch_values<'a>(
     evaluator: &mut FileEvaluator<'a, '_, '_>,
     expression: &'a Expression<'a>,
+    guarded_reads: &[Span],
     test: &mut Option<Span>,
 ) -> Option<[Option<Value>; 2]> {
     if let Expression::ConditionalExpression(choice) = unwrap(expression)
-        && finite_test(evaluator, &choice.test)
+        && !holds_guarded_read(guarded_reads, choice.test.span())
     {
         // The caller keeps the original test at runtime. Two independent tests would need a
         // decision tree; a single pair of argument values cannot represent that call.
@@ -64,10 +69,12 @@ fn branch_values<'a>(
             if key == "__proto__" {
                 return None;
             }
-            for (arm, value) in
-                arms.iter_mut()
-                    .zip(branch_values(evaluator, &property.value, test)?)
-            {
+            for (arm, value) in arms.iter_mut().zip(branch_values(
+                evaluator,
+                &property.value,
+                guarded_reads,
+                test,
+            )?) {
                 if let Some(value) = value {
                     arm.insert(key.clone(), value);
                 } else {
@@ -92,49 +99,4 @@ fn exact_value<'a>(
     }
     .check(expression)
     .then(|| evaluator.evaluate(expression).value)
-}
-
-fn is_primitive_literal(expression: &Expression<'_>) -> bool {
-    matches!(unwrap(expression), Expression::NullLiteral(_)) || literal_json(expression).is_some()
-}
-
-fn finite_test(evaluator: &FileEvaluator<'_, '_, '_>, expression: &Expression<'_>) -> bool {
-    let expression = unwrap(expression);
-    let binding = match expression {
-        Expression::BinaryExpression(binary)
-            if matches!(
-                binary.operator,
-                BinaryOperator::StrictEquality | BinaryOperator::StrictInequality
-            ) =>
-        {
-            if is_primitive_literal(&binary.right) {
-                unwrap(&binary.left)
-            } else if is_primitive_literal(&binary.left) {
-                unwrap(&binary.right)
-            } else {
-                return false;
-            }
-        }
-        _ => expression,
-    };
-    let Expression::Identifier(identifier) = binding else {
-        return false;
-    };
-    let semantic = evaluator.semantic();
-    let Some(symbol) = identifier
-        .reference_id
-        .get()
-        .and_then(|reference| semantic.scoping().get_reference(reference).symbol_id())
-    else {
-        return false;
-    };
-    let node = semantic.symbol_declaration(symbol);
-    let AstKind::VariableDeclarator(declaration) = node.kind() else {
-        return false;
-    };
-    matches!(semantic.nodes().parent_kind(node.id()), AstKind::VariableDeclaration(parent)
-        if parent.kind == VariableDeclarationKind::Const)
-        && matches!(declaration.id, BindingPattern::BindingIdentifier(_))
-        && matches!(declaration.init.as_ref().map(unwrap), Some(Expression::ConditionalExpression(initializer))
-            if is_primitive_literal(&initializer.consequent) && is_primitive_literal(&initializer.alternate))
 }

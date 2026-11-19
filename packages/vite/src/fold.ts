@@ -555,6 +555,19 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     [styleCompiler.className(consequent), styleCompiler.className(alternate)] as const
 
   /**
+   * Whether copying the condition at `span` would copy something the fold rewrites or counts on
+   * rewriting: a call it compiles, or a read of a binding a compiled template reaches through
+   * `$setup`. The analysis has already declined a condition reading a Bamboo binding or a recipe.
+   */
+  const copiesCompiledCode = (span: FoldSpan) => {
+    const within = (inner: FoldSpan) => inner.start >= span.start && inner.end <= span.end
+    return (
+      analysis.calls.some((other) => !other.notImported && within(other.span)) ||
+      analysis.vueExposures.some((exposure) => exposure.reads.some(within))
+    )
+  }
+
+  /**
    * Report what no rule can be written for, found composing `parts` in `composition`, by the parts
    * it is written in.
    *
@@ -834,7 +847,9 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       continue
     }
 
-    if (call.styleBranch) {
+    // Its test is copied into what the call compiles to, so a call inside the test, compiled on its
+    // own, would be copied as it was written.
+    if (call.styleBranch && !copiesCompiledCode(call.styleBranch.test)) {
       const { test, consequent, alternate } = call.styleBranch
       candidates.push({
         call,
@@ -953,19 +968,6 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     }
     for (const arg of args) read(arg)
     return { spans, atoms }
-  }
-
-  /**
-   * Whether copying the condition at `span` would copy something the fold rewrites or counts on
-   * rewriting: a call it compiles, or a read of a binding a compiled template reaches through
-   * `$setup`. The analysis has already declined a condition reading a Bamboo binding or a recipe.
-   */
-  const copiesCompiledCode = (span: FoldSpan) => {
-    const within = (inner: FoldSpan) => inner.start >= span.start && inner.end <= span.end
-    return (
-      analysis.calls.some((other) => !other.notImported && within(other.span)) ||
-      analysis.vueExposures.some((exposure) => exposure.reads.some(within))
-    )
   }
 
   for (const call of analysis.calls) {

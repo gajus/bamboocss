@@ -82,6 +82,8 @@ pub struct FoldCall {
 
 #[napi(object)]
 pub struct FoldStyleBranch {
+    /// The test, as written: anything but one reading a Bamboo binding or a recipe, since the
+    /// fold copies it into what it writes, to choose between the two styles where the call was.
     pub test: FoldSpan,
     pub consequent: serde_json::Value,
     pub alternate: serde_json::Value,

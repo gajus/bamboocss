@@ -429,6 +429,10 @@ describe('per-module transform cost', () => {
     parseAndFold(SYNTHETIC)
   })
 
+  bench('analyze only (conditional module)', () => {
+    parseOnly(CONDITIONAL_MODULE)
+  })
+
   // `time` raised past the 500ms default: at the default this reports a dozen samples,
   // and a dozen samples cannot resolve the effect sizes it exists to catch — two runs of
   // an unchanged tree disagreed by 7%.

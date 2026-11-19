@@ -66,8 +66,14 @@ Every style call has to resolve, at build time, to a finite set of classes.
 // ❌ an open runtime value has no finite set of rules: `dynamic`
 css({ color: props.color })
 
-// ❌ a choice inside a value has to be decided at build time: `dynamic`
+// ✅ one choice between known values: its test picks one of two compiled class strings
 css({ color: isActive ? 'gray.900' : 'gray.500' })
+
+// ❌ a second choice in the same call: `dynamic`
+css({ color: isActive ? 'gray.900' : 'gray.500', bg: isDanger ? 'red.50' : 'white' })
+
+// ✅ a call per choice, which cx() composes into every combination
+cx(css({ color: isActive ? 'gray.900' : 'gray.500' }), css({ bg: isDanger ? 'red.50' : 'white' }))
 
 // ✅ branch between complete calls
 isActive ? css({ color: 'gray.900' }) : css({ color: 'gray.500' })
@@ -87,6 +93,8 @@ const panel = css({ width: 'var(--panel-width)', md: { width: '100%' } })
 - Values may come from constants, other modules and helper functions. A helper may declare values, branch with `if` and
   return; a `switch`, a loop, `try`, `throw`, or a value written to after its declaration makes the call `dynamic`.
 - A spread of a runtime object, or a computed key, is `dynamic`.
+- A choice's test is copied into the compiled call and asked there, once, so it may read anything but a Bamboo import or
+  a recipe, which the compiler removes: `dynamic`.
 - `css.raw()` returns a style object to compose, `css(shared, { gap: '4' })`. Used as a live value it is `raw-call`.
 - An inline `cva`/`sva` declaration is erased. Call it anywhere, other modules included; never read the binding
   (`const alias = badge`, `badge.raw()`, passing `badge` along or putting it in context): `runtime-binding`. Besides

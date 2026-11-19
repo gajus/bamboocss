@@ -123,7 +123,8 @@ const Button = (props: ButtonProps) => {
 than the first few. Each `dynamic` call is a runtime value Panda extracted optimistically or never styled at all:
 
 - one of a known set of values: a recipe variant, compiled to a lookup;
-- a ternary inside a value: a ternary between two complete `css()` calls;
+- more than one ternary inside one call: a `css()` call per choice, which `cx()` composes, or a ternary between complete
+  calls (one ternary between known values compiles as it is);
 - a continuous value (a width, an offset): the `style` attribute, or a CSS variable the compiled rule reads;
 - a class assembled outside the source Bamboo reads: `staticCss`.
 

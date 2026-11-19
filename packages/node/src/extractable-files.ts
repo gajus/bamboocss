@@ -1,3 +1,4 @@
+import { emittedModuleCandidates } from '@bamboocss/shared'
 import { existsSync } from 'node:fs'
 import { isAbsolute, posix } from 'node:path'
 
@@ -43,14 +44,6 @@ const SPECIFIER = /(?:\bfrom\s*|^\s*(?:import|export)\s*|\bimport\s*\(\s*|\brequ
 
 /** The extensions a specifier may omit, in the order the native resolver tries them. */
 const EXTENSIONS = ['.ts', '.tsx', '.d.ts', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs']
-
-/** What a `.js`-family specifier may actually name, source first. */
-const EMITTED: ReadonlyArray<readonly [string, readonly string[]]> = [
-  ['.js', ['.ts', '.tsx', '.d.ts', '.js', '.jsx']],
-  ['.jsx', ['.tsx', '.ts', '.d.ts', '.jsx', '.js']],
-  ['.mjs', ['.mts', '.d.mts', '.mjs']],
-  ['.cjs', ['.cts', '.d.cts', '.cjs']],
-]
 
 export interface ExtractableOptions {
   /** Absolute project root; a specifier that cannot reach inside it cannot carry a binding. */
@@ -114,10 +107,7 @@ interface Project {
 
 /** A candidate path with every extension a specifier may have omitted. */
 const candidatesFor = (base: string): string[] => {
-  const emitted = EMITTED.find(([suffix]) => base.endsWith(suffix))
-  const paths = emitted
-    ? emitted[1].map((extension) => base.slice(0, -emitted[0].length) + extension)
-    : [base, ...EXTENSIONS.map((extension) => base + extension)]
+  const paths = emittedModuleCandidates(base) ?? [base, ...EXTENSIONS.map((extension) => base + extension)]
   return [...paths, ...EXTENSIONS.map((extension) => `${base}/index${extension}`)]
 }
 

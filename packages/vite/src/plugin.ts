@@ -4,7 +4,7 @@ import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 
 import { logger } from '@bamboocss/logger'
 import type { ImportMapOutput } from '@bamboocss/types'
-import { truncateList } from '@bamboocss/shared'
+import { emittedModuleCandidates, truncateList } from '@bamboocss/shared'
 import { markStaticCompilerActive } from '@bamboocss/node/static-compiler'
 import type { Plugin } from 'vite'
 import { asError, bamboocssCss, bamboocssCssEarly, isStylesheetUrl, VIRTUAL_CSS_ID } from './css'
@@ -207,7 +207,7 @@ export const namesEntrypoint = (ctx: { imports: { outdir: string; value: ImportM
 
 /** A module specifier in an import, export-from, dynamic import or require. */
 const MODULE_SPECIFIER = /\b(?:from|import|require)\s*\(?\s*['"]([^'"]+)['"]/g
-/** How a relative specifier may name a file, in the order the bundler tries them. */
+/** Extra spellings to try when the specifier has no emitted JavaScript extension. */
 const SPECIFIER_SUFFIXES = [
   '',
   '.ts',
@@ -263,7 +263,10 @@ const packageNameOf = (specifier: string) => {
 export const importsSourceModule = (resolution: SourceResolution, filePath: string, code: string) => {
   const { isSourceModule, resolveAlias, baseUrl, isSourcePackage } = resolution
   const directory = dirname(filePath)
-  const covered = (base: string) => SPECIFIER_SUFFIXES.some((suffix) => isSourceModule(base + suffix))
+  const covered = (base: string) => {
+    const emitted = emittedModuleCandidates(base)
+    return emitted ? emitted.some(isSourceModule) : SPECIFIER_SUFFIXES.some((suffix) => isSourceModule(base + suffix))
+  }
   for (const match of code.matchAll(MODULE_SPECIFIER)) {
     const specifier = match[1]!
     if (specifier.startsWith('.') || specifier.startsWith('/')) {

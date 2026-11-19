@@ -56,6 +56,12 @@ beforeAll(async () => {
   write('src/held.ts', `import { button } from '@acme/ds'\nexport const held = button({ size: 'sm' })\n`)
   write('src/rewritten.ts', `import { button } from '@acme/ds'\nexport const rewritten = button({ size: 'md' })\n`)
   write(
+    'src/styles.ts',
+    `import { cva } from '../styled-system/css/index.js'\n` + `export const badge = cva({ base: { color: 'red' } })\n`,
+  )
+  write('src/js-consumer.ts', `import { badge } from './styles.js'\nexport const className = badge({})\n`)
+  write('src/js-entry.ts', `import 'virtual:bamboo.css'\nexport { className } from './js-consumer'\n`)
+  write(
     'src/types.ts',
     `import type { Simplify } from 'types-only'\n` +
       `export type Shape = Simplify<{ a: 1 }>\n` +
@@ -89,14 +95,20 @@ const rewriteFirst: Plugin = {
   },
 }
 
-const buildEntry = async (entry: string) => {
+const buildEntry = async (entry: string, ssr = false) => {
   const result = (await build({
     root,
     configFile: false,
     logLevel: 'silent',
     css: { postcss: { plugins: [] } },
     plugins: [rewriteFirst, bamboocss({ cwd: root, reportSummary: false })],
-    build: { write: false, minify: false, lib: { entry: join(root, entry), formats: ['es'], fileName: 'scope' } },
+    build: {
+      write: false,
+      minify: false,
+      ssr,
+      ssrEmitAssets: ssr,
+      lib: { entry: join(root, entry), formats: ['es'], fileName: 'scope' },
+    },
   })) as Rollup.RollupOutput[]
 
   const output = result[0]!.output
@@ -132,3 +144,20 @@ describe('a workspace recipe imported by package name', () => {
     await expect(buildEntry('outside/entry.ts')).rejects.toThrow(/outside the CSS extraction graph/)
   }, 60_000)
 })
+
+test.each([
+  ['client', false],
+  ['SSR', true],
+])(
+  'folds a recipe imported through its emitted .js specifier in a %s build',
+  async (_environment, ssr) => {
+    const { css, js } = await buildEntry('src/js-entry.ts', ssr)
+    const { className } = (await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`)) as {
+      className: string
+    }
+
+    expect(className).toBeTruthy()
+    expect(hasRuleFor(css, className)).toBe(true)
+  },
+  60_000,
+)

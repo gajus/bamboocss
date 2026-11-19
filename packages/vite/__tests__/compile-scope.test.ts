@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { logger } from '@bamboocss/logger'
 import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest'
-import { bamboocss, namesEntrypoint } from '../src/plugin'
+import { bamboocss, importsSourceModule, namesEntrypoint } from '../src/plugin'
 
 const cwd = join(dirname(fileURLToPath(import.meta.url)), '../../../sandbox/codegen')
 
@@ -96,6 +96,27 @@ describe('what the compiler transforms', () => {
     expect(namesEntrypoint(ctx, `import { css } from '../generated/styled/css'`)).toBe(true)
     expect(namesEntrypoint(ctx, `import { button } from '@acme/styled/css'`)).toBe(true)
     expect(namesEntrypoint(ctx, `export const answer = 42`)).toBe(false)
+  })
+
+  test.each([
+    ['./styles.js', 'styles.ts'],
+    ['./styles.jsx', 'styles.tsx'],
+    ['@app/styles.mjs', 'styles.mts'],
+    ['styles.cjs', 'styles.cts'],
+    ['./styles.js', 'styles.js'],
+  ])('counts an import of %s when the inventory holds %s', (specifier, source) => {
+    expect(
+      importsSourceModule(
+        {
+          isSourceModule: (path) => path === join(cwd, 'src', source),
+          isSourcePackage: () => false,
+          resolveAlias: (name) => (name.startsWith('@app/') ? join(cwd, 'src', name.slice('@app/'.length)) : undefined),
+          baseUrl: join(cwd, 'src'),
+        },
+        join(cwd, 'src', 'entry.ts'),
+        `import { badge } from '${specifier}'\nexport const className = badge({})`,
+      ),
+    ).toBe(true)
   })
 })
 

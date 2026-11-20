@@ -1,5 +1,13 @@
 # @bamboocss/shared
 
+## 1.64.6
+
+### Patch Changes
+
+- 9c15d95: Compile recipe calls imported through JavaScript specifiers such as `./styles.js` when they resolve to
+  TypeScript source. The Vite skip check now uses the same extension substitutions as the extraction scan, so client and
+  SSR bundles keep the recipe's class strings and CSS.
+
 ## 1.64.5
 
 ## 1.64.4

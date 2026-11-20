@@ -1,5 +1,28 @@
 # @bamboocss/node
 
+## 1.64.7
+
+### Patch Changes
+
+- 11680bb: Compile a ternary inside `css()` whatever its test reads when both styles are known:
+  `css({ padding: compact ? '2' : '4' })` with `compact` a prop compiles to `compact` choosing between two class
+  strings, asked where the call was, once. The test used to have to read a local `const` initialized by a ternary of
+  literals, and anything else failed the build as `dynamic`.
+  - The test may read anything but a Bamboo import or a recipe, which the compiler removes, and may not hold a call it
+    compiles on its own.
+  - A call holds one choice. Give a second its own `css()` call: `cx()` composes them into every combination, asking
+    each test only where the call would have.
+  - @bamboocss/config@1.64.7
+  - @bamboocss/core@1.64.7
+  - @bamboocss/generator@1.64.7
+  - @bamboocss/logger@1.64.7
+  - @bamboocss/plugin-svelte@1.64.7
+  - @bamboocss/plugin-vue@1.64.7
+  - @bamboocss/reporter@1.64.7
+  - @bamboocss/shared@1.64.7
+  - @bamboocss/token-dictionary@1.64.7
+  - @bamboocss/types@1.64.7
+
 ## 1.64.6
 
 ### Patch Changes

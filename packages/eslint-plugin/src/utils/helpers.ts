@@ -609,6 +609,55 @@ export const getUnresolvedValueMessage = (property: string, value: string, conte
   return message
 }
 
+/** Whether `call` calls bamboo's `css` by its name: not `css.raw`, a pattern or a recipe. */
+export const isCssCall = (call: TSESTree.CallExpression, context: RuleContext<any, any>) => {
+  const { callee } = call
+  return (
+    callee.type === 'Identifier' &&
+    getImports(context).some(({ alias, name }) => name === 'css' && alias === callee.name)
+  )
+}
+
+/**
+ * Whether `node` reads a binding of bamboo's: a name imported from a module bamboo generates, or a
+ * recipe this file declares with `cva` or `sva`. The compiled module holds neither — an import it no
+ * longer calls, and a recipe declaration it erases — so code it copies cannot read one.
+ */
+export const readsBambooBinding = (node: TSESTree.Node, context: RuleContext<any, any>) => {
+  const imports = getImports(context)
+  if (imports.length === 0) return false
+  // The modules this file imports something of bamboo's from, which is all they export: the import
+  // map names `css`, `cva` and `sva` in the css module, and `cx` and `keyframes` are bamboo's too.
+  const modules = new Set(imports.map(({ mod }) => mod))
+  const recipes = new Set(imports.filter(({ name }) => name === 'cva' || name === 'sva').map(({ alias }) => alias))
+  try {
+    const manager = scopeManagerOf(context)
+    if (!manager) return false
+    const [start, end] = node.range
+    for (const scope of manager.scopes) {
+      for (const { identifier, resolved } of scope.references) {
+        if (!resolved || identifier.range[0] < start || identifier.range[1] > end) continue
+        for (const definition of resolved.defs) {
+          if (
+            definition.type === 'ImportBinding' &&
+            definition.parent.type === 'ImportDeclaration' &&
+            modules.has(definition.parent.source.value)
+          ) {
+            return true
+          }
+          const init = definition.type === 'Variable' ? definition.node.init : undefined
+          if (init?.type === 'CallExpression' && init.callee.type === 'Identifier' && recipes.has(init.callee.name)) {
+            return true
+          }
+        }
+      }
+    }
+  } catch {
+    // As `resolveReference`: a file scope analysis cannot read is not answered from it.
+  }
+  return false
+}
+
 /** Whether a call is to a recipe, whose argument selects variants rather than styles anything. */
 export const isRecipeCall = (call: TSESTree.CallExpression, context: RuleContext<any, any>) => {
   if (call.callee.type !== 'Identifier') return false

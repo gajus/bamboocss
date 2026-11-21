@@ -48,3 +48,25 @@ test('a cold Builder pass parses only files that can reach bamboo', async () => 
     column: 26,
   })
 })
+
+// Beside a package import, the comment hid the specifier and the consumer went unparsed, so the
+// variant its call selects was never seen.
+test('a cold Builder pass parses a file whose recipe import has a comment in front of its specifier', async () => {
+  const cwd = createProject()
+  writeFileSync(
+    join(cwd, 'src/recipe.ts'),
+    `import { cva } from '../styled-system/css'\nexport const tag = cva({ variants: { tone: { loud: { borderColor: 'green' } } } })\n`,
+  )
+  writeFileSync(
+    join(cwd, 'src/tagged.ts'),
+    `import { join } from 'node:path'\nimport { tag } from /* the recipe */ './recipe'\nexport const tagged = [tag({ tone: 'loud' }), join('a')]\n`,
+  )
+  const builder = new Builder()
+  await builder.setup({ cwd })
+  const parseFile = vi.spyOn(builder.getContextOrThrow(), 'parseFile')
+
+  builder.extract()
+
+  expect(parseFile.mock.calls.map(([file]) => basename(file))).toContain('tagged.ts')
+  expect(builder.toCss()).toContain('border-color: green')
+})

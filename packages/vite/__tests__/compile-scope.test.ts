@@ -118,6 +118,45 @@ describe('what the compiler transforms', () => {
       ),
     ).toBe(true)
   })
+
+  const reaches = (code: string) =>
+    importsSourceModule(
+      {
+        isSourceModule: (path) => path === join(cwd, 'src', 'styles.ts'),
+        isSourcePackage: () => false,
+        resolveAlias: () => undefined,
+        baseUrl: undefined,
+      },
+      join(cwd, 'src', 'entry.ts'),
+      `${code}\nexport const className = badge({})`,
+    )
+
+  // A comment in front of the specifier hid it: the module was skipped, and the recipe call in it
+  // shipped uncompiled, to throw when it was loaded. Read as extraction's scan reads it.
+  test.each([
+    ['a block comment after from', `import { badge } from /* the recipe */ './styles'`],
+    ['a line comment after from', `import { badge } from // the recipe\n  './styles'`],
+    ['a comment in an export-from', `export { badge } from /* the recipe */ './styles'`],
+    ['a comment in a dynamic import', `const { badge } = await import(/* @vite-ignore */ './styles')`],
+    ['a comment in a side-effect import', `import /* registers the recipe */ './styles'`],
+  ])('counts the import, reading past %s', (_label, code) => {
+    expect(reaches(code)).toBe(true)
+  })
+
+  // It names a file only once decoded, which the analysis does.
+  test.each([
+    ['a unicode escape', `import { badge } from './style\\u0073'`],
+    ['a hex escape', `import { badge } from './style\\x73'`],
+  ])('counts a specifier spelled with %s', (_label, code) => {
+    expect(reaches(code)).toBe(true)
+  })
+
+  test('does not count a comment that wraps after "from", or Array.from( before one', () => {
+    const code =
+      `import { z } from 'zod'\n// The schema is derived from\n// the API's own.\n` +
+      `export const rows = Array.from(\n  // one row per letter\n  'abc',\n)\n`
+    expect(reaches(code)).toBe(false)
+  })
 })
 
 /**
@@ -251,6 +290,21 @@ describe('which modules the compiler transforms', () => {
 
   test('compiles one outside `include` that imports that package', async () => {
     const { code, skipped } = await transformIn('outside/consumer.ts', files.consumer)
+    expect(skipped).toBe(false)
+    expect(code).toBeDefined()
+    expect(code).not.toContain('button({')
+  })
+
+  // Both were skipped, leaving the call to a definition compiling the design system removed: a
+  // build that passed and a module that threw when loaded, in the client and in SSR.
+  test.each([
+    ['a comment in front of its specifier', `import { button } from /* the design system */ '@acme/ds'`],
+    ['an escape in its specifier', `import { button } from '@acme/d\\u0073'`],
+  ])('compiles one that imports that package with %s', async (_label, line) => {
+    const { code, skipped } = await transformIn(
+      'app/consumer.ts',
+      `${line}\nexport const cls = button({ size: 'sm' })\n`,
+    )
     expect(skipped).toBe(false)
     expect(code).toBeDefined()
     expect(code).not.toContain('button({')

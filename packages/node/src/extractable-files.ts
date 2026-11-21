@@ -1,4 +1,4 @@
-import { emittedModuleCandidates } from '@bamboocss/shared'
+import { emittedModuleCandidates, specifierAfterComments } from '@bamboocss/shared'
 import { existsSync } from 'node:fs'
 import { isAbsolute, posix } from 'node:path'
 
@@ -27,20 +27,22 @@ import { isAbsolute, posix } from 'node:path'
  * The failure this must not have is dropping a rule, which is silent: the build stays green and
  * the class the component asks for has nothing behind it. So every uncertainty resolves toward
  * including the file, and the cases are named rather than left to a catch-all — a file that
- * cannot be read, a source whose imports could not be scanned, a specifier that looks local and
- * resolves to nothing. Being wrong in that direction costs time; being wrong in the other costs
- * correctness.
+ * cannot be read, a source whose imports could not be scanned, a specifier spelled with an escape,
+ * a specifier that looks local and resolves to nothing. Being wrong in that direction costs time;
+ * being wrong in the other costs correctness.
  */
 
 /**
- * Module specifiers, from the four places one can appear.
+ * Module specifiers, from the four places one can appear — or, where one would be, the opening of
+ * a comment, which `specifierAfterComments` reads past, as the Vite compiler's scan does.
  *
  * Deliberately loose about what surrounds them. A specifier missed here costs an edge, and an
  * edge missed can exclude a file that should have been kept — so the pattern is written to
  * over-match rather than to parse, and `scanSpecifiers` treats a source it found nothing in as
  * one it failed to read.
  */
-const SPECIFIER = /(?:\bfrom\s*|^\s*(?:import|export)\s*|\bimport\s*\(\s*|\brequire\s*\(\s*)['"]([^'"\n]+)['"]/gm
+const SPECIFIER =
+  /(?:\bfrom\s*|^\s*(?:import|export)\s*|\bimport\s*\(\s*|\brequire\s*\(\s*)(?:['"]([^'"\n]+)['"]|\/[*/])/gm
 
 /** The extensions a specifier may omit, in the order the native resolver tries them. */
 const EXTENSIONS = ['.ts', '.tsx', '.d.ts', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs']
@@ -64,15 +66,28 @@ export interface ExtractableOptions {
   baseUrl?: string
 }
 
-/** Every specifier in a source, or `undefined` when the text could not be scanned at all. */
-const scanSpecifiers = (text: string): string[] | undefined => {
-  const found: string[] = []
-  for (const match of text.matchAll(SPECIFIER)) if (match[1]) found.push(match[1])
-  if (found.length) return found
+/**
+ * Every specifier a source spells plainly, and whether those are all of its imports.
+ *
+ * Not all of them when one holds an escape, which names a file only once decoded. A comment in
+ * front of a specifier hid it, beside any other import: the file was dropped, and the classes a
+ * recipe call in it asked for had no rule.
+ */
+const scanSpecifiers = (text: string): { specifiers: string[]; complete: boolean } => {
+  const specifiers: string[] = []
+  let complete = true
+  for (const match of text.matchAll(SPECIFIER)) {
+    // No string caught: a comment opens where the specifier would be, in the match's last two characters.
+    const specifier = match[1] ?? specifierAfterComments(text, match.index + match[0].length - 2)
+    if (specifier === undefined) continue
+    if (specifier.includes('\\')) complete = false
+    else specifiers.push(specifier)
+  }
+  if (specifiers.length || !complete) return { specifiers, complete }
   // Nothing matched. Either the file imports nothing — common, and fine — or the pattern failed
   // on a shape it should have caught. The two are told apart by whether the file says `import`
   // or `require` at all; if it does and nothing was found, this did not understand the file.
-  return /\b(?:import|require)\b/.test(text) ? undefined : found
+  return { specifiers, complete: !/\b(?:import|require)\b/.test(text) }
 }
 
 /** `path` with `/` for every separator, as fast-glob spells the inventory on every platform. */
@@ -221,11 +236,10 @@ export const selectExtractable = (files: readonly string[], options: Extractable
     // left those edges unrecorded and `auxiliary` empty on the codebases that needed it most.
     if (options.entrypoints.some((entrypoint) => text.includes(entrypoint))) keep.add(key)
 
-    const specifiers = scanSpecifiers(text)
-    if (specifiers === undefined) {
-      keep.add(key)
-      continue
-    }
+    // A file whose imports were not all read is kept, since the one missed could carry a binding.
+    // The edges that were read are recorded all the same, for `auxiliary`.
+    const { specifiers, complete } = scanSpecifiers(text)
+    if (!complete) keep.add(key)
 
     const directory = posix.dirname(key)
     for (const specifier of specifiers) {

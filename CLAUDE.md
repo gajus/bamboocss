@@ -96,8 +96,11 @@ evaluator's `resolve` follows one — a relative path, tsconfig `paths` and `bas
 inventory holds files of, as it holds a workspace design system imported as `@acme/ds`; skipping that caller leaves a
 call to a recipe the compiler removed. Never ask the bundler there: the specifiers are read out of text, which cannot
 tell a type from a value, and Vite fails the build resolving `import type … from 'type-fest'`, a package with no
-JavaScript. A single-file component's compiled script is held as a project overlay under `X.__bamboo__.ts[x]` so an
-importer resolves the same text; nothing is written to disk.
+JavaScript. Text hides a specifier two ways: a comment in front of it, which `specifierAfterComments`
+(`packages/shared/src/module-specifier.ts`) reads past, and an escape, which both scans treat as reaching bamboo.
+Extraction's scan (`selectExtractable`) reads specifiers as this one does, so a change to one belongs in both. A
+single-file component's compiled script is held as a project overlay under `X.__bamboo__.ts[x]` so an importer resolves
+the same text; nothing is written to disk.
 
 **Cross-file answers are cached across native calls.** Each transform builds a fresh `ProjectEvaluator`, so without it a
 module importing from a large barrel re-parsed the barrel's members every time. `evaluate_export`, the imported-recipe
@@ -261,6 +264,7 @@ Perf-sensitive code has Vitest benchmarks in `{packages,sandbox}/*/__tests__/**/
 | `node/extractable-files`                        | which files a cold extraction pass parses (`selectExtractable`) |
 | `node/parse-file`                               | decoding one file's native analysis (`parseNativeFile`)         |
 | `shared/split-props`, `shared/leaf-class`       | runtime helpers on the per-render path                          |
+| `vite/compile-scope`                            | the transform's per-module skip test (`importsSourceModule`)    |
 | `vite/fold`                                     | native analysis per module, and the JS fold on top of it        |
 | `vite/recipe-lookup`                            | a compiled recipe lookup per call: `cvaMap` and its table       |
 | `vite/output-pass`                              | the early output pass: pruning, naming and splitting a sheet    |

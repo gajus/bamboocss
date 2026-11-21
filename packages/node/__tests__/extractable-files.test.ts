@@ -111,6 +111,58 @@ describe('an uncertainty', () => {
   test('does not mistake a file that genuinely imports nothing for one it failed on', () => {
     expect(select({ '/repo/a.ts': `export const a = 1` })).toEqual([])
   })
+
+  test('keeps a file with a specifier spelled with an escape, recording the edges it could read', () => {
+    // `'./recipe'` names `./recipe` only once decoded, which a scan does not do.
+    const sources: Record<string, string> = {
+      '/repo/app.tsx': `import { icon } from './generated/icon'\nimport { card } from './recip\\u0065'\nexport const A = card()`,
+      '/repo/generated/icon.ts': `export const icon = 'x'`,
+    }
+    const result = selectExtractable(['/repo/app.tsx'], {
+      cwd: CWD,
+      entrypoints: ENTRYPOINTS,
+      fileExists: (filePath) => filePath in sources,
+      readFile: (filePath) => sources[filePath],
+    })
+
+    expect(result.extractable).toEqual(['/repo/app.tsx'])
+    expect(result.auxiliary).toEqual(['/repo/generated/icon.ts'])
+  })
+})
+
+/**
+ * Beside any other import, a comment in front of a specifier hid it: the file importing a recipe
+ * that way was dropped, and the classes its call asked for had no rule. Read past the comment, as
+ * the Vite compiler's scan reads it, so the two agree on what the file imports.
+ */
+describe('a specifier a comment stands in front of', () => {
+  test.each([
+    ['a block comment after from', `import { card } from /* the recipe */ './recipe'`],
+    ['a line comment after from', `import { card } from // the recipe\n  './recipe'`],
+    ['a comment in an export-from', `export { card } from /* the recipe */ './recipe'`],
+    ['a comment in a dynamic import', `const { card } = await import(/* webpackChunkName: "recipe" */ './recipe')`],
+  ])('is read past %s, beside a package import', (_label, line) => {
+    const sources = {
+      '/repo/recipe.ts': `import { cva } from 'styled-system/css'\nexport const card = cva({})`,
+      '/repo/card.tsx': `import React from 'react'\n${line}\nexport const Card = () => <div className={card()} />`,
+    }
+    expect(select(sources)).toEqual(['/repo/recipe.ts', '/repo/card.tsx'])
+  })
+
+  test('is followed to where it points, so a file it leads nowhere from is still skipped', () => {
+    const sources = {
+      '/repo/util.ts': `export const clamp = (n: number) => n`,
+      '/repo/uses.ts': `import { clamp } from /* the helper */ './util'\nexport const u = clamp(1)`,
+    }
+    expect(select(sources)).toEqual([])
+  })
+
+  test('is not found where a comment wraps after "from", in a file importing only packages', () => {
+    const sources = {
+      '/repo/schema.ts': `import { z } from 'zod'\n// Derived from\n// the API's own.\nexport const s = z`,
+    }
+    expect(select(sources)).toEqual([])
+  })
 })
 
 describe('a path mapping', () => {

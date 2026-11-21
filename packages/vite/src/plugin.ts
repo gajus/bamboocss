@@ -4,7 +4,7 @@ import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 
 import { logger } from '@bamboocss/logger'
 import type { ImportMapOutput } from '@bamboocss/types'
-import { emittedModuleCandidates, truncateList } from '@bamboocss/shared'
+import { emittedModuleCandidates, specifierAfterComments, truncateList } from '@bamboocss/shared'
 import { markStaticCompilerActive } from '@bamboocss/node/static-compiler'
 import type { Plugin } from 'vite'
 import { asError, bamboocssCss, bamboocssCssEarly, isStylesheetUrl, VIRTUAL_CSS_ID } from './css'
@@ -205,8 +205,11 @@ export const namesEntrypoint = (ctx: { imports: { outdir: string; value: ImportM
   return needles.some((needle) => code.includes(needle))
 }
 
-/** A module specifier in an import, export-from, dynamic import or require. */
-const MODULE_SPECIFIER = /\b(?:from|import|require)\s*\(?\s*['"]([^'"]+)['"]/g
+/**
+ * A module specifier in an import, export-from, dynamic import or require — or, where one would
+ * be, the opening of a comment, which `specifierAfterComments` reads past.
+ */
+const MODULE_SPECIFIER = /\b(?:from|import|require)\s*\(?\s*(?:['"]([^'"]+)['"]|\/[*/])/g
 /** Extra spellings to try when the specifier has no emitted JavaScript extension. */
 const SPECIFIER_SUFFIXES = [
   '',
@@ -255,6 +258,10 @@ const packageNameOf = (specifier: string) => {
  * package ships its own output. A subpath import (`#…`) resolves through the importer's
  * `package.json`, which this does not read, so one counts.
  *
+ * A specifier is read past a comment in front of it, as extraction's scan reads it, and one
+ * spelled with an escape counts, since it names a file only once decoded. Either was missed: the
+ * module was skipped, and a recipe call in it shipped uncompiled, to throw when it was loaded.
+ *
  * The bundler is not asked. The specifiers here are read out of text, which cannot tell a type
  * from a value, and a type-only one is an import nothing else resolves: Vite fails the build
  * resolving `import type { Simplify } from 'type-fest'`, a package with no JavaScript, and in dev
@@ -268,7 +275,11 @@ export const importsSourceModule = (resolution: SourceResolution, filePath: stri
     return emitted ? emitted.some(isSourceModule) : SPECIFIER_SUFFIXES.some((suffix) => isSourceModule(base + suffix))
   }
   for (const match of code.matchAll(MODULE_SPECIFIER)) {
-    const specifier = match[1]!
+    // No string caught: a comment opens where the specifier would be, in the match's last two characters.
+    const specifier = match[1] ?? specifierAfterComments(code, match.index + match[0].length - 2)
+    if (specifier === undefined) continue
+    // Left to the analysis, which decodes the string as the parser does.
+    if (specifier.includes('\\')) return true
     if (specifier.startsWith('.') || specifier.startsWith('/')) {
       if (covered(specifier.startsWith('/') ? specifier : resolve(directory, specifier))) return true
       continue

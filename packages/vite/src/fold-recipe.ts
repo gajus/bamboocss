@@ -193,11 +193,16 @@ export type LowerResult =
     }
 
 export interface CompiledStyleMap {
-  expression: string
+  /**
+   * The source the call compiles to: `helper([...values], table)`, with the table written as
+   * `tableRef` writes it, or the one leaf every state reduces to. A table is the JSON text of
+   * `[root, nodes, leaves]`.
+   */
+  source(helper: string, tableRef: (table: string) => string): string
   classNames: string[]
   staticClasses: string
   outputKind: 'class' | 'slots'
-  /** Whether `expression` actually calls `cvaMap`; reduced constant maps do not. */
+  /** Whether `source` actually calls `cvaMap`; reduced constant maps do not. */
   usesHelper: boolean
 }
 
@@ -443,6 +448,10 @@ export const lowerRecipeCall = (
    * of a slot recipe whose `tone` styles only its icon never reads `tone`, and the root of that
    * table decides `size`. Without the name, `cvaMap` read the value at the node's depth and
    * decided `size` by `tone`.
+   *
+   * The table, `[root, nodes, leaves]`, is constant, so the fold declares it once at module scope
+   * for every call that reads it. Written inside the call, it was built again on every render. A
+   * slot object is then shared by those calls, and `cvaMap` hands each call a copy of it.
    */
   const axes = Object.keys(config.variants ?? {}).filter((key) => dynamicAxes.has(key))
   const stateCount = axes.reduce(
@@ -541,16 +550,15 @@ export const lowerRecipeCall = (
       // A variant may not affect the requested slot (or every state may reduce to the
       // same complete StyleSet). When the discarded selector expressions are inert, emit
       // that leaf directly: no helper import, lookup table, or runtime read is necessary.
-      const expression =
-        root < 0 && effectful.length === 0
-          ? JSON.stringify(staticLeaf)
-          : `${RECIPE_MAP_HELPER}([${expressions.join(', ')}], ${JSON.stringify(nodes)}, ${JSON.stringify(leaves)}, ${root})`
+      const usesHelper = !(root < 0 && effectful.length === 0)
+      const table = JSON.stringify([root, nodes, leaves])
       return {
-        expression,
+        source: (helper, tableRef) =>
+          usesHelper ? `${helper}([${expressions.join(', ')}], ${tableRef(table)})` : JSON.stringify(staticLeaf),
         classNames: [...emittedClasses],
         staticClasses: typeof staticLeaf === 'string' ? staticLeaf : '',
         outputKind: wholeSlots ? 'slots' : 'class',
-        usesHelper: !(root < 0 && effectful.length === 0),
+        usesHelper,
       }
     },
   }

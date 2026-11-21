@@ -110,7 +110,8 @@ badge({ tone: 'quiet' })
 
 When a declared variant axis is chosen at runtime, Bamboo enumerates its finite state space at build time. Each leaf is
 a complete, precedence-correct StyleSet, and a small `cvaMap` decision table selects among those precompiled class
-strings. The style config and recipe engine do not ship.
+strings. The style config and recipe engine do not ship. The table is declared once at the top of the module, so a
+render reads it instead of building it, and calls that select alike share one.
 
 ```tsx
 export const className = (tone) => badge({ tone })

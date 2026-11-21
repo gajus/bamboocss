@@ -39,9 +39,7 @@ const declaration = outdent`
     */
    export declare function cvaMap(
      values: unknown[],
-     nodes: Array<[number, unknown, unknown, unknown[]]>,
-     leaves: unknown[],
-     root: number,
+     table: [root: number, nodes: Array<[number, unknown, unknown, unknown[]]>, leaves: unknown[]],
    ): unknown
 
    /**
@@ -179,13 +177,15 @@ export function generateCx(ctx: Context) {
 
   ${cxFunction(ctx.utility.prefix)}
 
-  // Each node is [position, miss, undefined, [key, child, key, child, ...]]: the position in
-  // \`values\` it decides, then where each answer leads. A decision that changes nothing is left
-  // out of the table, so a node's depth is not its position. Children are either another
-  // non-negative node index or a negative leaf reference. Arrays avoid object-literal
-  // \`__proto__\` semantics, while string coercion matches a recipe's property lookup.
-  const cvaMap = (values, nodes, leaves, root) => {
-    let current = root
+  // A table is [root, nodes, leaves], declared once in the module that reads it. Each node is
+  // [position, miss, undefined, [key, child, key, child, ...]]: the position in \`values\` it
+  // decides, then where each answer leads. A decision that changes nothing is left out of the
+  // table, so a node's depth is not its position. Children are either another non-negative node
+  // index or a negative leaf reference. Arrays avoid object-literal \`__proto__\` semantics, while
+  // string coercion matches a recipe's property lookup.
+  const cvaMap = (values, table) => {
+    const nodes = table[1]
+    let current = table[0]
     // Each node on a path decides a later value than the one before it, so a path visits one node
     // per value at most; a longer one is a table no build wrote.
     for (let i = 0; i < values.length && current >= 0; i++) {
@@ -212,7 +212,11 @@ export function generateCx(ctx: Context) {
       }
       current = next
     }
-    return current < 0 ? (leaves[~current] ?? '') : ''
+    const leaf = current < 0 ? table[2][~current] : undefined
+    if (leaf === undefined) return ''
+    // A slot object is shared by every call reading the table, so each call gets a copy: one that
+    // adds to its \`root\` must not change what the next call reads.
+    return typeof leaf === 'string' ? leaf : { ...leaf }
   }
 
   export { cx, cvaMap, splitProps }

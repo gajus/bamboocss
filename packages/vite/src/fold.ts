@@ -516,6 +516,8 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     missing?: true
     /** Bindings to add to an existing import, by name so duplicates can be dropped. */
     insert?: HelperInsert
+    /** Lookup tables `replacement` reads by name, declared once it is applied. */
+    tables?: string[]
     /** Modules another module's recipe was read from, or through. */
     foreign?: readonly string[]
     start: number
@@ -523,6 +525,37 @@ export const foldSource = (options: FoldOptions): FoldResult => {
   }
 
   const candidates: Candidate[] = []
+
+  /**
+   * Where a recipe lookup's table is declared, once for the module, so a call reads it rather than
+   * building it on every render: before the first import, when nothing but comments and directives
+   * comes ahead of it. No statement runs before it then, so a call at module scope reads a table
+   * already initialized, as a call in a component does. Where a statement comes first, each table
+   * stays in its call.
+   */
+  const firstImport = Math.min(...analysis.imports.map((declaration) => declaration.span.start))
+  const tablesAt = Number.isFinite(firstImport) && onlyPrologueBefore(code, firstImport) ? firstImport : undefined
+  /** Table JSON → the name it is declared under, in the order calls first read them. */
+  const tableNames = new Map<string, string>()
+  /** The tables an applied replacement reads, which are the ones declared. */
+  const readTables = new Set<string>()
+  let tablePrefix: string | undefined
+  /** A reference to `table` for one replacement, recording the names it reads into `tables`. */
+  const tableRef = (tables: string[]) => (table: string) => {
+    if (tablesAt === undefined) return table
+    let name = tableNames.get(table)
+    if (!name) {
+      // A prefix the module never spells, so no binding anywhere in it is named like a table.
+      if (tablePrefix === undefined) {
+        tablePrefix = '__bambooLookup'
+        while (code.includes(tablePrefix)) tablePrefix += '_'
+      }
+      name = `${tablePrefix}${tableNames.size}`
+      tableNames.set(table, name)
+    }
+    tables.push(name)
+    return name
+  }
   /**
    * `token.value()` calls whose token holds what no literal stands in for, neither a string nor a
    * finite number. Not candidates, since nothing is written for one: a style compiled around it takes
@@ -1266,10 +1299,8 @@ export const foldSource = (options: FoldOptions): FoldResult => {
         )
         continue
       }
-      const expression =
-        compiled.usesHelper && dynamicCandidate.mapHelperName && dynamicCandidate.mapHelperName !== RECIPE_MAP_HELPER
-          ? compiled.expression.replaceAll(`${RECIPE_MAP_HELPER}(`, `${dynamicCandidate.mapHelperName}(`)
-          : compiled.expression
+      const tables: string[] = []
+      const expression = compiled.source(dynamicCandidate.mapHelperName ?? RECIPE_MAP_HELPER, tableRef(tables))
 
       const arguments_: string[] = []
       let wroteCompiled = false
@@ -1298,6 +1329,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
         ].filter(Boolean),
         literalClassNames: literalClasses(),
         insert: compiled.usesHelper ? dynamicCandidate.insert : undefined,
+        tables,
         foreign: styleParts.flatMap((part) => part.candidate.foreign ?? []),
       })
       continue
@@ -1373,10 +1405,8 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       candidate.failed = true
       continue
     }
-    candidate.replacement =
-      compiled.usesHelper && candidate.mapHelperName && candidate.mapHelperName !== RECIPE_MAP_HELPER
-        ? compiled.expression.replaceAll(`${RECIPE_MAP_HELPER}(`, `${candidate.mapHelperName}(`)
-        : compiled.expression
+    candidate.tables = []
+    candidate.replacement = compiled.source(candidate.mapHelperName ?? RECIPE_MAP_HELPER, tableRef(candidate.tables))
     if (!compiled.usesHelper) candidate.insert = undefined
     candidate.className = compiled.staticClasses
     candidate.classNames = compiled.classNames
@@ -1487,6 +1517,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     if (candidate.replacement) {
       magic.overwrite(start, end, candidate.replacement)
       applyInsert(candidate.insert)
+      for (const table of candidate.tables ?? []) readTables.add(table)
       applied.push([start, end])
       folded.push({
         name,
@@ -1525,6 +1556,14 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     magic.overwrite(start, end, replacement)
     applied.push([start, end])
     folded.push({ name, kind: 'class', className, classNames, start, end })
+  }
+
+  // Only the tables a replacement that was applied reads: one whose call overlapped another and
+  // was dropped declares nothing.
+  if (tablesAt !== undefined && readTables.size) {
+    let declarations = ''
+    for (const [table, name] of tableNames) if (readTables.has(name)) declarations += `const ${name} = ${table};\n`
+    magic.appendLeft(tablesAt, declarations)
   }
 
   // `input.splitVariantProps(props)` — the other way a wrapper reaches its recipe. Lowered to
@@ -1709,6 +1748,52 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     dependencies: [...dependencies],
     ...joinedClassNames(),
     ...joinGroups(),
+  }
+}
+
+const WHITESPACE = /\s/
+
+/**
+ * Whether nothing but whitespace, comments, a hashbang and directives comes before `end`, so no
+ * statement runs ahead of a declaration placed there.
+ *
+ * Read conservatively, since a wrong yes runs a call before the table it reads exists: a string
+ * followed by anything but `;`, another string or `end` begins an expression, as `'a'.length` and
+ * `'a'` with `(b)` on the line below do, and any other token is a statement.
+ */
+const onlyPrologueBefore = (code: string, end: number) => {
+  let index = code.startsWith('#!') ? code.indexOf('\n') : 0
+  if (index === -1) return false
+  const skipTrivia = () => {
+    while (index < end) {
+      if (WHITESPACE.test(code[index]!)) {
+        index++
+      } else if (code.startsWith('//', index)) {
+        const newline = code.indexOf('\n', index + 2)
+        index = newline === -1 ? code.length : newline + 1
+      } else if (code.startsWith('/*', index)) {
+        const close = code.indexOf('*/', index + 2)
+        index = close === -1 ? code.length : close + 2
+      } else {
+        return
+      }
+    }
+  }
+  for (;;) {
+    skipTrivia()
+    if (index >= end) return index === end
+    const quote = code[index]
+    if (quote !== "'" && quote !== '"') return false
+    let close = index + 1
+    while (close < end && code[close] !== quote) {
+      if (code[close] === '\n') return false
+      close += code[close] === '\\' ? 2 : 1
+    }
+    if (close >= end) return false
+    index = close + 1
+    skipTrivia()
+    if (code[index] === ';') index++
+    else if (index < end && code[index] !== "'" && code[index] !== '"') return false
   }
 }
 

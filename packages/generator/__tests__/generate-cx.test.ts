@@ -5,7 +5,9 @@ import { generateCx } from '../src/artifacts/js/cx'
 
 type Cx = (...args: unknown[]) => string
 type Node = [number, unknown, unknown, unknown[]]
-type CvaMap = (values: unknown[], nodes: Node[], leaves: unknown[], root: number) => unknown
+/** `[root, nodes, leaves]`, as the transform declares one. */
+type Table = [number, Node[], unknown[]]
+type CvaMap = (values: unknown[], table: Table) => unknown
 
 /**
  * Evaluate the emitted artifact rather than a copy of it. These ship to the browser as this
@@ -24,39 +26,51 @@ const { cvaMap } = compile()
 describe('generated cvaMap', () => {
   // root 1 decides tone, the first value, then node 0 decides size, the second. A miss and null
   // take the miss edge; undefined takes its own, preserving a distinct default state.
-  const nodes: Node[] = [
-    [1, ~0, ~1, ['sm', ~2, '__proto__', ~3]],
-    [0, ~4, 0, ['quiet', ~5]],
+  const table: Table = [
+    1,
+    [
+      [1, ~0, ~1, ['sm', ~2, '__proto__', ~3]],
+      [0, ~4, 0, ['quiet', ~5]],
+    ],
+    ['miss-size', 'default-size', 'small', 'proto', 'miss-tone', 'quiet-tone'],
   ]
-  const leaves = ['miss-size', 'default-size', 'small', 'proto', 'miss-tone', 'quiet-tone']
 
   test('walks declared, absent, and missing states without prototype lookups', () => {
-    expect(cvaMap(['quiet', 'sm'], nodes, leaves, 1)).toBe('quiet-tone')
-    expect(cvaMap([undefined, 'sm'], nodes, leaves, 1)).toBe('small')
-    expect(cvaMap([undefined, undefined], nodes, leaves, 1)).toBe('default-size')
-    expect(cvaMap([undefined, '__proto__'], nodes, leaves, 1)).toBe('proto')
-    expect(cvaMap([undefined, 'unknown'], nodes, leaves, 1)).toBe('miss-size')
-    expect(cvaMap([undefined, null], nodes, leaves, 1)).toBe('miss-size')
+    expect(cvaMap(['quiet', 'sm'], table)).toBe('quiet-tone')
+    expect(cvaMap([undefined, 'sm'], table)).toBe('small')
+    expect(cvaMap([undefined, undefined], table)).toBe('default-size')
+    expect(cvaMap([undefined, '__proto__'], table)).toBe('proto')
+    expect(cvaMap([undefined, 'unknown'], table)).toBe('miss-size')
+    expect(cvaMap([undefined, null], table)).toBe('miss-size')
   })
 
   // `.root` of a recipe whose `tone` styles only its icon: the table leaves `tone` out, and its root
   // decides `size`, the second value. Read by depth, `tone` decided it.
   test('reads the value a node decides, not the one at its depth', () => {
-    const table: Node[] = [[1, ~0, ~1, ['sm', ~2]]]
-    const sizes = ['no-size', 'default-size', 'small']
-    expect(cvaMap(['quiet', 'sm'], table, sizes, 0)).toBe('small')
-    expect(cvaMap(['sm', undefined], table, sizes, 0)).toBe('default-size')
-    expect(cvaMap([undefined, null], table, sizes, 0)).toBe('no-size')
+    const sizes: Table = [0, [[1, ~0, ~1, ['sm', ~2]]], ['no-size', 'default-size', 'small']]
+    expect(cvaMap(['quiet', 'sm'], sizes)).toBe('small')
+    expect(cvaMap(['sm', undefined], sizes)).toBe('default-size')
+    expect(cvaMap([undefined, null], sizes)).toBe('no-size')
   })
 
   // A path decides each value once at most, so a longer one is not a table a build wrote.
   test('stops on a table whose path is longer than its values', () => {
-    expect(cvaMap(['sm'], [[0, 0, 0, ['sm', 0]]], ['leaf'], 0)).toBe('')
+    expect(cvaMap(['sm'], [0, [[0, 0, 0, ['sm', 0]]], ['leaf']])).toBe('')
   })
 
   test('can return a whole slot object from one selector evaluation', () => {
     const slots = { root: 'd_flex', label: 'c_gray' }
-    expect(cvaMap(['quiet'], [[0, ~0, ~0, ['quiet', ~1]]], ['', slots], 0)).toEqual(slots)
+    expect(cvaMap(['quiet'], [0, [[0, ~0, ~0, ['quiet', ~1]]], ['', slots]])).toEqual(slots)
+  })
+
+  // The table is the module's, read by every call, so a slot object a caller changes must not be
+  // the one the next call returns.
+  test('hands each call its own copy of a slot object', () => {
+    const slots: Table = [0, [[0, ~0, ~0, ['quiet', ~1]]], ['', { root: 'd_flex', label: 'c_gray' }]]
+    const first = cvaMap(['quiet'], slots) as Record<string, string>
+    first.root += ' px_4'
+    expect(cvaMap(['quiet'], slots)).toEqual({ root: 'd_flex', label: 'c_gray' })
+    expect(cvaMap(['quiet'], slots)).not.toBe(cvaMap(['quiet'], slots))
   })
 })
 

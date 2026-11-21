@@ -39,7 +39,7 @@ const declaration = outdent`
     */
    export declare function cvaMap(
      values: unknown[],
-     nodes: Array<[unknown, unknown, unknown[]]>,
+     nodes: Array<[number, unknown, unknown, unknown[]]>,
      leaves: unknown[],
      root: number,
    ): unknown
@@ -179,28 +179,32 @@ export function generateCx(ctx: Context) {
 
   ${cxFunction(ctx.utility.prefix)}
 
-  // Each node is [miss, undefined, [key, child, key, child, ...]]. Children are either
-  // another non-negative node index or a negative leaf reference. Arrays avoid object-literal
+  // Each node is [position, miss, undefined, [key, child, key, child, ...]]: the position in
+  // \`values\` it decides, then where each answer leads. A decision that changes nothing is left
+  // out of the table, so a node's depth is not its position. Children are either another
+  // non-negative node index or a negative leaf reference. Arrays avoid object-literal
   // \`__proto__\` semantics, while string coercion matches a recipe's property lookup.
   const cvaMap = (values, nodes, leaves, root) => {
     let current = root
+    // Each node on a path decides a later value than the one before it, so a path visits one node
+    // per value at most; a longer one is a table no build wrote.
     for (let i = 0; i < values.length && current >= 0; i++) {
       const node = nodes[current]
       if (!node) return ''
 
-      const value = values[i]
+      const value = values[node[0]]
       if (value === undefined) {
-        current = node[1]
+        current = node[2]
         continue
       }
       if (value === null) {
-        current = node[0]
+        current = node[1]
         continue
       }
 
       const key = String(value)
-      const entries = node[2]
-      let next = node[0]
+      const entries = node[3]
+      let next = node[1]
       for (let j = 0; j < entries.length; j += 2) {
         if (entries[j] !== key) continue
         next = entries[j + 1]

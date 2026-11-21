@@ -262,6 +262,7 @@ Perf-sensitive code has Vitest benchmarks in `{packages,sandbox}/*/__tests__/**/
 | `node/parse-file`                               | decoding one file's native analysis (`parseNativeFile`)         |
 | `shared/split-props`, `shared/leaf-class`       | runtime helpers on the per-render path                          |
 | `vite/fold`                                     | native analysis per module, and the JS fold on top of it        |
+| `vite/recipe-lookup`                            | a compiled recipe lookup per call: `cvaMap` and its table       |
 | `vite/output-pass`                              | the early output pass: pruning, naming and splitting a sheet    |
 
 Nothing measures what the compiled output costs to _render_. `sandbox/runtime-perf/render.bench.ts` did, and went with

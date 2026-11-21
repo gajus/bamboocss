@@ -88,9 +88,9 @@ export const SPLIT_PROPS_HELPER = 'splitProps'
 /** Marker for a binding the fold must never resolve — declared twice, or unresolvable. */
 export const AMBIGUOUS: RecipeEntry = Object.freeze({ config: {} })
 
-/** `.size`, or `["x-large"]` when the variant is not a valid identifier. */
+/** `?.size`, or `?.["x-large"]` when the variant is not a valid identifier. */
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/
-const propertyAccess = (key: string) => (IDENTIFIER.test(key) ? `.${key}` : `[${JSON.stringify(key)}]`)
+const optionalAccess = (key: string) => (IDENTIFIER.test(key) ? `?.${key}` : `?.[${JSON.stringify(key)}]`)
 
 /** Where a helper import can be written, and under what name the call site can reach it. */
 export interface HelperInsert {
@@ -271,10 +271,13 @@ export const lowerRecipeCall = (
      *
      * An identifier only. Each variant reads the binding again, and re-reading anything else —
      * a call, a property access — would evaluate it once per axis instead of once.
+     *
+     * Each read is optional. A recipe's props are optional in its type, and `badge(props)` with
+     * `props` undefined selects the defaults, as `badge()` does; `props.tone` threw instead.
      */
     if (written.identifier !== undefined) {
       for (const key of Object.keys(config.variants ?? {})) {
-        dynamicAxes.set(key, `${written.identifier}${propertyAccess(key)}`)
+        dynamicAxes.set(key, `${written.identifier}${optionalAccess(key)}`)
       }
     } else {
       // A spread contributes keys the build cannot enumerate, and a computed key is one it
@@ -435,6 +438,11 @@ export const lowerRecipeCall = (
    * values use string keys, matching JavaScript's property-key coercion in the recipe
    * runtime. A flat alternating key/value array avoids the special `__proto__` semantics
    * of an object literal.
+   *
+   * A decision that changes nothing is left out, so a node names the value it decides. `.root`
+   * of a slot recipe whose `tone` styles only its icon never reads `tone`, and the root of that
+   * table decides `size`. Without the name, `cvaMap` read the value at the node's depth and
+   * decided `size` by `tone`.
    */
   const axes = Object.keys(config.variants ?? {}).filter((key) => dynamicAxes.has(key))
   const stateCount = axes.reduce(
@@ -451,6 +459,8 @@ export const lowerRecipeCall = (
   type SlotClasses = Record<string, string>
   type Leaf = string | SlotClasses
   type Ref = number
+  /** The position in the lookup's values the node decides, its miss and `undefined` edges, then each declared value's. */
+  type Node = [number, Ref, Ref, Array<string | Ref>]
 
   const expressions = axes.map((axis) => dynamicAxes.get(axis)!)
   const wholeSlots = Array.isArray(config.slots) && slot === undefined
@@ -458,7 +468,7 @@ export const lowerRecipeCall = (
   const map: DynamicStyleMap = {
     outputKind: wholeSlots ? 'slots' : 'class',
     compile(before = [], after = []) {
-      const nodes: Array<[Ref, Ref, Array<string | Ref>]> = []
+      const nodes: Node[] = []
       const nodeByShape = new Map<string, number>()
       const leaves: Leaf[] = []
       const leafByShape = new Map<string, number>()
@@ -510,10 +520,12 @@ export const lowerRecipeCall = (
           byValue.push(value, buildNode(index + 1, { ...dynamicSelection, [axis]: value }))
         }
 
+        // Every value leads to the same place, so the decision is left out: the parent's edge goes
+        // straight there, to a node deciding a later value than its depth says.
         const refs = [miss, absent, ...byValue.filter((_, valueIndex) => valueIndex % 2 === 1)] as Ref[]
         if (refs.every((ref) => ref === refs[0])) return refs[0]!
 
-        const node: [Ref, Ref, Array<string | Ref>] = [miss, absent, byValue]
+        const node: Node = [index, miss, absent, byValue]
         const shape = JSON.stringify(node)
         const known = nodeByShape.get(shape)
         if (known !== undefined) return known

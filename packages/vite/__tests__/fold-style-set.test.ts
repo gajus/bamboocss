@@ -1,3 +1,4 @@
+import { generateCx } from '../../generator/src/artifacts/js/cx'
 import { withoutMergeCodes } from '@bamboocss/fixture'
 import { getRecipeIdentity, viewTransitionClassName } from '@bamboocss/shared'
 import { describe, expect, test } from 'vitest'
@@ -179,6 +180,8 @@ describe('static style-set folding', () => {
 
   test('bounds an exact dynamic recipe table before enumerating its Cartesian product', () => {
     const fixture = createFoldFixture()
+    // The compound makes `tone` and `size` decide one declaration together, so neither can be
+    // decided apart from the other.
     const source = `
       import { cva } from 'styled-system/css'
       const badge = cva({
@@ -186,13 +189,66 @@ describe('static style-set folding', () => {
           tone: { quiet: { color: 'gray.500' }, loud: { color: 'red.500' } },
           size: { sm: { padding: '2' }, md: { padding: '4' } },
         },
+        compoundVariants: [{ tone: 'loud', size: 'md', css: { fontWeight: 'bold' } }],
       })
       export const className = (tone, size) => badge({ tone, size })
     `
 
     // Each axis has miss, undefined, and two declared values: 4 * 4 = 16 exact states.
-    expect(() => fixture.foldStyleSets(source, 'app/src/state-limit.ts', 15)).toThrow('would inspect 16 selections')
+    expect(() => fixture.foldStyleSets(source, 'app/src/state-limit.ts', 15)).toThrow(
+      'would inspect 16 selections across 2 runtime variant axes that decide declarations together (tone, size)',
+    )
     expect(() => fixture.foldStyleSets(source, 'app/src/state-limit.ts', 16)).not.toThrow()
+  })
+
+  // Each styles a property of its own, so each is decided apart: nine tables of four states, where
+  // one table of all nine would hold 262,144 and fail the build.
+  test('compiles variants that decide declarations of their own past the limit, a table for each', () => {
+    const fixture = createFoldFixture()
+    const properties = [
+      'color',
+      'padding',
+      'margin',
+      'fontSize',
+      'fontWeight',
+      'borderRadius',
+      'opacity',
+      'gap',
+      'zIndex',
+    ]
+    const values = [
+      ['red.300', 'gray.500'],
+      ['1', '2'],
+      ['1', '2'],
+      ['sm', 'lg'],
+      ['light', 'bold'],
+      ['sm', 'full'],
+      ['0.5', '0.8'],
+      ['1', '2'],
+      ['1', '2'],
+    ]
+    const variants = properties.map(
+      (property, index) =>
+        `v${index}: { a: { ${property}: '${values[index]![0]}' }, b: { ${property}: '${values[index]![1]}' } }`,
+    )
+    const names = properties.map((_, index) => `v${index}`)
+    const result = fixture.foldStyleSets(`
+      import { cva } from 'styled-system/css'
+      const badge = cva({ base: { display: 'flex' }, variants: { ${variants.join(', ')} } })
+      export const className = (p) => badge(p)
+      export const literal = badge({ ${names.map((name, index) => `${name}: '${index % 2 ? 'a' : 'b'}'`).join(', ')} })
+    `)
+
+    expect(result.skipped).toEqual([])
+    const { js } = generateCx(fixture.ctx as never)
+    const { cvaMap } = new Function(
+      js.replace(/^import[^\n]*\n/m, '').replace(/export\s*\{[^}]*\}/, 'return { cx, cvaMap }'),
+    )()
+    const code = result.code.replace(/^import .*$/gm, '').replaceAll('export const ', 'const ')
+    const module = new Function('cvaMap', `${code}\nreturn { className, literal }`)(cvaMap)
+    const props = Object.fromEntries(names.map((name, index) => [name, index % 2 ? 'a' : 'b']))
+    expect(module.className(props)).toBe(module.literal)
+    expect(module.className({})).toBe(fixture.runtimeCss({ display: 'flex' }))
   })
 
   test('composes static cx styles into every runtime StyleSet leaf', () => {

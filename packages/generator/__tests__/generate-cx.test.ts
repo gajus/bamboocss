@@ -7,7 +7,7 @@ type Cx = (...args: unknown[]) => string
 type Node = [number, unknown, unknown, unknown[]]
 /** `[root, nodes, leaves]`, as the transform declares one. */
 type Table = [number, Node[], unknown[]]
-type CvaMap = (values: unknown[], table: Table) => unknown
+type CvaMap = (values: unknown[], table: unknown) => unknown
 
 /**
  * Evaluate the emitted artifact rather than a copy of it. These ship to the browser as this
@@ -58,19 +58,34 @@ describe('generated cvaMap', () => {
     expect(cvaMap(['sm'], [0, [[0, 0, 0, ['sm', 0]]], ['leaf']])).toBe('')
   })
 
-  test('can return a whole slot object from one selector evaluation', () => {
-    const slots = { root: 'd_flex', label: 'c_gray' }
-    expect(cvaMap(['quiet'], [0, [[0, ~0, ~0, ['quiet', ~1]]], ['', slots]])).toEqual(slots)
+  // Segments: runs of a recipe's declarations, each a constant or decided by variants of its own.
+  test('joins segments in order, leaving out the empty ones', () => {
+    const tone: Table = [0, [[0, ~0, ~0, ['quiet', ~1]]], ['', 'c_gray']]
+    const size: Table = [0, [[1, ~0, ~1, ['sm', ~2]]], ['', 'p_4', 'p_2']]
+    const segments = ['d_flex', tone, size, 'm_1']
+    expect(cvaMap(['quiet', 'sm'], segments)).toBe('d_flex c_gray p_2 m_1')
+    expect(cvaMap([null, undefined], segments)).toBe('d_flex p_4 m_1')
+    expect(cvaMap([null, null], segments)).toBe('d_flex m_1')
   })
 
-  // The table is the module's, read by every call, so a slot object a caller changes must not be
-  // the one the next call returns.
-  test('hands each call its own copy of a slot object', () => {
+  // A table's leaf can be a slot recipe's whole object, which the table holds for every call.
+  test('hands each call its own copy of a slot object a table holds', () => {
     const slots: Table = [0, [[0, ~0, ~0, ['quiet', ~1]]], ['', { root: 'd_flex', label: 'c_gray' }]]
     const first = cvaMap(['quiet'], slots) as Record<string, string>
     first.root += ' px_4'
     expect(cvaMap(['quiet'], slots)).toEqual({ root: 'd_flex', label: 'c_gray' })
     expect(cvaMap(['quiet'], slots)).not.toBe(cvaMap(['quiet'], slots))
+  })
+
+  // Past a few states, a slot recipe's whole object is a lookup per slot. The table is the module's, read by every
+  // call, so the object has to be the call's own: one a caller changes is not what the next returns.
+  test('builds a slot object from a lookup per slot, a new one for every call', () => {
+    const slots = { root: 'd_flex', label: [0, [[0, ~0, ~0, ['quiet', ~1]]], ['', 'c_gray']] }
+    expect(cvaMap(['quiet'], slots)).toEqual({ root: 'd_flex', label: 'c_gray' })
+    expect(cvaMap(['loud'], slots)).toEqual({ root: 'd_flex', label: '' })
+    const first = cvaMap(['quiet'], slots) as Record<string, string>
+    first.root += ' px_4'
+    expect(cvaMap(['quiet'], slots)).toEqual({ root: 'd_flex', label: 'c_gray' })
   })
 })
 

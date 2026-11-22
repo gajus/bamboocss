@@ -33,14 +33,14 @@ const declaration = outdent`
     */
    export declare function cx(...args: Argument[]): string
 
+   type CvaTable = [root: number, nodes: Array<[number, unknown, unknown, unknown[]]>, leaves: string[]]
+   type CvaLookup = string | CvaTable | Array<string | CvaTable>
+
    /**
     * Select a complete build-precompiled recipe StyleSet from a reduced decision table.
     * Written by the source transform, not by hand.
     */
-   export declare function cvaMap(
-     values: unknown[],
-     table: [root: number, nodes: Array<[number, unknown, unknown, unknown[]]>, leaves: unknown[]],
-   ): unknown
+   export declare function cvaMap(values: unknown[], table: CvaLookup | Record<string, CvaLookup>): unknown
 
    /**
     * Split a props object into the listed keys and everything else.
@@ -177,13 +177,42 @@ export function generateCx(ctx: Context) {
 
   ${cxFunction(ctx.utility.prefix)}
 
-  // A table is [root, nodes, leaves], declared once in the module that reads it. Each node is
-  // [position, miss, undefined, [key, child, key, child, ...]]: the position in \`values\` it
-  // decides, then where each answer leads. A decision that changes nothing is left out of the
-  // table, so a node's depth is not its position. Children are either another non-negative node
-  // index or a negative leaf reference. Arrays avoid object-literal \`__proto__\` semantics, while
-  // string coercion matches a recipe's property lookup.
+  // What a recipe call reads, declared once in the module that reads it: a table, segments, or a
+  // lookup per slot of a slot recipe's whole object. A table is [root, nodes, leaves], each leaf a
+  // class string or a whole slot object. Each node is [position, miss, undefined, [key, child, key,
+  // child, ...]]: the position in \`values\` it decides, then where each answer leads. A decision
+  // that changes nothing is left out of the table, so a node's depth is not its position. Children
+  // are either another non-negative node index or a negative leaf reference. Arrays avoid
+  // object-literal \`__proto__\` semantics, while string coercion matches a recipe's property lookup.
   const cvaMap = (values, table) => {
+    // A slot recipe's whole object: a lookup per slot, in an object the call has to itself.
+    if (!Array.isArray(table)) {
+      const slots = {}
+      for (const slot in table) {
+        const lookup = table[slot]
+        slots[slot] = typeof lookup === 'string' ? lookup : cvaMap(values, lookup)
+      }
+      return slots
+    }
+    if (typeof table[0] === 'number') {
+      const leaf = cvaLeaf(values, table)
+      // A slot object is shared by every call reading the table, so each call gets a copy: one that
+      // adds to its \`root\` must not change what the next call reads.
+      return typeof leaf === 'string' ? leaf : { ...leaf }
+    }
+    // Segments: runs of the recipe's declarations, each a constant or a table of variants that
+    // decide it alone, joined in the order the recipe writes them.
+    let classes = ''
+    for (let i = 0; i < table.length; i++) {
+      const segment = table[i]
+      const part = typeof segment === 'string' ? segment : cvaLeaf(values, segment)
+      if (part) classes = classes ? classes + ' ' + part : part
+    }
+    return classes
+  }
+
+  // The leaf one table selects for \`values\`.
+  const cvaLeaf = (values, table) => {
     const nodes = table[1]
     let current = table[0]
     // Each node on a path decides a later value than the one before it, so a path visits one node
@@ -212,11 +241,7 @@ export function generateCx(ctx: Context) {
       }
       current = next
     }
-    const leaf = current < 0 ? table[2][~current] : undefined
-    if (leaf === undefined) return ''
-    // A slot object is shared by every call reading the table, so each call gets a copy: one that
-    // adds to its \`root\` must not change what the next call reads.
-    return typeof leaf === 'string' ? leaf : { ...leaf }
+    return current < 0 ? (table[2][~current] ?? '') : ''
   }
 
   export { cx, cvaMap, splitProps }

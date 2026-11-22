@@ -36,10 +36,25 @@ export interface StaticStyleSetCompiler {
   composeCx(...styles: Dict[]): Dict
   /** Resolve one recipe selection to authored styles. */
   resolveRecipe(config: StyleSetRecipeConfig, selection?: Dict, slot?: string): Dict | undefined
+  /**
+   * The fragments `resolveRecipe` merges for one selection, in the order it merges them, each with
+   * its place: 0 for the base, then one per variant in the config's order, then one per compound.
+   */
+  recipeFragments(config: StyleSetRecipeConfig, selection?: Dict, slot?: string): RecipeFragment[] | undefined
+  /** A style set as merging reads it: mixins written out, shorthands resolved, nullish leaves dropped. */
+  normalize(styles: Dict): Dict
+  /** The merge key of each declaration a style set holds, property and conditions, as `composeCx` keys them. */
+  mergeKeys(styles: Dict): string[]
   /** Allocate the ordinary globally shared utility atoms for a style set. */
   className(...styles: Dict[]): string
   /** Allocate a compact class for a non-atomic compiler surface such as `viewTransition()`. */
   allocateClassString(className: string): string
+}
+
+/** One style fragment a recipe selection merges, and its place in the merge. @see StaticStyleSetCompiler.recipeFragments */
+export interface RecipeFragment {
+  place: number
+  styles: Dict
 }
 
 const isRecord = (value: unknown): value is Dict => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -198,7 +213,7 @@ export const createStaticStyleSetCompiler = (
     return composed
   }
 
-  const resolveRecipe = (config: StyleSetRecipeConfig, input: Dict = {}, slot?: string): Dict | undefined => {
+  const recipeFragments = (config: StyleSetRecipeConfig, input: Dict = {}, slot?: string) => {
     const slots = Array.isArray(config.slots) ? config.slots : undefined
     if (Boolean(slots) !== Boolean(slot)) return undefined
     if (slot && !slots?.includes(slot)) return undefined
@@ -206,38 +221,47 @@ export const createStaticStyleSetCompiler = (
     const selection = { ...(config.defaultVariants ?? {}), ...compact(input) }
     if (Object.values(selection).some((value) => isRecord(value))) return undefined
 
-    const fragments: Dict[] = []
-    const take = (candidate: unknown) => {
+    const fragments: RecipeFragment[] = []
+    const take = (place: number, candidate: unknown) => {
       if (!isRecord(candidate)) return
       const styles = slot ? candidate[slot] : candidate
-      if (isRecord(styles)) fragments.push(styles)
+      if (isRecord(styles)) fragments.push({ place, styles })
     }
 
-    take(config.base)
+    take(0, config.base)
 
     // Recipe rules are emitted in declaration order, and later variant axes therefore win
     // when two selected axes write the same property. A call site's object-key order never
     // changes that CSS precedence. Resolve in the config's order as well, so replacing those
     // rules with one complete StyleSet is behavior-preserving and an opaque props object does
     // not make precedence depend on how a caller happened to construct it.
-    for (const variant of Object.keys(config.variants ?? {})) {
+    const variants = Object.keys(config.variants ?? {})
+    variants.forEach((variant, index) => {
       const value = selection[variant]
-      if (value == null) continue
-      take(config.variants?.[variant]?.[String(value)])
-    }
+      if (value == null) return
+      take(1 + index, config.variants?.[variant]?.[String(value)])
+    })
 
-    for (const compound of config.compoundVariants ?? []) {
-      if (!isRecord(compound) || !matchesCompound(compound, selection, config.variants)) continue
-      take(compound.css)
-    }
+    ;(config.compoundVariants ?? []).forEach((compound, index) => {
+      if (!isRecord(compound) || !matchesCompound(compound, selection, config.variants)) return
+      take(1 + variants.length + index, compound.css)
+    })
 
-    return compose(...fragments)
+    return fragments
+  }
+
+  const resolveRecipe = (config: StyleSetRecipeConfig, input: Dict = {}, slot?: string): Dict | undefined => {
+    const fragments = recipeFragments(config, input, slot)
+    return fragments && compose(...fragments.map((fragment) => fragment.styles))
   }
 
   return {
     compose,
     composeCx,
     resolveRecipe,
+    recipeFragments,
+    normalize: (styles) => normalizeStyleObject(prepare([styles])[0]!, cssContext),
+    mergeKeys: (styles) => declarationsOf(prepare([styles])[0]!).map((declaration) => declaration.key),
     className: (...styles) => runtimeCss(...prepare(styles)),
     allocateClassString,
   }

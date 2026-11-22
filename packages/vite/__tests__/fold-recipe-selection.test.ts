@@ -176,3 +176,91 @@ export const literalDefault = badge()
     expect(module.classNameOf(undefined)).toBe(module.literalDefault)
   })
 })
+
+/** The tables the module declares, as `cvaMap` reads them. */
+const tablesIn = (code: string) =>
+  [...code.matchAll(/^const __bambooLookup\w* = (.*);$/gm)].map((match) => JSON.parse(match[1]!) as unknown)
+
+/** Segments: an array whose first element is not a table's root. */
+const isSegments = (lookup: unknown) => Array.isArray(lookup) && typeof lookup[0] !== 'number'
+
+describe('a dynamic recipe call compiled in segments', () => {
+  // `tone` takes the base's `color` with it, and the compound ties `size` to `shape`: two groups,
+  // each over two runs that do not touch, since `tone` is written between `size` and `shape`.
+  const names = ['size', 'tone', 'shape']
+  const rows = combinations([
+    statesOf('sm', 'md', 'lg'),
+    statesOf('quiet', 'loud', 'muted'),
+    statesOf('round', 'square', 'pill'),
+  ])
+  const source = `import { cva } from 'styled-system/css'
+const badge = cva({
+  base: { display: 'inline-flex', color: 'gray.500' },
+  variants: {
+    size: { sm: { padding: '2', fontSize: 'sm' }, md: { padding: '4' }, lg: { padding: '6', fontSize: 'lg' } },
+    tone: { quiet: { color: 'gray.300' }, loud: { color: 'red.500' }, muted: {} },
+    shape: { round: { borderRadius: 'full' }, square: { borderRadius: 'sm' }, pill: { borderRadius: 'full', fontWeight: 'bold' } },
+  },
+  compoundVariants: [{ size: 'lg', shape: 'pill', css: { fontWeight: 'light' } }],
+  defaultVariants: { size: 'md' },
+})
+export const className = (size, tone, shape) => badge({ size, tone, shape })
+export const classNameOf = (props) => badge(props)
+export const literal = [${rows.map((row) => `badge(${literalSelection(names, row)})`).join(', ')}]
+`
+  const { result, code, module } = compileAndRun(source, ['className', 'classNameOf', 'literal'])
+
+  test('compiles every call, the dynamic ones to segments', () => {
+    expect(result.skipped).toEqual([])
+    expect(tablesIn(code).some(isSegments)).toBe(true)
+  })
+
+  test.each(rows.map((row, index) => [describeRow(names, row), row, index] as const))(
+    'selects what the literal call does, %s',
+    (_label, row, index) => {
+      expect(module.className(...row.map((state) => state.value))).toBe(module.literal[index])
+      expect(module.classNameOf(propsOf(names, row)), 'a props object').toBe(module.literal[index])
+    },
+  )
+})
+
+describe('a dynamic slot recipe call compiled in segments', () => {
+  const names = ['size', 'tone', 'shape']
+  const rows = combinations([
+    statesOf('sm', 'md', 'lg'),
+    statesOf('quiet', 'loud', 'muted'),
+    statesOf('round', 'square', 'pill'),
+  ])
+  const literals = rows.map((row) => `field(${literalSelection(names, row)})`)
+  const source = `import { sva } from 'styled-system/css'
+const field = sva({
+  slots: ['root', 'icon'],
+  base: { root: { display: 'flex', color: 'gray.500' }, icon: { color: 'gray.300' } },
+  variants: {
+    size: { sm: { root: { padding: '2' }, icon: { fontSize: 'sm' } }, md: { root: { padding: '4' } }, lg: { root: { padding: '6' }, icon: { fontSize: 'lg' } } },
+    tone: { quiet: { icon: { color: 'gray.500' } }, loud: { root: { color: 'red.500' }, icon: { color: 'red.300' } }, muted: {} },
+    shape: { round: { root: { borderRadius: 'full' } }, square: { root: { borderRadius: 'sm' } }, pill: { root: { borderRadius: 'full', fontWeight: 'bold' } } },
+  },
+  defaultVariants: { tone: 'quiet' },
+})
+export const slots = (size, tone, shape) => field({ size, tone, shape })
+export const root = (size, tone, shape) => field({ size, tone, shape }).root
+export const literalSlots = [${literals.join(', ')}]
+`
+  const { result, code, module } = compileAndRun(source, ['slots', 'root', 'literalSlots'])
+
+  test('compiles every call, a slot of the whole object to segments', () => {
+    expect(result.skipped).toEqual([])
+    const tables = tablesIn(code)
+    expect(tables.some((table) => !Array.isArray(table) && Object.values(table as object).some(isSegments))).toBe(true)
+  })
+
+  test.each(rows.map((row, index) => [describeRow(names, row), row, index] as const))(
+    'selects what the literal call does, %s',
+    (_label, row, index) => {
+      const values = row.map((state) => state.value)
+      expect(module.slots(...values)).toEqual(module.literalSlots[index])
+      expect(module.root(...values), '.root').toBe(module.literalSlots[index].root)
+    },
+  )
+})

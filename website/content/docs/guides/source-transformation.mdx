@@ -121,8 +121,14 @@ export const className = (tone) => badge({ tone })
 `undefined` remains distinct from `null` and unknown values so defaults behave correctly. Compound variants are resolved
 in every leaf. Slot recipes can return either one selected slot or a precompiled slot object.
 
-The Cartesian product is bounded by `maxRecipeStates` (65,536 by default). Make axes static, split an unusually large
-recipe, or raise the bound deliberately when a recipe exceeds it.
+Variants that style declarations of their own are decided apart. A recipe whose `size` sets the padding and whose `tone`
+sets the color compiles to one small table per variant, joined into the same class string the whole recipe names, rather
+than one table over every combination. Variants are decided together where they write the same property or into the same
+condition, such as both setting styles under `_hover`, where both override the base, or where a compound variant names
+them. Recipes with few states keep one table, which is quicker to read.
+
+The Cartesian product of the variants decided together is bounded by `maxRecipeStates` (65,536 by default). Make axes
+static, split an unusually large recipe, or raise the bound deliberately when a recipe exceeds it.
 
 Spreads, computed selection keys, unresolved recipe configs, and reflective reads such as `recipe.config` are rejected.
 `recipe.splitVariantProps(props)` is compiled to the generated `splitProps` helper and does not retain the recipe

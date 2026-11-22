@@ -1,5 +1,6 @@
 import type { FoldAnalysis, FoldCall, FoldSelection } from '@bamboocss/native-extractor'
 import { inferSlots } from '@bamboocss/shared'
+import { type ClassLookup, createRecipeLookups, type SlotsLookup } from './recipe-table'
 import type { StaticStyleSetCompiler, StyleSetRecipeConfig } from './style-set'
 
 /**
@@ -430,133 +431,45 @@ export const lowerRecipeCall = (
   }
 
   /**
-   * Compile the finite recipe state space into a reduced decision table.
+   * The lookups the call compiles to, kept symbolic until an enclosing `cx()` has had the chance to
+   * compose them. @see createRecipeLookups
    *
-   * Each leaf is a *complete* final StyleSet. This matters for declarations overridden by
-   * variants and compounds: selecting independent per-axis atoms would put both values in
-   * the utility layer and let stylesheet order, rather than the recipe's merge order, pick
-   * the winner. Complete leaves retain the same precedence while sharing their atoms with
-   * every `css()` and recipe in the build.
-   *
-   * `undefined` is its own edge because it restores a default variant. `null` and any
-   * undeclared value take the miss edge and explicitly suppress that default. Declared
-   * values use string keys, matching JavaScript's property-key coercion in the recipe
-   * runtime. A flat alternating key/value array avoids the special `__proto__` semantics
-   * of an object literal.
-   *
-   * A decision that changes nothing is left out, so a node names the value it decides. `.root`
-   * of a slot recipe whose `tone` styles only its icon never reads `tone`, and the root of that
-   * table decides `size`. Without the name, `cvaMap` read the value at the node's depth and
-   * decided `size` by `tone`.
-   *
-   * The table, `[root, nodes, leaves]`, is constant, so the fold declares it once at module scope
-   * for every call that reads it. Written inside the call, it was built again on every render. A
-   * slot object is then shared by those calls, and `cvaMap` hands each call a copy of it.
+   * Each table is constant, so the fold declares it once at module scope for every call that reads
+   * it. Written inside the call, it was built again on every render.
    */
   const axes = Object.keys(config.variants ?? {}).filter((key) => dynamicAxes.has(key))
-  const stateCount = axes.reduce(
-    (product, axis) => product * (Object.keys(config.variants?.[axis] ?? {}).length + 2),
-    1,
-  )
-  if (stateCount > maxRecipeStates) {
-    throw new Error(
-      `Static recipe compilation would inspect ${stateCount.toLocaleString('en-US')} selections across ` +
-        `${axes.length} runtime variant axes, above maxRecipeStates=${maxRecipeStates.toLocaleString('en-US')}. ` +
-        `Make one or more axes statically known, split the recipe, or raise the limit explicitly.`,
-    )
-  }
-  type SlotClasses = Record<string, string>
-  type Leaf = string | SlotClasses
-  type Ref = number
-  /** The position in the lookup's values the node decides, its miss and `undefined` edges, then each declared value's. */
-  type Node = [number, Ref, Ref, Array<string | Ref>]
-
   const expressions = axes.map((axis) => dynamicAxes.get(axis)!)
   const wholeSlots = Array.isArray(config.slots) && slot === undefined
+  const lookups = createRecipeLookups({
+    config: config as StyleSetRecipeConfig,
+    selection,
+    axes,
+    styleCompiler,
+    maxRecipeStates,
+  })
 
   const map: DynamicStyleMap = {
     outputKind: wholeSlots ? 'slots' : 'class',
     compile(before = [], after = []) {
-      const nodes: Node[] = []
-      const nodeByShape = new Map<string, number>()
-      const leaves: Leaf[] = []
-      const leafByShape = new Map<string, number>()
-      const emittedClasses = new Set<string>()
-
-      const leaf = (dynamicSelection: Dict): Ref => {
-        const selected = { ...selection, ...dynamicSelection }
-
-        if (wholeSlots) {
-          const compiled = compiledSelection(selected)
-          if (!compiled || typeof compiled.value === 'string') return internLeaf('')
-          for (const token of compiled.classNames) emittedClasses.add(token)
-          return internLeaf(compiled.value)
-        }
-
-        const styles = styleCompiler.resolveRecipe(config as StyleSetRecipeConfig, selected, slot)
-        if (!styles) return internLeaf('')
-        // Beside the other arguments of a `cx()`, if any, merged as the runtime `cx` merges their classes.
-        const className = styleCompiler.className(styleCompiler.composeCx(...before, styles, ...after))
-        for (const token of className.split(' ')) if (token) emittedClasses.add(token)
-        return internLeaf(className)
-      }
-
-      // Leaves are referenced as bitwise-complemented indices (-1, -2, ...), while node
-      // indices are non-negative. Complete class strings therefore appear once even when
-      // many variant combinations resolve to the same StyleSet.
-      function internLeaf(value: Leaf): Ref {
-        const shape = JSON.stringify(value)
-        const known = leafByShape.get(shape)
-        if (known !== undefined) return ~known
-        const id = leaves.length
-        leaves.push(value)
-        leafByShape.set(shape, id)
-        return ~id
-      }
-
-      const buildNode = (index: number, dynamicSelection: Dict): Ref => {
-        if (index === axes.length) return leaf(dynamicSelection)
-
-        const axis = axes[index]!
-        const values = Object.keys(config.variants?.[axis] ?? {})
-        const miss = buildNode(index + 1, { ...dynamicSelection, [axis]: null })
-        const absentSelection = { ...dynamicSelection }
-        delete absentSelection[axis]
-        const absent = buildNode(index + 1, absentSelection)
-
-        const byValue: Array<string | Ref> = []
-        for (const value of values) {
-          byValue.push(value, buildNode(index + 1, { ...dynamicSelection, [axis]: value }))
-        }
-
-        // Every value leads to the same place, so the decision is left out: the parent's edge goes
-        // straight there, to a node deciding a later value than its depth says.
-        const refs = [miss, absent, ...byValue.filter((_, valueIndex) => valueIndex % 2 === 1)] as Ref[]
-        if (refs.every((ref) => ref === refs[0])) return refs[0]!
-
-        const node: Node = [index, miss, absent, byValue]
-        const shape = JSON.stringify(node)
-        const known = nodeByShape.get(shape)
-        if (known !== undefined) return known
-
-        const id = nodes.length
-        nodes.push(node)
-        nodeByShape.set(shape, id)
-        return id
-      }
-
-      const root = buildNode(0, {})
-      const staticLeaf = root < 0 ? leaves[~root] : undefined
-      // A variant may not affect the requested slot (or every state may reduce to the
-      // same complete StyleSet). When the discarded selector expressions are inert, emit
-      // that leaf directly: no helper import, lookup table, or runtime read is necessary.
-      const usesHelper = !(root < 0 && effectful.length === 0)
-      const table = JSON.stringify([root, nodes, leaves])
+      const emitted = new Set<string>()
+      const lookup: ClassLookup | SlotsLookup = wholeSlots
+        ? lookups.slots(emitted)
+        : lookups.classes(slot, before, after, emitted)
+      // A table is an array; a slot object of nothing but strings is the object every call reaches.
+      const constant =
+        typeof lookup === 'string' ||
+        (wholeSlots && !Array.isArray(lookup) && Object.values(lookup).every((value) => typeof value === 'string'))
+      // A variant may not affect the requested slot, or every state may compile alike. When the
+      // discarded selector expressions are inert, emit that string, or slot object, directly: no
+      // helper import, lookup table, or runtime read is necessary. One that could run something
+      // still has to, so it is read by a table with no decisions.
+      const usesHelper = !(constant && effectful.length === 0)
+      const table = JSON.stringify(typeof lookup === 'string' ? [~0, [], [lookup]] : lookup)
       return {
         source: (helper, tableRef) =>
-          usesHelper ? `${helper}([${expressions.join(', ')}], ${tableRef(table)})` : JSON.stringify(staticLeaf),
-        classNames: [...emittedClasses],
-        staticClasses: typeof staticLeaf === 'string' ? staticLeaf : '',
+          usesHelper ? `${helper}([${expressions.join(', ')}], ${tableRef(table)})` : JSON.stringify(lookup),
+        classNames: [...emitted],
+        staticClasses: typeof lookup === 'string' ? lookup : '',
         outputKind: wholeSlots ? 'slots' : 'class',
         usesHelper,
       }

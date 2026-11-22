@@ -134,6 +134,33 @@ export const mixed${index} = (tone) => recipe${index}({ tone, size: 'lg' })
 `
 
 /**
+ * A module of wide inline recipes: five variants of two values, each styling a property of its own.
+ *
+ * One table over a call's variants would inspect all 1,024 of its selections; decided apart, the
+ * call is five segments of four. This is the shape whose build cost the split exists to cut.
+ */
+const WIDE_RECIPE_MODULE = `
+import { cva } from 'styled-system/css'
+
+${Array.from(
+  { length: 4 },
+  (_, index) => `
+const wide${index} = cva({
+  base: { display: 'flex' },
+  variants: {
+    tone: { info: { color: 'blue.500' }, warn: { color: 'red.300' } },
+    size: { sm: { padding: '${(index % 3) + 1}' }, lg: { padding: '4' } },
+    shape: { round: { borderRadius: 'full' }, square: { borderRadius: 'sm' } },
+    weight: { light: { fontWeight: 'light' }, bold: { fontWeight: 'bold' } },
+    align: { start: { textAlign: 'start' }, end: { textAlign: 'end' } },
+  },
+})
+export const wideCall${index} = (p) => wide${index}({ tone: p.tone, size: p.size, shape: p.shape, weight: p.weight, align: p.align })
+`,
+).join('')}
+`
+
+/**
  * A module whose styles come from helpers the evaluator has to call, which nothing else here
  * does — the others call only `css` and patterns, which are not run — and the same styles
  * written out, as its control.
@@ -468,6 +495,15 @@ describe('per-module transform cost', () => {
 
   bench('analyze + fold, names cold (recipe module)', () => {
     parseAndFoldCold(RECIPE_MODULE)
+  })
+
+  // The control for the pair below.
+  bench('analyze only (wide recipe module)', () => {
+    parseOnly(WIDE_RECIPE_MODULE)
+  })
+
+  bench('analyze + fold (wide recipe module)', () => {
+    parseAndFold(WIDE_RECIPE_MODULE)
   })
 
   // The control for the two below.

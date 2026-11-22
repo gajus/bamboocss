@@ -86,15 +86,15 @@ state actually changed (`grep` for something the change added) before trusting a
 **The Vite compiler holds no AST of its own.** Each transform is one `ctx.compileModules` call
 (`packages/node/src/create-context.ts`) into the Rust fold analysis (`packages/native-extractor/src/fold/`), which
 returns plain facts — calls, their evaluated data and exactness, imports, references, imported recipes, dependencies —
-with UTF-16 offsets. `packages/vite/src/fold.ts` keeps what is policy: class allocation, recipe decision tables, `cx`
-composition and the MagicString edits. Rules deciding whether an evaluated value may _replace_ source live in
-`fold/exact.rs`; extraction is deliberately optimistic and the fold is not, so a change to the evaluator has to be read
-against both. A module that reaches nothing bamboo is skipped before analysis: one naming no entrypoint and importing
-nothing the project holds, whether `include` holds it as it is, a framework rewrote it first or it lies outside
-`include`/`exclude` (`importsSourceModule` in `packages/vite/src/plugin.ts`). An import is followed the ways the native
-evaluator's `resolve` follows one — a relative path, tsconfig `paths` and `baseUrl`, a `#` import, and a package the
-inventory holds files of, as it holds a workspace design system imported as `@acme/ds`; skipping that caller leaves a
-call to a recipe the compiler removed. Never ask the bundler there: the specifiers are read out of text, which cannot
+with UTF-16 offsets. `packages/vite/src/fold.ts` keeps what is policy: class allocation, recipe decision tables
+(`recipe-table.ts`), `cx` composition and the MagicString edits. Rules deciding whether an evaluated value may _replace_
+source live in `fold/exact.rs`; extraction is deliberately optimistic and the fold is not, so a change to the evaluator
+has to be read against both. A module that reaches nothing bamboo is skipped before analysis: one naming no entrypoint
+and importing nothing the project holds, whether `include` holds it as it is, a framework rewrote it first or it lies
+outside `include`/`exclude` (`importsSourceModule` in `packages/vite/src/plugin.ts`). An import is followed the ways the
+native evaluator's `resolve` follows one — a relative path, tsconfig `paths` and `baseUrl`, a `#` import, and a package
+the inventory holds files of, as it holds a workspace design system imported as `@acme/ds`; skipping that caller leaves
+a call to a recipe the compiler removed. Never ask the bundler there: the specifiers are read out of text, which cannot
 tell a type from a value, and Vite fails the build resolving `import type … from 'type-fest'`, a package with no
 JavaScript. Text hides a specifier two ways: a comment in front of it, which `specifierAfterComments`
 (`packages/shared/src/module-specifier.ts`) reads past, and an escape, which both scans treat as reaching bamboo.

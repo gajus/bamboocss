@@ -515,7 +515,7 @@ describe('compiler', () => {
       expect(result).toMatchObject({
         meta: {
           'bamboocss:transform': {
-            version: 7,
+            version: 8,
             moduleId: id,
             file: id,
             classNames: [expect.stringMatching(/^_[\w-]{6}:c_red\.300$/)],
@@ -569,6 +569,49 @@ describe('compiler', () => {
 
     expect(message).toContain('1 call(s) could not be compiled')
     expect(message).toContain(reason)
+  })
+
+  // What the build cannot know about a call is sealed with the call, as a refusal is, and so is
+  // which advice it takes after the list.
+  test('a rebuild from cached transform metadata still says what a call cannot know', async () => {
+    const plugin = plugins({ cwd, reportSummary: false }).fold
+    const buildStart = hookOf(plugin.buildStart)!
+    const transform = hookOf(plugin.transform)!
+    const buildEnd = hookOf(plugin.buildEnd)!
+    const id = join(cwd, 'src/__cached-unknown.tsx')
+    const source = `import { css } from 'styled-system/css'\nexport const cls = (h) => css({ height: h })\n`
+    const context = { addWatchFile() {}, environment: { name: 'client' }, getModuleInfo: () => null }
+    const reason =
+      '2: css() — dynamic: `h` at src/__cached-unknown.tsx:2:41 is a parameter, so only the caller knows its value'
+    const advice = 'A value known only at runtime has no class to compile to.'
+    const failure = (end: () => unknown) => {
+      try {
+        end()
+      } catch (error) {
+        return (error as Error).message
+      }
+      throw new Error('the build was expected to fail')
+    }
+
+    await buildStart.call(context as never, {} as never)
+    const result = await transform.call(context as never, source, id, {} as never)
+    const meta = (result as { meta: Record<string, unknown> }).meta
+    const fresh = failure(() => buildEnd.call(context as never))
+
+    expect(fresh).toContain(reason)
+    expect(fresh).toContain(advice)
+
+    await buildStart.call(context as never, {} as never)
+    const rebuilt = {
+      ...context,
+      getModuleIds: () => [id][Symbol.iterator](),
+      getModuleInfo: (candidate: string) => (candidate === id ? { meta } : null),
+    }
+    const message = failure(() => buildEnd.call(rebuilt as never))
+
+    expect(message).toContain('1 call(s) could not be compiled')
+    expect(message).toContain(reason)
+    expect(message).toContain(advice)
   })
 
   test('keeps aggregate reachability exact when module contributions are replaced', async () => {

@@ -701,6 +701,8 @@ fn inline_recipe_raw<'a>(
         .then(|| object.name.to_string())
 }
 
+/// What a call loses of its styles. `complete` is whether every argument it reads evaluated whole,
+/// which no argument of a call that did needs asking again.
 fn call_losses<'a>(
     call: &'a oxc_ast::ast::CallExpression<'a>,
     binding: &CallBinding,
@@ -708,6 +710,7 @@ fn call_losses<'a>(
     named: &NamedBindings,
     namespaces: &NamespaceBindings,
     entrypoints: &[NativeEntrypoint],
+    complete: bool,
 ) -> Vec<NativeLoss> {
     let mut losses = Vec::new();
     let recipe = binding.kind == "css" && matches!(binding.imported_name.as_str(), "cva" | "sva");
@@ -719,6 +722,7 @@ fn call_losses<'a>(
             });
             continue;
         };
+        let losses_before = losses.len();
         if binding.kind == "css"
             && binding.imported_name == "css"
             && let Expression::CallExpression(inner) = unwrap_expression(expression)
@@ -760,6 +764,26 @@ fn call_losses<'a>(
                 });
             }
             recipe_losses(expression, evaluator, "", &mut losses);
+        } else if ((binding.kind == "css" && binding.imported_name == "css")
+            || binding.kind == "pattern")
+            && !matches!(
+                unwrap_expression(expression),
+                Expression::ObjectExpression(_)
+            )
+        {
+            // A whole argument the evaluator could not read reaches the data as `{}`, which is
+            // complete and loses nothing: `css(sizes[size])` and `css(styles)` warned of nothing,
+            // where the same value under a key did. A choice between styles it can read is
+            // complete, and compiles. A `.raw()` argument has said what it loses already.
+            if !complete
+                && losses.len() == losses_before
+                && !evaluator.evaluate(expression).complete
+            {
+                losses.push(NativeLoss {
+                    prop: None,
+                    reason: "unresolvable-value".to_string(),
+                });
+            }
         } else if ((binding.kind == "css" && binding.imported_name == "css")
             || binding.kind == "pattern")
             && let Expression::ObjectExpression(object) = unwrap_expression(expression)
@@ -907,6 +931,7 @@ fn analyze_source<'sources>(
             &named,
             &namespaces,
             entrypoints,
+            complete,
         );
         let span = expression.span();
         let (line, column) = positions.line_and_column(span.start);

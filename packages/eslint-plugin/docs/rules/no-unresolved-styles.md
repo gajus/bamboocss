@@ -4,8 +4,9 @@
 
 <!-- end auto-generated rule header -->
 
-The build warns when it cannot read a style: a value known only at runtime, an object spread it cannot see into. The
-declarations it could not read have no rule behind them, so they are absent from the page. This rule reports the same
+The build warns when it cannot read a style: a value known only at runtime, an object spread it cannot see into, an
+argument it cannot evaluate at all. A `css()` or pattern call it cannot read does not compile, and the build fails at
+it; a recipe's calls compile without the declarations its config does not let the build read. This rule reports the same
 warnings where they are written, from the build's own extraction and in the build's own words — not a guess at what is
 dynamic, as [`no-dynamic-styling`](./no-dynamic-styling.md) makes — so it reports exactly the styles the build drops.
 
@@ -27,9 +28,14 @@ export const tone = (color: string) => css({ color })
 // An object spread or computed key leaves the build unable to tell which properties this call sets.
 export const passthrough = (props: object) => css({ ...props })
 
-// A recipe loses every style, not this one: its class names are named from what the build read.
+// This argument will not reach the stylesheet because it is not statically known.
+const pads = { sm: { px: '2' }, lg: { px: '6' } }
+export const pad = (size: 'sm' | 'lg') => css(pads[size])
+
+// The recipe's calls compile without `base.color`, and the element gets the rest of its styles.
 export const card = (color: string) => cva({ base: { color } })
 ```
 
-Write the value out, use a recipe variant for a known set of values, or generate a genuinely dynamic one with
-`staticCss`. See [dynamic styling](https://bamboocss.com/docs/guides/dynamic-styling).
+Write the value out, or choose between values written out with a ternary. A known set of values is a recipe variant, and
+a value known only at runtime belongs in the `style` attribute, or in a CSS variable a declaration reads. See
+[dynamic styling](https://bamboocss.com/docs/guides/dynamic-styling).

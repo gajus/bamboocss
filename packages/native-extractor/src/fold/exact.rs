@@ -26,9 +26,91 @@ use oxc_ast::{
         PropertyKey, PropertyKind,
     },
 };
+use oxc_span::{GetSpan, Span};
 use oxc_syntax::operator::BinaryOperator;
 
 use crate::evaluator::{EvalResult, FileEvaluator};
+
+/// What the audit could not account for, and where: why a call is reported as `dynamic` where the
+/// evaluator refused nothing. Each kind is what the walk met, not a guess at what was meant.
+///
+/// - `parameter`: a function's parameter, or a name bound from one, whose value is the caller's.
+/// - `lookup`: a property read by a key known only at runtime, `sizes[size]`.
+/// - `default`: a value a destructuring default supplies, which is a fallback rather than a value.
+/// - `loop`: a loop's variable.
+/// - `global`: a name the module does not declare.
+/// - `import`: an imported value the build cannot read.
+/// - `call`: a call the build cannot evaluate.
+/// - `write`: a binding written after its declaration. The evaluator's refusal names the write,
+///   and is what is reported where there is one.
+/// - `spread`: a spread of something the build cannot enumerate.
+/// - `spread-choice`: a choice inside a spread.
+/// - `key`: a computed key the build cannot evaluate.
+/// - `method`: a method or an accessor, which runs when read.
+/// - `proto`: a `__proto__` key, which sets the object's prototype rather than a property.
+/// - `choice`: a choice where none compiles: in a pattern, or inside another value.
+/// - `and`: a choice written with `&&`, which gives its left operand where that is falsy.
+/// - `test`: a choice whose test reads a Bamboo import or a recipe, which the compiled call no
+///   longer holds. See `style_choice`.
+/// - `choices`: more combinations of answers than one call compiles to. See `style_choice`.
+/// - `value`: anything else the build cannot evaluate.
+#[derive(Clone, Copy)]
+pub(crate) struct Unknown<'a> {
+    pub kind: &'static str,
+    /// The value, as written.
+    pub span: Span,
+    /// For `choices`: how many the call holds.
+    pub count: u32,
+    /// For an operator's value or a call's: the expression, whose operands `Exactness::explain`
+    /// reads for the one that is unknown.
+    operands_of: Option<&'a Expression<'a>>,
+}
+
+impl Unknown<'_> {
+    /// `choices`, for a call holding `count` of them.
+    pub(crate) fn choices(span: Span, count: u32) -> Self {
+        Unknown {
+            count,
+            ..unknown("choices", span)
+        }
+    }
+}
+
+pub(crate) fn unknown<'a>(kind: &'static str, span: Span) -> Unknown<'a> {
+    Unknown {
+        kind,
+        span,
+        count: 0,
+        operands_of: None,
+    }
+}
+
+/// Accounted for, or the first value that is not.
+type Audit<'a> = Result<(), Unknown<'a>>;
+
+/// What a spread the build cannot enumerate holds: a choice, which compiles nowhere inside one,
+/// or anything else.
+pub(crate) fn spread_kind(argument: &Expression<'_>) -> &'static str {
+    match unwrap(argument) {
+        Expression::ConditionalExpression(_) | Expression::LogicalExpression(_) => "spread-choice",
+        _ => "spread",
+    }
+}
+
+/// What a read's receiver lacks, reported as the read: `props.tone` rather than `props`, which is
+/// what is written where the value is used. A lookup stays where it is, since that is what it
+/// names, and so does anything found elsewhere, in a declaration the read followed.
+fn anchored<'a>(found: Unknown<'a>, read: &'a Expression<'a>) -> Unknown<'a> {
+    let span = read.span();
+    if found.kind == "lookup" || found.span.start < span.start || found.span.end > span.end {
+        return found;
+    }
+    Unknown {
+        span,
+        operands_of: None,
+        ..found
+    }
+}
 
 /// Strip the wrappers that carry no runtime meaning.
 pub(crate) fn unwrap<'a>(expression: &'a Expression<'a>) -> &'a Expression<'a> {
@@ -142,13 +224,51 @@ impl<'a> Exactness<'_, 'a, '_, '_> {
         if !exact_result(&result) || (result.holds_nullish() && !self.drops_nullish) {
             return false;
         }
-        self.accounts(expression)
+        self.accounts(expression).is_ok()
+    }
+
+    /// Why `check` refuses `expression`: the first value in it the walk cannot account for, in the
+    /// order the source writes them. `None` where `check` accepts it.
+    ///
+    /// For a call reported as `dynamic`, so off the path a compiled call takes. The walk is the one
+    /// `check` makes, so the reason is the decision itself rather than a second opinion of it; only
+    /// an operator's operands are read further here, for the one among them that is unknown.
+    pub fn explain(&mut self, expression: &'a Expression<'a>) -> Option<Unknown<'a>> {
+        let result = self.evaluator.evaluate(expression);
+        let exact = exact_result(&result) && !(result.holds_nullish() && !self.drops_nullish);
+        match self.accounts(expression) {
+            Err(found) => Some(self.operand(found)),
+            Ok(()) if !exact => Some(unknown("value", expression.span())),
+            Ok(()) => None,
+        }
+    }
+
+    /// Of a value no better described than unknown, the operand that makes it so, where one does:
+    /// the parameter in `size * 2`, or the one a helper is called with.
+    fn operand(&mut self, found: Unknown<'a>) -> Unknown<'a> {
+        let Some(expression) = found.operands_of else {
+            return found;
+        };
+        let operands: Vec<&'a Expression<'a>> = match expression {
+            Expression::BinaryExpression(binary) => vec![&binary.left, &binary.right],
+            Expression::UnaryExpression(unary) => vec![&unary.argument],
+            Expression::CallExpression(call) => call
+                .arguments
+                .iter()
+                .filter_map(|argument| argument.as_expression())
+                .collect(),
+            _ => Vec::new(),
+        };
+        operands
+            .into_iter()
+            .find_map(|operand| self.accounts(operand).err())
+            .map_or(found, |inner| self.operand(inner))
     }
 
     /// Walks the source and requires every value in it to be exact. The evaluated result is
     /// complete by the time this runs, so the walk is about *provenance*: what the evaluator
     /// accepted but a rewrite may not.
-    fn accounts(&mut self, expression: &'a Expression<'a>) -> bool {
+    fn accounts(&mut self, expression: &'a Expression<'a>) -> Audit<'a> {
         let inner = unwrap(expression);
         match inner {
             Expression::ConditionalExpression(conditional) => {
@@ -156,10 +276,10 @@ impl<'a> Exactness<'_, 'a, '_, '_> {
                 // An undecided test collapses to both arms as conditions, which `exact_result`
                 // already refused; a decided one is exact only through its chosen arm.
                 let Some(truthy) = test.truthiness().filter(|_| exact_result(&test)) else {
-                    return false;
+                    return Err(unknown("choice", inner.span()));
                 };
-                if !self.decides(&conditional.test) {
-                    return false;
+                if self.decides(&conditional.test).is_err() {
+                    return Err(unknown("choice", inner.span()));
                 }
                 if truthy {
                     self.accounts(&conditional.consequent)
@@ -168,12 +288,17 @@ impl<'a> Exactness<'_, 'a, '_, '_> {
                 }
             }
             Expression::LogicalExpression(logical) => {
-                if !self.decides(&logical.left) {
-                    return false;
-                }
+                // `a && b` gives `a` where `a` is falsy, so where `a` is not known it is a choice
+                // between the two. `a || b` and `a ?? b` give `a` itself unless it is falsy or
+                // nullish, so what is not known about it is what is not known about the value.
+                let undecided = |found: Unknown<'a>| match logical.operator {
+                    LogicalOperator::And => unknown("and", inner.span()),
+                    _ => found,
+                };
+                self.decides(&logical.left).map_err(undecided)?;
                 let left = self.evaluator.evaluate(&logical.left);
                 if !exact_result(&left) {
-                    return false;
+                    return Err(undecided(unknown("value", logical.left.span())));
                 }
                 let right_wins = match &left.value {
                     Some(value) => match logical.operator {
@@ -183,7 +308,7 @@ impl<'a> Exactness<'_, 'a, '_, '_> {
                     },
                     // `undefined`: falsy, and nullish.
                     None if left.is_undefined() => logical.operator != LogicalOperator::And,
-                    None => return false,
+                    None => return Err(undecided(unknown("value", logical.left.span()))),
                 };
                 if right_wins {
                     self.accounts(&logical.right)
@@ -208,7 +333,7 @@ impl<'a> Exactness<'_, 'a, '_, '_> {
                         | BinaryOperator::Instanceof
                 ) =>
             {
-                false
+                Err(unknown("value", inner.span()))
             }
             Expression::ObjectExpression(object) => {
                 for property in &object.properties {
@@ -216,9 +341,7 @@ impl<'a> Exactness<'_, 'a, '_, '_> {
                         ObjectPropertyKind::SpreadProperty(spread) => {
                             let argument = unwrap(&spread.argument);
                             if let Expression::ObjectExpression(_) = argument {
-                                if !self.accounts(argument) {
-                                    return false;
-                                }
+                                self.accounts(argument)?;
                                 continue;
                             }
                             // A named spread: exact only when it resolved to an object and the
@@ -227,22 +350,20 @@ impl<'a> Exactness<'_, 'a, '_, '_> {
                             if !exact_result(&value)
                                 || !matches!(value.value, Some(serde_json::Value::Object(_)))
                             {
-                                return false;
+                                return Err(unknown(spread_kind(argument), spread.span));
                             }
-                            if !self.accounts(argument) {
-                                return false;
-                            }
+                            self.accounts(argument)?;
                         }
                         ObjectPropertyKind::ObjectProperty(property) => {
                             if property.method || property.kind != PropertyKind::Init {
-                                return false;
+                                return Err(unknown("method", property.span));
                             }
                             if property.computed {
                                 let Some(key) = property.key.as_expression() else {
-                                    return false;
+                                    return Err(unknown("key", property.key.span()));
                                 };
                                 if !exact_result(&self.evaluator.evaluate(key)) {
-                                    return false;
+                                    return Err(unknown("key", key.span()));
                                 }
                             }
                             // `{ display: undefined }` contributes nothing and is dropped by the
@@ -251,26 +372,30 @@ impl<'a> Exactness<'_, 'a, '_, '_> {
                             {
                                 continue;
                             }
-                            if !self.accounts(&property.value) {
-                                return false;
-                            }
+                            self.accounts(&property.value)?;
                         }
                     }
                 }
-                true
+                Ok(())
             }
             Expression::ArrayExpression(array) => {
-                array.elements.iter().all(|element| match element {
-                    ArrayExpressionElement::SpreadElement(_) => false,
-                    ArrayExpressionElement::Elision(_) => true,
-                    _ => element
-                        .as_expression()
-                        .is_some_and(|value| self.accounts(value)),
-                })
+                for element in &array.elements {
+                    match element {
+                        ArrayExpressionElement::SpreadElement(spread) => {
+                            return Err(unknown("spread", spread.span));
+                        }
+                        ArrayExpressionElement::Elision(_) => {}
+                        _ => match element.as_expression() {
+                            Some(value) => self.accounts(value)?,
+                            None => return Err(unknown("value", element.span())),
+                        },
+                    }
+                }
+                Ok(())
             }
             Expression::Identifier(identifier) => {
                 if identifier.name == "undefined" {
-                    return true;
+                    return Ok(());
                 }
                 self.identifier_is_exact(identifier)
             }
@@ -280,20 +405,39 @@ impl<'a> Exactness<'_, 'a, '_, '_> {
                     self.member_read(inner, &member.object)
                 } else {
                     self.accounts(&member.object)
-                        && exact_result(&self.evaluator.evaluate(&member.expression))
+                        .map_err(|unknown| anchored(unknown, inner))?;
+                    if exact_result(&self.evaluator.evaluate(&member.expression)) {
+                        Ok(())
+                    } else {
+                        Err(unknown("lookup", inner.span()))
+                    }
                 }
             }
-            Expression::TemplateLiteral(template) => template
-                .expressions
-                .iter()
-                .all(|expression| self.accounts(expression)),
+            Expression::TemplateLiteral(template) => {
+                for expression in &template.expressions {
+                    self.accounts(expression)?;
+                }
+                Ok(())
+            }
             // An operator's operands are not walked. What the walk refuses as unknowable at build
             // time — a binding or property written after its declaration, a caller's argument —
             // the evaluator refuses too, and a destructuring default it takes only where the
             // property is known to be absent, which is the runtime's value as well.
             // `fold-known-values.test.ts` pins those refusals under `+`, `*`, unary `-`, a
             // template literal and a helper's argument.
-            _ => exact_result(&self.evaluator.evaluate(inner)),
+            _ => {
+                if exact_result(&self.evaluator.evaluate(inner)) {
+                    return Ok(());
+                }
+                let kind = match inner {
+                    Expression::CallExpression(_) | Expression::NewExpression(_) => "call",
+                    _ => "value",
+                };
+                Err(Unknown {
+                    operands_of: Some(inner),
+                    ..unknown(kind, inner.span())
+                })
+            }
         }
     }
 
@@ -306,7 +450,7 @@ impl<'a> Exactness<'_, 'a, '_, '_> {
     /// declaration is refused now (`is_mutated`), as is a parameter, whose value is the caller's,
     /// so a name the audit accounts for holds what its declaration says. `o.display ?? 'block'`
     /// on a module's own options object no longer fails the compile.
-    fn decides(&mut self, expression: &'a Expression<'a>) -> bool {
+    fn decides(&mut self, expression: &'a Expression<'a>) -> Audit<'a> {
         match unwrap(expression) {
             Expression::Identifier(_) | Expression::StaticMemberExpression(_) => {
                 self.accounts(expression)
@@ -325,28 +469,46 @@ impl<'a> Exactness<'_, 'a, '_, '_> {
             // nothing is written now the fallback argument is retired, and was refused here for
             // being a call. What follows the path goes with the call, so it has to be inert.
             Expression::CallExpression(call) if self.evaluator.is_token_call(call) => {
-                call.arguments
+                match call
+                    .arguments
                     .first()
                     .and_then(|argument| argument.as_expression())
-                    .is_some_and(|path| self.accounts(path))
-                    && call
-                        .arguments
-                        .iter()
-                        .skip(1)
-                        .all(|argument| argument.as_expression().is_some_and(is_inert_literal))
+                {
+                    Some(path) => self.accounts(path)?,
+                    None => return Err(unknown("value", call.span)),
+                }
+                if call
+                    .arguments
+                    .iter()
+                    .skip(1)
+                    .all(|argument| argument.as_expression().is_some_and(is_inert_literal))
+                {
+                    Ok(())
+                } else {
+                    Err(unknown("value", call.span))
+                }
             }
-            _ => is_written_here(expression),
+            _ if is_written_here(expression) => Ok(()),
+            _ => Err(unknown("value", expression.span())),
         }
     }
 
     /// A property read: exact through that property's own source, where the source can be
     /// followed to it, and otherwise only if the whole receiver is.
-    fn member_read(&mut self, read: &'a Expression<'a>, receiver: &'a Expression<'a>) -> bool {
+    fn member_read(&mut self, read: &'a Expression<'a>, receiver: &'a Expression<'a>) -> Audit<'a> {
         match self.property_source(read, Vec::new()) {
             MemberSource::Property(value) => self.accounts(value),
             // Another module's property: its evaluator answers for the property alone.
-            MemberSource::Imported => exact_result(&self.evaluator.evaluate(read)),
-            MemberSource::Receiver => self.accounts(receiver),
+            MemberSource::Imported => {
+                if exact_result(&self.evaluator.evaluate(read)) {
+                    Ok(())
+                } else {
+                    Err(unknown("import", read.span()))
+                }
+            }
+            MemberSource::Receiver => self
+                .accounts(receiver)
+                .map_err(|found| anchored(found, read)),
         }
     }
 
@@ -460,7 +622,8 @@ impl<'a> Exactness<'_, 'a, '_, '_> {
     fn identifier_is_exact(
         &mut self,
         identifier: &'a oxc_ast::ast::IdentifierReference<'a>,
-    ) -> bool {
+    ) -> Audit<'a> {
+        let at = identifier.span;
         let semantic = self.evaluator.semantic();
         let scoping = semantic.scoping();
         let Some(symbol) = identifier
@@ -468,25 +631,46 @@ impl<'a> Exactness<'_, 'a, '_, '_> {
             .get()
             .and_then(|reference| scoping.get_reference(reference).symbol_id())
         else {
-            return false;
+            return Err(unknown("global", at));
         };
         // Written after its declaration, a binding no longer holds what its initializer says.
         if self.evaluator.is_mutated(symbol) {
-            return false;
+            return Err(unknown("write", at));
         }
+        let symbol_is_exact = |evaluator: &mut FileEvaluator<'a, '_, '_>, kind| {
+            if exact_result(&evaluator.evaluate_symbol(symbol)) {
+                Ok(())
+            } else {
+                Err(unknown(kind, at))
+            }
+        };
         if self.evaluator.is_import(symbol) {
             // Cross-module values are resolved by the evaluator from the exporting module's
             // initializer; the exactness of that initializer was established there.
-            return exact_result(&self.evaluator.evaluate_symbol(symbol));
+            return symbol_is_exact(self.evaluator, "import");
         }
         let declaration = semantic.symbol_declaration(symbol);
+        // A binding declared through a pattern whose node kind is the pattern element (for-of
+        // heads, nested patterns) is not a plain value: what it is bound from, where it is one of
+        // those.
+        let bound_from = || {
+            semantic
+                .nodes()
+                .ancestor_kinds(declaration.id())
+                .find_map(|kind| match kind {
+                    AstKind::FormalParameter(_) => Some("parameter"),
+                    AstKind::ForOfStatement(_) | AstKind::ForInStatement(_) => Some("loop"),
+                    AstKind::AssignmentPattern(_) => Some("default"),
+                    _ => None,
+                })
+        };
         match declaration.kind() {
             AstKind::VariableDeclarator(declarator) => {
                 if !matches!(declarator.id, BindingPattern::BindingIdentifier(_)) {
                     // Destructured: the value is exact only when no default on the path to the
                     // name can supply it.
                     if pattern_default_reaches(&declarator.id, symbol) {
-                        return false;
+                        return Err(unknown("default", at));
                     }
                     // And it is the property it takes, not the whole initializer: `{ w } = theme`
                     // beside `px: compute()` is `w`.
@@ -495,41 +679,28 @@ impl<'a> Exactness<'_, 'a, '_, '_> {
                     {
                         return match self.property_source(init, path) {
                             MemberSource::Property(value) => self.accounts(value),
-                            MemberSource::Imported => {
-                                exact_result(&self.evaluator.evaluate_symbol(symbol))
-                            }
+                            MemberSource::Imported => symbol_is_exact(self.evaluator, "import"),
                             MemberSource::Receiver => self.accounts(init),
                         };
                     }
                 }
                 match &declarator.init {
                     Some(init) => self.accounts(init),
-                    None => false,
+                    None => Err(unknown("value", at)),
                 }
             }
             // A parameter's value is the caller's; a default is a fallback, not a value.
-            AstKind::FormalParameter(_) | AstKind::CatchParameter(_) => false,
-            AstKind::BindingRestElement(_) => false,
-            AstKind::TSEnumDeclaration(_) => true,
-            // The enum a namespace declared before it merges with, read as the enum is.
-            AstKind::TSNamespaceDeclaration(_) if self.evaluator.merges_enum(symbol) => true,
-            _ => {
-                // A binding declared through a pattern whose node kind is the pattern element
-                // (for-of heads, nested patterns) is not a plain value.
-                let mut ids = semantic.nodes().ancestor_kinds(declaration.id());
-                if ids.any(|kind| {
-                    matches!(
-                        kind,
-                        AstKind::FormalParameter(_)
-                            | AstKind::ForOfStatement(_)
-                            | AstKind::ForInStatement(_)
-                            | AstKind::AssignmentPattern(_)
-                    )
-                }) {
-                    return false;
-                }
-                exact_result(&self.evaluator.evaluate_symbol(symbol))
+            AstKind::FormalParameter(_) | AstKind::CatchParameter(_) => {
+                Err(unknown("parameter", at))
             }
+            AstKind::BindingRestElement(_) => Err(unknown(bound_from().unwrap_or("value"), at)),
+            AstKind::TSEnumDeclaration(_) => Ok(()),
+            // The enum a namespace declared before it merges with, read as the enum is.
+            AstKind::TSNamespaceDeclaration(_) if self.evaluator.merges_enum(symbol) => Ok(()),
+            _ => match bound_from() {
+                Some(kind) => Err(unknown(kind, at)),
+                None => symbol_is_exact(self.evaluator, "value"),
+            },
         }
     }
 }

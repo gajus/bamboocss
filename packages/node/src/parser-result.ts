@@ -6,10 +6,10 @@ export interface UnresolvedStyle {
   /**
    * What the loss costs, which decides how it is explained.
    *
-   * - `atomic` — a `css()` call. The declarations the build saw still apply; the ones it
-   *   did not have no rule behind them, so they are simply absent.
+   * - `atomic` — a `css()` or pattern call, which is replaced by its class string, so it does
+   *   not compile while the build cannot read it.
    * - `recipe` — a `cva`/`sva` config. A declaration the build cannot see has no rule behind
-   *   any selection that includes it.
+   *   any selection that includes it, and the recipe's calls compile without it.
    * - `keyframes` — a `keyframes()` call. Its name is a hash of its stops, so of stops the build
    *   cannot read whole there is no name, and no block.
    */

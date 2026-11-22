@@ -1,6 +1,13 @@
 import { resolveTsPathPattern } from '@bamboocss/config/ts-path'
 import type { Context } from '@bamboocss/core'
-import type { FoldAnalysis, FoldCall, FoldCxArgument, FoldRefusal, FoldSpan } from '@bamboocss/native-extractor'
+import type {
+  FoldAnalysis,
+  FoldCall,
+  FoldCxArgument,
+  FoldRefusal,
+  FoldSpan,
+  FoldUnknown,
+} from '@bamboocss/native-extractor'
 import { BambooError, viewTransitionClassName } from '@bamboocss/shared'
 import type { Dict } from '@bamboocss/types'
 import MagicString from 'magic-string'
@@ -17,6 +24,7 @@ import {
   type RecipeConfig,
   type RecipeEntry,
 } from './fold-recipe'
+import { MAX_CX_COMBINATIONS } from './combinations'
 import { createRuntimeToken, createRuntimeTokenValue } from './runtime-css'
 import type { StaticStyleSetCompiler } from './style-set'
 import { UnwritableStyleError } from './unwritable-style'
@@ -85,6 +93,12 @@ export interface SkippedCall {
    * binding may be anywhere in its module.
    */
   refusal?: FoldRefusal
+  /**
+   * For `dynamic`, where the evaluator refused nothing: what in the call the build cannot know, and
+   * where. The call site is where it is used, which is not always where it is written: a read the
+   * call makes can lead to a declaration elsewhere in the module.
+   */
+  unknown?: FoldUnknown
   /**
    * What to change, where the reason does not say: for `unknown-condition` the key and what it
    * was probably meant to be, for `empty-value` the property and what to write instead, for a
@@ -201,22 +215,23 @@ const TRAILING_INDEX = /\/index$/
 const styleErrorDetail = (error: unknown) =>
   error instanceof BambooError ? { detail: error.message.split('\n\n')[0]! } : undefined
 
+/** Code as a diagnostic quotes it, as the native analysis does: its first line, shortened past 60 characters. */
+const excerptOf = (text: string) => {
+  const line = text.split('\n')[0]!.trim()
+  return line.length <= 60 ? line : `${line.slice(0, 59)}…`
+}
+
+/** Why a call is `dynamic`, as the analysis established it: code it refused, or what it cannot know. */
+const dynamicReason = (call: FoldCall) =>
+  call.refusal ? { refusal: call.refusal } : call.unknown ? { unknown: call.unknown } : undefined
+
 const hasStyles = (data: unknown[]): data is Dict[] =>
   data.length > 0 && data.every((entry) => entry != null && typeof entry === 'object')
 
 /** `recipe(props).slot` names a slot only when the recipe declares one by that name. */
 const slotsOf = (config: RecipeConfig | undefined) => (Array.isArray(config?.slots) ? (config.slots as string[]) : [])
 
-/**
- * The most combinations of answers a `cx()` holding conditions is compiled to.
- *
- * Each is written out whole, as one arm of a ternary, so what the call compiles to doubles with each
- * independent condition: five are thirty-two. Past this the call stays the runtime join it was
- * written as, and a join does not merge: where two arguments set one property, the browser applies
- * whichever rule the stylesheet holds later, not the later argument. At eight, a variant component
- * with four conditions — a state, two variants and a flag — was left to that.
- */
-export const MAX_CX_COMBINATIONS = 32
+export { MAX_CX_COMBINATIONS }
 
 /** A node of the decision the native analysis returns for a `css()` call's choices. @see FoldStyleChoice */
 type NativeChoice = { test: number; then: NativeChoice; otherwise: NativeChoice } | { styles: Dict[] }
@@ -687,7 +702,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       // conditional would have left undecided, and nothing else. Later entries in `data` are
       // the trailing arguments, judged below by what they are rather than what they evaluate to.
       if (!call.exact || typeof call.data[0] !== 'string') {
-        skipped.push({ name, reason: 'dynamic', start, end, ...(call.refusal && { refusal: call.refusal }) })
+        skipped.push({ name, reason: 'dynamic', start, end, ...dynamicReason(call) })
         continue
       }
 
@@ -751,7 +766,10 @@ export const foldSource = (options: FoldOptions): FoldResult => {
           end,
           ...(call.refusal
             ? { refusal: call.refusal }
-            : { detail: 'the name it returns is a hash of its stops, so they have to be known at build time' }),
+            : {
+                detail: 'the name it returns is a hash of its stops, so they have to be known at build time',
+                ...(call.unknown && { unknown: call.unknown }),
+              }),
         })
         continue
       }
@@ -897,7 +915,18 @@ export const foldSource = (options: FoldOptions): FoldResult => {
 
     // Its tests are copied into what the call compiles to, so a call inside one, compiled on its
     // own, would be copied as it was written.
-    if (call.styleChoice && !call.styleChoice.tests.some(copiesCompiledCode)) {
+    if (call.styleChoice) {
+      const copied = call.styleChoice.tests.find(copiesCompiledCode)
+      if (copied) {
+        skipped.push({
+          name,
+          reason: 'dynamic',
+          start,
+          end,
+          detail: `the test \`${excerptOf(code.slice(copied.start, copied.end))}\` holds a call the compiler compiles on its own, which a copy of the test would leave as written`,
+        })
+        continue
+      }
       candidates.push({
         call,
         name,
@@ -912,7 +941,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     }
 
     if (!call.exact || !hasStyles(call.data)) {
-      skipped.push({ name, reason: 'dynamic', start, end, ...(call.refusal && { refusal: call.refusal }) })
+      skipped.push({ name, reason: 'dynamic', start, end, ...dynamicReason(call) })
       continue
     }
 

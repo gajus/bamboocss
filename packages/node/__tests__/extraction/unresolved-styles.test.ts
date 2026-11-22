@@ -2,13 +2,9 @@ import { describe, expect, test } from 'vitest'
 import { parseAndExtract } from './fixture'
 
 /**
- * A property the build cannot resolve has no rule behind it, so the declaration is simply
- * absent from the element — no error, no warning, and the rest of the call still applies.
- *
- * Only the surprising half of that is reported. A spread or computed key looks static and
- * is not, which is worth interrupting for. A value the build could not evaluate is the
- * documented dynamic-styling shape, answered by `staticCss` and already covered by the
- * `no-dynamic-styling` lint rule — warning on every one of those would bury the first.
+ * A style the build cannot resolve has no rule behind it. For a `css()` call that is a call the
+ * compiler then fails the build at, naming it; extraction says what it could not read, and the
+ * `no-unresolved-styles` lint rule says it in the editor, in the same words.
  */
 const unresolved = (code: string) => parseAndExtract(code).parserResult.unresolved
 
@@ -33,13 +29,9 @@ describe('unresolved styles', () => {
   // --- quiet where it should be ---
 
   /**
-   * The documented dynamic shape. It loses `color` and keeps `fontSize`, which is what the
-   * `no-dynamic-styling` rule and `staticCss` are for — reporting it here would fire on
-   * ordinary code and drown the spread case above.
-   */
-  /**
    * The retired engine kept this quiet. The native engine reports it as `missing-property`,
-   * deliberately — see `.changeset/native-extractor-parity.md`.
+   * deliberately — see `.changeset/native-extractor-parity.md`. The call does not compile, and the
+   * compiler says so; extraction still writes the rules it could read.
    */
   test('a value the extractor cannot evaluate is reported, and the rest still applies', () => {
     const result = parseAndExtract(
@@ -65,5 +57,36 @@ describe('unresolved styles', () => {
 
   test('a statically resolvable spread reports nothing', () => {
     expect(unresolved(withCss(`const base = { fontSize: "xl" }\ncss({ ...base, color: "red" })`))).toEqual([])
+  })
+
+  /**
+   * It reached the data as `{}`, which is complete and loses nothing, so nothing was reported
+   * where the same value under a key was.
+   */
+  test('a whole argument the build cannot evaluate is reported', () => {
+    const found = unresolved(
+      withCss(
+        `const pads = { sm: { px: "2" }, lg: { px: "6" } }\n` +
+          `export const a = (size) => css(pads[size])\n` +
+          `export const b = (styles) => css({ color: "red" }, styles)`,
+      ),
+    )
+
+    expect(found.map(({ line, prop, reason }) => ({ line, prop, reason }))).toEqual([
+      { line: 3, prop: undefined, reason: 'unresolvable-value' },
+      { line: 4, prop: undefined, reason: 'unresolvable-value' },
+    ])
+  })
+
+  test('a choice between styles it can read is not, and nor is a known argument', () => {
+    const found = unresolved(
+      withCss(
+        `const on = { color: "red" }, off = { color: "blue" }\n` +
+          `export const a = (active) => css(active ? on : off)\n` +
+          `export const b = css(on, off)`,
+      ),
+    )
+
+    expect(found).toEqual([])
   })
 })

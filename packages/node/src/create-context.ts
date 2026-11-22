@@ -35,30 +35,44 @@ import { OutputEngine } from './output-engine'
 /** A thrown value's message, for a `catch` binding that is typed `unknown`. */
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
+/** What to do about a value the build could not read, in a `css()` or pattern call. */
+const VALUE_FIX =
+  'Write the value out, or choose between values written out with a ternary. One known only at runtime belongs ' +
+  "in the `style` attribute, or in a CSS variable a declaration reads, `width: 'var(--width)'`."
+
 /**
- * What each loss is, and what the author can do about it.
+ * What each loss is, and what the author can do about it: in a `css()` or pattern call, and in a
+ * recipe's config where that differs.
  *
  * Kept apart from the sentence around it so every reason has to answer both questions.
- * "Make the value static" is the fix for a value the build could not evaluate and no help
- * at all for two arguments it could not tell apart, and a diagnostic that gives the wrong
- * instruction is worse than one that gives none.
+ * "Write the value out" is the fix for a value the build could not evaluate and no help at all
+ * for two arguments it could not tell apart, and a diagnostic that gives the wrong instruction is
+ * worse than one that gives none. `name` is the property or recipe the loss is at, quoted, and
+ * absent for a whole argument.
  */
-const unresolvedReasons: Record<ParserResult['unresolved'][number]['reason'], (prop: string) => [string, string]> = {
-  'unresolvable-value': (prop) => [
-    `${prop} will not reach the stylesheet because its value is not statically known`,
-    'Make the value static to group it.',
+const unresolvedReasons: Record<
+  UnresolvedStyle['reason'],
+  (name: string | undefined) => [loss: string, fix: string, recipeFix?: string]
+> = {
+  'unresolvable-value': (name) => [
+    name
+      ? `${name} will not reach the stylesheet because its value is not statically known`
+      : 'this argument will not reach the stylesheet because it is not statically known',
+    VALUE_FIX,
+    'Write the value out, or declare what varies as a variant the calls select.',
   ],
-  'missing-property': (prop) => [
-    `${prop} will not reach the stylesheet because its value could not be evaluated at build time`,
-    'Make the value static to group it.',
+  'missing-property': (name) => [
+    `${name ?? 'a property'} will not reach the stylesheet because its value could not be evaluated at build time`,
+    VALUE_FIX,
+    'Write the value out, or declare what varies as a variant the calls select.',
   ],
   'unenumerable-keys': () => [
     'an object spread or computed key leaves the build unable to tell which properties this call sets',
-    'Write the properties out, or spread a value the build can resolve, to group it.',
+    'Write the properties out, or spread an object the build can read.',
   ],
-  'unresolved-raw': (prop) => [
-    `${prop}.raw() composes its own props rather than its styles, so ${prop}'s declarations will not reach the stylesheet`,
-    `Call it instead — cx(${prop}(props), css({ … })) — or move the overrides into ${prop} itself.`,
+  'unresolved-raw': (name = 'a recipe') => [
+    `${name}.raw() composes its own props rather than its styles, so ${name}'s declarations will not reach the stylesheet`,
+    `Call it instead — cx(${name}(props), css({ … })) — or move the overrides into ${name} itself.`,
   ],
 }
 
@@ -67,11 +81,11 @@ const unresolvedReasons: Record<ParserResult['unresolved'][number]['reason'], (p
  * about it, and where to read more. The build's warning is all four; the editor's diagnostic —
  * `@bamboocss/eslint-plugin`'s `no-unresolved-styles` — the first and the third, the same words.
  *
- * A recipe does not degrade the way a `css()` call does, so it does not get the same explanation.
- * Its classes are named from a hash of its config: a declaration the build cannot see changes that
- * hash, the browser asks for a name no rule was emitted under, and *every* style is lost rather
- * than the unresolved one. A `css()` call's loss is partial — what the build saw still applies — so
- * its wording says which half is missing rather than implying the element is unstyled.
+ * The two degrade apart. A `css()` or pattern call is replaced by its class string, so one whose
+ * styles the build cannot read does not compile, and the compiler fails the build at it. A recipe's
+ * calls are compiled from its config, which the build reads on its own: they compile to the classes
+ * of what it read and without what it could not, so the element keeps the rest of the recipe's
+ * styles and loses that one.
  */
 export function explainUnresolvedStyle(entry: Pick<UnresolvedStyle, 'kind' | 'prop' | 'reason'>) {
   if (entry.kind === 'keyframes') {
@@ -82,21 +96,22 @@ export function explainUnresolvedStyle(entry: Pick<UnresolvedStyle, 'kind' | 'pr
       see: 'https://bamboocss.com/docs/concepts/keyframes',
     }
   }
-  const [loss] = unresolvedReasons[entry.reason](entry.prop ? `\`${entry.prop}\`` : 'a property')
+  const name = entry.prop ? `\`${entry.prop}\`` : undefined
+  const [loss, fix, recipeFix = fix] = unresolvedReasons[entry.reason](name)
   // The path is what makes several losses in one config distinguishable — without it they read
-  // as identical lines at the same position.
-  const what = entry.prop ? `${loss} at \`${entry.prop}\`` : loss
+  // as identical lines at the same position. A loss naming it says where already.
+  const what = name && !loss.includes(name) ? `${loss} at ${name}` : loss
   return entry.kind === 'recipe'
     ? {
         what,
-        why: "A recipe's classes are named from a hash of its config, so a declaration the build cannot see gives the build and the browser different names and the element renders with no styles at all.",
-        fix: 'Set `className` on the recipe, so its name does not depend on what the build could resolve.',
+        why: "A recipe's calls compile to the classes of the declarations the build can read in its config, so they compile without this one: the element gets the rest of the recipe's styles, and not this.",
+        fix: recipeFix,
         see: 'https://bamboocss.com/docs/concepts/recipes',
       }
     : {
         what,
-        why: 'The build emits a rule per declaration it can see, and the runtime names a class for every declaration the object actually has — so the ones it could not see have no rule behind them and are simply absent.',
-        fix: 'Write the value out, or generate it with `staticCss` if it is genuinely dynamic.',
+        why: 'A style call compiles to its class string at build time, with no runtime styling to fall back to, so this one does not compile: the compiler rejects it as `dynamic`, and the build fails.',
+        fix,
         see: 'https://bamboocss.com/docs/guides/dynamic-styling',
       }
 }
@@ -196,11 +211,12 @@ export class BambooContext extends Generator {
   }
 
   /**
-   * Report `css()` calls whose styles the build could not fully see.
+   * Report style calls and recipe configs whose styles the build could not fully see.
    *
-   * A warning rather than an error: the build is not wrong, the call site is unresolvable,
-   * and the declarations it did resolve still apply. But the ones it could not have no rule
-   * behind them and are simply absent, so it must not be silent.
+   * A warning rather than an error, since the error is the compiler's to give: a `css()` or pattern
+   * call it cannot read fails the build where the compiler meets it, with the reason. A recipe's
+   * calls compile without what its config does not let the build read, and this is the one report
+   * that they do.
    */
   reportUnresolvedStyles = (result: { unresolved?: ParserResult['unresolved'] }) => {
     const unresolved = result.unresolved

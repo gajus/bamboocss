@@ -229,10 +229,11 @@ The compiler scans the output plan as well as recognized calls. A Bamboo import 
 reflectively, or missed because a transform threw is still a survivor and fails the build.
 
 ```text
-bamboocss: 2 call(s) could not be compiled.
+bamboocss: 3 call(s) could not be compiled.
 
   src/card.tsx
     18: css() — dynamic: `tone` uses a `switch` statement at src/theme.ts:4:3, which the compiler does not run
+    24: css() — dynamic: `props.width` at src/card.tsx:24:31 reads a parameter, so only the caller knows its value
   src/styles.ts
     7: badge — runtime-binding
 ```
@@ -249,11 +250,16 @@ Common reasons:
 | `compile-failed`    | Compilation of the module threw; no clean result can be claimed.                                      |
 | `unknown-condition` | A nested key is neither a property nor a condition: a misspelled `_hover`, or a selector without `&`. |
 
-Some `dynamic` calls are code the compiler refused to run rather than a value it cannot know, and the line says what and
-where, since the call site does not show it. Either a helper's body uses a statement the compiler does not run (a
-`switch`, a loop, `try`, a `throw` it reaches, or a statement run for its effect), possibly in another file, or a value
-the call reads is reassigned or written into after its declaration. A helper's body may declare values, branch with `if`
-and return.
+A `dynamic` line says what the compiler cannot know and where, which is not always the call site: a read the call makes
+can lead to a declaration elsewhere in the module. It is a parameter or a value read off one, a lookup by a key known
+only at runtime (`sizes[size]`), a spread or computed key it cannot enumerate, a choice where none compiles — inside a
+spread, inside another value, in a pattern, written with `&&`, or one whose test reads a Bamboo import — or more than 32
+combinations of choices in one call. After the list, the error says once for each of those what to write instead.
+
+Some `dynamic` calls are code the compiler refused to run rather than a value it cannot know. Either a helper's body
+uses a statement the compiler does not run (a `switch`, a loop, `try`, a `throw` it reaches, or a statement run for its
+effect), possibly in another file, or a value the call reads is reassigned or written into after its declaration. A
+helper's body may declare values, branch with `if` and return.
 
 An `unknown-condition` line names the key and what it was probably meant to be — `_hovr` is not a condition; did you
 mean `_hover`? — and is reported by the call it is written in. In a recipe, the declaration holding it reports it, and

@@ -25,7 +25,9 @@ use oxc_syntax::symbol::SymbolId;
 use crate::cache::SharedCache;
 use crate::evaluator::{EvalResult, FileEvaluator, ProjectEvaluator, Refusal};
 use crate::offsets::Utf16;
-use exact::{Exactness, exact_result, is_inert, is_inert_literal, unwrap};
+use exact::{
+    Exactness, Unknown, exact_result, is_inert, is_inert_literal, spread_kind, unknown, unwrap,
+};
 use model::*;
 
 /// Entrypoints the fold recognises, by kind.
@@ -1054,6 +1056,7 @@ fn analyze_facts<'a>(
                     exact: false,
                     style_choice: None,
                     refusal: None,
+                    unknown: None,
                     argument_count: call.arguments.len() as u32,
                     trailing_arguments_inert: true,
                     selection: None,
@@ -1090,6 +1093,7 @@ fn analyze_facts<'a>(
                 exact: true,
                 style_choice: None,
                 refusal: None,
+                unknown: None,
                 argument_count: call.arguments.len() as u32,
                 trailing_arguments_inert: true,
                 selection: None,
@@ -1132,6 +1136,7 @@ fn analyze_facts<'a>(
                 exact: false,
                 style_choice: None,
                 refusal: None,
+                unknown: None,
                 argument_count: call.arguments.len() as u32,
                 trailing_arguments_inert: true,
                 selection: None,
@@ -1168,6 +1173,10 @@ fn analyze_facts<'a>(
         } else {
             call.arguments.len()
         };
+        // With more than one argument it does not: `css()` drops an argument whose values are all
+        // `undefined` before merging, and keeps one holding `null`, which then overrides what came
+        // before. `keyframes()` is named for, and written from, its stops without them.
+        let drops_nullish = (kind == "css" || kind == "keyframes") && call.arguments.len() == 1;
         let exact =
             call.arguments
                 .iter()
@@ -1175,12 +1184,7 @@ fn analyze_facts<'a>(
                 .all(|argument| match argument.as_expression() {
                     Some(expression) => Exactness {
                         evaluator: &mut evaluator,
-                        // With more than one argument it does not: `css()` drops an argument
-                        // whose values are all `undefined` before merging, and keeps one holding
-                        // `null`, which then overrides what came before. `keyframes()` is named
-                        // for, and written from, its stops without them.
-                        drops_nullish: (kind == "css" || kind == "keyframes")
-                            && call.arguments.len() == 1,
+                        drops_nullish,
                     }
                     .check(expression),
                     None => false,
@@ -1199,13 +1203,58 @@ fn analyze_facts<'a>(
             .map(|stops| project.keyframes_name(stops));
         let guarded = (kind == "token" || kind == "tokenValue")
             && crate::result_guarded(semantic.nodes(), node.id());
-        let style_choice =
-            if kind == "css" && !raw && property.is_none() && !exact && data.len() > 1 {
+        // `css()` is the one call that compiles a choice between known styles.
+        let chooses = kind == "css" && !raw && property.is_none();
+        let mut choice_unknown = None;
+        let style_choice = if chooses && !exact && data.len() > 1 {
+            let guarded_reads = guarded_reads.get_or_insert_with(read_spans);
+            match style_choice::analyze(&mut evaluator, &call.arguments, &utf16, guarded_reads) {
+                Ok(choice) => Some(choice),
+                Err(unknown) => {
+                    choice_unknown = unknown;
+                    None
+                }
+            }
+        } else {
+            None
+        };
+        let refusal = refusal
+            .filter(|_| !exact)
+            .map(|refusal| fold_refusal(&refusal));
+        // Why a call the fold reports as `dynamic` is one, which nothing asks of a call that compiles:
+        // the reason its choices do not compile, where it holds any, or else the first value in it
+        // the build cannot know.
+        let unknown = if exact
+            || refusal.is_some()
+            || style_choice.is_some()
+            || !matches!(
+                kind.as_str(),
+                "css" | "pattern" | "token" | "tokenValue" | "viewTransition" | "keyframes"
+            ) {
+            None
+        } else {
+            let mut found = choice_unknown;
+            if found.is_none() && chooses && data.len() <= 1 {
                 let guarded_reads = guarded_reads.get_or_insert_with(read_spans);
-                style_choice::analyze(&mut evaluator, &call.arguments, &utf16, guarded_reads)
-            } else {
-                None
-            };
+                found =
+                    style_choice::analyze(&mut evaluator, &call.arguments, &utf16, guarded_reads)
+                        .err()
+                        .flatten();
+            }
+            if found.is_none() {
+                found = call.arguments.iter().take(judged).find_map(|argument| {
+                    match argument.as_expression() {
+                        Some(expression) => Exactness {
+                            evaluator: &mut evaluator,
+                            drops_nullish,
+                        }
+                        .explain(expression),
+                        None => Some(unknown("spread", argument.span())),
+                    }
+                });
+            }
+            found.map(|unknown| fold_unknown(&evaluator, &unknown))
+        };
         let statement_start = (kind == "tokenValue" || style_choice.is_some())
             && is_statement_start(semantic, node.id());
         calls.push(FoldCall {
@@ -1221,9 +1270,8 @@ fn analyze_facts<'a>(
             data,
             exact,
             style_choice,
-            refusal: refusal
-                .filter(|_| !exact)
-                .map(|refusal| fold_refusal(&refusal)),
+            refusal,
+            unknown,
             argument_count: call.arguments.len() as u32,
             trailing_arguments_inert,
             selection: None,
@@ -1461,6 +1509,19 @@ fn argument_values<'a>(
     (output, complete, refusal)
 }
 
+/// What the build cannot know about a call, as the record JavaScript reads.
+fn fold_unknown(evaluator: &FileEvaluator<'_, '_, '_>, unknown: &Unknown<'_>) -> FoldUnknown {
+    let place = evaluator.place(unknown.span);
+    FoldUnknown {
+        kind: unknown.kind.to_string(),
+        excerpt: place.excerpt,
+        count: unknown.count,
+        file_path: place.file_path,
+        line: place.line,
+        column: place.column,
+    }
+}
+
 /// What the evaluator refused, as the record JavaScript reads.
 fn fold_refusal(refusal: &Refusal) -> FoldRefusal {
     FoldRefusal {
@@ -1641,6 +1702,7 @@ fn recipe_invocation<'a>(
         exact: true,
         style_choice: None,
         refusal: None,
+        unknown: None,
         argument_count: call.arguments.len() as u32,
         trailing_arguments_inert: true,
         selection,

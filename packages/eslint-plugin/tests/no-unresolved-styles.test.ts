@@ -11,10 +11,12 @@ import { eslintTester } from '../test-utils'
  * could not read and that never reaches the stylesheet, in the words the build prints.
  */
 const css = {
-  fix: 'Write the value out, or generate it with `staticCss` if it is genuinely dynamic.',
-  what: '`color` will not reach the stylesheet because its value could not be evaluated at build time at `color`',
+  fix:
+    'Write the value out, or choose between values written out with a ternary. One known only at runtime belongs ' +
+    "in the `style` attribute, or in a CSS variable a declaration reads, `width: 'var(--width)'`.",
+  what: '`color` will not reach the stylesheet because its value could not be evaluated at build time',
 }
-const recipeFix = 'Set `className` on the recipe, so its name does not depend on what the build could resolve.'
+const spreadFix = 'Write the properties out, or spread an object the build can read.'
 const spread = 'an object spread or computed key leaves the build unable to tell which properties this call sets'
 const dynamic = multiline`
   import { css } from './bamboo/css';
@@ -35,24 +37,62 @@ eslintTester.run(RULE_NAME, rule, {
       errors: [
         {
           column: 42,
-          data: { fix: css.fix, what: spread },
+          data: { fix: spreadFix, what: spread },
           line: 3,
           messageId: 'unresolved',
         },
       ],
     },
-    // A recipe loses every style, not the one: its classes are named from what the build read.
-    // Each loss names its path, or two in one call would read the same.
+    // A whole argument the build cannot read, which reached the stylesheet as nothing at all and
+    // said nothing either.
+    {
+      code: multiline`
+  import { css } from './bamboo/css';
+
+  const pads = { sm: { px: '2' }, lg: { px: '6' } }
+  export const styles = (size: 'sm' | 'lg') => css(pads[size])`,
+      errors: [
+        {
+          column: 46,
+          data: {
+            fix: css.fix,
+            what: 'this argument will not reach the stylesheet because it is not statically known',
+          },
+          line: 4,
+          messageId: 'unresolved',
+        },
+      ],
+    },
+    // A recipe's calls compile without what its config does not let the build read. Each loss
+    // names its path, or two in one call would read the same.
     {
       code: multiline`
   import { cva } from './bamboo/css';
 
   export const card = (x: object, y: object) => cva({ base: { ...x }, variants: { tone: { calm: { ...y } } } })`,
       errors: [
-        { column: 47, data: { fix: recipeFix, what: `${spread} at \`base\`` }, line: 3, messageId: 'unresolved' },
+        { column: 47, data: { fix: spreadFix, what: `${spread} at \`base\`` }, line: 3, messageId: 'unresolved' },
         {
           column: 47,
-          data: { fix: recipeFix, what: `${spread} at \`variants.tone.calm\`` },
+          data: { fix: spreadFix, what: `${spread} at \`variants.tone.calm\`` },
+          line: 3,
+          messageId: 'unresolved',
+        },
+      ],
+    },
+    // A value a recipe's config cannot read is a variant's to choose, not a ternary's.
+    {
+      code: multiline`
+  import { cva } from './bamboo/css';
+
+  export const card = (tone: string) => cva({ base: { color: tone } })`,
+      errors: [
+        {
+          column: 39,
+          data: {
+            fix: 'Write the value out, or declare what varies as a variant the calls select.',
+            what: '`base.color` will not reach the stylesheet because its value could not be evaluated at build time',
+          },
           line: 3,
           messageId: 'unresolved',
         },

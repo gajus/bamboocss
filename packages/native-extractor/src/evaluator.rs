@@ -47,6 +47,14 @@ const MAX_CALL_DEPTH: u32 = 64;
 /// few dozen.
 const MAX_CALLS: u32 = 10_000;
 
+/// A place in a file, as a refusal names one: its code, shortened, and its 1-based line and column.
+pub(crate) struct Place {
+    pub excerpt: String,
+    pub file_path: String,
+    pub line: u32,
+    pub column: u32,
+}
+
 /// Code the evaluator will not run, and where — the reason an unknown value is unknown.
 ///
 /// Most unknowns explain themselves at the call: a parameter, a prop, an import the build
@@ -2973,6 +2981,19 @@ impl<'a, 'project, 'sources> FileEvaluator<'a, 'project, 'sources> {
             statement.span(),
             statement.span(),
         )
+    }
+
+    /// Where `at` is in this file, and the code there as a refusal shows it: for what the fold
+    /// reports of a call that is not a refusal.
+    pub(crate) fn place(&self, at: oxc_span::Span) -> Place {
+        let source = self.semantic.source_text();
+        let (line, column) = self.positions.line_and_column(at.start);
+        Place {
+            excerpt: excerpt_of(&source[at.start as usize..at.end as usize]),
+            file_path: self.filename.to_string(),
+            line,
+            column,
+        }
     }
 
     /// A refusal at `at`, in this file, showing the code at `excerpt`.

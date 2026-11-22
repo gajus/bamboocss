@@ -92,6 +92,8 @@ const panel = css({ width: 'var(--panel-width)', md: { width: '100%' } })
 - Values may come from constants, other modules and helper functions. A helper may declare values, branch with `if` and
   return; a `switch`, a loop, `try`, `throw`, or a value written to after its declaration makes the call `dynamic`.
 - A spread of a runtime object, or a computed key, is `dynamic`.
+- A lookup by a runtime key, `sizes[size]`, is `dynamic`: make the map a recipe variant. So is a choice written with
+  `&&`: write `active ? 'red.300' : undefined`.
 - A choice's test is copied into the compiled call and asked there, once, so it may read anything but a Bamboo import or
   a recipe, which the compiler removes: `dynamic`.
 - `css.raw()` returns a style object to compose, `css(shared, { gap: '4' })`. Used as a live value it is `raw-call`.
@@ -110,7 +112,7 @@ const panel = css({ width: 'var(--panel-width)', md: { width: '100%' } })
 
 | Reason              | What to change                                                                                       |
 | ------------------- | ---------------------------------------------------------------------------------------------------- |
-| `dynamic`           | A value, spread, key or helper the compiler will not guess. The line names the code it refused.      |
+| `dynamic`           | A value, spread, key, choice or helper the compiler will not guess. The line names it and where.     |
 | `recipe-call`       | A recipe selection it cannot enumerate: a spread, a computed key, a responsive object.               |
 | `raw-call`          | `.raw()` used as a value.                                                                            |
 | `runtime-binding`   | A Bamboo import read rather than called, usually an erased recipe aliased, passed on or re-exported. |

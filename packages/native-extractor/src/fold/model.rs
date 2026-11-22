@@ -55,6 +55,9 @@ pub struct FoldCall {
     /// For a call that is not exact because the evaluator refused code it does not run: what,
     /// and where. Absent when it is not exact for any other reason.
     pub refusal: Option<FoldRefusal>,
+    /// For a `css()`, pattern, `token()` or `viewTransition()` call that is neither exact nor
+    /// compiled as a choice, where the evaluator refused nothing: what in it the build cannot know.
+    pub unknown: Option<FoldUnknown>,
     /// Number of arguments written at the call site.
     pub argument_count: u32,
     /// Every argument after the first is a literal whose evaluation cannot run anything.
@@ -116,6 +119,22 @@ pub struct FoldRefusal {
     /// The statement, the one making the write, or the call, as written: its first line,
     /// shortened.
     pub excerpt: String,
+    pub file_path: String,
+    /// 1-based, the column in UTF-16 code units.
+    pub line: u32,
+    pub column: u32,
+}
+
+/// What keeps a call's arguments from being known at build time where the evaluator refused no
+/// code: the first value in them the audit cannot account for, or what keeps the call's choices
+/// from compiling. The kinds are `exact::Unknown`'s.
+#[napi(object)]
+pub struct FoldUnknown {
+    pub kind: String,
+    /// The value, as written: its first line, shortened.
+    pub excerpt: String,
+    /// For `choices`: how many the call holds.
+    pub count: u32,
     pub file_path: String,
     /// 1-based, the column in UTF-16 code units.
     pub line: u32,

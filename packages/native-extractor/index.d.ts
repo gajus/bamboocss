@@ -225,6 +225,11 @@ export interface FoldCall {
   styleChoice?: FoldStyleChoice
   /** Why the call is not exact, when the evaluator refused code it does not run. */
   refusal?: FoldRefusal
+  /**
+   * For a `css()`, pattern, `token()` or `viewTransition()` call that is neither exact nor compiled
+   * as a choice, where the evaluator refused nothing: what in it the build cannot know.
+   */
+  unknown?: FoldUnknown
   argumentCount: number
   trailingArgumentsInert: boolean
   selection?: FoldSelection
@@ -265,6 +270,48 @@ export interface FoldRefusal {
   subject: string
   helper?: string
   excerpt: string
+  filePath: string
+  line: number
+  column: number
+}
+
+/**
+ * What keeps a call's arguments from being known at build time where the evaluator refused no code:
+ * the first value in them the audit cannot account for, or what keeps its choices from compiling.
+ *
+ * `parameter`: a function's parameter, or a name bound from one. `lookup`: a property read by a key
+ * known only at runtime, `sizes[size]`. `default`: a value a destructuring default supplies. `loop`:
+ * a loop's variable. `global`: a name the module does not declare. `import`: an imported value the
+ * build cannot read. `call`: a call it cannot evaluate. `write`: a binding written after its
+ * declaration. `spread`: a spread of something it cannot enumerate. `spread-choice`: a choice inside
+ * a spread. `key`: a computed key it cannot evaluate. `method`: a method or an accessor. `proto`: a
+ * `__proto__` key. `choice`: a choice where none compiles, in a pattern or inside another value.
+ * `and`: a choice written with `&&`. `test`: a choice whose test reads a Bamboo import or a recipe.
+ * `choices`: more combinations of answers than one call compiles to, `count` the choices it holds.
+ * `value`: anything else it cannot evaluate. `line` is 1-based; `column` too, in UTF-16.
+ */
+export interface FoldUnknown {
+  kind:
+    | 'parameter'
+    | 'lookup'
+    | 'default'
+    | 'loop'
+    | 'global'
+    | 'import'
+    | 'call'
+    | 'write'
+    | 'spread'
+    | 'spread-choice'
+    | 'key'
+    | 'method'
+    | 'proto'
+    | 'choice'
+    | 'and'
+    | 'test'
+    | 'choices'
+    | 'value'
+  excerpt: string
+  count: number
   filePath: string
   line: number
   column: number

@@ -8,7 +8,9 @@ use serde_json::{Map, Value};
 
 use crate::{evaluator::FileEvaluator, offsets::Utf16};
 
-use super::{Exactness, holds_guarded_read, model::FoldStyleChoice, unwrap};
+use super::{
+    Exactness, Unknown, holds_guarded_read, model::FoldStyleChoice, spread_kind, unknown, unwrap,
+};
 
 /// The most combinations of answers one call is compiled to, as `MAX_CX_COMBINATIONS` bounds a
 /// `cx()`: each is written out whole, so what the call compiles to doubles with each independent
@@ -17,7 +19,9 @@ const MAX_COMBINATIONS: usize = 32;
 
 /// What the call's arguments style on each path through its tests, and the tests, which the fold
 /// copies into what it writes: a ternary per test, asked where the call was and only on the path
-/// that reaches it, choosing between class strings.
+/// that reaches it, choosing between class strings. Otherwise, why not, where it is the choices
+/// that keep the call from compiling: `None` for a call holding none, which is not exact for some
+/// other reason the audit says.
 ///
 /// A test can be anything a copied condition can be — `compact`, `props.size === 'sm'` — reading
 /// neither a Bamboo import nor a recipe: `guarded_reads`, sorted by start. Each answer, and every
@@ -29,19 +33,33 @@ pub(super) fn analyze<'a>(
     arguments: &'a [Argument<'a>],
     utf16: &Utf16,
     guarded_reads: &[Span],
-) -> Option<FoldStyleChoice> {
-    let expressions = arguments
-        .iter()
-        .map(Argument::as_expression)
-        .collect::<Option<Vec<_>>>()?;
+) -> Result<FoldStyleChoice, Option<Unknown<'a>>> {
+    let mut expressions = Vec::with_capacity(arguments.len());
+    for argument in arguments {
+        match argument.as_expression() {
+            Some(expression) => expressions.push(expression),
+            // `css(...styles)`: how many style objects it passes is not known, let alone which.
+            None => return Err(Some(unknown("spread", argument.span()))),
+        }
+    }
 
     let mut written = Vec::new();
+    let mut guarded = None;
     for expression in &expressions {
-        collect_tests(expression, guarded_reads, &mut written);
+        collect_tests(expression, guarded_reads, &mut written, &mut guarded);
     }
     if written.is_empty() {
-        return None;
+        return Err(guarded.map(|test| unknown("test", test)));
     }
+    // Where a call has more combinations than it compiles to: the choices it holds, which is the
+    // count that has to come down.
+    let past_limit = || {
+        let span = Span::new(
+            arguments.first().map_or(0, |first| first.span().start),
+            arguments.last().map_or(0, |last| last.span().end),
+        );
+        Some(Unknown::choices(span, written.len() as u32))
+    };
     // A test that could run something may change what a later read answers, so a read is asked
     // once only where no test can.
     let once = written.iter().all(|test| plain_read(test).is_some());
@@ -55,7 +73,12 @@ pub(super) fn analyze<'a>(
     };
     let mut call = Tree::Leaf(Vec::new());
     for expression in expressions {
-        let argument = choices.explore(expression)?;
+        let argument = choices
+            .explore(expression)
+            .map_err(|found| match found.kind {
+                "choices" => past_limit(),
+                _ => Some(found),
+            })?;
         call = sequence(
             call,
             argument,
@@ -69,13 +92,14 @@ pub(super) fn analyze<'a>(
                 }
                 Some(styles)
             },
-        )?;
-        bounded(&call)?;
+        )
+        .ok_or_else(|| Some(unknown("value", expression.span())))?;
+        bounded(&call).ok_or_else(past_limit)?;
     }
 
     let mut tree = String::new();
     call.write_json(&mut tree);
-    Some(FoldStyleChoice {
+    Ok(FoldStyleChoice {
         tests: choices.tests.iter().map(|test| utf16.span(*test)).collect(),
         tree,
     })
@@ -92,25 +116,30 @@ fn plain_read(expression: &Expression<'_>) -> Option<String> {
     }
 }
 
-/// Every test `explore` meets, in the order it meets them.
+/// Every test `explore` meets, in the order it meets them, and the first of those it cannot ask:
+/// one reading a Bamboo binding or a recipe, which the compiled call no longer holds.
 fn collect_tests<'a>(
     expression: &'a Expression<'a>,
     guarded_reads: &[Span],
     into: &mut Vec<&'a Expression<'a>>,
+    guarded: &mut Option<Span>,
 ) {
     match unwrap(expression) {
         Expression::ConditionalExpression(choice)
-            if !holds_guarded_read(guarded_reads, choice.test.span()) =>
+            if holds_guarded_read(guarded_reads, choice.test.span()) =>
         {
+            guarded.get_or_insert(choice.test.span());
+        }
+        Expression::ConditionalExpression(choice) => {
             into.push(&choice.test);
-            collect_tests(&choice.consequent, guarded_reads, into);
-            collect_tests(&choice.alternate, guarded_reads, into);
+            collect_tests(&choice.consequent, guarded_reads, into, guarded);
+            collect_tests(&choice.alternate, guarded_reads, into, guarded);
         }
         Expression::ObjectExpression(object) => {
             // A spread holds no choice: see `explore`.
             for property in &object.properties {
                 if let ObjectPropertyKind::ObjectProperty(property) = property {
-                    collect_tests(&property.value, guarded_reads, into);
+                    collect_tests(&property.value, guarded_reads, into, guarded);
                 }
             }
         }
@@ -215,6 +244,12 @@ fn bounded<L: Clone>(tree: &Tree<L>) -> Option<()> {
     (tree.leaves() <= MAX_COMBINATIONS).then_some(())
 }
 
+/// Past `MAX_COMBINATIONS`, as `explore` says it: how many choices the call holds is `analyze`'s
+/// to count.
+fn too_many<'a>(span: Span) -> Unknown<'a> {
+    Unknown::choices(span, 0)
+}
+
 /// `first`, then `second` on every path through it, each leaf the two combined: the order the call
 /// evaluates them in, and so the order the compiled call asks their tests. `second` is copied only
 /// where a test of `first` splits the paths it is grafted onto.
@@ -297,8 +332,11 @@ impl<'a> Choices<'_, 'a, '_, '_, '_> {
     }
 
     /// What `expression` evaluates to on each path through the tests it holds: `None` where it is
-    /// nullish, which `css()` drops.
-    fn explore(&mut self, expression: &'a Expression<'a>) -> Option<Tree<Option<Value>>> {
+    /// nullish, which `css()` drops. Otherwise, the first thing on the way that is not known.
+    fn explore(
+        &mut self,
+        expression: &'a Expression<'a>,
+    ) -> Result<Tree<Option<Value>>, Unknown<'a>> {
         match unwrap(expression) {
             Expression::ConditionalExpression(choice)
                 if !holds_guarded_read(self.guarded_reads, choice.test.span()) =>
@@ -313,23 +351,30 @@ impl<'a> Choices<'_, 'a, '_, '_, '_> {
                 } else {
                     tree
                 };
-                bounded(&tree)?;
-                Some(tree)
+                bounded(&tree).ok_or_else(|| too_many(choice.span))?;
+                Ok(tree)
             }
+            // Its test reads what the compiler removes, so it compiles only where it is decided.
+            Expression::ConditionalExpression(choice) => exact_value(self.evaluator, expression)
+                .map(Tree::Leaf)
+                .map_err(|_| unknown("test", choice.test.span())),
             Expression::ObjectExpression(object) => {
                 let mut built = Tree::Leaf(Map::new());
                 for property in &object.properties {
                     built = match property {
                         ObjectPropertyKind::ObjectProperty(property) => {
-                            if property.computed
-                                || property.method
-                                || property.kind != PropertyKind::Init
-                            {
-                                return None;
+                            if property.computed {
+                                return Err(unknown("key", property.key.span()));
                             }
-                            let key = property.key.static_name()?.into_owned();
+                            if property.method || property.kind != PropertyKind::Init {
+                                return Err(unknown("method", property.span));
+                            }
+                            let Some(key) = property.key.static_name() else {
+                                return Err(unknown("key", property.key.span()));
+                            };
+                            let key = key.into_owned();
                             if key == "__proto__" {
-                                return None;
+                                return Err(unknown("proto", property.key.span()));
                             }
                             let value = self.explore(&property.value)?;
                             sequence(
@@ -347,17 +392,19 @@ impl<'a> Choices<'_, 'a, '_, '_, '_> {
                                     }
                                     Some(map)
                                 },
-                            )?
+                            )
+                            .ok_or_else(|| unknown("value", property.value.span()))?
                         }
                         // Merged where it is written: a key it holds takes the place the key already
                         // had, as an object spread assigns it. It has to be exact: extraction cannot
                         // tell which properties a choice inside one sets, so the stylesheet would hold
                         // no rule for what either answer names.
                         ObjectPropertyKind::SpreadProperty(spread) => {
-                            let value = Tree::Leaf(exact_value(self.evaluator, &spread.argument)?);
+                            let value = exact_value(self.evaluator, &spread.argument)
+                                .map_err(|_| unknown(spread_kind(&spread.argument), spread.span))?;
                             sequence(
                                 built,
-                                value,
+                                Tree::Leaf(value),
                                 &mut Vec::new(),
                                 &mut |mut map: Map<String, Value>, value| {
                                     match value {
@@ -367,14 +414,15 @@ impl<'a> Choices<'_, 'a, '_, '_, '_> {
                                     }
                                     Some(map)
                                 },
-                            )?
+                            )
+                            .ok_or_else(|| unknown("spread", spread.span))?
                         }
                     };
-                    bounded(&built)?;
+                    bounded(&built).ok_or_else(|| too_many(object.span))?;
                 }
-                Some(map_leaves(built, &mut |map| Some(Value::Object(map))))
+                Ok(map_leaves(built, &mut |map| Some(Value::Object(map))))
             }
-            _ => Some(Tree::Leaf(exact_value(self.evaluator, expression)?)),
+            _ => exact_value(self.evaluator, expression).map(Tree::Leaf),
         }
     }
 }
@@ -390,14 +438,19 @@ fn map_leaves<A, B>(tree: Tree<A>, map: &mut impl FnMut(A) -> B) -> Tree<B> {
     }
 }
 
+/// What `expression` evaluates to, where that is exact, and otherwise why not.
 fn exact_value<'a>(
     evaluator: &mut FileEvaluator<'a, '_, '_>,
     expression: &'a Expression<'a>,
-) -> Option<Option<Value>> {
-    Exactness {
-        evaluator,
+) -> Result<Option<Value>, Unknown<'a>> {
+    let mut exactness = Exactness {
+        evaluator: &mut *evaluator,
         drops_nullish: true,
+    };
+    if !exactness.check(expression) {
+        return Err(exactness
+            .explain(expression)
+            .unwrap_or_else(|| unknown("value", expression.span())));
     }
-    .check(expression)
-    .then(|| evaluator.evaluate(expression).value)
+    Ok(evaluator.evaluate(expression).value)
 }

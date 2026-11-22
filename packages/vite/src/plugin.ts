@@ -11,7 +11,8 @@ import { asError, bamboocssCss, bamboocssCssEarly, isStylesheetUrl, VIRTUAL_CSS_
 import { extractedFileKey, normalizeFsPath } from './fs-path'
 import { bare } from './class-name'
 import { createCompilationHost, type CompilationGeneration } from './compilation-host'
-import type { FoldRefusal } from '@bamboocss/native-extractor'
+import type { FoldRefusal, FoldUnknown } from '@bamboocss/native-extractor'
+import { MAX_CX_COMBINATIONS } from './combinations'
 import type { FoldResult, SkipReason, SkippedCall } from './fold'
 import { loadCssOutputModule, loadFoldModule } from './lazy-modules'
 import type { StaticStyleSetCompiler } from './style-set'
@@ -115,7 +116,7 @@ const SFC_SCRIPT_TAG = /<script[\s>/]/i
 const COMPILED_MDX = /^(?:export default )?function (?:_createMdxContent|MDXContent)\b/m
 const NODE_MODULES = /node_modules/
 const TRANSFORM_META_KEY = 'bamboocss:transform'
-const TRANSFORM_ARTIFACT_VERSION = 7 as const
+const TRANSFORM_ARTIFACT_VERSION = 8 as const
 
 /**
  * Queries that make Vite serve something other than the module's own source.
@@ -441,6 +442,136 @@ export const describeRefusal = (refusal: FoldRefusal, root: string) => {
   return `${helper} uses ${statement} at ${at}, which the compiler does not run`
 }
 
+/** A binding's name alone, as opposed to a read off one, `props.tone`. */
+const BINDING_NAME = /^[\p{ID_Start}$_][\p{ID_Continue}$\u200C\u200D]*$/u
+
+/**
+ * Why each kind of value is not known at build time, after the value and where it is written:
+ * `value` is `` `h` at src/bar.tsx:4:20 ``, and `is` is "is" for a binding's name and "reads" for a
+ * read off one, as `props.tone` reads a parameter where `h` is one. @see FoldUnknown
+ */
+const UNKNOWN_REASONS: Record<
+  FoldUnknown['kind'],
+  (parts: { value: string; is: string; at: string; unknown: FoldUnknown; name: string }) => string
+> = {
+  parameter: ({ value, is }) => `${value} ${is} a parameter, so only the caller knows its value`,
+  lookup: ({ value }) => `${value} reads a property by a key known only at runtime`,
+  default: ({ value }) => `${value} comes from a destructuring default, which is a fallback rather than its value`,
+  loop: ({ value, is }) => `${value} ${is} a loop's variable, which takes its value only as the loop runs`,
+  global: ({ value, is }) => `${value} ${is} a global, which only the runtime knows`,
+  import: ({ value, is }) => `${value} ${is} an import whose value is not known at build time`,
+  call: ({ value }) => `${value} is a call the build cannot evaluate`,
+  write: ({ value }) =>
+    `${value} is written after its declaration, so it no longer holds the value it was declared with`,
+  spread: ({ value }) =>
+    `${value} spreads what the build cannot enumerate, so it cannot tell which properties the call sets`,
+  'spread-choice': ({ value }) => `${value} is a choice inside a spread, which does not compile`,
+  key: ({ value }) => `${value} is a computed key the build cannot evaluate`,
+  method: ({ value }) => `${value} is a method or an accessor, which runs only when it is read`,
+  proto: ({ value }) => `${value} sets the object's prototype rather than a property`,
+  choice: ({ value, name }) =>
+    name === 'css'
+      ? `${value} is a choice inside a value, where none compiles`
+      : `${value} is a choice, which \`${name}()\` does not compile`,
+  and: ({ value }) =>
+    `${value} chooses with \`&&\`, which gives its left operand where that is falsy, so it does not compile`,
+  test: ({ unknown, at }) =>
+    `the test \`${unknown.excerpt}\` at ${at} reads a Bamboo import or a recipe, which the compiled call no longer holds`,
+  choices: ({ unknown }) => `its ${unknown.count} choices give more combinations of answers than one call compiles to`,
+  value: ({ value }) => `${value} is not known at build time`,
+}
+
+/** Every kind the native analysis names, for a transform artifact replayed from metadata. */
+const UNKNOWN_KINDS = new Set(Object.keys(UNKNOWN_REASONS) as Array<FoldUnknown['kind']>)
+
+/**
+ * What to do about each kind of value the build cannot know: said once after the list, for each
+ * group of kinds the list holds, since what changes the call is the same for every call there.
+ */
+const UNKNOWN_ADVICE: Array<[kinds: Array<FoldUnknown['kind']>, advice: string]> = [
+  [
+    ['parameter', 'default', 'loop', 'global', 'import', 'call', 'write', 'value'],
+    `A value known only at runtime has no class to compile to. Where it is one of a few, choose between them: ` +
+      `\`css({ p: compact ? '2' : '4' })\` compiles to its test picking a class string, and a recipe's variants pick ` +
+      `among many. Anything else — a width, an offset, a color from data — belongs in the \`style\` attribute, or in ` +
+      `a CSS variable a declaration reads, \`css({ width: 'var(--width)' })\`, where a condition still has to ` +
+      `override it.`,
+  ],
+  [
+    ['lookup'],
+    `A lookup by a key known only at runtime is a choice among the map's values: declare them as a recipe's ` +
+      `variant, \`cva({ variants: { size: { sm: { … }, lg: { … } } } })\`, and call the recipe with the key, which ` +
+      `compiles to a lookup of class strings.`,
+  ],
+  [
+    ['spread'],
+    `A spread has to resolve to an object the build can read, or it cannot tell which properties the call sets.`,
+  ],
+  [
+    ['spread-choice'],
+    `A choice inside a spread does not compile: pass it as an argument of its own, ` +
+      `\`css(base, active ? on : off)\`, which does.`,
+  ],
+  [
+    ['key', 'method', 'proto'],
+    `An object's keys have to be known at build time: a computed key has to evaluate, a method or an accessor ` +
+      `runs only when it is read, and \`__proto__\` sets the prototype rather than a property.`,
+  ],
+  [
+    ['choice'],
+    `A choice compiles in a \`css()\` call, as the whole value of a property or as a whole argument. Inside ` +
+      `another value — an array, a template literal, an operand — or in any other call's arguments it does not: ` +
+      `lift it to the property, or choose between whole calls, \`compact ? flex({ gap: '2' }) : flex({ gap: '4' })\`.`,
+  ],
+  [
+    ['and'],
+    `A choice written with \`&&\` gives its left operand where that is falsy, which no class string stands for: ` +
+      `write it as a ternary, \`active ? 'red.300' : undefined\`.`,
+  ],
+  [
+    ['test'],
+    `A choice compiles to its test, copied into the compiled call, which holds no Bamboo import or recipe for it ` +
+      `to read: test a value of the program's own instead.`,
+  ],
+  [
+    ['choices'],
+    `One \`css()\` call compiles to at most ${MAX_CX_COMBINATIONS} combinations of its choices' answers. Give some ` +
+      `of the choices a \`css()\` call of their own, joined with \`cx()\`, or make them a recipe's variants, which ` +
+      `are decided apart where each styles declarations of its own.`,
+  ],
+]
+
+/**
+ * What the build cannot know about a call, as a sentence: the value, where it is written, and why
+ * it is not known at build time.
+ *
+ * Where a read the call makes leads to a declaration, that is where it points, which can be
+ * elsewhere in the module: `const tone = props.tone` above the call reading `tone`.
+ */
+export const describeUnknown = (unknown: FoldUnknown, root: string, name: string) => {
+  const at = `${displayPath(root, unknown.filePath)}:${unknown.line}:${unknown.column}`
+  const reason = UNKNOWN_REASONS[unknown.kind] ?? UNKNOWN_REASONS.value
+  return reason({
+    value: `\`${unknown.excerpt}\` at ${at}`,
+    is: BINDING_NAME.test(unknown.excerpt) ? 'is' : 'reads',
+    at,
+    unknown,
+    name,
+  })
+}
+
+/**
+ * What a skipped call's line says after its reason: the detail the fold gave, or the code the
+ * evaluator refused, or what the build cannot know. A `keyframes()` call's detail says why its stops
+ * have to be known, and what is not known follows it.
+ */
+const describeSkip = (entry: SkippedCall, root: string) => {
+  if (entry.refusal) return entry.detail ?? describeRefusal(entry.refusal, root)
+  const unknown = entry.unknown && describeUnknown(entry.unknown, root, entry.name)
+  if (entry.detail) return unknown ? `${entry.detail}: ${unknown}` : entry.detail
+  return unknown
+}
+
 /** Classes only ever passed through a `cx()` as written in a module's folded calls. */
 const literalOnly = (folded: FoldResult['folded']) => {
   const literal = new Set<string>()
@@ -463,7 +594,7 @@ const formatSkipped = (id: string, skipped: SkippedCall[], root: string) => {
     .map(([reason, count]) => `${reason}=${count}`)
     .join(' ')
   const reasons = skipped.flatMap((entry) => {
-    const detail = entry.detail ?? (entry.refusal && describeRefusal(entry.refusal, root))
+    const detail = describeSkip(entry, root)
     return detail ? [`\n  ${entry.name}(): ${detail}`] : []
   })
   return `${id}: ${summary}${reasons.join('')}`
@@ -535,6 +666,8 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     detail?: string
     /** `detail` is code the evaluator refused, which the error explains after the list. */
     refused?: true
+    /** `detail` is what the build cannot know, of this kind, which the error says what to do about. */
+    unknown?: FoldUnknown['kind']
   }
   interface TransformArtifactPayload {
     version: typeof TRANSFORM_ARTIFACT_VERSION
@@ -571,12 +704,13 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       artifact.file,
       artifact.folded,
       artifact.skipped.map(([reason, count]) => [reason, count]),
-      artifact.survivors.map(({ line, name, reason, detail, refused }) => [
+      artifact.survivors.map(({ line, name, reason, detail, refused, unknown }) => [
         line,
         name,
         reason,
         detail ?? null,
         refused ?? false,
+        unknown ?? null,
       ]),
       artifact.transformedFile,
       [...artifact.classNames],
@@ -671,7 +805,8 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
           typeof entry.reason === 'string' &&
           skipReasons.has(entry.reason as SkipReason) &&
           (entry.detail === undefined || typeof entry.detail === 'string') &&
-          (entry.refused === undefined || entry.refused === true),
+          (entry.refused === undefined || entry.refused === true) &&
+          (entry.unknown === undefined || UNKNOWN_KINDS.has(entry.unknown as FoldUnknown['kind'])),
       )
     ) {
       return false
@@ -958,10 +1093,15 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
             `Nothing was established about its calls either way.\n\n`
           : '') +
         (entries.some((entry) => entry.refused)
-          ? `A \`dynamic\` call with a reason is code the compiler will not run rather than guess at: a ` +
-            `helper's body may declare values, branch with \`if\` and return, and a value a style reads must not ` +
-            `be written after its declaration.\n\n`
+          ? `Code the compiler refused is code it will not run rather than guess at: a helper's body may declare ` +
+            `values, branch with \`if\` and return, and a value a style reads must not be written after its ` +
+            `declaration.\n\n`
           : '') +
+        UNKNOWN_ADVICE.filter(([kinds]) =>
+          entries.some((entry) => entry.unknown !== undefined && kinds.includes(entry.unknown)),
+        )
+          .map(([, advice]) => `${advice}\n\n`)
+          .join('') +
         (entries.some((entry) => entry.reason === 'unknown-condition')
           ? `\`unknown-condition\` is a key nested in a style object that is neither a property nor a ` +
             `condition. The stylesheet drops it, so the class named for it would have no rule and the styles ` +
@@ -982,9 +1122,8 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
             `declaration.\n\n`
           : '') +
         (entries.some((entry) => entry.reason !== 'unknown-condition')
-          ? `Bamboo emits no runtime styling fallback or recipe layer. Make the values finite and statically ` +
-            `analyzable, move variation into declared recipe variants, or safelist intentional dynamic classes ` +
-            `with \`staticCss\`.\n\n`
+          ? `Bamboo emits no runtime styling fallback or recipe layer: what a call styles has to be known at ` +
+            `build time, as values written out, choices between them, or a recipe's variants.\n\n`
           : '') +
         `Set \`BAMBOO_DIAGNOSTIC_LIMIT=all\` to list every finding rather than the first few.`,
     )
@@ -3157,13 +3296,14 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       if (entry.name === 'cx' && (entry.reason === 'dynamic' || entry.reason === 'opaque-composition')) continue
       // Every skipped entry indexes the module being folded: each module reports only about
       // its own text, so there is no foreign offset to translate.
+      const detail = describeSkip(entry, root)
       survivorsHere.push({
         line: lineAt(code, entry.start),
         name: entry.name,
         reason: entry.reason,
-        ...(entry.detail
-          ? { detail: entry.detail }
-          : entry.refusal && { detail: describeRefusal(entry.refusal, root), refused: true as const }),
+        ...(detail && { detail }),
+        ...(entry.refusal && !entry.detail && { refused: true as const }),
+        ...(entry.unknown && !entry.refusal && { unknown: entry.unknown.kind }),
       })
     }
 

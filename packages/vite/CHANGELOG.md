@@ -1,5 +1,61 @@
 # @bamboocss/vite
 
+## 1.64.8
+
+### Patch Changes
+
+- c371311: Compile a `css()` call holding several choices between known styles, where only one compiled and a second
+  failed the build as `dynamic`: `css({ color: active ? 'white' : 'gray.700', bg: loud ? 'red.500' : 'transparent' })`
+  compiles to its tests choosing one class string per combination of answers.
+  - A choice inside another's answer is asked only where that answer is taken, as the call asked it, and every test runs
+    as often as the call ran it. A plain read such as `props.active` written twice is asked once, where every test in
+    the call is a plain read.
+  - Choices compile beside a spread of known styles and after another argument, merged where they are written. A choice
+    inside a spread is still `dynamic`: extraction cannot tell which properties either answer sets.
+  - Past 32 combinations a call is `dynamic`, as a `cx()` is past 32.
+
+- 3e6ecbf: Read an import whose specifier has a comment in front of it, `from /* the recipe */ './recipes'`, in both
+  scans that decide without parsing whether a module can reach bamboo, and count one spelled with an escape,
+  `'./recipes'`.
+  - The Vite compiler skipped such a module: the build passed, and a recipe call in it shipped uncompiled, to throw when
+    it was loaded, in the client and in SSR.
+  - Extraction dropped such a file whenever it imported anything else as well, so the classes its call asked for had no
+    rule.
+  - A comment that only wraps after the word "from", or `Array.from(` with a comment before its argument, is still not
+    an import, so a module that reaches nothing bamboo is still skipped.
+
+- 63749e5: A recipe call whose variants are chosen at runtime selects what the same call written with literals selects.
+  - A slot read off a slot recipe, `field({ tone, size }).root`, returned the wrong class for most selections where an
+    earlier variant styles nothing in that slot: the lookup decided `size` by the value of `tone`. A variant that
+    matters only beside another, through a compound variant, did the same to the variants after it.
+  - `badge(props)` with `props` undefined selects the defaults, as `badge()` does, where it threw.
+
+- 9a12241: Decide a recipe call's variants apart where each styles declarations of its own:
+  `button({ size, tone, shape })`, with `size` setting the padding, `tone` the color and `shape` the radius, compiles to
+  a table per variant joined into the same class string, where one table held every combination. Variants decided apart
+  do not count toward one another's `maxRecipeStates`, so a recipe with many such variants compiles where it failed the
+  build.
+  - Variants are still decided together where they write the same property or into the same condition, where both
+    override the base, or where a compound variant names them. A call composed with other styles in a `cx()` is decided
+    whole.
+  - A call with 64 states or fewer keeps one table, which is quicker to read than segments joined on every call.
+  - A slot recipe's whole object is a lookup per slot, so each slot's table holds only the variants that style it.
+
+- a6e7819: Declare a recipe lookup's table once at the top of the module, where it was built again inside the call on
+  every render: `badge({ tone })` now reads its table rather than allocating one. Calls that select alike share a table,
+  and a slot recipe's call still returns an object of its own.
+  - A table stays in its call where a statement comes before the module's first import, since that statement would run
+    before anything declared there.
+
+- Updated dependencies [c371311]
+- Updated dependencies [3e6ecbf]
+  - @bamboocss/node@1.64.8
+  - @bamboocss/shared@1.64.8
+  - @bamboocss/config@1.64.8
+  - @bamboocss/core@1.64.8
+  - @bamboocss/logger@1.64.8
+  - @bamboocss/types@1.64.8
+
 ## 1.64.7
 
 ### Patch Changes

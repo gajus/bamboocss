@@ -1,5 +1,40 @@
 # @bamboocss/generator
 
+## 1.64.8
+
+### Patch Changes
+
+- 63749e5: A recipe call whose variants are chosen at runtime selects what the same call written with literals selects.
+  - A slot read off a slot recipe, `field({ tone, size }).root`, returned the wrong class for most selections where an
+    earlier variant styles nothing in that slot: the lookup decided `size` by the value of `tone`. A variant that
+    matters only beside another, through a compound variant, did the same to the variants after it.
+  - `badge(props)` with `props` undefined selects the defaults, as `badge()` does, where it threw.
+
+- 9a12241: Decide a recipe call's variants apart where each styles declarations of its own:
+  `button({ size, tone, shape })`, with `size` setting the padding, `tone` the color and `shape` the radius, compiles to
+  a table per variant joined into the same class string, where one table held every combination. Variants decided apart
+  do not count toward one another's `maxRecipeStates`, so a recipe with many such variants compiles where it failed the
+  build.
+  - Variants are still decided together where they write the same property or into the same condition, where both
+    override the base, or where a compound variant names them. A call composed with other styles in a `cx()` is decided
+    whole.
+  - A call with 64 states or fewer keeps one table, which is quicker to read than segments joined on every call.
+  - A slot recipe's whole object is a lookup per slot, so each slot's table holds only the variants that style it.
+
+- a6e7819: Declare a recipe lookup's table once at the top of the module, where it was built again inside the call on
+  every render: `badge({ tone })` now reads its table rather than allocating one. Calls that select alike share a table,
+  and a slot recipe's call still returns an object of its own.
+  - A table stays in its call where a statement comes before the module's first import, since that statement would run
+    before anything declared there.
+
+- Updated dependencies [3e6ecbf]
+  - @bamboocss/shared@1.64.8
+  - @bamboocss/core@1.64.8
+  - @bamboocss/token-dictionary@1.64.8
+  - @bamboocss/is-valid-prop@1.64.8
+  - @bamboocss/logger@1.64.8
+  - @bamboocss/types@1.64.8
+
 ## 1.64.7
 
 ### Patch Changes

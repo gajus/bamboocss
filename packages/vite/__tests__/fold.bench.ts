@@ -75,6 +75,24 @@ export const guessed${index} = (e: boolean) => css({ padding: '${index % 8}', co
 `
 
 /**
+ * A module of `css()` calls holding several choices: three side by side, and one inside another's
+ * answer, which compile to a ternary per test choosing one class string per combination.
+ */
+const CHOICES_MODULE = `
+import { css } from 'styled-system/css'
+
+${Array.from(
+  { length: 8 },
+  (_, index) => `
+export const tab${index} = (active: boolean, loud: boolean, compact: boolean) =>
+  css({ margin: '${index % 8}', color: active ? 'white' : 'gray.700', bg: loud ? 'red.500' : 'transparent', padding: compact ? '2' : '4' })
+export const tone${index} = (on: boolean, strong: boolean) =>
+  css({ color: on ? (strong ? 'red.500' : 'red.300') : 'gray.500', fontWeight: on ? 'bold' : 'normal' })
+`,
+).join('')}
+`
+
+/**
  * A call-heavy module, which the sandbox files above barely are — between them they hold
  * only a handful of call sites.
  *
@@ -470,6 +488,15 @@ describe('per-module transform cost', () => {
     },
     { warmupIterations: 3, time: 3000 },
   )
+
+  // The control for the one below.
+  bench('analyze only (choices module)', () => {
+    parseOnly(CHOICES_MODULE)
+  })
+
+  bench('analyze + fold (choices module)', () => {
+    parseAndFold(CHOICES_MODULE)
+  })
 
   bench('analyze only (jsx module)', () => {
     parseOnly(JSX_MODULE)

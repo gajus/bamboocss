@@ -70,8 +70,9 @@ css({ color: 'red.300' }, { color: 'blue.500', display: 'flex' })
 // emits only the blue color atom and the display atom
 ```
 
-One choice may be left to runtime, when both of its answers are known: `css({ padding: compact ? '2' : '4' })` compiles
-to `compact` choosing between two class strings. See [dynamic styling](/docs/guides/dynamic-styling#finite-choices).
+Choices may be left to runtime, when all of their answers are known: `css({ padding: compact ? '2' : '4' })` compiles to
+`compact` choosing between two class strings, and a call holding several compiles to their tests choosing one class
+string per combination, up to 32. See [dynamic styling](/docs/guides/dynamic-styling#finite-choices).
 
 An open runtime style value has no finite CSS rule set and is rejected:
 

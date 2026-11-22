@@ -98,37 +98,41 @@ eslintTester.run(RULE_NAME, rule, {
       errors: [{ messageId: 'dynamicRecipeVariant' }],
     },
 
-    // A css() call compiles one choice: the second is reported, where it is written.
+    // Past 32 combinations the call is not compiled: reported once, where its first choice is written.
     {
       code: multiline`
   import { css } from './bamboo/css';
 
-  const tab = (active) => css({ color: active ? 'white' : 'gray.700', bg: active ? 'blue.500' : 'transparent' })`,
-      errors: [{ messageId: 'choice', line: 3, column: 73 }],
+  const f = (a, b, c, d, e, g) => css({ color: a ? 'white' : 'gray.700', bg: b ? 'red.500' : 'white', p: c ? '2' : '4', m: d ? '1' : '2', opacity: e ? 0.5 : 1, fontWeight: g ? 'bold' : 'light' })`,
+      errors: [{ messageId: 'choices', line: 3, column: 46 }],
     },
 
-    // A choice within a choice is a second one, in an answer as in the other answer's styles.
+    // The compiler writes out what each answer sets only where every key is written out.
     {
       code: multiline`
   import { css } from './bamboo/css';
 
-  const a = (x, y) => css({ color: x ? (y ? 'red.100' : 'red.300') : 'gray.700' })
-  const b = (x, y) => css(x ? { color: y ? 'red.100' : 'red.300' } : {})`,
+  const a = (active, key) => css({ [key]: 'red.100', color: active ? 'red.100' : 'gray.700' })
+  const b = (active, more) => css(...more, { color: active ? 'red.100' : 'gray.700' })
+  const c = (active, on) => css({ ...(on ? { padding: '2' } : {}), color: active ? 'red.100' : 'gray.700' })`,
       errors: [
-        { messageId: 'choice', line: 3, column: 39 },
-        { messageId: 'choice', line: 4, column: 38 },
+        { messageId: 'dynamicProperty' },
+        { messageId: 'choice' },
+        { messageId: 'choice' },
+        { messageId: 'choice', line: 5 },
       ],
     },
 
-    // A choice compiles only in a call taking one object, every key of it written out.
+    // A choice inside an answer is checked as the one around it is.
     {
       code: multiline`
-  import { css } from './bamboo/css';
+  import { css, cva } from './bamboo/css';
 
-  const base = { display: 'flex' }
-  const a = (active) => css(base, { color: active ? 'red.100' : 'gray.700' })
-  const b = (active) => css({ ...base, color: active ? 'red.100' : 'gray.700' })`,
-      errors: [{ messageId: 'choice' }, { messageId: 'choice' }],
+  const badge = cva({ base: { color: 'red.100' } })
+  const tone = 'red.300'
+  const a = (x, y) => css({ color: x ? (y ? tone : 'red.100') : 'gray.700' })
+  const b = (x) => css({ color: x ? (badge() ? 'red.100' : 'red.300') : 'gray.700' })`,
+      errors: [{ messageId: 'dynamic', line: 5, column: 43 }, { messageId: 'choiceTest' }],
     },
 
     // A pattern, a recipe and css.raw() compile none.
@@ -165,6 +169,33 @@ eslintTester.run(RULE_NAME, rule, {
     },
   ],
   valid: [
+    // Choices beside one another, a read written twice asked once by the compiler.
+    {
+      code: multiline`
+  import { css } from './bamboo/css';
+
+  const tab = (active, loud) => css({ color: active ? 'white' : 'gray.700', bg: active ? 'blue.500' : 'transparent', fontWeight: loud ? 'bold' : 'normal' })`,
+    },
+
+    // A choice within an answer, asked only on the path that reaches it.
+    {
+      code: multiline`
+  import { css } from './bamboo/css';
+
+  const a = (x, y) => css({ color: x ? (y ? 'red.100' : 'red.300') : 'gray.700' })
+  const b = (x, y) => css(x ? { color: y ? 'red.100' : 'red.300' } : {})`,
+    },
+
+    // Beside a spread and after another argument, merged where they are written.
+    {
+      code: multiline`
+  import { css } from './bamboo/css';
+
+  const base = { display: 'flex' }
+  const a = (active) => css(base, { color: active ? 'red.100' : 'gray.700' })
+  const b = (active) => css({ ...base, color: active ? 'red.100' : 'gray.700' })`,
+    },
+
     {
       code: multiline`
   import { css } from './bamboo/css';

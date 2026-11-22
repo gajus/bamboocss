@@ -39,14 +39,20 @@ const unwrap = (node: TSESTree.Node): TSESTree.Node => {
 
 /**
  * The choices — `test ? a : b` — a `css()` call's arguments hold, in the order they are written: as
- * an argument, as a value in its objects, and within the answers of another. `open` is a spread, a
- * computed key, a method, an accessor or `__proto__` in an object outside every answer, which leaves
- * the compiler no way to write out what each answer sets.
+ * an argument, as a value in its objects, and within the answers of another. `open` is a computed
+ * key, a method, an accessor, `__proto__` or a spread of a choice in an object outside every answer,
+ * or a spread of the call's arguments, which leave the compiler no way to write out what each
+ * answer sets.
  */
 interface Choices {
   found: TSESTree.ConditionalExpression[]
   open: boolean
+  /** The combinations of answers the compiler writes out, counted no further than past its limit. */
+  combinations: number
 }
+
+/** The most combinations of a call's choices the compiler writes out, one class string each. */
+const MAX_COMBINATIONS = 32
 
 const collectChoices = (node: TSESTree.Node, choices: Choices, inAnswer: boolean) => {
   const value = unwrap(node)
@@ -58,8 +64,10 @@ const collectChoices = (node: TSESTree.Node, choices: Choices, inAnswer: boolean
   }
   if (value.type !== 'ObjectExpression') return
   for (const property of value.properties) {
+    // A spread is merged where it is written: one the build knows compiles beside a choice, and one
+    // holding a choice does not, as extraction cannot tell which properties either answer sets.
     if (property.type !== 'Property') {
-      if (!inAnswer) choices.open = true
+      if (!inAnswer && unwrap(property.argument).type === 'ConditionalExpression') choices.open = true
       continue
     }
     const { key } = property
@@ -71,14 +79,97 @@ const collectChoices = (node: TSESTree.Node, choices: Choices, inAnswer: boolean
   }
 }
 
+/** `active` or `props.size`: a read with nothing to run, which the compiler asks once however often it is written. */
+const plainRead = (node: TSESTree.Node): string | undefined => {
+  const value = unwrap(node)
+  if (value.type === 'Identifier') return value.name
+  if (value.type === 'MemberExpression' && !value.computed && !value.optional && value.property.type === 'Identifier') {
+    const object = plainRead(value.object)
+    return object === undefined ? undefined : `${object}.${value.property.name}`
+  }
+  return undefined
+}
+
+/** The decision the compiler writes for a call's choices, by test: a leaf is `undefined`. */
+type Decision = { test: string; then: Decision; otherwise: Decision } | undefined
+
+const leavesOf = (decision: Decision): number => (decision ? leavesOf(decision.then) + leavesOf(decision.otherwise) : 1)
+
+/** `second` on every path through `first`, each test a path answered taking its answer, as the compiler asks them. */
+const sequence = (first: Decision, second: Decision, decided = new Map<string, boolean>()): Decision => {
+  if (first) {
+    decided.set(first.test, true)
+    const then = sequence(first.then, second, decided)
+    decided.set(first.test, false)
+    const otherwise = sequence(first.otherwise, second, decided)
+    decided.delete(first.test)
+    return { test: first.test, then, otherwise }
+  }
+  if (!second) return undefined
+  const answered = decided.get(second.test)
+  if (answered !== undefined) return sequence(undefined, answered ? second.then : second.otherwise, decided)
+  decided.set(second.test, true)
+  const then = sequence(undefined, second.then, decided)
+  decided.set(second.test, false)
+  const otherwise = sequence(undefined, second.otherwise, decided)
+  decided.delete(second.test)
+  return { test: second.test, then, otherwise }
+}
+
+/**
+ * How many combinations of answers the compiler writes out for `call`, counting no further than
+ * past its limit: its choices in the order the call asks them, a plain read written twice asked once
+ * where every test is one.
+ */
+const combinationsOf = (call: TSESTree.CallExpression, found: TSESTree.ConditionalExpression[]) => {
+  const once = found.every((choice) => plainRead(choice.test) !== undefined)
+  const keys = new Map<TSESTree.Node, string>()
+  const keyOf = (choice: TSESTree.ConditionalExpression) => {
+    let key = keys.get(choice)
+    if (key === undefined) keys.set(choice, (key = (once && plainRead(choice.test)) || `#${keys.size}`))
+    return key
+  }
+  let tooMany = false
+  const decisionOf = (node: TSESTree.Node): Decision => {
+    const value = unwrap(node)
+    if (tooMany) return undefined
+    if (value.type === 'ConditionalExpression') {
+      const choice = { test: keyOf(value), then: decisionOf(value.consequent), otherwise: decisionOf(value.alternate) }
+      const decision = sequence(choice, undefined)
+      if (leavesOf(decision) > MAX_COMBINATIONS) tooMany = true
+      return decision
+    }
+    if (value.type !== 'ObjectExpression') return undefined
+    let decision: Decision
+    for (const property of value.properties) {
+      if (property.type !== 'Property') continue
+      decision = sequence(decision, decisionOf(property.value))
+      if (leavesOf(decision) > MAX_COMBINATIONS) tooMany = true
+      if (tooMany) return undefined
+    }
+    return decision
+  }
+  let decision: Decision
+  for (const argument of call.arguments) {
+    decision = sequence(decision, decisionOf(argument))
+    if (tooMany || leavesOf(decision) > MAX_COMBINATIONS) return MAX_COMBINATIONS + 1
+  }
+  return tooMany ? MAX_COMBINATIONS + 1 : leavesOf(decision)
+}
+
 /** Each call's choices, read once however many of them its keys report. */
 const choicesCache = new WeakMap<TSESTree.CallExpression, Choices>()
 
 const choicesOf = (call: TSESTree.CallExpression) => {
   let choices = choicesCache.get(call)
   if (!choices) {
-    choices = { found: [], open: false }
-    for (const argument of call.arguments) collectChoices(argument, choices, false)
+    choices = { found: [], open: false, combinations: 1 }
+    for (const argument of call.arguments) {
+      // A spread of the arguments is one the compiler cannot write out.
+      if (argument.type === 'SpreadElement') choices.open = true
+      else collectChoices(argument, choices, false)
+    }
+    if (choices.found.length > 0 && !choices.open) choices.combinations = combinationsOf(call, choices.found)
     choicesCache.set(call, choices)
   }
   return choices
@@ -162,14 +253,17 @@ const rule = createRule({
     const isUndefined = (node: TSESTree.Node) =>
       isIdentifier(node) && node.name === 'undefined' && !resolveReference(node, context)
 
+    /** Calls reported for holding more combinations than the compiler writes out, once each. */
+    const reportedCalls = new WeakSet<TSESTree.CallExpression>()
+
     /**
-     * A choice between two styles, written as a style value: `css({ padding: compact ? '2' : '4' })`.
+     * A choice between styles, written as a style value: `css({ padding: compact ? '2' : '4' })`.
      *
-     * The compiler compiles one per `css()` call, in a call taking one object with every key of it
-     * written out, to its test choosing between the class strings of its two answers. So the test is
-     * copied, and may read anything but a binding of bamboo's, and each answer is a style value like
-     * any other. Anywhere else a choice is a dynamic value: a pattern, a recipe and `css.raw()`
-     * compile none.
+     * The compiler compiles a `css()` call's choices, beside one another, inside the answers of
+     * another and beside a spread or a second argument, to their tests choosing between class
+     * strings, one per combination of answers, up to 32. So each test is copied, and may read
+     * anything but a binding of bamboo's, and each answer is a style value like any other. Anywhere
+     * else a choice is a dynamic value: a pattern, a recipe and `css.raw()` compile none.
      */
     function reportChoice(choice: TSESTree.ConditionalExpression) {
       const call = getAncestor(isCallExpression, choice)
@@ -178,17 +272,28 @@ const rule = createRule({
         context.report({ messageId: 'dynamic', node: choice })
         return
       }
-      if (call.arguments.length > 1 || choices.open || choices.found[0] !== choice) {
+      if (choices.open) {
         context.report({ messageId: 'choice', node: choice })
         return
       }
+      if (choices.combinations > MAX_COMBINATIONS) {
+        if (reportedCalls.has(call)) return
+        reportedCalls.add(call)
+        context.report({ messageId: 'choices', node: choices.found[0]! })
+        return
+      }
+      checkChoice(choice)
+    }
+
+    function checkChoice(choice: TSESTree.ConditionalExpression) {
       if (readsBambooBinding(choice.test, context)) {
         context.report({ messageId: 'choiceTest', node: choice.test })
         return
       }
       for (const answer of [choice.consequent, choice.alternate]) {
+        const value = unwrap(answer)
         // A choice within this one, which no key of its own reports.
-        if (unwrap(answer).type === 'ConditionalExpression') context.report({ messageId: 'choice', node: answer })
+        if (value.type === 'ConditionalExpression') checkChoice(value)
         else if (!isStaticValue(answer) && !isUndefined(answer)) context.report({ messageId: 'dynamic', node: answer })
       }
     }
@@ -291,7 +396,9 @@ const rule = createRule({
       array:
         'An array is not a style value. Write a responsive value as a condition object, e.g. { base: "medium", lg: "bold" }.',
       choice:
-        'A css() call compiles one choice, and only in a call taking one object with every key written out. Give this one a css() call of its own and join the calls with cx().',
+        'A css() call compiles its choices only where every key it is given is written out: no computed key, method, accessor or __proto__, and no spread of its arguments. Give this choice a css() call of its own and join the calls with cx().',
+      choices:
+        'A css() call compiles at most 32 combinations of its choices, one class string each. Make some of them variants of a recipe, which decides variants that style declarations of their own apart.',
       choiceTest:
         'A choice compiles to its test, copied into the compiled call, which holds no Bamboo import or recipe for it to read.',
       dynamic: 'Remove dynamic value. Prefer static styles.',

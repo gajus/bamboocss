@@ -40,22 +40,28 @@ An ordinary branch between complete calls is also finite:
 const className = compact ? css({ px: '2' }) : css({ px: '4' })
 ```
 
-The compiler can rewrite both calls independently. It can also lower a single choice within a `css()` argument when both
-styles are known, to the same test choosing between two precompiled class strings:
+The compiler can rewrite both calls independently. It can also lower choices within a `css()` call when every answer is
+known, to the same tests choosing between precompiled class strings:
 
 ```tsx
 const className = css({ padding: compact ? '2' : '4' })
 // compiles to: (compact) ? "_DJEIKl:p_2" : "_DJEIKl:p_4"
 ```
 
-The test runs where the call did, once, so it can be anything — a prop, `size === 'sm'`, a helper's result — that reads
-neither a Bamboo import nor a recipe, which the compiler removes. A call holds one such choice: a second one in the same
-argument is rejected, and so is a choice of a runtime value. Give each choice a `css()` call of its own and join them
-with `cx()`, which compiles every combination:
+Each test runs where the call ran it, as often as it did, so it can be anything — a prop, `size === 'sm'`, a helper's
+result — that reads neither a Bamboo import nor a recipe, which the compiler removes. A call can hold several choices,
+side by side or inside one another's answers, beside a spread of known styles or after another argument: it compiles to
+one class string per combination of answers, with a test inside an answer asked only where that answer is taken. A plain
+read such as `props.active` written twice is asked once, where every test in the call is a plain read. Past 32
+combinations the call is rejected, and so is a choice of a runtime value:
 
 ```tsx
-cx(css({ padding: compact ? '2' : '4' }), css({ color: loud ? 'orange.500' : 'blue.500' }))
+css({ padding: compact ? '2' : '4', color: loud ? 'orange.500' : 'blue.500' })
+// compiles to: (compact) ? ((loud) ? "…" : "…") : ((loud) ? "…" : "…")
 ```
+
+Many independent choices are better written as variants of a recipe, which decides variants that style declarations of
+their own apart.
 
 An open-ended style value is rejected:
 

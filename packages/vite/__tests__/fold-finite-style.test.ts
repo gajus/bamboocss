@@ -202,13 +202,190 @@ describe('finite css() choices', () => {
   test.each([
     `css({ color: tone === 'quiet' ? loud : 'orange.500' })`,
     `css({ color: ${color}, padding: loud })`,
-    `css({ color: ${color}, background: ${color} })`,
     `css({ color: ${color}, ...loud })`,
-  ])('declines %s when the entire argument is not a single finite choice', (style) => {
+  ])('declines %s, where an answer or another value is not known', (style) => {
     const { foldStrict } = createFoldFixture()
     const result = foldStrict(withCss(`function badge(loud) { ${tone}; return ${style}; }`))
 
     expect(result.folded).toEqual([])
     expect(result.skipped).toContainEqual(expect.objectContaining({ reason: 'dynamic' }))
+  })
+})
+
+/**
+ * Choices in one `css()` call: a ternary per test, asked where the call asked it and only on the
+ * path that reaches it, each answer the class string `css()` names for what that path writes.
+ */
+describe('several choices in one css() call', () => {
+  /** Every class the call compiles to has a rule in the stylesheet extraction built. */
+  const expectRules = (
+    fixture: ReturnType<typeof createFoldFixture>,
+    result: ReturnType<typeof fixture.foldStrict>,
+  ) => {
+    const css = fixture.getStyleSetCss()
+    const classNames = result.folded.flatMap((folded) => folded.classNames)
+    expect(classNames.length).toBeGreaterThan(0)
+    for (const classes of classNames) {
+      for (const selector of selectorsFor(classes)) expect(css, selector).toContain(selector)
+    }
+  }
+
+  test('compiles one class string per combination of two choices', () => {
+    const fixture = createFoldFixture()
+    const result = fixture.foldStrict(
+      withCss(`function badge(active, loud) {
+      return css({ color: active ? 'white' : 'gray.700', bg: loud ? 'red.500' : 'transparent' });
+    }`),
+    )
+
+    expect(result.skipped).toEqual([])
+    expect(result.folded[0]?.classNames).toHaveLength(4)
+    const badge = badgeOf(result.code)
+    for (const active of [true, false]) {
+      for (const loud of [true, false]) {
+        const styles = { color: active ? 'white' : 'gray.700', bg: loud ? 'red.500' : 'transparent' }
+        expect(badge(active, loud), JSON.stringify(styles)).toBe(fixture.runtimeCss(styles))
+      }
+    }
+    expectRules(fixture, result)
+  })
+
+  test('asks a choice inside an answer only on the path that reaches it', () => {
+    const fixture = createFoldFixture()
+    const result = fixture.foldStrict(
+      withCss(`function badge(first, second) {
+      return css({ color: first() ? (second() ? 'red.100' : 'red.300') : 'gray.700', padding: '2' });
+    }`),
+    )
+
+    expect(result.skipped).toEqual([])
+    const badge = badgeOf(result.code)
+    for (const [one, two, color] of [
+      [true, true, 'red.100'],
+      [true, false, 'red.300'],
+      [false, true, 'gray.700'],
+    ] as const) {
+      let asked = 0
+      const answer = badge(
+        () => one,
+        () => {
+          asked++
+          return two
+        },
+      )
+      expect(answer).toBe(fixture.runtimeCss({ color, padding: '2' }))
+      expect(asked, 'the second test is asked only where the first answered yes').toBe(one ? 1 : 0)
+    }
+    expectRules(fixture, result)
+  })
+
+  // Read again, a plain read answers the same, so the call asks it once.
+  test('asks a plain read written twice once', () => {
+    const fixture = createFoldFixture()
+    const result = fixture.foldStrict(
+      withCss(`function badge(props) {
+      return css({ color: props.active ? 'white' : 'gray.700', bg: props.active ? 'blue.500' : 'transparent' });
+    }`),
+    )
+
+    expect(result.skipped).toEqual([])
+    expect(result.folded[0]?.classNames).toHaveLength(2)
+    const badge = badgeOf(result.code)
+    for (const active of [true, false]) {
+      let reads = 0
+      const props = new Proxy({ active }, { get: (target, key) => (reads++, target[key as 'active']) })
+      const styles = { color: active ? 'white' : 'gray.700', bg: active ? 'blue.500' : 'transparent' }
+      expect(badge(props)).toBe(fixture.runtimeCss(styles))
+      expect(reads).toBe(1)
+    }
+    expectRules(fixture, result)
+  })
+
+  // One that could run something may answer otherwise the next time, so it is asked as often as written.
+  test('asks a test that could run something each time it is written', () => {
+    const fixture = createFoldFixture()
+    const result = fixture.foldStrict(
+      withCss(`function badge(pick) {
+      return css({ color: pick() ? 'white' : 'gray.700', bg: pick() ? 'blue.500' : 'transparent' });
+    }`),
+    )
+
+    expect(result.skipped).toEqual([])
+    expect(result.folded[0]?.classNames).toHaveLength(4)
+    const badge = badgeOf(result.code)
+    for (const answers of [
+      [true, false],
+      [false, true],
+    ]) {
+      const queue = [...answers]
+      const styles = { color: answers[0] ? 'white' : 'gray.700', bg: answers[1] ? 'blue.500' : 'transparent' }
+      expect(badge(() => queue.shift())).toBe(fixture.runtimeCss(styles))
+      expect(queue).toEqual([])
+    }
+    expectRules(fixture, result)
+  })
+
+  test('merges a spread and a second argument where they are written', () => {
+    const fixture = createFoldFixture()
+    const result = fixture.foldStrict(
+      withCss(`const base = { display: 'flex', color: 'gray.700' }
+      const more = { padding: '2', color: 'gray.500' }
+      function badge(active) {
+        return css(base, { ...more, color: active ? 'white' : 'gray.900' });
+      }`),
+    )
+
+    expect(result.skipped).toEqual([])
+    const badge = badgeOf(result.code)
+    const base = { display: 'flex', color: 'gray.700' }
+    for (const active of [true, false]) {
+      const second = { padding: '2', color: active ? 'white' : 'gray.900' }
+      expect(badge(active)).toBe(fixture.runtimeCss(base, second))
+    }
+    expectRules(fixture, result)
+  })
+
+  test('compiles up to 32 combinations, and fails the build past them', () => {
+    const choices = [
+      `color: a ? 'white' : 'gray.700'`,
+      `bg: b ? 'red.500' : 'transparent'`,
+      `padding: c ? '2' : '4'`,
+      `margin: d ? '1' : '2'`,
+      `opacity: e ? 0.5 : 1`,
+      `fontWeight: f ? 'bold' : 'light'`,
+    ]
+    const fold = (count: number) =>
+      createFoldFixture().foldStrict(
+        withCss(`function badge(a, b, c, d, e, f) { return css({ ${choices.slice(0, count).join(', ')} }); }`),
+      )
+
+    const fixture = createFoldFixture()
+    const five = fixture.foldStrict(
+      withCss(`function badge(a, b, c, d, e) { return css({ ${choices.slice(0, 5).join(', ')} }); }`),
+    )
+    expect(five.skipped).toEqual([])
+    expectRules(fixture, five)
+    expect(five.folded[0]?.classNames).toHaveLength(32)
+    expect(fold(6).skipped).toContainEqual(expect.objectContaining({ name: 'css', reason: 'dynamic' }))
+  })
+
+  test('composes with the other arguments of a cx()', () => {
+    const fixture = createFoldFixture()
+    const result = fixture.foldStrict(
+      withCss(`function badge(active, loud) {
+      return cx(css({ color: active ? 'white' : 'gray.700', bg: loud ? 'red.500' : 'transparent' }), css({ padding: '4' }));
+    }`),
+    )
+
+    expect(result.skipped.every(({ reason }) => reason === 'overlapping')).toBe(true)
+    expect(result.code).not.toMatch(/\bcx\(/)
+    const badge = badgeOf(result.code)
+    for (const active of [true, false]) {
+      for (const loud of [true, false]) {
+        const styles = { color: active ? 'white' : 'gray.700', bg: loud ? 'red.500' : 'transparent' }
+        expect(badge(active, loud)).toBe(fixture.runtimeCss(styles, { padding: '4' }))
+      }
+    }
+    expectRules(fixture, result)
   })
 })

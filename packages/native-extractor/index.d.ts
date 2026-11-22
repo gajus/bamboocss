@@ -184,14 +184,18 @@ export interface FoldCxArgument {
   readsBamboo: boolean
 }
 
-export interface FoldStyleBranch {
+export interface FoldStyleChoice {
   /**
-   * The test, as written: anything but one reading a Bamboo binding or a recipe, since the fold
-   * copies it into what it writes, to choose between the two styles where the call was.
+   * Each test, as written: anything but one reading a Bamboo binding or a recipe, since the fold
+   * copies it into what it writes, to choose between the styles where the call was.
    */
-  test: FoldSpan
-  consequent: Record<string, unknown>
-  alternate: Record<string, unknown>
+  tests: FoldSpan[]
+  /**
+   * The decision, as the call asks it, as JSON: a node is `{ test, then, otherwise }`, `test`
+   * indexing `tests`, and a leaf is `{ styles }`, the call's arguments on that path, each a style
+   * object.
+   */
+  tree: string
 }
 
 export interface FoldCall {
@@ -217,8 +221,8 @@ export interface FoldCall {
   calleeProperty?: string
   data: unknown[]
   exact: boolean
-  /** Two exact `css()` style objects chosen by the test at the call site. */
-  styleBranch?: FoldStyleBranch
+  /** For `css()`, the exact style objects its choices give, decided by their tests at the call site. */
+  styleChoice?: FoldStyleChoice
   /** Why the call is not exact, when the evaluator refused code it does not run. */
   refusal?: FoldRefusal
   argumentCount: number

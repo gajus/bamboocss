@@ -50,8 +50,8 @@ pub struct FoldCall {
     /// leaf, no branch collapsed to one arm, no destructuring default standing in for a value,
     /// no spread or computed key the value cannot account for.
     pub exact: bool,
-    /// For `css()`, two exact style objects chosen by the test at the call site.
-    pub style_branch: Option<FoldStyleBranch>,
+    /// For `css()`, the exact style objects its choices give, decided by their tests at the call site.
+    pub style_choice: Option<FoldStyleChoice>,
     /// For a call that is not exact because the evaluator refused code it does not run: what,
     /// and where. Absent when it is not exact for any other reason.
     pub refusal: Option<FoldRefusal>,
@@ -81,12 +81,15 @@ pub struct FoldCall {
 }
 
 #[napi(object)]
-pub struct FoldStyleBranch {
-    /// The test, as written: anything but one reading a Bamboo binding or a recipe, since the
-    /// fold copies it into what it writes, to choose between the two styles where the call was.
-    pub test: FoldSpan,
-    pub consequent: serde_json::Value,
-    pub alternate: serde_json::Value,
+pub struct FoldStyleChoice {
+    /// Each test, as written: anything but one reading a Bamboo binding or a recipe, since the
+    /// fold copies it into what it writes, to choose between the styles where the call was.
+    pub tests: Vec<FoldSpan>,
+    /// The decision, as the call asks it, as JSON: a node is `{ test, then, otherwise }`, `test`
+    /// indexing `tests`, and a leaf is `{ styles }`, the call's arguments on that path, each a style
+    /// object. Text, since a tree of objects crossed into JavaScript one object at a time cost more
+    /// than building it.
+    pub tree: String,
 }
 
 /// Code the evaluator does not run, which is why a call's arguments are not known.

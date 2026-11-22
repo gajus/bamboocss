@@ -218,6 +218,12 @@ const slotsOf = (config: RecipeConfig | undefined) => (Array.isArray(config?.slo
  */
 export const MAX_CX_COMBINATIONS = 32
 
+/** A node of the decision the native analysis returns for a `css()` call's choices. @see FoldStyleChoice */
+type NativeChoice = { test: number; then: NativeChoice; otherwise: NativeChoice } | { styles: Dict[] }
+
+/** That decision with each path's arguments composed: the style set the call gives there. */
+type ChoiceTree = { test: number; then: ChoiceTree; otherwise: ChoiceTree } | { styles: Dict }
+
 /** One `cx()` argument the fold can compose, in the order it is written. */
 type CxPart<C> =
   | { kind: 'style'; candidate: C }
@@ -488,8 +494,8 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     name: string
     /** Symbolic declarations this candidate contributes, before class allocation. */
     styleSet?: Dict
-    /** A `css()` choice that can also compose with the other arguments in an enclosing `cx()`. */
-    styleBranch?: { test: FoldSpan; consequent: Dict; alternate: Dict }
+    /** A `css()` call's choices, which can also compose with the other arguments of an enclosing `cx()`. */
+    styleChoice?: { tests: FoldSpan[]; tree: ChoiceTree }
     className?: string
     /** Every class literal emitted, when that is more than `className` — see FoldedCall. */
     classNames?: string[]
@@ -584,8 +590,17 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     skipped.push({ name, reason: error.reason, start, end, detail: error.message })
   }
 
-  const branchClassNames = ({ consequent, alternate }: NonNullable<Candidate['styleBranch']>) =>
-    [styleCompiler.className(consequent), styleCompiler.className(alternate)] as const
+  /** The native decision, each path's arguments composed as `css(a, b)` merges them. */
+  const composeChoice = (tree: NativeChoice): ChoiceTree =>
+    'styles' in tree
+      ? { styles: styleCompiler.compose(...tree.styles) }
+      : { test: tree.test, then: composeChoice(tree.then), otherwise: composeChoice(tree.otherwise) }
+
+  /** The class string of each path through `tree`, which throws where one has a key that is not a condition. */
+  const choiceClassNames = (tree: ChoiceTree): string[] =>
+    'styles' in tree
+      ? [styleCompiler.className(tree.styles)]
+      : [...choiceClassNames(tree.then), ...choiceClassNames(tree.otherwise)]
 
   /**
    * Whether copying the condition at `span` would copy something the fold rewrites or counts on
@@ -619,7 +634,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     for (const part of parts) {
       const unknown = unwritableIn(() => {
         if (part.styleMap) return part.styleMap.compile()
-        if (part.styleBranch) return branchClassNames(part.styleBranch)
+        if (part.styleChoice) return choiceClassNames(part.styleChoice.tree)
         return styleCompiler.className(part.styleSet ?? {})
       })
       if (!unknown) continue
@@ -880,19 +895,17 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       continue
     }
 
-    // Its test is copied into what the call compiles to, so a call inside the test, compiled on its
+    // Its tests are copied into what the call compiles to, so a call inside one, compiled on its
     // own, would be copied as it was written.
-    if (call.styleBranch && !copiesCompiledCode(call.styleBranch.test)) {
-      const { test, consequent, alternate } = call.styleBranch
+    if (call.styleChoice && !call.styleChoice.tests.some(copiesCompiledCode)) {
       candidates.push({
         call,
         name,
         start,
         end,
-        styleBranch: {
-          test,
-          consequent: styleCompiler.compose(consequent),
-          alternate: styleCompiler.compose(alternate),
+        styleChoice: {
+          tests: call.styleChoice.tests,
+          tree: composeChoice(JSON.parse(call.styleChoice.tree) as NativeChoice),
         },
       })
       continue
@@ -914,7 +927,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
   for (const candidate of candidates) {
     if (
       candidate.styleSet ||
-      candidate.styleBranch ||
+      candidate.styleChoice ||
       candidate.value !== undefined ||
       candidate.missing ||
       candidate.replacement ||
@@ -1070,16 +1083,20 @@ export const foldSource = (options: FoldOptions): FoldResult => {
         into.push({ kind: 'style', candidate })
         return true
       }
-      if (candidate?.styleBranch) {
-        const { test, consequent, alternate } = candidate.styleBranch
+      if (candidate?.styleChoice) {
+        const choice = candidate.styleChoice
         matched.push(candidate)
-        tests.push(test)
-        into.push({
-          kind: 'branch',
-          test,
-          then: [{ kind: 'style', candidate: { ...candidate, styleSet: consequent } }],
-          otherwise: [{ kind: 'style', candidate: { ...candidate, styleSet: alternate } }],
-        })
+        tests.push(...choice.tests)
+        const branch = (tree: ChoiceTree): CxItem<Candidate> =>
+          'styles' in tree
+            ? { kind: 'style', candidate: { ...candidate, styleSet: tree.styles } }
+            : {
+                kind: 'branch',
+                test: choice.tests[tree.test]!,
+                then: [branch(tree.then)],
+                otherwise: [branch(tree.otherwise)],
+              }
+        into.push(branch(choice.tree))
         return true
       }
       if (candidate?.call.kind === 'viewTransition' && candidate.replacement && candidate.className) {
@@ -1208,7 +1225,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
         const candidate = byRange.get(`${arg.span.start}:${arg.span.end}`)
         if (
           candidate?.styleSet ||
-          candidate?.styleBranch ||
+          candidate?.styleChoice ||
           candidate?.styleMap?.outputKind === 'class' ||
           candidate?.replacement
         )
@@ -1531,31 +1548,40 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       continue
     }
 
-    let className: string
-    let alternate: string | undefined
+    let className = ''
+    const classNames = new Set<string>()
+    let replacement: string
     try {
-      if (candidate.styleBranch) [className, alternate] = branchClassNames(candidate.styleBranch)
-      else className = styleCompiler.className(candidate.styleSet ?? {})
+      if (candidate.styleChoice) {
+        // A ternary per test, asked where the call asked it and only on the path that reaches it,
+        // each answer the class string of the styles that path gives.
+        const { tests } = candidate.styleChoice
+        const write = (tree: ChoiceTree): string => {
+          if ('styles' in tree) {
+            const leaf = styleCompiler.className(tree.styles)
+            if (leaf) classNames.add(leaf)
+            // JSON.stringify escapes the backslashes bamboo puts in class names for escaped
+            // characters, and any quote an arbitrary value introduced.
+            return JSON.stringify(leaf)
+          }
+          const answer = (branch: ChoiceTree) => ('styles' in branch ? write(branch) : `(${write(branch)})`)
+          const test = tests[tree.test]!
+          return `(${code.slice(test.start, test.end)}) ? ${answer(tree.then)} : ${answer(tree.otherwise)}`
+        }
+        replacement = `${candidate.call.statementStart ? 'void 0, ' : ''}(${write(candidate.styleChoice.tree)})`
+      } else {
+        className = styleCompiler.className(candidate.styleSet ?? {})
+        if (className) classNames.add(className)
+        replacement = JSON.stringify(className)
+      }
     } catch (error) {
       if (error instanceof UnwritableStyleError) reportUnwritable(name, start, end, error)
       else skipped.push({ name, reason: 'dynamic', start, end, ...styleErrorDetail(error) })
       continue
     }
-
-    // JSON.stringify escapes the backslashes bamboo puts in class names for escaped
-    // characters, and any quote an arbitrary value introduced.
-    let replacement = JSON.stringify(className)
-    const classNames = className ? [className] : []
-    if (candidate.styleBranch) {
-      const { test } = candidate.styleBranch
-      const condition = code.slice(test.start, test.end)
-      replacement = `${candidate.call.statementStart ? 'void 0, ' : ''}((${condition}) ? ${replacement} : ${JSON.stringify(alternate)})`
-      if (alternate && alternate !== className) classNames.push(alternate)
-      className = ''
-    }
     magic.overwrite(start, end, replacement)
     applied.push([start, end])
-    folded.push({ name, kind: 'class', className, classNames, start, end })
+    folded.push({ name, kind: 'class', className, classNames: [...classNames], start, end })
   }
 
   // Only the tables a replacement that was applied reads: one whose call overlapped another and

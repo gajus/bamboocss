@@ -66,14 +66,13 @@ Every style call has to resolve, at build time, to a finite set of classes.
 // ❌ an open runtime value has no finite set of rules: `dynamic`
 css({ color: props.color })
 
-// ✅ one choice between known values: its test picks one of two compiled class strings
+// ✅ a choice between known values: its test picks one of two compiled class strings
 css({ color: isActive ? 'gray.900' : 'gray.500' })
 
-// ❌ a second choice in the same call: `dynamic`
+// ✅ several choices in one call: their tests pick one compiled class string per combination, up to 32
 css({ color: isActive ? 'gray.900' : 'gray.500', bg: isDanger ? 'red.50' : 'white' })
 
-// ✅ a call per choice, which cx() composes into every combination
-cx(css({ color: isActive ? 'gray.900' : 'gray.500' }), css({ bg: isDanger ? 'red.50' : 'white' }))
+// ❌ more than 32 combinations, or a choice inside a spread: `dynamic`; make them recipe variants
 
 // ✅ branch between complete calls
 isActive ? css({ color: 'gray.900' }) : css({ color: 'gray.500' })

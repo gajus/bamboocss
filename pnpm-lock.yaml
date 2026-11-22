@@ -139,13 +139,6 @@ importers:
       microdiff:
         specifier: 1.5.0
         version: 1.5.0
-      typescript:
-        specifier: npm:@typescript/typescript6@6.0.2
-        version: '@typescript/typescript6@6.0.2'
-    devDependencies:
-      pkg-types:
-        specifier: 2.3.0
-        version: 2.3.0
 
   packages/config/__tests__/samples/cjs:
     devDependencies:

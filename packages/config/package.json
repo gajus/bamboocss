@@ -82,11 +82,7 @@
     "esbuild": "0.27.7",
     "escalade": "3.2.0",
     "get-tsconfig": "4.13.0",
-    "microdiff": "1.5.0",
-    "typescript": "npm:@typescript/typescript6@6.0.2"
-  },
-  "devDependencies": {
-    "pkg-types": "2.3.0"
+    "microdiff": "1.5.0"
   },
   "engines": {
     "node": ">=22.12.0"

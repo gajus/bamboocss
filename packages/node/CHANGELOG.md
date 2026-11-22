@@ -1,5 +1,44 @@
 # @bamboocss/node
 
+## 1.64.8
+
+### Patch Changes
+
+- c371311: Compile a `css()` call holding several choices between known styles, where only one compiled and a second
+  failed the build as `dynamic`: `css({ color: active ? 'white' : 'gray.700', bg: loud ? 'red.500' : 'transparent' })`
+  compiles to its tests choosing one class string per combination of answers.
+  - A choice inside another's answer is asked only where that answer is taken, as the call asked it, and every test runs
+    as often as the call ran it. A plain read such as `props.active` written twice is asked once, where every test in
+    the call is a plain read.
+  - Choices compile beside a spread of known styles and after another argument, merged where they are written. A choice
+    inside a spread is still `dynamic`: extraction cannot tell which properties either answer sets.
+  - Past 32 combinations a call is `dynamic`, as a `cx()` is past 32.
+
+- 3e6ecbf: Read an import whose specifier has a comment in front of it, `from /* the recipe */ './recipes'`, in both
+  scans that decide without parsing whether a module can reach bamboo, and count one spelled with an escape,
+  `'./recipes'`.
+  - The Vite compiler skipped such a module: the build passed, and a recipe call in it shipped uncompiled, to throw when
+    it was loaded, in the client and in SSR.
+  - Extraction dropped such a file whenever it imported anything else as well, so the classes its call asked for had no
+    rule.
+  - A comment that only wraps after the word "from", or `Array.from(` with a comment before its argument, is still not
+    an import, so a module that reaches nothing bamboo is still skipped.
+
+- Updated dependencies [3e6ecbf]
+- Updated dependencies [63749e5]
+- Updated dependencies [9a12241]
+- Updated dependencies [a6e7819]
+  - @bamboocss/shared@1.64.8
+  - @bamboocss/generator@1.64.8
+  - @bamboocss/config@1.64.8
+  - @bamboocss/core@1.64.8
+  - @bamboocss/reporter@1.64.8
+  - @bamboocss/token-dictionary@1.64.8
+  - @bamboocss/logger@1.64.8
+  - @bamboocss/plugin-svelte@1.64.8
+  - @bamboocss/plugin-vue@1.64.8
+  - @bamboocss/types@1.64.8
+
 ## 1.64.7
 
 ### Patch Changes

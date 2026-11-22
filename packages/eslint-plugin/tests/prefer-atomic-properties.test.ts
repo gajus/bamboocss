@@ -4,6 +4,16 @@ import multiline from 'multiline-ts'
 
 eslintTester.run(RULE_NAME, rule, {
   invalid: [
+    // A style handed to a pattern beside its own props is still a style: one error, `margin`'s, as
+    // `padding` is the pattern's.
+    {
+      code: multiline`
+  import { panel } from './bamboo/patterns';
+
+  const styles = panel({ padding: '4', margin: '2' })`,
+      errors: [{ messageId: 'atomic', line: 3, column: 38 }],
+    },
+
     {
       code: multiline`
   import { css } from './bamboo/css';
@@ -56,6 +66,24 @@ eslintTester.run(RULE_NAME, rule, {
   function App(){
     return <div className={css({ _hover: {  borderTopStyle: 'solid', borderTopWidth: '1px', borderTopColor: 'blue' } })} />;
   }`,
+    },
+
+    // A variant being selected, or a prop the pattern declares, is that recipe's or pattern's name for
+    // something, and split up it would reach neither: \`panel\` reads \`padding\` and \`rounded\` by name.
+    {
+      code: multiline`
+  import { cva } from './bamboo/css';
+  import { panel } from './bamboo/patterns';
+  import { cardStyle } from './bamboo/recipes';
+
+  export const card = cardStyle({ rounded: true })
+  export const box = panel({ padding: '4', rounded: true })
+  export const badge = cva({
+    className: 'badge',
+    variants: { rounded: { true: { borderTopLeftRadius: 'md' } } },
+    defaultVariants: { rounded: true },
+    compoundVariants: [{ rounded: true, css: { color: 'red.300' } }],
+  })`,
     },
   ],
 })

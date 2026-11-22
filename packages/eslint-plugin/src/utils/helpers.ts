@@ -703,6 +703,20 @@ export const isPatternProperty = (node: TSESTree.Property, context: RuleContext<
 }
 
 /**
+ * Whether a key names a variant or a pattern's own prop rather than a style, whatever style it
+ * shares a name with: the argument a recipe is called with, `link({ color: 'shark' })`, which
+ * selects variants; a recipe declaration's `defaultVariants` or a compound variant's conditions
+ * (`isVariantSelection`); or a prop the pattern it is handed to declares, `flex({ direction:
+ * 'column' })`, which the pattern maps onto a style of its own (`isPatternProperty`). A check
+ * judging the key, or its value, as CSS stands aside for each.
+ */
+export const isVariantOrPatternProperty = (node: TSESTree.Property, context: RuleContext<any, any>) => {
+  if (isVariantSelection(node)) return true
+  const call = getAncestor(isCallExpression, node)
+  return Boolean(call && isRecipeCall(call, context)) || isPatternProperty(node, context)
+}
+
+/**
  * The tokens holding `value` as written, in the category of the first of `properties` that reads
  * one, innermost first: what to write instead.
  */

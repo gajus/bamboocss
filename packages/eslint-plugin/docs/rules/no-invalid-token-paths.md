@@ -12,6 +12,11 @@ A reference written in a value, `token(colors.nope)`, reaches the stylesheet as 
 declaration never takes a token's value. A value naming no token on a property that reads a token category,
 `color: 'mutedd'`, is reported the same way, in the build's own sentence.
 
+Only a style's value is judged. A recipe's call selects variants, so `link({ color: 'shark' })` names the `shark`
+variant, not a colour, and the same goes for `defaultVariants` and a compound variant's conditions. A pattern's own prop
+is the pattern's to map: `flex({ direction: 'column' })` is `flexDirection`, not CSS `direction`. A style handed to the
+pattern beside them is judged as any other.
+
 A call, `token('colors.nope')` or `token.value('colors.nope')`, returns `undefined`, so whatever reads it gets nothing:
 in a style, the property is dropped and no rule is emitted for it. Calls are read off the build's own extraction, so a
 path it resolves through a constant or a ternary is judged as the build judges it, a path it cannot read is left alone,

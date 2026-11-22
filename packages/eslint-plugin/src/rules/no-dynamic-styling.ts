@@ -6,6 +6,7 @@ import {
   isBambooProp as isBambooProperty,
   isCssCall,
   isKeyframesName,
+  isRecipeCall,
   isRecipeVariant,
   readsBambooBinding,
   resolveReference,
@@ -263,7 +264,8 @@ const rule = createRule({
      * another and beside a spread or a second argument, to their tests choosing between class
      * strings, one per combination of answers, up to 32. So each test is copied, and may read
      * anything but a binding of bamboo's, and each answer is a style value like any other. Anywhere
-     * else a choice is a dynamic value: a pattern, a recipe and `css.raw()` compile none.
+     * else a choice is a dynamic value: a pattern, a recipe's declaration and `css.raw()` compile none.
+     * A recipe's call never reaches here, as it selects variants rather than styling anything.
      */
     function reportChoice(choice: TSESTree.ConditionalExpression) {
       const call = getAncestor(isCallExpression, choice)
@@ -348,6 +350,14 @@ const rule = createRule({
         }
 
         if (isRecipeVariant(node, context)) {
+          return
+        }
+
+        // A recipe call selects its variants at run time as readily as from a literal, `table({ size,
+        // variant })`: the compiler looks the answer up in a table of every combination. A pattern is
+        // not a recipe, and compiles only what it is given written out.
+        const call = getAncestor(isCallExpression, node)
+        if (call && isRecipeCall(call, context)) {
           return
         }
 

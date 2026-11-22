@@ -5,6 +5,7 @@ import {
   isBambooProp as isBambooProperty,
   isRecipeVariant,
   isValidProperty,
+  isVariantOrPatternProperty,
   resolveLonghand,
 } from '../utils/helpers'
 import { isIdentifier, isJSXIdentifier } from '../utils/nodes'
@@ -131,6 +132,12 @@ const rule = createRule({
         }
 
         if (isCachedRecipeVariant(node)) {
+          return
+        }
+
+        // A variant being selected, or a prop the pattern declares, is the recipe's or the pattern's
+        // name for something: split into atomic properties, it would no longer reach either.
+        if (isVariantOrPatternProperty(node, context)) {
           return
         }
 

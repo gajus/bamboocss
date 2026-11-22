@@ -13,13 +13,18 @@ have every key written out, beside other choices, inside another's answers, besi
 It compiles to the choices' tests picking one class string per combination of answers, so a test can read anything but a
 Bamboo import or a recipe, which the compiled call no longer holds. Past 32 combinations a call is reported once, where
 its first choice is written: make some of the choices variants of a recipe. A choice beside a computed key, a method or
-a spread of a choice is reported, and so is one in a call spreading its arguments. A pattern, a recipe and `css.raw()`
-compile no choice.
+a spread of a choice is reported, and so is one in a call spreading its arguments. A pattern, a recipe's declaration and
+`css.raw()` compile no choice.
+
+A recipe's call is not reported: it selects variants rather than styling anything, and selects them at run time as
+readily as written out, since the compiler looks the answer up in a table of every combination. A variant it names at
+run time, a computed key, is reported, as the build cannot compile one.
 
 ## Examples
 
 ```ts
 import { css } from '../styled-system/css'
+import { table } from '../styled-system/recipes'
 
 const tone = 'red.300'
 
@@ -35,6 +40,9 @@ export const c = (active: boolean, loud: boolean) =>
 
 // ⚠️ a choice beside a computed key, which leaves the build unable to write out what each answer sets
 export const d = (active: boolean, key: string) => css({ [key]: 'red.300', color: active ? 'white' : 'gray.700' })
+
+// ✅ a recipe's call, whose variants are chosen at run time
+export const e = (size: 'sm' | 'lg', verticalAlign: 'top' | 'middle') => table({ size, verticalAlign })
 ```
 
 See [dynamic styling](https://bamboocss.com/docs/guides/dynamic-styling).

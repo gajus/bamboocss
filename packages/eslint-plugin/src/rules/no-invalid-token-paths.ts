@@ -10,6 +10,7 @@ import {
   isInBambooStyle,
   isRecipeVariant,
   isStyledTaggedTemplate,
+  isVariantOrPatternProperty,
 } from '../utils/helpers'
 import { isJSXExpressionContainer, isJSXIdentifier, isLiteral, isTemplateLiteral } from '../utils/nodes'
 import { AST_NODE_TYPES, type TSESTree } from '@typescript-eslint/utils'
@@ -138,6 +139,13 @@ const rule = createRule({
         // a condition is judged against the property that holds it.
         const property = getStyleProperty(node, context)
         if (!property || !isBambooAttribute(property.node, context) || isRecipeVariant(property.node, context)) {
+          return
+        }
+
+        // Not a variant being selected, nor a pattern's own prop, whose value is no style's: `color:
+        // 'shark'` in `link({ color: 'shark' })` names a variant, and `direction: 'column'` in `flex()`
+        // is the pattern's, which it writes as `flexDirection`, not CSS `direction`.
+        if (isVariantOrPatternProperty(property.node, context)) {
           return
         }
 

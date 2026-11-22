@@ -1,6 +1,14 @@
 import { createRule } from '../utils'
-import { isBambooAttribute, isBambooProp as isBambooProperty, isKeyframesName, isRecipeVariant } from '../utils/helpers'
-import { isIdentifier, isJSXExpressionContainer, isMemberExpression } from '../utils/nodes'
+import {
+  getAncestor,
+  isBambooAttribute,
+  isBambooProp as isBambooProperty,
+  isKeyframesName,
+  isRecipeCall,
+  isRecipeVariant,
+  isVariantSelection,
+} from '../utils/helpers'
+import { isCallExpression, isIdentifier, isJSXExpressionContainer, isMemberExpression } from '../utils/nodes'
 import { type TSESTree } from '@typescript-eslint/utils'
 
 export const RULE_NAME = 'no-property-renaming'
@@ -98,6 +106,13 @@ const rule = createRule({
         }
 
         if (isCachedRecipeVariant(node)) {
+          return
+        }
+
+        // A variant being selected is no prop to track: a recipe call reads any value it is handed,
+        // `cardStyle({ rounded: isRounded })`, and a declaration's selections are its own to make.
+        const call = getAncestor(isCallExpression, node)
+        if (isVariantSelection(node) || (call && isRecipeCall(call, context))) {
           return
         }
 

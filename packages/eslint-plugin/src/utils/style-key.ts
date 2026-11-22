@@ -1,12 +1,4 @@
-import {
-  getAncestor,
-  isBambooAttribute,
-  isPatternProperty,
-  isRecipeCall,
-  isRecipeVariant,
-  isVariantSelection,
-  resolveLonghand,
-} from './helpers'
+import { getAncestor, isBambooAttribute, isRecipeVariant, isVariantOrPatternProperty, resolveLonghand } from './helpers'
 import { isCallExpression } from './nodes'
 import { type TSESLint, type TSESTree } from '@typescript-eslint/utils'
 import { type RuleContext } from '@typescript-eslint/utils/ts-eslint'
@@ -27,8 +19,8 @@ type StyleProperty = TSESTree.Property & { key: TSESTree.Identifier; parent: TSE
 export const getStyleKey = (node: TSESTree.Property, context: RuleContext<any, any>) => {
   if (node.computed || node.key.type !== 'Identifier' || node.parent.type !== 'ObjectExpression') return
   const call = getAncestor(isCallExpression, node)
-  if (!call || !isBambooAttribute(node, context) || isRecipeCall(call, context)) return
-  if (isRecipeVariant(node, context) || isVariantSelection(node) || isPatternProperty(node, context)) return
+  if (!call || !isBambooAttribute(node, context)) return
+  if (isRecipeVariant(node, context) || isVariantOrPatternProperty(node, context)) return
   return node as StyleProperty
 }
 

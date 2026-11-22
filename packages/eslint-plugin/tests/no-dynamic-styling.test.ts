@@ -4,6 +4,15 @@ import multiline from 'multiline-ts'
 
 eslintTester.run(RULE_NAME, rule, {
   invalid: [
+    // A recipe call compiles what it selects at run time, but not a variant it names at run time.
+    {
+      code: multiline`
+  import { cardStyle } from './bamboo/recipes';
+
+  export const card = (key: 'rounded') => cardStyle({ [key]: true })`,
+      errors: [{ messageId: 'dynamicProperty' }],
+    },
+
     {
       code: multiline`
   import { css } from './bamboo/css';
@@ -261,6 +270,17 @@ eslintTester.run(RULE_NAME, rule, {
   import { css } from './bamboo/css';
 
   const styles = css({ zIndex: -1, marginTop: -4, color: 'red.100' as const })`,
+    },
+
+    // A recipe call selects its variants at run time: the compiler looks the answer up in a table of
+    // every combination. Only a variant named as a style was ever reported.
+    {
+      code: multiline`
+  import { cardStyle } from './bamboo/recipes';
+
+  export const a = (rounded: boolean) => cardStyle({ rounded })
+  export const b = (isRounded: boolean) => cardStyle({ rounded: isRounded })
+  export const c = (big: boolean) => cardStyle({ rounded: big ? true : false })`,
     },
   ],
 })

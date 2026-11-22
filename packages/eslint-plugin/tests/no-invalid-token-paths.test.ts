@@ -11,6 +11,15 @@ const noSuchToken = (call: string, fix = 'Check the path, or add the token to yo
 
 eslintTester.run(RULE_NAME, rule, {
   invalid: [
+    // A style handed to a pattern beside the pattern's own prop is still judged as one.
+    {
+      code: multiline`
+  import { flex } from './bamboo/patterns';
+
+  const styles = flex({ direction: 'column', color: 'shark' })`,
+      errors: [{ messageId: 'unresolvedValue' }],
+    },
+
     /**
      * The squiggle the deleted type narrowing used to give, from the resolver instead.
      *
@@ -253,6 +262,28 @@ eslintTester.run(RULE_NAME, rule, {
   const token = (path: string) => path;
   export const label = token('colors.ghost');
   export const styles = css({ color: 'red.300' })`,
+    },
+
+    /**
+     * A recipe's argument selects variants, and a pattern's own prop is the pattern's to map: neither
+     * value is a style's. `rounded: true` names a `cardStyle` variant, not a `radii` token, and
+     * `direction` is `flex`'s `flexDirection`, not CSS `direction`. They were judged as both.
+     */
+    {
+      code: multiline`
+  import { cva } from './bamboo/css';
+  import { flex } from './bamboo/patterns';
+  import { cardStyle } from './bamboo/recipes';
+
+  export const card = cardStyle({ rounded: true })
+  export const column = flex({ direction: 'column' })
+  export const responsive = flex({ direction: { base: 'column', md: 'row' } })
+  export const badge = cva({
+    className: 'badge',
+    variants: { rounded: { true: { borderRadius: 'md' } } },
+    defaultVariants: { rounded: true },
+    compoundVariants: [{ rounded: true, css: { color: 'red.300' } }],
+  })`,
     },
   ],
 })

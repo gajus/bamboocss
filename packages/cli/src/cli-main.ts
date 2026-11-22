@@ -172,7 +172,7 @@ export async function main() {
 
       const done = logger.time.info('✨ Bamboo initialized')
 
-      await setupConfig(
+      const project = await setupConfig(
         cwd,
         compact({
           force,
@@ -196,10 +196,10 @@ export async function main() {
       }
 
       if (flags.codegen) {
-        const { msg, box } = await codegen(ctx)
-        logger.log(msg + box)
+        const { msg } = await codegen(ctx)
+        logger.log(msg + ctx.initMessage(project.guide))
       } else {
-        logger.log(ctx.initMessage())
+        logger.log(ctx.initMessage(project.guide))
       }
 
       done()

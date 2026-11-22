@@ -11,6 +11,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs'
+import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, posix } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -23,6 +24,7 @@ import { TraceMap, originalPositionFor } from '@jridgewell/trace-mapping'
 import { build as buildVite8, createBuilder, createServer as createVite8Server, type Plugin } from 'vite8'
 import { afterEach, beforeEach, describe, expect, onTestFinished, test, vi } from 'vitest'
 import { cascadeOrder } from '../../../packages/core/__tests__/cascade-oracle'
+import { UNIMPORTED_STYLESHEET_GRACE_MS } from '../../../packages/vite/src/unimported-stylesheet'
 
 /**
  * The plugin driven by a real Vite build, rather than by calling its hooks directly.
@@ -4919,6 +4921,69 @@ describe('vite plugin, real dev server', () => {
       await server.close()
     }
   }, 120_000)
+})
+
+/**
+ * A dev server compiling classes for a page that imports no stylesheet says so, once it has served
+ * the page and gone quiet. It said nothing, and the page rendered unstyled; only `vite build`
+ * failed on it.
+ */
+describe('a dev server with nothing importing the stylesheet', () => {
+  const entry = join(cwd, 'src/__unimported-sheet.tsx')
+  afterEach(() => {
+    rmSync(entry, { force: true })
+  })
+
+  /** What the server warned of about the stylesheet, serving `code` over HTTP and waiting it out. */
+  const warningsServing = async (code: string) => {
+    writeFileSync(entry, code)
+    const warnings: string[] = []
+    const server = await createServer({
+      root: cwd,
+      configFile: false,
+      customLogger: {
+        info() {},
+        warn(message: string) {
+          warnings.push(message)
+        },
+        warnOnce() {},
+        error() {},
+        clearScreen() {},
+        hasErrorLogged: () => false,
+        hasWarned: false,
+      },
+      css: { postcss: { plugins: [] } },
+      plugins: [bamboocss({ cwd, reportSummary: false })],
+      optimizeDeps: { noDiscovery: true, include: [] },
+      // A port of its own: a request has to reach the server for it to judge.
+      server: { host: '127.0.0.1', port: 0 },
+    })
+    try {
+      await server.listen()
+      const { port } = server.httpServer!.address() as AddressInfo
+      const response = await fetch(`http://127.0.0.1:${port}/src/__unimported-sheet.tsx`)
+      // Compiled, so there were classes to say this about.
+      expect(await response.text()).not.toMatch(/\bcss\(\{/)
+      await new Promise((resolve) => setTimeout(resolve, UNIMPORTED_STYLESHEET_GRACE_MS + 1_000))
+    } finally {
+      await server.close()
+    }
+    return warnings.filter((message) => message.includes('virtual:bamboo.css'))
+  }
+
+  const styled = `import { css } from '../styled-system/css'\nexport const a = css({ width: '[871.25px]' })\n`
+
+  test('says so once it has served the page and gone quiet', async () => {
+    expect(await warningsServing(styled)).toEqual([
+      expect.stringContaining(
+        'src/__unimported-sheet.tsx was compiled to Bamboo class values, but nothing has imported "virtual:bamboo.css"',
+      ),
+    ])
+  }, 60_000)
+
+  test('says nothing where the page imports it', async () => {
+    expect(await warningsServing(`import 'virtual:bamboo.css'\n${styled}`)).toEqual([])
+  }, 60_000)
 })
 
 /**

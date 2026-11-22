@@ -243,9 +243,10 @@ export class BambooContext extends Generator {
     return this.runtime.fs.glob({ include: dependencies, cwd })
   }
 
-  initMessage = () => {
+  /** What to do next, after `bamboo init`: `guide` names the installation guide for the project's framework. */
+  initMessage = (guide?: string) => {
     return createBox({
-      content: this.messages.codegenComplete(),
+      content: this.messages.codegenComplete(guide),
       title: this.messages.exclamation(),
     })
   }

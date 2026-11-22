@@ -3,7 +3,7 @@
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, test } from 'vitest'
 import { codegen } from '../src/codegen'
 import { loadConfigAndCreateContext } from '../src/config'
@@ -93,4 +93,58 @@ describe('bamboo doctor', () => {
     }
     await expect(doctor(ctx)).rejects.toThrow('Failed to load the native extractor binary')
   }, 60_000)
+
+  /**
+   * A project registering the Vite plugin and importing the stylesheet nowhere fails `vite build`,
+   * and a dev server renders it unstyled. The import can be in any of the project's files, not only
+   * the sources `include` selects.
+   */
+  describe('the stylesheet import', () => {
+    const withFiles = (files: Record<string, string>) => {
+      const cwd = project({ 'app.tsx': app })
+      for (const [file, code] of Object.entries(files)) {
+        mkdirSync(dirname(join(cwd, file)), { recursive: true })
+        writeFileSync(join(cwd, file), code)
+      }
+      return cwd
+    }
+    const viteConfig = `import bamboocss from '@bamboocss/vite'\nexport default { plugins: [bamboocss()] }\n`
+
+    test('is a problem where the project registers the plugin and nothing imports the sheet', async () => {
+      const cwd = withFiles({ 'vite.config.ts': viteConfig, 'src/main.tsx': `import './app'\n` })
+      await codegen(await loadConfigAndCreateContext({ cwd }))
+      const report = await doctor(await loadConfigAndCreateContext({ cwd }))
+
+      expect(report).toMatchObject({ usesVitePlugin: true, importsStylesheet: false })
+      expect(report.problems).toEqual([expect.stringContaining('Nothing imports `virtual:bamboo.css`')])
+      expect(formatDoctorReport(report)).toContain('stylesheet  virtual:bamboo.css not imported')
+    }, 60_000)
+
+    test.each([
+      ['an entry module outside `include`', 'src/main.ts', `import 'virtual:bamboo.css'\n`],
+      ["Storybook's preview", '.storybook/preview.ts', `import 'virtual:bamboo.css'\n`],
+      ["Nuxt's config", 'nuxt.config.ts', `export default { css: ['virtual:bamboo.css'] }\n`],
+    ])(
+      'is found in %s',
+      async (_where, file, code) => {
+        const cwd = withFiles({ 'vite.config.ts': viteConfig, [file]: code })
+        await codegen(await loadConfigAndCreateContext({ cwd }))
+        const report = await doctor(await loadConfigAndCreateContext({ cwd }))
+
+        expect(report).toMatchObject({ usesVitePlugin: true, importsStylesheet: true, problems: [] })
+      },
+      60_000,
+    )
+
+    // Codegen alone, a design system's own package, has no stylesheet to import.
+    test('is no problem in a project that does not register the plugin', async () => {
+      const cwd = project({ 'app.tsx': app })
+      await codegen(await loadConfigAndCreateContext({ cwd }))
+
+      expect(await doctor(await loadConfigAndCreateContext({ cwd }))).toMatchObject({
+        usesVitePlugin: false,
+        problems: [],
+      })
+    }, 60_000)
+  })
 })

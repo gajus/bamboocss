@@ -24,7 +24,12 @@ everywhere; the rest list the commands that take them.
 
 Initialize Bamboo in a project. This process will:
 
-- Create a `bamboo.config.ts` file in your project with the default settings and presets.
+- Create a `bamboo.config.ts` file in your project with the default settings and presets. Its `include` is the one the
+  installation guide for the project's framework gives, read off `package.json`: `./app/**` for React Router, `.vue`,
+  `.svelte` and `.astro` files where the project depends on Vue, Svelte or Astro, and `./src/**` and `./pages/**`
+  otherwise. The next steps it prints link that guide.
+- Add the output directory to the project's `.gitignore`: the nearest one inside its repository, or a new one beside the
+  config. `--cwd` names the project wherever the command runs.
 - Emit CSS utilities for your project in the specified `output` directory.
 
 ```bash
@@ -269,7 +274,8 @@ pnpm bamboo debug --zip
 Check the project as the build reads it, without writing anything: the config it loads, the sources `include` selects,
 and the generated `styled-system` against what `bamboo codegen` would write now. It fails, and says what to fix, when a
 generated file is missing, out of date or no longer generated, when a source cannot be extracted — every style in it is
-absent from the stylesheet — or when a call names a pattern or recipe that does not exist.
+absent from the stylesheet — when a call names a pattern or recipe that does not exist, or when the project registers
+`@bamboocss/vite` and none of its files imports `virtual:bamboo.css`, which `vite build` fails on.
 
 ```bash
 pnpm bamboo doctor

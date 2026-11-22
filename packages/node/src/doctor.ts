@@ -26,6 +26,13 @@ export interface DoctorReport {
   unextracted: Array<{ file: string; message: string }>
   /** Calls to a pattern or recipe the entrypoint does not export, as `file: name`. */
   deadCalls: string[]
+  /** Whether a file of the project's names `@bamboocss/vite`: registers the plugin, or reads its types. */
+  usesVitePlugin: boolean
+  /**
+   * Whether a file of the project's names `virtual:bamboo.css`, which a project registering the
+   * plugin has to import: without it `vite build` fails, and a dev server renders pages unstyled.
+   */
+  importsStylesheet: boolean
   conditions: number
   /** Token count by category. */
   tokens: Record<string, number>
@@ -37,6 +44,44 @@ export interface DoctorReport {
 }
 
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error))
+
+/**
+ * The files a project registers the plugin and imports the stylesheet from, which can be anywhere
+ * in it: an entry module, a root layout, `nuxt.config.ts`, `.storybook/preview.ts`, `index.html`.
+ * Not its dependencies, nor what codegen writes, and declaration files are not read at all.
+ */
+const sourceGlobs = [
+  '**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts,vue,svelte,astro,mdx,html}',
+  '.storybook/**/*.{js,jsx,ts,tsx,mjs,mts}',
+]
+
+/**
+ * Whether the project registers the Vite plugin, and whether it imports `virtual:bamboo.css`.
+ *
+ * Read off the text, as a mention, so a commented-out import counts as one: what this finds wrong
+ * is that nothing mentions the stylesheet at all, which it can say without a false alarm.
+ */
+const scanStylesheetImport = (ctx: BambooContext) => {
+  const { fs, path } = ctx.runtime
+  const cwd = ctx.config.cwd
+  const outdir = path.relative(cwd, path.resolve(cwd, ctx.config.outdir)).replaceAll('\\', '/')
+  const files = fs.glob({ include: sourceGlobs, exclude: ['**/node_modules/**', `${outdir}/**`], cwd })
+
+  let usesVitePlugin = false
+  let importsStylesheet = false
+  for (const file of files) {
+    let text: string
+    try {
+      text = fs.readFileSync(file)
+    } catch {
+      continue
+    }
+    usesVitePlugin ||= text.includes('@bamboocss/vite')
+    importsStylesheet ||= text.includes('virtual:bamboo.css')
+    if (usesVitePlugin && importsStylesheet) break
+  }
+  return { usesVitePlugin, importsStylesheet }
+}
 
 /**
  * Whether a generated file holds what codegen would write there.
@@ -116,6 +161,8 @@ export async function doctor(ctx: BambooContext): Promise<DoctorReport> {
   const tokens: Record<string, number> = {}
   for (const [category, values] of ctx.tokens.view.categoryMap) tokens[category] = values.size
 
+  const { usesVitePlugin, importsStylesheet } = scanStylesheetImport(ctx)
+
   const problems: string[] = []
   const outOfStep = [
     missing.length && `${missing.length} missing`,
@@ -130,6 +177,12 @@ export async function doctor(ctx: BambooContext): Promise<DoctorReport> {
   }
   if (unextracted.length) problems.push(`${unextracted.length} source file(s) could not be extracted.`)
   if (deadCalls.length) problems.push(`${deadCalls.length} call(s) name a pattern or recipe that does not exist.`)
+  if (usesVitePlugin && !importsStylesheet) {
+    problems.push(
+      'Nothing imports `virtual:bamboo.css`, so pages render unstyled and `vite build` fails: import it once, from ' +
+        'the application entry module.',
+    )
+  }
 
   return {
     cwd,
@@ -138,6 +191,8 @@ export async function doctor(ctx: BambooContext): Promise<DoctorReport> {
     artifacts: { outdir, files, missing, stale, leftover },
     unextracted,
     deadCalls,
+    usesVitePlugin,
+    importsStylesheet,
     conditions: ctx.conditions.keys().length,
     tokens,
     utilities: ctx.utility.keys().length,
@@ -155,6 +210,9 @@ export function formatDoctorReport(report: DoctorReport): string {
     `config      ${report.config}`,
     `sources     ${report.sources} file(s)`,
     `styled-system ${report.artifacts.outdir}, ${report.artifacts.files} file(s)`,
+    ...(report.usesVitePlugin
+      ? [`stylesheet  virtual:bamboo.css ${report.importsStylesheet ? 'imported' : 'not imported'}`]
+      : []),
     `tokens      ${tokenCount} in ${categories} categor${categories === 1 ? 'y' : 'ies'}`,
     `conditions  ${report.conditions}`,
     `utilities   ${report.utilities}`,

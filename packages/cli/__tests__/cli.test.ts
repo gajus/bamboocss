@@ -95,6 +95,31 @@ describe('CLI', () => {
     expect(logFileExists).toBeUndefined()
   })
 
+  // `--cwd` names the project wherever the command runs. Its `.gitignore` was looked for, and
+  // created when there was none, in the folder the command ran from.
+  test('init --cwd updates the .gitignore of the project it names', async () => {
+    const project = mkdtempSync(path.join(tmpdir(), 'bamboo-cli-cwd-'))
+    const elsewhere = mkdtempSync(path.join(tmpdir(), 'bamboo-cli-elsewhere-'))
+    try {
+      mkdirSync(path.join(project, '.git'))
+      writeFileSync(path.join(project, 'tsconfig.json'), '{}')
+      mkdirSync(path.join(project, 'node_modules/@bamboocss'), { recursive: true })
+      symlinkSync(
+        path.resolve(_dirname, '..'),
+        path.join(project, 'node_modules/@bamboocss/dev'),
+        process.platform === 'win32' ? 'junction' : 'dir',
+      )
+
+      runCommand(`node ${binPath} init --cwd="${project}" --no-codegen`, { cwd: elsewhere })
+
+      expect(await fs.readFile(path.join(project, '.gitignore'), 'utf8')).toBe('## Bamboo\nstyled-system\n')
+      await expect(fs.access(path.join(elsewhere, '.gitignore'))).rejects.toThrow()
+    } finally {
+      await fs.rm(project, { force: true, recursive: true })
+      await fs.rm(elsewhere, { force: true, recursive: true })
+    }
+  }, 120_000)
+
   /**
    * `--strict-values` used to be collected and dropped.
    *

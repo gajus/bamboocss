@@ -3062,9 +3062,14 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
         const remaining = remainingEnvironments(staticSession, environment)
         if (typeof this.getModuleInfo === 'function' && !remaining.length) {
           if (!staticSession.cssLoaded) {
+            // Whether or not anything compiled to a class: the sheet also holds the tokens a
+            // compiled `token()` reads, preflight and global styles. It used to say classes were
+            // compiled either way.
+            const compiled = staticSession.transformedFiles.size
             throw new Error(
-              `bamboocss: compiled class values were produced, but ${JSON.stringify(VIRTUAL_CSS_ID)} ` +
-                `was not imported. Add \`import ${JSON.stringify(VIRTUAL_CSS_ID)}\` once, from a JavaScript or ` +
+              `bamboocss: ${JSON.stringify(VIRTUAL_CSS_ID)} was not imported, so the build has no Bamboo ` +
+                `stylesheet${compiled ? `, and the class values ${compiled} module(s) were compiled to have no rules` : ''}. ` +
+                `Add \`import ${JSON.stringify(VIRTUAL_CSS_ID)}\` once, from a JavaScript or ` +
                 `TypeScript module in the application entry graph.\n\n` +
                 `It has to be a JS import. \`@import\` from a stylesheet does not reach it: the id names a virtual ` +
                 `module resolved by this plugin, and Vite resolves CSS \`@import\` before plugin resolution, so it ` +
@@ -3328,6 +3333,7 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     // directly; only artifacts replayed from writable transform metadata need the defensive
     // snapshot, schema walk, ownership check and HMAC verification above.
     commitTransformArtifact(state, artifact)
+    if (command === 'serve' && artifact.transformedFile) staticSession.noteDevCompile?.(filePath)
     // Retained when disk cannot answer what this module was compiled from: a dev server, or an
     // SFC submodule whose file holds template source. Deliberately keyed on what
     // `compilerParsePath` asked for.

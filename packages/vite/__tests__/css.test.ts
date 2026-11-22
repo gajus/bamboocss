@@ -127,6 +127,7 @@ describe('the virtual stylesheet', () => {
             invalidateModule() {},
           },
           reloadModule: (mod: { id: string }) => void reloaded.push(mod.id),
+          middlewares: { use() {} },
           config: { root: cwd },
           watcher: { on: (event: string, listener: (file: string) => void) => listeners.set(event, listener) },
         } as never,
@@ -375,6 +376,7 @@ describe('the virtual stylesheet', () => {
             invalidateModule: () => {},
           },
           reloadModule: () => {},
+          middlewares: { use() {} },
           config: { root: cwd },
           watcher: { on: (event: string, listener: (file: string) => void) => listeners.set(event, listener) },
         } as never,
@@ -433,6 +435,7 @@ describe('the virtual stylesheet', () => {
           invalidateModule: () => {},
         },
         reloadModule: (mod: { id: string }) => void reloaded.push(mod.id),
+        middlewares: { use() {} },
         config: { root: cwd },
         watcher: { on: (event: string, listener: (file: string) => void) => listeners.set(event, listener) },
       } as never,
@@ -488,6 +491,7 @@ describe('the virtual stylesheet', () => {
           invalidateModule: () => {},
         },
         reloadModule: (mod: { id: string }) => void reloaded.push(mod.id),
+        middlewares: { use() {} },
         config: { root: cwd },
         watcher: { on: (event: string, listener: (file: string) => void) => listeners.set(event, listener) },
       } as never,
@@ -517,6 +521,7 @@ describe('the virtual stylesheet', () => {
       hookOf(plugin.configureServer)!.call(
         {} as never,
         {
+          middlewares: { use() {} },
           config: { ...config, root: cwd },
           environments: { client: { moduleGraph: { getModulesByFile: () => undefined } } },
           moduleGraph: { getModuleById: () => undefined, getModulesByFile: () => undefined, invalidateModule() {} },
@@ -629,6 +634,7 @@ describe('the folders a dev server watches beyond its root', () => {
       hookOf(plugin.configureServer)!.call(
         {} as never,
         {
+          middlewares: { use() {} },
           config: { root: linkedRoot },
           environments: { client: { moduleGraph: { getModulesByFile: () => undefined } } },
           moduleGraph: { getModuleById: () => undefined, getModulesByFile: () => undefined, invalidateModule() {} },

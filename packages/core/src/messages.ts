@@ -59,9 +59,9 @@ export const thankYou = () => outdent`
 /**
  * What a project needs after `bamboo init`, which is the Vite setup: the plugin is what compiles
  * and emits the styles, and the stylesheet declares its own layers, so there is no `@layer`
- * statement to write.
+ * statement to write. Where each goes differs by framework, which its installation guide says.
  */
-export const codegenComplete = () =>
+export const codegenComplete = (guide = 'vite') =>
   outdent`
 
   ${colors.bold().cyan('Next steps:')}
@@ -82,7 +82,7 @@ export const codegenComplete = () =>
 
   [3] Add ${quote('"prepare": "bamboo codegen"')} to your package.json scripts.
 
-  See https://bamboocss.com/docs/installation/vite
+  See https://bamboocss.com/docs/installation/${guide}
 
   `
 

@@ -213,7 +213,8 @@ export const Button = (props: ButtonProps) => {
    reports each file.
 2. **"css() was not compiled"** at runtime. The module never went through the plugin: it is missing from the Vite
    config, the file is outside `include`, or a test runner without Vite ran it (use Vitest with `bamboocss()`).
-3. **"virtual:bamboo.css was not imported".** Import it once, from the JS entry.
+3. **"virtual:bamboo.css was not imported"**, from the build, or **"nothing has imported virtual:bamboo.css"**, from the
+   dev server once it has served the page. Import it once, from the JS entry; `bamboo doctor` reports it too.
 4. **A class with no rule, or styles gone after a config edit.** `bamboo doctor` reports generated files that are stale
    or missing, files that could not be extracted, and calls to patterns or recipes that no longer exist. Run
    `bamboo codegen` after a config change.

@@ -137,6 +137,13 @@ export interface StaticCompilationSession {
   cssLoaded: boolean
   /** Source modules whose Bamboo styles were compiled into emitted class values. */
   transformedFiles: Set<string>
+  /**
+   * Told of each module a dev server compiles Bamboo classes into, so the stylesheet's plugin can
+   * say when nothing has imported the sheet. `transformedFiles` is filled only once a generation
+   * completes, which in dev is when the server closes. Installed by that plugin's
+   * `configureServer`; a build has none, and fails at its end instead.
+   */
+  noteDevCompile?: (file: string) => void
   /** Source modules covered by Bamboo's configured extraction graph. */
   extractedFiles: Set<string>
   /** Escaped selectors emitted from the source graph and therefore safe to tree-shake. */

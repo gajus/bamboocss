@@ -10,6 +10,7 @@ import type { CssSourceMap } from './css-output-module'
 import { extractedFileKey } from './fs-path'
 import { createRetryableLazy, loadConfigModule, loadCssOutputModule } from './lazy-modules'
 import { emittedSheetFor, remainingEnvironments, type StaticCompilationSession } from './static-session'
+import { type UnimportedStylesheetWatch, watchUnimportedStylesheet } from './unimported-stylesheet'
 
 /**
  * What a project imports to get the stylesheet.
@@ -583,6 +584,22 @@ const within = (root: string, path: string) => {
  */
 const spelledAsVite = (path: string) => (sep === '\\' ? path.replaceAll('\\', '/') : path)
 
+/** What a dev server says when it compiled classes and nothing imported the stylesheet. */
+export const unimportedStylesheetWarning = (root: string, compiled: ReadonlySet<string>) => {
+  const [first] = compiled
+  const name = first === undefined ? 'a module' : spelledAsVite(relative(root, first))
+  const which =
+    compiled.size === 1
+      ? `${name} was compiled to Bamboo class values`
+      : `${compiled.size} modules, ${name} among them, were compiled to Bamboo class values`
+  const id = JSON.stringify(VIRTUAL_CSS_ID)
+  return (
+    `bamboocss: ${which}, but nothing has imported ${id}, so ${compiled.size === 1 ? 'it renders' : 'they render'} ` +
+    `unstyled. Add \`import ${id}\` once, from a JavaScript or TypeScript module in the application entry graph; ` +
+    `\`vite build\` fails until it is there.`
+  )
+}
+
 export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
   const {
     configPath,
@@ -595,6 +612,8 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
 
   let builder: CompilationBuilder | undefined
   let server: ViteDevServer | undefined
+  /** A dev server's watch for compiled classes with nothing importing the stylesheet. */
+  let unimported: UnimportedStylesheetWatch | undefined
   let command: 'build' | 'serve' = 'build'
   /** A dev server's config files, on the resolved config: what Vite restarts for. */
   let configFileDependencies: string[] | undefined
@@ -1001,8 +1020,10 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
 
       // Here rather than in `build`, which is no longer only reached by a load: `buildStart`
       // generates the sheet whether or not anything imports it. The flag means the virtual
-      // module was asked for, and `buildEnd` fails a build that compiled classes without it.
+      // module was asked for, and `buildEnd` fails a build that never asked for it, as a dev
+      // server says once when it compiled classes and nothing has.
       session.cssLoaded = true
+      unimported?.loaded()
 
       // `?url` asks where the stylesheet is served, not for the stylesheet. A build never gets here
       // with it: Vite's CSS plugin loads it first, emitting the sheet as an asset and exporting that
@@ -1119,6 +1140,16 @@ export const bamboocssCss = (options: BambooCssPluginOptions): Plugin => {
     configureServer(devServer) {
       server = devServer
       if (builder?.context) watchOutsideRoot(devServer, builder)
+
+      // Not under Vitest, whose server runs in `test` mode: it serves test files rather than the
+      // application's entry, and a test that leaves the stylesheet out was not written to be styled.
+      if (devServer.config.mode !== 'test') {
+        unimported = watchUnimportedStylesheet(
+          (middleware) => devServer.middlewares.use(middleware),
+          (compiled) => devServer.config.logger.warn(unimportedStylesheetWarning(devServer.config.root, compiled)),
+        )
+        session.noteDevCompile = unimported.compiled
+      }
 
       /**
        * The graph the stylesheet's own module lives in, which is the one that has to reach it.

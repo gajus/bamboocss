@@ -23,14 +23,6 @@ export default defineConfig({
       supportsBackdrop: '@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px)))',
     },
   },
-  staticCss: {
-    recipes: {
-      // used in .mdx files, e.g. <Callout type="default" /> or with the blockquote sign like: `> Blabla`
-      // MDX content is outside the source inventory above, so request these variants explicitly
-      callout: [{ type: ['*'] }],
-      card: [{ variant: ['*'] }],
-    },
-  },
   theme: {
     extend: {
       breakpoints: {

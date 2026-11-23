@@ -1,5 +1,64 @@
 # @bamboocss/node
 
+## 1.64.9
+
+### Patch Changes
+
+- 8273a7d: Say why a call is `dynamic`. A `css()`, pattern, `token()` or `keyframes()` call the compiler could not
+  compile printed `css() — dynamic` and nothing else unless the evaluator had refused code, and then advised
+  `staticCss`, which does not make a call compile. The line now names what the build cannot know and where:
+
+  ```text
+  9: css() — dynamic: `pads[size]` at src/bar.tsx:9:46 reads a property by a key known only at runtime
+  12: css() — dynamic: its 6 choices give more combinations of answers than one call compiles to
+  16: css() — dynamic: `h` at src/bar.tsx:16:39 is a parameter, so only the caller knows its value
+  ```
+
+  - The reasons are a parameter or a value read off one, a lookup by a key known only at runtime, a spread or computed
+    key the build cannot enumerate, a choice inside a spread, inside another value, in a pattern or written with `&&`, a
+    choice whose test reads a Bamboo import or a recipe, and more than 32 combinations of choices. Where a read leads to
+    a declaration elsewhere in the module, the line points there.
+  - After the list, the error says once for each reason what to write instead, and no longer mentions `staticCss`.
+  - A `css()` or pattern argument the build cannot read as a whole, `css(pads[size])` or `css(styles)`, now warns as one
+    under a key did; it warned of nothing.
+  - The warning no longer says the runtime names a class for what the build could not see: there is no such runtime, and
+    the call fails to compile. It gives each reason its own fix rather than `staticCss`, and names a property once. A
+    recipe's warning says its calls compile without the declaration, where it said the element loses every style and to
+    set `className`; the `no-unresolved-styles` lint rule reports the same words.
+
+- ab8804e: Say when nothing imports `virtual:bamboo.css` before the build fails on it, and make `bamboo init` write a
+  config and a `.gitignore` that fit the project.
+  - A dev server whose modules compiled to Bamboo classes, with nothing importing the stylesheet, says so once it has
+    served the page and gone quiet:
+    `src/app.tsx was compiled to Bamboo class values, but nothing has imported "virtual:bamboo.css", so it renders unstyled`.
+    It said nothing, the page rendered unstyled, and only `vite build` failed.
+  - `bamboo doctor` reports a project that registers `@bamboocss/vite` and whose files never import
+    `virtual:bamboo.css`. The import is found wherever it is: an entry module outside `include`,
+    `.storybook/preview.ts`, `nuxt.config.ts`.
+  - The build's error no longer says class values were compiled when none were. It fails the same: the stylesheet also
+    holds the tokens a compiled `token()` reads, preflight and global styles.
+  - `bamboo init` writes the `include` the project's installation guide gives, read off `package.json`. It wrote
+    `./src/**` and `./pages/**` for JS and TS files whatever the project was, which missed React Router's `app/`, a Nuxt
+    project's folders, and every `.vue`, `.svelte` and `.astro` file, so the build failed on the first module it
+    compiled there. The next steps it prints link the framework's guide.
+  - `bamboo init --cwd <dir>` updates the `.gitignore` of the project it names. It looked from the folder the command
+    ran in, and created one there when it found none. The file is now the nearest one inside the project's repository,
+    or a new one beside the config, never one beyond the repository; and its line is relative to it, so a nested app's
+    `src/styled-system` is written `apps/web/src/styled-system` in the repository's `.gitignore`.
+
+- Updated dependencies [caf408c]
+- Updated dependencies [ab8804e]
+  - @bamboocss/config@1.64.9
+  - @bamboocss/core@1.64.9
+  - @bamboocss/generator@1.64.9
+  - @bamboocss/reporter@1.64.9
+  - @bamboocss/logger@1.64.9
+  - @bamboocss/plugin-svelte@1.64.9
+  - @bamboocss/plugin-vue@1.64.9
+  - @bamboocss/shared@1.64.9
+  - @bamboocss/token-dictionary@1.64.9
+  - @bamboocss/types@1.64.9
+
 ## 1.64.8
 
 ### Patch Changes

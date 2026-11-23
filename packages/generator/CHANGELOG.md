@@ -1,5 +1,17 @@
 # @bamboocss/generator
 
+## 1.64.9
+
+### Patch Changes
+
+- Updated dependencies [ab8804e]
+  - @bamboocss/core@1.64.9
+  - @bamboocss/is-valid-prop@1.64.9
+  - @bamboocss/logger@1.64.9
+  - @bamboocss/shared@1.64.9
+  - @bamboocss/token-dictionary@1.64.9
+  - @bamboocss/types@1.64.9
+
 ## 1.64.8
 
 ### Patch Changes

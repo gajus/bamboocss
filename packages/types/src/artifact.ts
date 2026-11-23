@@ -1,5 +1,3 @@
-import { type Difference } from 'microdiff'
-
 export interface ArtifactContent {
   file: string
   code: string | undefined
@@ -53,5 +51,13 @@ export interface ArtifactFilters {
 export interface DiffConfigResult {
   hasConfigChanged: boolean
   artifacts: Set<ArtifactId>
-  diffs: Difference[]
+  /**
+   * Each change from the previous config, as `microdiff` reports one. Its `Difference`, written
+   * out: a project installing this package does not get `microdiff` to import it from.
+   */
+  diffs: Array<
+    | { type: 'CREATE'; path: (string | number)[]; value: any }
+    | { type: 'REMOVE'; path: (string | number)[]; oldValue: any }
+    | { type: 'CHANGE'; path: (string | number)[]; value: any; oldValue: any }
+  >
 }

@@ -1,6 +1,6 @@
-import { mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import ts from 'typescript'
 import { afterAll, beforeAll, expect, test } from 'vitest'
 import { main as build } from '../scripts/build'
@@ -19,22 +19,25 @@ let program: ts.Program
 let index: ts.Symbol
 
 /**
- * The package's own dependencies, which the declarations import, each linked where it really is.
- * Through one link to the package's `node_modules`, itself a folder of links, TypeScript found
- * neither `microdiff` nor `pkg-types` on Windows.
+ * What a project installing the package has beside it: the dependencies it declares, each linked
+ * where it really is, and nothing else. Linking its whole `node_modules` put its devDependencies
+ * there too, so declarations importing `pkg-types` and `microdiff`, which no project installing
+ * the package got, type-checked here. Each is linked on its own: through one link to the
+ * package's `node_modules`, itself a folder of links, TypeScript found none of them on Windows.
  */
-const linkDependencies = (from: string, to: string) => {
-  mkdirSync(to, { recursive: true })
-  for (const name of readdirSync(from)) {
-    if (name.startsWith('.')) continue
-    if (name.startsWith('@')) linkDependencies(join(from, name), join(to, name))
-    else symlinkSync(realpathSync(join(from, name)), join(to, name), process.platform === 'win32' ? 'junction' : 'dir')
+const linkDependencies = (to: string) => {
+  const root = join(import.meta.dirname, '..')
+  const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
+  for (const name of Object.keys({ ...manifest.dependencies, ...manifest.peerDependencies })) {
+    const link = join(to, name)
+    mkdirSync(dirname(link), { recursive: true })
+    symlinkSync(realpathSync(join(root, 'node_modules', name)), link, process.platform === 'win32' ? 'junction' : 'dir')
   }
 }
 
 beforeAll(() => {
   build(out)
-  linkDependencies(join(import.meta.dirname, '..', 'node_modules'), join(out, 'node_modules'))
+  linkDependencies(join(out, 'node_modules'))
   program = ts.createProgram([join(out, 'index.d.ts')], {
     module: ts.ModuleKind.NodeNext,
     moduleResolution: ts.ModuleResolutionKind.NodeNext,

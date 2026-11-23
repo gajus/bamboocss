@@ -1,4 +1,3 @@
-import type { TSConfig } from 'pkg-types'
 import type { Conditions, ExtendableConditions } from './conditions'
 import type { BambooHooks } from './hooks'
 import type { PatternConfig } from './pattern'
@@ -14,6 +13,36 @@ import type {
 import type { ExtendableTheme, Theme } from './theme'
 import type { ExtendableUtilityConfig, UtilityConfig } from './utility'
 
+/**
+ * A `tsconfig.json` as the config loader reads it. Bamboo uses `baseUrl` and `paths`, to resolve
+ * an import the way TypeScript does; any other compiler option is kept as it was written.
+ *
+ * Written out rather than imported from `pkg-types`: a project installing this package does not
+ * get `pkg-types`, whose own type imports `typescript` besides.
+ */
+interface TSConfig {
+  compilerOptions?: {
+    baseUrl?: string
+    paths?: Record<string, string[]>
+    [option: string]: unknown
+  }
+  compileOnSave?: boolean
+  exclude?: string[]
+  extends?: string | string[]
+  files?: string[]
+  include?: string[]
+  references?: { path: string }[]
+  typeAcquisition?: {
+    disableFilenameBasedTypeAcquisition?: boolean
+    enable?: boolean
+    exclude?: string[]
+    include?: string[]
+  }
+}
+
+// Exported by a declaration, not by `export interface`: shipped as a declaration file, this module
+// would otherwise hold no export declaration and export every declaration in it, the private
+// ones below included.
 export type { TSConfig }
 
 export type CascadeLayer = 'reset' | 'base' | 'tokens' | 'recipes' | 'utilities'

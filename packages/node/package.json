@@ -71,7 +71,6 @@
     "package-manager-detector": "1.6.0",
     "perfect-debounce": "1.0.0",
     "picomatch": "4.0.5",
-    "pkg-types": "2.3.0",
     "pluralize": "8.0.0",
     "ts-pattern": "5.9.0"
   },

@@ -11,6 +11,8 @@
     "lib": ["dom", "dom.iterable", "esnext"],
     "target": "esnext",
     "noImplicitReturns": false,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "strict": true,

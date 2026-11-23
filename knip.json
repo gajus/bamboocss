@@ -80,10 +80,12 @@
         "velite.config.ts",
         "bamboo.config.ts",
         "seo.config.ts",
+        "react-router.config.ts",
         "scripts/*.tsx"
       ],
       "project": ["{app,src,theme,scripts}/**/*.{ts,tsx,cjs,mjs}"],
-      "ignore": ["src/icons/**", "src/mdx/contexts/**"]
+      "ignore": ["src/icons/**", "src/mdx/contexts/**"],
+      "react-router": { "config": ["vite.config.ts"] }
     },
     "packages/plugin-vue": {
       "project": ["src/**/*.ts"]

@@ -730,7 +730,7 @@ describe.sequential('vite plugin, real rebuild', () => {
       // `cx(external, css(shared))` joins a class the build cannot read with one it compiled,
       // which is reported apart from a plain dynamic skip so the warning can name it. What
       // this test is about is the line below: the cached rebuild has to reach the same verdict.
-      expect(summaries[0]).toContain('declined: opaque-composition=1')
+      expect(summaries[0]).toContain('1 cx() call joins classes at runtime: opaque-composition=1')
       expect(summaries[1], 'cached coverage and diagnostics must match the clean build').toBe(summaries[0])
 
       expect(cachedCss).toContain(width)
@@ -4528,11 +4528,11 @@ export default defineConfig({
 
     // Matched on the summary's shape rather than on the word, which the per-file debug line
     // `Compiled N call(s) in <file>` also carries whenever `BAMBOO_DEBUG` is set.
-    const summaries = lines.filter((line) => /Compiled \d+\/\d+/.test(line))
+    const summaries = lines.filter((line) => /Compiled \d+ calls? across/.test(line))
     expect(summaries, 'one summary for the run, not one per environment').toHaveLength(1)
     // Three source modules, one of which folds its single `css()` call. The shared module is
     // transformed by both environments and must still count as one file and one call.
-    expect(summaries[0]).toContain('Compiled 1/1 (100%) across 1/3 files')
+    expect(summaries[0]).toContain('Compiled 1 call across 1/3 files')
   }, 180_000)
 })
 

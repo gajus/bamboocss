@@ -39,8 +39,8 @@ export interface BambooVitePluginOptions {
    */
   reportSkipped?: boolean
   /**
-   * Print a coverage summary when the build finishes: how much compiled, and why any
-   * candidates were rejected.
+   * Print a coverage summary when the build finishes: how many calls compiled, in how many
+   * files, and how many `cx()` calls join classes at runtime.
    *
    * On by default. Without it there is no signal that the transform did anything, and
    * no way to tell a project where everything folds from one where nothing does.
@@ -2006,31 +2006,38 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
       }
     }
 
-    let folded = 0
+    // A call the compiler declined has already failed the build, in dev as well, before this
+    // runs, so nothing skipped here is a failure, and none of it is a call left uncompiled by
+    // mistake. One nested in a call that compiled (`overlapping`) went with that call: it is
+    // counted as compiled. One that only shares a name (`not-imported`) is somebody else's
+    // function: it is not counted. Anything else is a `cx()` joining a class the build cannot
+    // read, the one runtime surface there is on purpose, so it is named apart. The three were
+    // counted as declined against a share of calls compiled, which made the docs site, where
+    // every call that can compile does, read "Compiled 208/237 (88%)".
+    let compiled = 0
     let filesWithFolds = 0
-    const skipped = new Map<string, number>()
+    const joins = new Map<string, number>()
     for (const entry of perFile.values()) {
-      folded += entry.folded
+      compiled += entry.folded + (entry.skipped.get('overlapping') ?? 0)
       if (entry.folded) filesWithFolds++
       for (const [reason, count] of entry.skipped) {
-        skipped.set(reason, (skipped.get(reason) ?? 0) + count)
+        if (reason === 'overlapping' || reason === 'not-imported') continue
+        joins.set(reason, (joins.get(reason) ?? 0) + count)
       }
     }
 
-    const declined = Array.from(skipped.values()).reduce((sum, count) => sum + count, 0)
-    const total = folded + declined
-    if (!total) return
+    const joined = Array.from(joins.values()).reduce((sum, count) => sum + count, 0)
+    if (!compiled && !joined) return
 
-    const share = Math.round((folded / total) * 100)
-    const reasons = Array.from(skipped.entries())
+    const reasons = Array.from(joins.entries())
       .sort((a, b) => b[1] - a[1])
       .map(([reason, count]) => `${reason}=${count}`)
       .join(' ')
 
     logger.info(
       'vite:transform',
-      `Compiled ${folded}/${total} (${share}%) across ${filesWithFolds}/${perFile.size} files` +
-        (reasons ? ` — declined: ${reasons}` : ''),
+      `Compiled ${compiled} ${compiled === 1 ? 'call' : 'calls'} across ${filesWithFolds}/${perFile.size} files` +
+        (joined ? `; ${joined} cx() ${joined === 1 ? 'call joins' : 'calls join'} classes at runtime: ${reasons}` : ''),
     )
   }
 

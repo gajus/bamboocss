@@ -1506,4 +1506,77 @@ describe('coverage summary', () => {
       ;(logger as { info: typeof logger.info }).info = info
     }
   })
+
+  /** Runs one module through a fresh compiler and returns what it logged, and how `buildEnd` ended. */
+  const summarize = async (source: string, file: string) => {
+    const cwd = join(dirname(fileURLToPath(import.meta.url)), '../../../sandbox/codegen')
+    const plugin = plugins({ cwd }).fold
+    const logged: string[] = []
+    const info = logger.info
+    ;(logger as { info: typeof logger.info }).info = (_type: string, message: string) => {
+      logged.push(message)
+    }
+    try {
+      await hookOf(plugin.buildStart)?.call({} as never, {} as never)
+      await callTransform(plugin, source, join(cwd, 'src', file))
+      const ended = await callBuildEnd(plugin).then(
+        () => 'ended',
+        (error: Error) => error.message,
+      )
+      return { logged, ended }
+    } finally {
+      ;(logger as { info: typeof logger.info }).info = info
+    }
+  }
+
+  /**
+   * The summary counts calls in the source, and none of these three is a call left uncompiled.
+   * Counted as declined against a share compiled, they made the docs site, which compiles every
+   * call it can, report "Compiled 208/237 (88%)".
+   *
+   * `both` compiles its two `css()` calls with the `cx()` around them, and `nested` its
+   * `token.value()` with the `css()` around it: six calls compiled in all, counting the `css()`
+   * in `forwarded`, whose `cx()` is left to join a class nothing here can read at runtime.
+   * `render` calls a parameter that only shares a name, which is nobody's call to count.
+   */
+  test('counts a call compiled with the one around it, leaves out a function that only shares a name, and names a cx() join apart', async () => {
+    const { logged, ended } = await summarize(
+      `import { css, cx } from 'styled-system/css'\n` +
+        `import { token } from 'styled-system/tokens'\n` +
+        `export const both = cx(css({ color: 'red.300' }), css({ margin: '1' }))\n` +
+        `export const nested = css({ zIndex: token.value('zIndex.modal') })\n` +
+        `export const forwarded = (className) => cx(className, css({ padding: '2' }))\n` +
+        `export function render(css) {\n  return css({ color: 'red.300' })\n}\n`,
+      'summary-kinds.tsx',
+    )
+
+    expect(ended).toBe('ended')
+    expect(logged).toEqual([
+      'Compiled 6 calls across 1/1 files; 1 cx() call joins classes at runtime: opaque-composition=1',
+    ])
+  })
+
+  test('says nothing when the only call is a function of the same name', async () => {
+    // Analyzed for the import, with nothing of Bamboo's called: this printed
+    // "Compiled 0/1 (0%) across 0/1 files — declined: not-imported=1".
+    const { logged, ended } = await summarize(
+      `import { css } from 'styled-system/css'\nexport function render(css) {\n  return css({ color: 'red.300' })\n}\n`,
+      'summary-stranger.tsx',
+    )
+
+    expect(ended).toBe('ended')
+    expect(logged).toEqual([])
+  })
+
+  // What the summary leaves out rests on this: a call the compiler declined fails the build
+  // before the summary prints, so nothing the summary counts can be one.
+  test('a declined call fails the build before the summary prints', async () => {
+    const { logged, ended } = await summarize(
+      `import { css } from 'styled-system/css'\nexport const fine = css({ color: 'red.300' })\nexport const sized = (h) => css({ height: h })\n`,
+      'summary-declined.tsx',
+    )
+
+    expect(ended).toContain('1 call(s) could not be compiled')
+    expect(logged).toEqual([])
+  })
 })

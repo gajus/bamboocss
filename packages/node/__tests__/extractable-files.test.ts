@@ -165,6 +165,25 @@ describe('a specifier a comment stands in front of', () => {
   })
 })
 
+/**
+ * A string or a quoted word ending in `from`, `import` or `require` closes with a quote that reads
+ * as the opening of a specifier. Taken for one, it took the rest of the line up to the next quote
+ * with it — the real specifier's, when the import followed on the same line — and the file lost
+ * the edge it was kept by.
+ */
+describe('a specifier a quote stands in front of on the same line', () => {
+  test.each([
+    ['a string ending in from', `const hint = 'copy from'; import { card } from './recipe'`],
+    ['a quoted key', `const map = { "from": 1 }; const { card } = require('./recipe')`],
+  ])('is still read after %s', (_label, line) => {
+    const sources = {
+      '/repo/recipe.ts': `import { cva } from 'styled-system/css'\nexport const card = cva({})`,
+      '/repo/card.tsx': `import React from 'react'\n${line}\nexport const Card = () => <div className={card()} />`,
+    }
+    expect(select(sources)).toEqual(['/repo/recipe.ts', '/repo/card.tsx'])
+  })
+})
+
 describe('a path mapping', () => {
   test('is followed, so an aliased import is still an edge', () => {
     const sources = {

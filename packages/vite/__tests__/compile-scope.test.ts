@@ -295,11 +295,18 @@ describe('which modules the compiler transforms', () => {
     expect(code).not.toContain('button({')
   })
 
-  // Both were skipped, leaving the call to a definition compiling the design system removed: a
-  // build that passed and a module that threw when loaded, in the client and in SSR.
+  // Each was skipped, leaving the call to a definition compiling the design system removed: a
+  // build that passed and a module that threw when loaded, in the client and in SSR. The last two
+  // put a quote in front of the import whose word ends in a keyword: read as a specifier opening,
+  // it took everything up to the next quote, the real specifier's, lines later or on the same line.
   test.each([
     ['a comment in front of its specifier', `import { button } from /* the design system */ '@acme/ds'`],
     ['an escape in its specifier', `import { button } from '@acme/d\\u0073'`],
+    [
+      'a comment quoting "import" on the line before',
+      `// keep the "import" below first\nimport { button } from '@acme/ds'`,
+    ],
+    ['a quoted key "import" on the same line', `const map = { "import": 1 }; import { button } from '@acme/ds'`],
   ])('compiles one that imports that package with %s', async (_label, line) => {
     const { code, skipped } = await transformIn(
       'app/consumer.ts',

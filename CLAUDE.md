@@ -96,11 +96,14 @@ native evaluator's `resolve` follows one — a relative path, tsconfig `paths` a
 the inventory holds files of, as it holds a workspace design system imported as `@acme/ds`; skipping that caller leaves
 a call to a recipe the compiler removed. Never ask the bundler there: the specifiers are read out of text, which cannot
 tell a type from a value, and Vite fails the build resolving `import type … from 'type-fest'`, a package with no
-JavaScript. Text hides a specifier two ways: a comment in front of it, which `specifierAfterComments`
-(`packages/shared/src/module-specifier.ts`) reads past, and an escape, which both scans treat as reaching bamboo.
-Extraction's scan (`selectExtractable`) reads specifiers as this one does, so a change to one belongs in both. A
-single-file component's compiled script is held as a project overlay under `X.__bamboo__.ts[x]` so an importer resolves
-the same text; nothing is written to disk.
+JavaScript. Text hides a specifier three ways: a comment in front of it, which `specifierAfterComments`
+(`packages/shared/src/module-specifier.ts`) reads past; an escape, which both scans treat as reaching bamboo; and a
+string or quoted word ending in `from`, `import` or `require` in front of it, whose closing quote reads as a specifier
+opening, which is why both patterns look ahead at a specifier rather than consume it. Extraction's scan
+(`selectExtractable`) reads specifiers as this one does, so a change to one belongs in both, and
+`packages/vite/__tests__/specifier-scan-oracle.test.ts` judges both against TypeScript's parser. A single-file
+component's compiled script is held as a project overlay under `X.__bamboo__.ts[x]` so an importer resolves the same
+text; nothing is written to disk.
 
 **Cross-file answers are cached across native calls.** Each transform builds a fresh `ProjectEvaluator`, so without it a
 module importing from a large barrel re-parsed the barrel's members every time. `evaluate_export`, the imported-recipe

@@ -39,10 +39,13 @@ import { isAbsolute, posix } from 'node:path'
  * Deliberately loose about what surrounds them. A specifier missed here costs an edge, and an
  * edge missed can exclude a file that should have been kept — so the pattern is written to
  * over-match rather than to parse, and `scanSpecifiers` treats a source it found nothing in as
- * one it failed to read.
+ * one it failed to read. For the same reason the specifier is looked ahead at rather than
+ * consumed, as the Vite compiler's scan reads it: a keyword ending a string on the line — `'copy
+ * from'`, a `"from"` key — stands before a closing quote that reads as an opening, and taken for
+ * one it swallowed the line up to the next quote, the real specifier's.
  */
 const SPECIFIER =
-  /(?:\bfrom\s*|^\s*(?:import|export)\s*|\bimport\s*\(\s*|\brequire\s*\(\s*)(?:['"]([^'"\n]+)['"]|\/[*/])/gm
+  /(?:\bfrom\s*|^\s*(?:import|export)\s*|\bimport\s*\(\s*|\brequire\s*\(\s*)(?=['"]([^'"\n]+)['"]|\/[*/])/gm
 
 /** The extensions a specifier may omit, in the order the native resolver tries them. */
 const EXTENSIONS = ['.ts', '.tsx', '.d.ts', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs']
@@ -72,13 +75,16 @@ export interface ExtractableOptions {
  * Not all of them when one holds an escape, which names a file only once decoded. A comment in
  * front of a specifier hid it, beside any other import: the file was dropped, and the classes a
  * recipe call in it asked for had no rule.
+ *
+ * Exported for `specifier-scan-oracle.test.ts` in `@bamboocss/vite`, which judges this scan and
+ * the Vite compiler's against a parser.
  */
-const scanSpecifiers = (text: string): { specifiers: string[]; complete: boolean } => {
+export const scanSpecifiers = (text: string): { specifiers: string[]; complete: boolean } => {
   const specifiers: string[] = []
   let complete = true
   for (const match of text.matchAll(SPECIFIER)) {
-    // No string caught: a comment opens where the specifier would be, in the match's last two characters.
-    const specifier = match[1] ?? specifierAfterComments(text, match.index + match[0].length - 2)
+    // No string caught: a comment opens where the specifier would be, where the match ends.
+    const specifier = match[1] ?? specifierAfterComments(text, match.index + match[0].length)
     if (specifier === undefined) continue
     if (specifier.includes('\\')) complete = false
     else specifiers.push(specifier)

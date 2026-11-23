@@ -209,8 +209,15 @@ export const namesEntrypoint = (ctx: { imports: { outdir: string; value: ImportM
 /**
  * A module specifier in an import, export-from, dynamic import or require — or, where one would
  * be, the opening of a comment, which `specifierAfterComments` reads past.
+ *
+ * Looked ahead at rather than consumed, so a false start costs nothing. A keyword that ends a
+ * string or a quoted word — `"import"` as a key, `'… copy from'`, a comment's `the "import"
+ * below` — stands before that string's closing quote, which reads as a specifier opening. Taken
+ * for one, it swallowed everything up to the next quote, the opening of the real specifier lines
+ * later, and that import was never read. Now the false start leaves a specifier naming nothing,
+ * and the scan goes on from the keyword. No specifier spans a line, so none read here does.
  */
-const MODULE_SPECIFIER = /\b(?:from|import|require)\s*\(?\s*(?:['"]([^'"]+)['"]|\/[*/])/g
+const MODULE_SPECIFIER = /\b(?:from|import|require)\s*\(?\s*(?=['"]([^'"\n]+)['"]|\/[*/])/g
 /** Extra spellings to try when the specifier has no emitted JavaScript extension. */
 const SPECIFIER_SUFFIXES = [
   '',
@@ -259,9 +266,11 @@ const packageNameOf = (specifier: string) => {
  * package ships its own output. A subpath import (`#…`) resolves through the importer's
  * `package.json`, which this does not read, so one counts.
  *
- * A specifier is read past a comment in front of it, as extraction's scan reads it, and one
- * spelled with an escape counts, since it names a file only once decoded. Either was missed: the
- * module was skipped, and a recipe call in it shipped uncompiled, to throw when it was loaded.
+ * A specifier is read past a comment in front of it, as extraction's scan reads it, and past a
+ * quoted word ending in a keyword (see `MODULE_SPECIFIER`), and one spelled with an escape counts,
+ * since it names a file only once decoded. Each was missed: the module was skipped, and a recipe
+ * call in it shipped uncompiled, to throw when it was loaded. `specifier-scan-oracle.test.ts`
+ * judges this scan against a parser.
  *
  * The bundler is not asked. The specifiers here are read out of text, which cannot tell a type
  * from a value, and a type-only one is an import nothing else resolves: Vite fails the build
@@ -276,8 +285,8 @@ export const importsSourceModule = (resolution: SourceResolution, filePath: stri
     return emitted ? emitted.some(isSourceModule) : SPECIFIER_SUFFIXES.some((suffix) => isSourceModule(base + suffix))
   }
   for (const match of code.matchAll(MODULE_SPECIFIER)) {
-    // No string caught: a comment opens where the specifier would be, in the match's last two characters.
-    const specifier = match[1] ?? specifierAfterComments(code, match.index + match[0].length - 2)
+    // No string caught: a comment opens where the specifier would be, where the match ends.
+    const specifier = match[1] ?? specifierAfterComments(code, match.index + match[0].length)
     if (specifier === undefined) continue
     // Left to the analysis, which decodes the string as the parser does.
     if (specifier.includes('\\')) return true

@@ -57,6 +57,49 @@
           }
         ]
       }
+    },
+    {
+      "files": ["packages/shared/src/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "regex": "^(?:node:.*|(?:assert|async_hooks|buffer|child_process|cluster|console|constants|crypto|dgram|diagnostics_channel|dns|domain|events|fs|http|http2|https|inspector|module|net|os|path|perf_hooks|process|punycode|querystring|readline|repl|stream|string_decoder|sys|timers|tls|trace_events|tty|url|util|v8|vm|wasi|worker_threads|zlib)(?:/.*)?)$",
+                "message": "Code in @bamboocss/shared can end up in styled-system/helpers.mjs, which runs in the browser: import no Node built-in here, with or without `node:`."
+              }
+            ]
+          }
+        ],
+        "no-restricted-globals": [
+          "error",
+          {
+            "name": "process",
+            "message": "Code in @bamboocss/shared can end up in styled-system/helpers.mjs, which runs in the browser."
+          },
+          {
+            "name": "Buffer",
+            "message": "Code in @bamboocss/shared can end up in styled-system/helpers.mjs, which runs in the browser."
+          },
+          {
+            "name": "global",
+            "message": "Code in @bamboocss/shared can end up in styled-system/helpers.mjs, which runs in the browser."
+          },
+          {
+            "name": "require",
+            "message": "Code in @bamboocss/shared can end up in styled-system/helpers.mjs, which runs in the browser."
+          },
+          {
+            "name": "__dirname",
+            "message": "Code in @bamboocss/shared can end up in styled-system/helpers.mjs, which runs in the browser."
+          },
+          {
+            "name": "__filename",
+            "message": "Code in @bamboocss/shared can end up in styled-system/helpers.mjs, which runs in the browser."
+          }
+        ]
+      }
     }
   ]
 }

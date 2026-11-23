@@ -96,7 +96,7 @@ const railStyles = css({
   position: 'absolute',
   insetInlineStart: '3',
   insetBlock: '0',
-  w: 'px',
+  w: '1px',
   bg: 'border',
 })
 

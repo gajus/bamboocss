@@ -8,10 +8,9 @@ import type {
   FoldSpan,
   FoldUnknown,
 } from '@bamboocss/native-extractor'
-import { BambooError, compiledHelperName, viewTransitionClassName } from '@bamboocss/shared'
+import { BambooError, viewTransitionClassName } from '@bamboocss/shared'
 import type { Dict } from '@bamboocss/types'
 import MagicString from 'magic-string'
-import { dirname, relative, resolve as resolvePath } from 'node:path'
 import {
   AMBIGUOUS,
   collectRecipeConfigs,
@@ -25,6 +24,7 @@ import {
   type RecipeEntry,
 } from './fold-recipe'
 import { MAX_CX_COMBINATIONS } from './combinations'
+import { COMPILED_RUNTIME_ID } from './compiled-runtime'
 import { createRuntimeToken, createRuntimeTokenValue } from './runtime-css'
 import type { StaticStyleSetCompiler } from './style-set'
 import { UnwritableStyleError } from './unwritable-style'
@@ -195,17 +195,11 @@ export const SURVIVES_TO_RUNTIME = new Set<SkipReason>([
 /**
  * Imports a surviving reference to is not a failure.
  *
- * These are what the compiler itself writes; all live in `cx` and pull no engine, so a
- * reference to one is the fold having worked. The helpers by their release names, which are
- * the ones it imports, and by their own.
+ * `cx`, which a compiled `cx()` call still calls for the classes it could not see, pulls no engine,
+ * so a reference to it is the fold having worked. The helpers a compiled call reaches come from
+ * `virtual:bamboo/compiled`, which is no bamboo module.
  */
-const PERMITTED_BINDINGS = new Set([
-  'cx',
-  RECIPE_MAP_HELPER,
-  SPLIT_PROPS_HELPER,
-  compiledHelperName(RECIPE_MAP_HELPER),
-  compiledHelperName(SPLIT_PROPS_HELPER),
-])
+const PERMITTED_BINDINGS = new Set(['cx'])
 
 const LEADING_RELATIVE = /^(?:\.\.?\/)+/
 const TRAILING_SLASH = /\/$/
@@ -346,11 +340,6 @@ export const foldSource = (options: FoldOptions): FoldResult => {
    */
   const cssModules = ctx.imports.matchers.css?.mods ?? []
 
-  /**
-   * The generated css module, the only one whose exports are known. A configured
-   * `importMap.css` points at the user's own wrapper, which need not re-export `cx`.
-   */
-  const generatedCssModule = [ctx.imports.outdir, 'css'].join('/')
   const pathMappings = ctx.conf.tsOptions?.pathMappings
   const trim = (value: string) =>
     value
@@ -376,55 +365,6 @@ export const foldSource = (options: FoldOptions): FoldResult => {
   }
 
   const isBambooCssModule = (mod: string) => matchesModule(mod, cssModules)
-  const isGeneratedCssModule = (mod: string) => matchesModule(mod, [generatedCssModule])
-
-  /**
-   * Where the compiler's helpers can be imported from, for a file that imports the generated
-   * css module by *subpath* — `styled-system/css/cva.js` exports `cva`, not `cvaMap`, so the
-   * sibling `cx` module is the host, spelled with the caller's own prefix and extension.
-   */
-  const helperModuleFromSubpath = (mod: string): string | undefined => {
-    const normalized = mod.replaceAll('\\', '/')
-    const marker = '/css/'
-    const at = normalized.lastIndexOf(marker)
-    if (at < 0) return undefined
-
-    const prefix = normalized.slice(0, at + marker.length - 1)
-    if (!isGeneratedCssModule(prefix)) return undefined
-
-    const rest = normalized.slice(at + marker.length)
-    if (!rest || rest.includes('/')) return undefined
-
-    const dot = rest.lastIndexOf('.')
-    const extension = dot > 0 ? rest.slice(dot) : ''
-    if (rest === `cx${extension}`) return undefined
-
-    return `${prefix}/cx${extension}`
-  }
-
-  /** The generated css entry as spelled beside an imported config recipe. */
-  const configRecipeCssSpecifier = (binding: string): string => {
-    for (const declaration of analysis.imports) {
-      if (declaration.typeOnly) continue
-      const namesBinding = declaration.specifiers.some((named) => !named.typeOnly && named.local === binding)
-      if (!namesBinding) continue
-
-      const mod = declaration.module.replaceAll('\\', '/')
-      const marker = '/recipes'
-      const at = mod.lastIndexOf(marker)
-      if (at >= 0) return `${mod.slice(0, at)}/css`
-    }
-    return generatedCssModule
-  }
-
-  /** A relative specifier learnt from another module, expressed from the module being folded. */
-  const rebaseSpecifier = (specifier: string, declaringPath: string, consumingPath: string): string | undefined => {
-    if (!specifier.startsWith('.')) return specifier
-    const absolute = resolvePath(dirname(declaringPath), specifier)
-    const rebased = relative(dirname(consumingPath), absolute).replaceAll('\\', '/')
-    if (!rebased) return undefined
-    return rebased.startsWith('.') ? rebased : `./${rebased}`
-  }
 
   const folded: FoldedCall[] = []
   const skipped: SkippedCall[] = []
@@ -493,8 +433,6 @@ export const foldSource = (options: FoldOptions): FoldResult => {
 
   // The module's own recipes, then the ones it imports — by the name the file bound.
   const recipeConfigs = collectRecipeConfigs(analysis)
-  /** The specifier a call's helper import is written with when the file has none to extend. */
-  const helperModules = new Map<string, string | undefined>()
   for (const imported of analysis.importedRecipes) {
     if (recipeConfigs.has(imported.local)) continue
     const config = imported.config as RecipeConfig | undefined
@@ -503,11 +441,6 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       config && typeof config === 'object'
         ? { config, filePath: imported.filePath, dependencies: imported.dependencies }
         : AMBIGUOUS,
-    )
-    const cssSpecifier = imported.declaringImports.find((specifier) => isGeneratedCssModule(specifier))
-    helperModules.set(
-      imported.local,
-      cssSpecifier ? rebaseSpecifier(cssSpecifier, imported.filePath, options.filePath) : undefined,
     )
   }
 
@@ -542,7 +475,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     value?: string | number
     /** A guarded `token()` call naming no token, compiled to the `undefined` it returns. */
     missing?: true
-    /** Bindings to add to an existing import, by name so duplicates can be dropped. */
+    /** Helpers its replacement calls that the module has to import. */
     insert?: HelperInsert
     /** Lookup tables `replacement` reads by name, declared once it is applied. */
     tables?: string[]
@@ -808,7 +741,6 @@ export const foldSource = (options: FoldOptions): FoldResult => {
         const config = ctx.recipes.getConfig(name) as RecipeConfig | undefined
         if (config) {
           recipeConfigs.set(name, { config })
-          helperModules.set(name, configRecipeCssSpecifier(name))
         }
       }
 
@@ -827,15 +759,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
         continue
       }
       const helperFor = (helper: typeof RECIPE_MAP_HELPER) =>
-        ensureRecipeHelperImport(
-          helper,
-          analysis,
-          call.shadowedHelpers,
-          isBambooCssModule,
-          isGeneratedCssModule,
-          helperModules.get(name),
-          helperModuleFromSubpath,
-        )
+        ensureRecipeHelperImport(helper, analysis, call.shadowedHelpers)
       const foreign = entry && entry !== AMBIGUOUS ? entry.dependencies : undefined
 
       if (lowered.kind === 'dynamic-style') {
@@ -1508,20 +1432,11 @@ export const foldSource = (options: FoldOptions): FoldResult => {
 
   const magic = new MagicString(code)
 
-  // Which bindings have already been added, for the whole module rather than per insertion
-  // point — a module-level binding is in scope everywhere in the file.
+  // The helpers the applied replacements call that the module does not import yet, for the whole
+  // module rather than per call site, since a module-level binding is in scope everywhere in it.
   const insertedNames = new Set<string>()
   const applyInsert = (insert: HelperInsert | undefined) => {
-    if (!insert) return
-    const missing = insert.names.filter((name) => !insertedNames.has(name))
-    if (!missing.length) return
-    magic.appendLeft(
-      insert.pos,
-      insert.module
-        ? `\nimport { ${missing.join(', ')} } from '${insert.module}'`
-        : missing.map((name) => `, ${name}`).join(''),
-    )
-    for (const name of missing) insertedNames.add(name)
+    for (const name of insert?.names ?? []) insertedNames.add(name)
   }
 
   const collides = (start: number, end: number) => applied.some(([from, to]) => start < to && from < end)
@@ -1641,15 +1556,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     const { start, end } = split.span
     if (collides(start, end)) continue
 
-    const helper = ensureRecipeHelperImport(
-      SPLIT_PROPS_HELPER,
-      analysis,
-      split.shadowedHelpers,
-      isBambooCssModule,
-      isGeneratedCssModule,
-      helperModules.get(split.binding),
-      helperModuleFromSubpath,
-    )
+    const helper = ensureRecipeHelperImport(SPLIT_PROPS_HELPER, analysis, split.shadowedHelpers)
     if (!helper) continue
 
     const keys = Object.keys(entry.config.variants ?? {})
@@ -1689,6 +1596,14 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     if (!compiled || collides(exposure.span.start, exposure.span.end)) continue
     magic.overwrite(exposure.span.start, exposure.span.end, exposure.replacement)
     applied.push([exposure.span.start, exposure.span.end])
+  }
+
+  // One declaration for every helper, after the last import rather than at the top of the file:
+  // a directive prologue — `'use client'`, which is exactly what a component file calling a
+  // recipe tends to open with — stops being a directive the moment a statement precedes it.
+  const lastImport = analysis.imports.at(-1)
+  if (insertedNames.size > 0 && lastImport) {
+    magic.appendLeft(lastImport.span.end, `\nimport { ${[...insertedNames].join(', ')} } from '${COMPILED_RUNTIME_ID}'`)
   }
 
   /**

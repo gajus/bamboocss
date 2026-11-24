@@ -333,8 +333,6 @@ pub struct FoldImportedRecipe {
     /// The declaring module's single resolved config; absent when it declares the name twice
     /// or the config resolved to more than one value.
     pub config: Option<serde_json::Value>,
-    /// Every module specifier the declaring module imports, in source order.
-    pub declaring_imports: Vec<String>,
     /// The modules a call lowered against this recipe depends on: the import's target, every
     /// module a re-export route crossed, the declaring module and whatever its config read.
     pub dependencies: Vec<String>,

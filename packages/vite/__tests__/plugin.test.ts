@@ -52,12 +52,14 @@ describe('plugin contract', () => {
     const { list } = plugins()
 
     // The css plugin owns the extraction the fold's context reads from, so it goes first. Its
-    // early half carries only a `pre`-ordered output hook, so its position is immaterial.
+    // early half carries only a `pre`-ordered output hook, so its position is immaterial, and so
+    // is that of the module serving the helpers compiled code imports, which answers one id.
     expect(list.map((p) => p.name)).toEqual([
       'bamboocss:css',
       'bamboocss:css-early',
       'bamboocss:compiler',
       'bamboocss:compiler-sfc',
+      'bamboocss:compiled-runtime',
     ])
   })
 

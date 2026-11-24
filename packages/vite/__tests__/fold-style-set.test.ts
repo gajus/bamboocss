@@ -1,8 +1,7 @@
-import { generateCx } from '../../generator/src/artifacts/js/cx'
 import { withoutMergeCodes } from '@bamboocss/fixture'
 import { getRecipeIdentity, viewTransitionClassName } from '@bamboocss/shared'
 import { describe, expect, test } from 'vitest'
-import { createFoldFixture, selectorsFor } from './fixture'
+import { compiledRuntime, createFoldFixture, selectorsFor } from './fixture'
 
 describe('static style-set folding', () => {
   test('an inline recipe and css share the same declaration atom across files', () => {
@@ -240,10 +239,7 @@ describe('static style-set folding', () => {
     `)
 
     expect(result.skipped).toEqual([])
-    const { js } = generateCx(fixture.ctx as never)
-    const { cvaMap } = new Function(
-      js.replace(/^import[^\n]*\n/m, '').replace(/export\s*\{[^}]*\}/, 'return { cx, cvaMap }'),
-    )()
+    const { cvaMap } = compiledRuntime
     const code = result.code.replace(/^import .*$/gm, '').replaceAll('export const ', 'const ')
     const module = new Function('cvaMap', `${code}\nreturn { className, literal }`)(cvaMap)
     const props = Object.fromEntries(names.map((name, index) => [name, index % 2 ? 'a' : 'b']))

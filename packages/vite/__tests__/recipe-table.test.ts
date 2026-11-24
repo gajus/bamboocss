@@ -1,9 +1,9 @@
 import { createContext } from '@bamboocss/fixture'
 import { describe, expect, test } from 'vitest'
-import { generateCx } from '../../generator/src/artifacts/js/cx'
 import { createRecipeLookups } from '../src/recipe-table'
 import { createRuntimeCss } from '../src/runtime-css'
 import { createStaticStyleSetCompiler, type StyleSetRecipeConfig } from '../src/style-set'
+import { compiledRuntime } from './fixture'
 
 /**
  * A recipe compiled in segments has to name, for every selection, exactly the class string the
@@ -18,11 +18,7 @@ import { createStaticStyleSetCompiler, type StyleSetRecipeConfig } from '../src/
  */
 const ctx = createContext()
 const styleCompiler = createStaticStyleSetCompiler(ctx, createRuntimeCss(ctx))
-const cvaMap = new Function(
-  generateCx(ctx as never)
-    .js.replace(/^import[^\n]*\n/m, '')
-    .replace(/export\s*\{[^}]*\}/, 'return { cvaMap }'),
-)().cvaMap as (values: unknown[], table: unknown) => unknown
+const { cvaMap } = compiledRuntime
 
 /** A seeded generator, so a failure names the recipe that produced it. */
 const random = (seed: number) => () => {

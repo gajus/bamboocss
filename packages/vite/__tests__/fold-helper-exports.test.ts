@@ -1,18 +1,13 @@
 import { createGeneratorContext } from '@bamboocss/fixture'
-import { compiledHelperName } from '@bamboocss/shared'
+import { type CvaLookup, cvaMap, splitProps } from '@bamboocss/shared'
 import { describe, expect, test } from 'vitest'
+import { bamboocssCompiledRuntime, COMPILED_RUNTIME_ID } from '../src/compiled-runtime'
 import { RECIPE_MAP_HELPER, SPLIT_PROPS_HELPER } from '../src/fold-recipe'
+import compiled from '../src/generated/compiled.mjs.json' with { type: 'json' }
+import { compiledRuntime } from './fixture'
 
-/** The helpers a fold can call. */
-const HELPERS = [RECIPE_MAP_HELPER, SPLIT_PROPS_HELPER] as const
-
-/**
- * The names a fold can write into a `styled-system/css` import: each helper's for this release.
- *
- * The transform extends whatever import of that module the file already has rather than
- * writing its own, so the barrel is the specifier its emitted calls resolve against.
- */
-const INJECTED = HELPERS.map(compiledHelperName)
+/** The helpers a fold can write a call to. */
+const HELPERS = [RECIPE_MAP_HELPER, SPLIT_PROPS_HELPER]
 
 /** The authoring API the barrel exists to expose. */
 const AUTHORING = ['css', 'cx', 'cva', 'sva', 'fallback', 'viewTransition']
@@ -24,20 +19,18 @@ const generated = (id: 'css-index' | 'cx', file: string) => {
   return code
 }
 
-const barrel = (extension: 'mjs' | 'd.ts') => generated('css-index', `index.${extension}`)
-
 /**
- * Names re-exported by a module, read from its `export { … } from '…'` statements, or with
- * `from: false` the names it exports from its own `export { … }` ones.
+ * Names a module exports, read from its `export { … }` lists, with or without `from`, and from
+ * its exported declarations.
  *
- * Parsed rather than matched as substrings, so a name appearing only in a comment does not
- * count as an export.
+ * Parsed rather than matched as substrings, and with comments left out, so a name appearing only
+ * in prose does not count as an export.
  */
-const reExportedNames = (code: string, { from = true } = {}) => {
+const exportedNames = (code: string) => {
+  const source = code.replaceAll(/\/\*[\s\S]*?\*\//g, '').replaceAll(/^\s*\/\/.*$/gm, '')
   const names = new Set<string>()
-  const statement = from ? /export\s+(?:type\s+)?\{([^}]*)\}\s*from/g : /export\s+\{([^}]*)\}(?!\s*from)/g
 
-  for (const [, clause] of code.matchAll(statement)) {
+  for (const [, clause = ''] of source.matchAll(/export\s+(?:type\s+)?\{([^}]*)\}/g)) {
     for (const specifier of clause.split(',')) {
       // `a as b` is exported under `b`; a bare `a` under itself.
       const exported = specifier
@@ -48,59 +41,104 @@ const reExportedNames = (code: string, { from = true } = {}) => {
       if (exported) names.add(exported)
     }
   }
+  const declaration = /export\s+(?:declare\s+)?(?:const|let|var|function|class|type|interface)\s+([\w$]+)/g
+  for (const [, name] of source.matchAll(declaration)) if (name) names.add(name)
 
   return names
 }
 
-describe('css barrel', () => {
+describe('virtual:bamboo/compiled', () => {
   /**
-   * Nothing else pins this pair short of a build. The barrel is a hand-written list in
-   * `setupCssIndex`, and folded code is rewritten in memory during the bundler's transform, so
-   * it is never typechecked — a name dropped from the barrel fails every build that compiles a
-   * recipe call, on an import the barrel does not export.
+   * Nothing else pins this short of a build. Folded code is rewritten in memory during the
+   * bundler's transform and never typechecked, so a helper the fold calls that this module does
+   * not export fails every build compiling such a call, on an import the module lacks.
+   *
+   * Nothing else, either: every export is shipped to every page that runs compiled code.
    */
-  test('exports every helper the fold can inject', () => {
-    const exported = reExportedNames(barrel('mjs'))
-    for (const helper of INJECTED) {
-      expect(exported, `${helper} is written by the fold and must resolve`).toContain(helper)
+  test('exports every helper the fold can write a call to, and nothing else', () => {
+    expect([...exportedNames(compiled.content)].sort()).toEqual([...HELPERS].sort())
+  })
+
+  /**
+   * The text is `@bamboocss/shared`'s `src/compiled.ts` as last built, which that package's
+   * postbuild copies here. A copy left behind by a change to the source answers differently from
+   * it; CI's check that a build changes nothing finds that too, but only there.
+   */
+  test('behaves as its source does', () => {
+    const table: CvaLookup = [
+      1,
+      [
+        [1, ~0, ~1, ['sm', ~2]],
+        [0, ~3, 0, ['quiet', ~4]],
+      ],
+      ['miss-size', 'default-size', 'small', 'miss-tone', 'quiet-tone'],
+    ]
+    const segments: CvaLookup = ['d_flex', [0, [[0, ~0, ~0, ['quiet', ~1]]], ['', 'c_gray']], 'm_1']
+    const slots: Record<string, CvaLookup> = {
+      root: 'd_flex',
+      label: [0, [[0, ~0, ~0, ['quiet', ~1]]], ['', 'c_gray']],
+    }
+    const selections = [
+      ['quiet', 'sm'],
+      [undefined, 'sm'],
+      [undefined, undefined],
+      [null, 'unknown'],
+    ]
+    for (const values of selections) {
+      for (const lookup of [table, segments, slots]) {
+        expect(compiledRuntime.cvaMap(values, lookup)).toEqual(cvaMap(values, lookup))
+      }
+    }
+
+    // An accessor stays one, which reading it eagerly would undo.
+    const props = Object.defineProperty({ size: 'sm', id: 'field' }, 'label', {
+      enumerable: true,
+      get: () => 'read',
+    })
+    const [picked, rest] = compiledRuntime.splitProps(props, ['size'])
+    expect([picked, rest]).toEqual(splitProps(props, ['size']))
+    expect(Object.getOwnPropertyDescriptor(rest, 'label')?.get).toBeTypeOf('function')
+  })
+
+  test('is what the plugin resolves and loads the id to', () => {
+    const plugin = bamboocssCompiledRuntime()
+    const resolveId = plugin.resolveId as (id: string) => string | null
+    const load = plugin.load as (id: string) => string | null
+
+    const resolved = resolveId(COMPILED_RUNTIME_ID)
+    expect(resolved).toBe(`\0${COMPILED_RUNTIME_ID}`)
+    expect(resolveId(resolved!)).toBe(resolved)
+    expect(load(resolved!)).toBe(compiled.content)
+    expect(load(`${resolved}?t=1`)).toBe(compiled.content)
+
+    expect(resolveId('virtual:bamboo.css')).toBeNull()
+    expect(load('\0virtual:bamboo.css')).toBeNull()
+  })
+})
+
+describe('the generated styled-system', () => {
+  /**
+   * Compiled code imports none of these from a `styled-system`, which can be another release's,
+   * so the generated runtime exports none: one it did is one compiled code could be pointed at
+   * again, and they are not authoring API.
+   */
+  test('exports none of the helpers compiled code calls', () => {
+    const modules = [
+      ['css-index', 'index.mjs'],
+      ['css-index', 'index.d.ts'],
+      ['cx', 'cx.mjs'],
+      ['cx', 'cx.d.ts'],
+    ] as const
+    for (const [id, file] of modules) {
+      const exported = exportedNames(generated(id, file))
+      for (const helper of HELPERS) expect(exported, `${file} exports ${helper}`).not.toContain(helper)
     }
   })
 
-  /**
-   * The barrel re-exports the helpers from the `cx` module, which defines them, so a name it
-   * re-exports and `cx` does not export fails to link, as `cx` would be the module lacking it.
-   */
-  test('re-exports helpers the cx module exports by the same names', () => {
-    const exported = reExportedNames(generated('cx', 'cx.mjs'), { from: false })
-    for (const helper of INJECTED) expect(exported).toContain(helper)
-  })
-
-  /**
-   * By their own names they are what code compiled before the helpers were named for a release
-   * imports, which finds nothing to call here either, rather than tables read in another format.
-   */
-  test('exports the helpers only by the names of this release', () => {
-    const exported = reExportedNames(barrel('mjs'))
-    for (const helper of HELPERS) expect(exported).not.toContain(helper)
-  })
-
-  test('exports the authoring API', () => {
-    const exported = reExportedNames(barrel('mjs'))
-    for (const name of AUTHORING) expect(exported).toContain(name)
-  })
-
-  /**
-   * The declaration file omits the injected helpers on purpose: a declaration would buy
-   * nothing — folded code is never typechecked — beyond advertising them as API, which is
-   * what a blanket `export *` did before. Each stays typed in the module defining it, so
-   * deep-importing one on purpose still works.
-   *
-   * Asserted so that "fix the types/runtime mismatch" does not quietly undo it.
-   */
-  test('does not declare the injected helpers as types', () => {
-    const declared = reExportedNames(barrel('d.ts'))
-
-    for (const helper of [...HELPERS, ...INJECTED]) expect(declared).not.toContain(helper)
-    for (const name of AUTHORING) expect(declared).toContain(name)
+  test('exports the authoring API from the css barrel', () => {
+    for (const file of ['index.mjs', 'index.d.ts']) {
+      const exported = exportedNames(generated('css-index', file))
+      for (const name of AUTHORING) expect(exported, `${file} exports ${name}`).toContain(name)
+    }
   })
 })

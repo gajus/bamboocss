@@ -15,7 +15,7 @@ import { generateCx } from '../src/artifacts/js/cx'
  */
 const compile = (config: Config) => {
   const { js } = generateCx(createGeneratorContext(config))
-  const body = js.replace(/^import[^\n]*\n/m, '').replace(/export\s*\{[^}]*\}/, 'return { cx }')
+  const body = js.replace(/export\s*\{[^}]*\}/, 'return { cx }')
   return (new Function(body)() as { cx: (...args: unknown[]) => string }).cx
 }
 

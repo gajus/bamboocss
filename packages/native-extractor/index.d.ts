@@ -352,7 +352,6 @@ export interface FoldAnalysis {
     filePath: string
     name: string
     config?: unknown
-    declaringImports: string[]
     dependencies: string[]
   }>
   /**

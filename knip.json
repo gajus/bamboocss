@@ -54,7 +54,7 @@
       "project": ["src/**/*.ts"]
     },
     "packages/shared": {
-      "entry": ["src/shared.ts!"],
+      "entry": ["src/shared.ts!", "src/compiled.ts!"],
       "project": ["src/**/*.ts"]
     },
     "packages/token-dictionary": {

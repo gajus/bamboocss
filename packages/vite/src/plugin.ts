@@ -7,6 +7,7 @@ import type { ImportMapOutput } from '@bamboocss/types'
 import { emittedModuleCandidates, specifierAfterComments, truncateList } from '@bamboocss/shared'
 import { markStaticCompilerActive } from '@bamboocss/node/static-compiler'
 import type { Plugin } from 'vite'
+import { bamboocssCompiledRuntime } from './compiled-runtime'
 import { asError, bamboocssCss, bamboocssCssEarly, isStylesheetUrl, VIRTUAL_CSS_ID } from './css'
 import { extractedFileKey, normalizeFsPath } from './fs-path'
 import { bare } from './class-name'
@@ -3492,5 +3493,6 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     bamboocssCssEarly({ session: staticSession, pruneCss }),
     compiler,
     compilerSfc,
+    bamboocssCompiledRuntime(),
   ]
 }

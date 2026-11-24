@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { generateCx } from '../../generator/src/artifacts/js/cx'
-import { createFoldFixture } from './fixture'
+import { compiledRuntime, createFoldFixture } from './fixture'
 
 /**
  * A recipe call whose selection the build cannot see compiles to a `cvaMap` decision table, and it
@@ -12,7 +12,7 @@ import { createFoldFixture } from './fixture'
  * at its depth in the table rather than the one the decision was about, so it decided `size` by
  * `tone` and returned the wrong root class for most selections, while `.icon` and the whole slot
  * object, which leave nothing out, were right. Each case below compiles both spellings of every
- * combination and runs them against the `cvaMap` the build emits.
+ * combination and runs them against the `cvaMap` the plugin serves.
  */
 
 /** What a variant can be given, and how a call written with literals spells it: `undefined` leaves the key out. */
@@ -51,18 +51,19 @@ const describeRow = (names: string[], row: State[]) =>
   names.map((name, index) => `${name}=${row[index]!.literal ?? 'omitted'}`).join(' ')
 
 /**
- * Fold `source` as the strict compiler does and run it against the `cx` and `cvaMap` this build
- * emits — the artifact evaluated, not a copy of it, since that string is what ships.
+ * Fold `source` as the strict compiler does and run it against the `cx` this build emits and the
+ * `cvaMap` the plugin serves — the shipped text evaluated, not a copy of it.
  */
 const compileAndRun = (source: string, exports: string[]) => {
   const fixture = createFoldFixture()
   const result = fixture.foldStrict(source)
   const { js } = generateCx(fixture.ctx as never)
-  const helpers = new Function(
-    js.replace(/^import[^\n]*\n/m, '').replace(/export\s*\{[^}]*\}/, 'return { cx, cvaMap }'),
-  )()
+  const helpers = new Function(js.replace(/export\s*\{[^}]*\}/, 'return { cx }'))()
   const code = result.code.replace(/^import .*$/gm, '').replaceAll('export const ', 'const ')
-  const module = new Function('cx', 'cvaMap', `${code}\nreturn { ${exports.join(', ')} }`)(helpers.cx, helpers.cvaMap)
+  const module = new Function('cx', 'cvaMap', `${code}\nreturn { ${exports.join(', ')} }`)(
+    helpers.cx,
+    compiledRuntime.cvaMap,
+  )
   return { result, code, module: module as Record<string, any> }
 }
 

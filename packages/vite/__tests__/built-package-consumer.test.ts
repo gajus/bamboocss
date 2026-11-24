@@ -254,7 +254,7 @@ const runtimeConsumer = (format: 'cjs' | 'mjs', action: RuntimeAction) => {
   const fixture = JSON.stringify(consumerFixture)
   const assertFactory = `
 const plugins = bamboocss({ cwd: ${fixture}, reportSummary: false })
-if (plugins.map((plugin) => plugin.name).join(',') !== 'bamboocss:css,bamboocss:css-early,bamboocss:compiler,bamboocss:compiler-sfc') throw new Error('bad packed plugins')
+if (plugins.map((plugin) => plugin.name).join(',') !== 'bamboocss:css,bamboocss:css-early,bamboocss:compiler,bamboocss:compiler-sfc,bamboocss:compiled-runtime') throw new Error('bad packed plugins')
 if (!globalThis[Symbol.for('bamboocss.static-compiler')]) throw new Error('packed factory did not announce the compiler')
 `
   const actionSource = runtimeAction(action, consumerFixture)

@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { generateCx } from '../../generator/src/artifacts/js/cx'
-import { createFoldFixture } from './fixture'
+import { compiledRuntime, createFoldFixture } from './fixture'
 
 /**
  * Where a recipe lookup's table lives: declared once for the module, before its first import, and
@@ -9,14 +8,11 @@ import { createFoldFixture } from './fixture'
  */
 const RECIPE = `const badge = cva({ variants: { tone: { quiet: { color: 'gray.500' }, loud: { color: 'red.500' } } } })`
 
-/** Fold `source` and run it against the `cvaMap` this build emits, with `globals` in scope. */
+/** Fold `source` and run it against the `cvaMap` the plugin serves, with `globals` in scope. */
 const run = (source: string, exports: string[], globals: Record<string, unknown> = {}) => {
   const fixture = createFoldFixture()
   const { code } = fixture.foldStrict(source)
-  const { js } = generateCx(fixture.ctx as never)
-  const { cvaMap } = new Function(
-    js.replace(/^import[^\n]*\n/m, '').replace(/export\s*\{[^}]*\}/, 'return { cx, cvaMap }'),
-  )()
+  const { cvaMap } = compiledRuntime
   const body = code.replace(/^import .*$/gm, '').replaceAll('export const ', 'const ')
   const module = new Function('cvaMap', ...Object.keys(globals), `${body}\nreturn { ${exports.join(', ')} }`)(
     cvaMap,

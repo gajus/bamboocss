@@ -1,7 +1,7 @@
 import { generateCx } from '../../generator/src/artifacts/js/cx'
 import { esc } from '@bamboocss/shared'
 import { describe, expect, test } from 'vitest'
-import { createFoldFixture } from './fixture'
+import { compiledRuntime, createFoldFixture } from './fixture'
 
 /**
  * Class names `cx` merges, end to end: a component styling itself with `css()` and forwarding the
@@ -23,9 +23,7 @@ const run = (hash: boolean) => {
   const fixture = createFoldFixture({ hash: { className: hash } })
   const result = fixture.fold(MODULE)
   const { js } = generateCx(fixture.ctx as never)
-  const cx = new Function(js.replace(/^import[^\n]*\n/m, '').replace(/export\s*\{[^}]*\}/, 'return { cx }'))().cx as (
-    ...args: unknown[]
-  ) => string
+  const cx = new Function(js.replace(/export\s*\{[^}]*\}/, 'return { cx }'))().cx as (...args: unknown[]) => string
   const exports = new Function(
     'cx',
     `${result.code.replace(/^import .*$/gm, '').replaceAll('export const ', 'const ')}\nreturn { card, wide, tall }`,
@@ -118,9 +116,7 @@ describe('a cx() the compiler composes merges as the runtime cx does', () => {
     const fixture = createFoldFixture({ hash: { className: hash } })
     const result = fixture.fold(MODULE_OF_PAIRS)
     const { js } = generateCx(fixture.ctx as never)
-    const cx = new Function(js.replace(/^import[^\n]*\n/m, '').replace(/export\s*\{[^}]*\}/, 'return { cx }'))().cx as (
-      ...args: unknown[]
-    ) => string
+    const cx = new Function(js.replace(/export\s*\{[^}]*\}/, 'return { cx }'))().cx as (...args: unknown[]) => string
     const names = PAIRS.flatMap((_, index) => [`composed${index}`, `chosen${index}`, `own${index}`, `passed${index}`])
     const exports = new Function(
       'cx',
@@ -164,13 +160,11 @@ export const own = (tone) => card({ tone })
 export const passed = css({ padding: '3' })
 `)
   const { js } = generateCx(fixture.ctx as never)
-  const helpers = new Function(
-    js.replace(/^import[^\n]*\n/m, '').replace(/export\s*\{[^}]*\}/, 'return { cx, cvaMap }'),
-  )()
+  const helpers = new Function(js.replace(/export\s*\{[^}]*\}/, 'return { cx }'))()
   const code = result.code.replace(/^import .*$/gm, '').replaceAll('export const ', 'const ')
   const exports = new Function('cx', 'cvaMap', `${code}\nreturn { composed, own, passed }`)(
     helpers.cx,
-    helpers.cvaMap,
+    compiledRuntime.cvaMap,
   ) as {
     composed: (tone: string) => string
     own: (tone: string) => string

@@ -31,7 +31,8 @@ try {
   globalThis[flag] = false
   const plugins = factory(transformCwd ? { cwd: transformCwd, reportSummary: false } : undefined)
   if (!globalThis[flag]) throw new Error('Plugin factory did not synchronously announce the static compiler')
-  const expectedPlugins = 'bamboocss:css,bamboocss:css-early,bamboocss:compiler,bamboocss:compiler-sfc'
+  const expectedPlugins =
+    'bamboocss:css,bamboocss:css-early,bamboocss:compiler,bamboocss:compiler-sfc,bamboocss:compiled-runtime'
   if (plugins.map((plugin) => plugin.name).join(',') !== expectedPlugins) {
     throw new Error('Plugin factory did not synchronously return the public plugins')
   }

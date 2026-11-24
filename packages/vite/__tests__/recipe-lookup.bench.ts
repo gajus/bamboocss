@@ -1,10 +1,10 @@
 import { bench, describe } from 'vitest'
 import { generateCx } from '../../generator/src/artifacts/js/cx'
-import { createFoldFixture } from './fixture'
+import { compiledRuntime, createFoldFixture } from './fixture'
 
 /**
  * A recipe call whose selection the build cannot see, on the path it runs every render: folded by
- * the compiler into a `cvaMap` lookup and run against the `cvaMap` the build emits, so what is
+ * the compiler into a `cvaMap` lookup and run against the `cvaMap` the plugin serves, so what is
  * measured is what ships, the table and the lookup both.
  *
  * The control answers the same selections from a nested object, as a map written by hand would,
@@ -50,14 +50,12 @@ export const slots = (tone, size) => field({ tone, size })
 const fixture = createFoldFixture()
 const { code } = fixture.foldStrict(SOURCE)
 const { js } = generateCx(fixture.ctx as never)
-const helpers = new Function(
-  js.replace(/^import[^\n]*\n/m, '').replace(/export\s*\{[^}]*\}/, 'return { cx, cvaMap }'),
-)()
+const helpers = new Function(js.replace(/export\s*\{[^}]*\}/, 'return { cx }'))()
 const compiled = new Function(
   'cx',
   'cvaMap',
   `${code.replace(/^import .*$/gm, '').replaceAll('export const ', 'const ')}\nreturn { className, root, slots, segmented }`,
-)(helpers.cx, helpers.cvaMap) as Record<'className' | 'root', (tone: unknown, size: unknown) => string> & {
+)(helpers.cx, compiledRuntime.cvaMap) as Record<'className' | 'root', (tone: unknown, size: unknown) => string> & {
   segmented: (tone: unknown, size: unknown, shape: unknown) => string
   slots: (tone: unknown, size: unknown) => Record<string, string>
 }

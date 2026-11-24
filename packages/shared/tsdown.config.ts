@@ -1,6 +1,6 @@
 import { defineConfig, type UserConfig } from 'tsdown'
 
-const entries = ['src/index.ts', 'src/shared.ts']
+const entries = ['src/index.ts', 'src/shared.ts', 'src/compiled.ts']
 
 export default defineConfig(
   entries.map(

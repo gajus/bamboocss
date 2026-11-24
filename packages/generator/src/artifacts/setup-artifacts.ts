@@ -1,5 +1,4 @@
 import type { Context } from '@bamboocss/core'
-import { compiledHelperName } from '@bamboocss/shared'
 import type { AffectedArtifacts, Artifact, ArtifactFilters, ArtifactId } from '@bamboocss/types'
 import outdent from 'outdent'
 import { generateConditions } from './js/conditions'
@@ -233,12 +232,12 @@ function setupPatterns(ctx: Context, filters?: ArtifactFilters): Artifact | unde
 }
 
 /**
- * The `styled-system/css` barrel.
+ * The `styled-system/css` barrel: the authoring API, and nothing else.
  *
- * A deliberate list rather than `export *`, because two of the four modules also export
- * helpers the source transform writes, and a blanket re-export made those part of the
- * authoring API by accident. The runtime and the declaration file name different sets on
- * purpose — see the note in the emitted js.
+ * A deliberate list rather than `export *`, so nothing else a module exports becomes authoring
+ * API by accident, as the helpers compiled code calls once did through a blanket re-export. No
+ * module here exports those any more: compiled code imports them from `virtual:bamboo/compiled`,
+ * which the Vite plugin serves from its own release.
  */
 function setupCssIndex(ctx: Context): Artifact {
   const index = {
@@ -247,17 +246,6 @@ function setupCssIndex(ctx: Context): Artifact {
   ${ctx.file.reExport('cx', './cx')}
   ${ctx.file.reExport('cva', './cva')}
   ${ctx.file.reExport('sva', './sva')}
-
-  // Written by the source transform, never by hand. They are exported here because the
-  // transform adds them to whatever \`styled-system/css\` import the file already has, so
-  // this is the specifier its emitted calls resolve against. By this release's names, which
-  // are the ones it imports, so code compiled by another release finds nothing here to call.
-  //
-  // The declaration file below deliberately omits them. Folded code is rewritten in memory
-  // during the bundler's transform and never typechecked, so a declaration here would buy
-  // nothing but an autocomplete entry advertising them as API. Each stays fully typed in
-  // the module that defines it, for anyone deep-importing on purpose.
-  ${ctx.file.reExport(`${compiledHelperName('cvaMap')}, ${compiledHelperName('splitProps')}`, './cx')}
  `,
     dts: outdent`
   ${ctx.file.reExportDts('css, fallback, keyframes, viewTransition', './css')}

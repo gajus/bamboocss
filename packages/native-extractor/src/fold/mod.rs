@@ -1446,7 +1446,6 @@ fn analyze_facts<'a>(
                 file_path: recipe.file_path,
                 name: recipe.name,
                 config: recipe.config,
-                declaring_imports: recipe.declaring_imports,
                 dependencies: recipe.dependencies,
             })
             .collect(),
@@ -1883,7 +1882,6 @@ struct ImportedRecipe {
     file_path: String,
     name: String,
     config: Option<serde_json::Value>,
-    declaring_imports: Vec<String>,
     dependencies: Vec<String>,
 }
 
@@ -1993,11 +1991,10 @@ fn imported_recipe_walk(
                 }
                 continue;
             }
-            let (config, declaring_imports, config_reads) = declaring
+            let (config, config_reads) = declaring
                 .map(|module| {
                     (
                         module.configs.get(&origin.name).cloned().flatten(),
-                        module.imports.clone(),
                         module.reads.clone(),
                     )
                 })
@@ -2007,7 +2004,6 @@ fn imported_recipe_walk(
                 file_path: origin.file_path.clone(),
                 name: origin.name.clone(),
                 config,
-                declaring_imports,
                 dependencies: dependencies(config_reads),
             });
         }
@@ -2047,7 +2043,6 @@ struct ModuleRecipes {
     /// Style bindings declared at module scope: name → the call (absent when it is not exact).
     styles: HashMap<String, Option<Arc<ModuleStyle>>>,
     exported_locally: HashSet<String>,
-    imports: Vec<String>,
     /// Modules the configs' and the styles' evaluation read.
     reads: Vec<String>,
 }
@@ -2179,22 +2174,10 @@ fn module_recipes_uncached(
                 }
             }
         }
-        let imports = parsed
-            .program
-            .body
-            .iter()
-            .filter_map(|statement| match statement {
-                Statement::ImportDeclaration(declaration) if !declaration.import_kind.is_type() => {
-                    Some(declaration.source.value.to_string())
-                }
-                _ => None,
-            })
-            .collect();
         Some(ModuleRecipes {
             configs,
             styles,
             exported_locally,
-            imports,
             reads,
         })
     })()

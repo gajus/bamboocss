@@ -5,10 +5,22 @@ import { createRequire } from 'node:module'
 import { dirname, isAbsolute, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { foldSource, type FoldResult } from '../src/fold'
+import compiledRuntimeModule from '../src/generated/compiled.mjs.json' with { type: 'json' }
 import { createRuntimeCss } from '../src/runtime-css'
 import { createStaticStyleSetCompiler } from '../src/style-set'
 
 export const FILE_PATH = 'app/src/test.tsx'
+
+/**
+ * The helpers compiled code calls, evaluated from the text the plugin serves as
+ * `virtual:bamboo/compiled` rather than imported from their source, since that text is what ships.
+ */
+export const compiledRuntime = new Function(
+  compiledRuntimeModule.content.replace(/export\s*\{([^}]*)\};?\s*$/, 'return {$1}'),
+)() as {
+  cvaMap: (values: unknown[], table: unknown) => unknown
+  splitProps: (props: object, ...keys: unknown[]) => Array<Record<string, unknown>>
+}
 
 export const createFoldFixture = (userConfig?: Parameters<typeof createContext>[0]) => {
   const ctx = createContext(userConfig)

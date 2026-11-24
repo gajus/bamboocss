@@ -1,5 +1,6 @@
 import type { FoldAnalysis, FoldCall, FoldSelection } from '@bamboocss/native-extractor'
-import { compiledHelperName, inferSlots } from '@bamboocss/shared'
+import { inferSlots } from '@bamboocss/shared'
+import { COMPILED_RUNTIME_ID } from './compiled-runtime'
 import { type ClassLookup, createRecipeLookups, type SlotsLookup } from './recipe-table'
 import type { StaticStyleSetCompiler, StyleSetRecipeConfig } from './style-set'
 
@@ -93,94 +94,39 @@ export const AMBIGUOUS: RecipeEntry = Object.freeze({ config: {} })
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/
 const optionalAccess = (key: string) => (IDENTIFIER.test(key) ? `?.${key}` : `?.[${JSON.stringify(key)}]`)
 
-/** Where a helper import can be written, and under what name the call site can reach it. */
+/** A helper a replacement calls that the module has to import, by name so duplicates can be dropped. */
 export interface HelperInsert {
-  pos: number
-  /** Import specifiers, each the helper's release name bound to its own: `cvaMap$bamboo_… as cvaMap`. */
   names: string[]
-  module?: string
 }
 
 /**
- * Make a generated compile helper callable at this call site, by whatever name the file gives it.
+ * Make a compiled helper callable at this call site, by whatever name the file gives it.
  *
- * Unlike `cx`, an inline recipe's callee is a local binding, so there is nothing to match —
- * the host here is any import of the generated css module, which a file defining a recipe
- * necessarily has, since `cva` came from it.
- *
- * Imported by this release's name for it, which only a runtime this release generated exports,
- * and bound to its own, which is what the call is written with. @see compiledHelperName
+ * Imported from `virtual:bamboo/compiled`, which the plugin serves from its own release, and never
+ * from a `styled-system`, whose helpers can be another release's. The import is written after the
+ * module's last one, which a module calling a recipe has: the recipe's, or the `cva` that made it.
  */
 export const ensureRecipeHelperImport = (
   helper: typeof RECIPE_MAP_HELPER | typeof SPLIT_PROPS_HELPER,
   analysis: Pick<FoldAnalysis, 'imports' | 'moduleScopeNames'>,
   /** Helper names a nested scope around the call site rebinds. */
   shadowedHere: readonly string[],
-  isBambooCssModule: (mod: string) => boolean,
-  isGeneratedCssModule: (mod: string) => boolean,
-  /**
-   * The specifier to write a *new* import declaration with, when the file has none to extend.
-   *
-   * Only supplied for a recipe declared in another module, which is the case where the premise
-   * above stops holding: such a file imports the binding, not the factory, so it need not
-   * import the css module at all.
-   */
-  newImportModule?: string,
-  /**
-   * Given an import specifier in this file, where the helper could be imported from instead —
-   * a project importing `styled-system/css/cva.js` rather than the barrel has no declaration
-   * this can extend, because `cva.js` does not export the helper.
-   */
-  helperModuleFromSubpath?: (mod: string) => string | undefined,
 ): { name: string; insert?: HelperInsert } | undefined => {
-  const imported = compiledHelperName(helper)
-  let host: FoldAnalysis['imports'][number] | undefined
-  let subpathModule: string | undefined
-
   for (const declaration of analysis.imports) {
-    if (declaration.typeOnly) continue
-
+    if (declaration.typeOnly || declaration.module !== COMPILED_RUNTIME_ID) continue
     for (const named of declaration.specifiers) {
-      if (named.typeOnly) continue
-
-      if (named.imported === imported) {
-        // Somebody else's helper, or one shadowed here, is not the one this calls.
-        if (!isBambooCssModule(declaration.module)) return undefined
-        return shadowedHere.includes(named.local) ? undefined : { name: named.local }
-      }
+      if (named.typeOnly || named.imported !== helper) continue
+      return shadowedHere.includes(named.local) ? undefined : { name: named.local }
     }
-
-    if (!host && isGeneratedCssModule(declaration.module) && declaration.specifiers.length > 0) host = declaration
-    if (!subpathModule) subpathModule = helperModuleFromSubpath?.(declaration.module)
   }
-
-  // A subpath spelling is only reached for when there is no barrel to extend, so a file that
-  // imports both keeps its existing declaration rather than growing a second one.
-  const fallbackModule = newImportModule ?? subpathModule
-
-  if (!host && !fallbackModule) return undefined
 
   // A module-scope binding of this name would collide with the one being added, and one in
   // scope at the call site would be reached instead of it.
   if (analysis.moduleScopeNames.includes(helper)) return undefined
   if (shadowedHere.includes(helper)) return undefined
+  if (analysis.imports.length === 0) return undefined
 
-  const specifier = `${imported} as ${helper}`
-
-  if (!host) {
-    // After the last import rather than at the top of the file. A directive prologue —
-    // `'use client'`, which is exactly what a component file calling a recipe tends to open
-    // with — stops being a directive the moment a statement precedes it.
-    const anchor = analysis.imports.at(-1)
-    if (!anchor) return undefined
-
-    return { name: helper, insert: { pos: anchor.span.end, names: [specifier], module: fallbackModule } }
-  }
-
-  const last = host.specifiers.at(-1)
-  if (!last) return undefined
-
-  return { name: helper, insert: { pos: last.end, names: [specifier] } }
+  return { name: helper, insert: { names: [helper] } }
 }
 
 export type LowerResult =

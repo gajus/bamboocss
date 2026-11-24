@@ -10,8 +10,8 @@ import { COMPILED_RUNTIME_ID } from '../src/compiled-runtime'
 import { bamboocss } from '../src/plugin'
 
 /**
- * A recipe call the compiler writes runs against the helpers of the plugin's own release, whatever
- * `styled-system` its recipe was declared against.
+ * A recipe call the compiler writes runs against the helpers of the plugin's own release, and a join
+ * of the classes it compiled against the plugin's `cx`, whatever `styled-system` its module imported.
  *
  * The plugin writes the project's own `styled-system` before anything imports it, and no other. A
  * workspace design system holding its own is the case that leaves: the app compiles the design
@@ -30,17 +30,22 @@ const write = (file: string, contents: string) => {
 
 /**
  * The design system's own `styled-system/css`, as a release reading this one's tables as selecting
- * nothing would answer: the `cva` its source imports, and helpers that find nothing to select.
+ * nothing would answer: the `cva` its source imports, and helpers that find nothing to select. Its
+ * `cx` reads none of the app's classes as atoms, as one generated for another prefix does, and so
+ * keeps a class an override was to replace.
  */
 const STALE_RUNTIME = [
   `export const cva = () => { throw new Error('cva() was not compiled') }`,
   `export const cvaMap = () => ''`,
   `export const splitProps = (props) => [{}, { ...props }]`,
+  `export const cx = (...args) => args.flat().filter(Boolean).join(' ')`,
 ].join('\n')
 
 type Entry = {
   className: (size: string) => string
   split: (props: Record<string, unknown>) => Array<Record<string, unknown>>
+  padding: string
+  overrides: (size: string) => string[]
 }
 
 beforeAll(() => {
@@ -54,9 +59,18 @@ beforeAll(() => {
   write('packages/ds/package.json', JSON.stringify({ name: '@acme/ds', type: 'module', exports: './src/index.ts' }))
   write(
     'packages/ds/src/index.ts',
-    `import { cva } from '../styled-system/css'\n` +
+    `import { cva, cx } from '../styled-system/css'\n` +
       `export const button = cva({ base: { color: 'red' }, ` +
-      `variants: { size: { sm: { padding: '[1.1111px]' }, md: { padding: '[2.2222px]' } } } })\n`,
+      `variants: { size: { sm: { padding: '[1.1111px]' }, md: { padding: '[2.2222px]' } } } })\n` +
+      // A join the compiler writes: the recipe's lookup, then a class it cannot see.
+      `export const withClass = (size, className) => cx(button({ size }), className)\n` +
+      `export { join } from './join'\n` +
+      `export { cx as merge } from '../styled-system/css'\n`,
+  )
+  // A module whose only Bamboo is a join at runtime, which compiles nothing.
+  write(
+    'packages/ds/src/join.ts',
+    `import { cx } from '../styled-system/css'\nexport const join = (a, b) => cx(a, b)\n`,
   )
   write('packages/ds/styled-system/css/index.mjs', `${STALE_RUNTIME}\n`)
   mkdirSync(join(root, 'node_modules/@acme'), { recursive: true })
@@ -66,9 +80,13 @@ beforeAll(() => {
   // compiler lowers to `splitProps`.
   write(
     'src/entry.ts',
-    `import 'virtual:bamboo.css'\nimport { button } from '@acme/ds'\n` +
+    `import 'virtual:bamboo.css'\nimport { button, join, merge, withClass } from '@acme/ds'\n` +
+      `import { css } from '../styled-system/css'\n` +
       `export const className = (size) => button({ size })\n` +
-      `export const split = (props) => button.splitVariantProps(props)\n`,
+      `export const split = (props) => button.splitVariantProps(props)\n` +
+      `export const padding = css({ padding: '[3.3333px]' })\n` +
+      // The app's padding, joined after the recipe's by each of the design system's joins.
+      `export const overrides = (size) => [withClass(size, padding), join(className(size), padding), merge(className(size), padding)]\n`,
   )
 })
 
@@ -90,6 +108,18 @@ const expectThisRelease = (entry: Entry) => {
   expect(entry.className('md')).toBeTruthy()
   expect(entry.className('sm')).not.toBe(entry.className('md'))
   expect(entry.split({ size: 'sm', id: 'field' })).toEqual([{ size: 'sm' }, { id: 'field' }])
+
+  // The stale `cx` keeps the recipe's padding beside the app's, which the stylesheet's order then
+  // settles; this release's drops it, as the later class asks.
+  const recipePadding = entry
+    .className('sm')
+    .split(' ')
+    .filter((name) => !entry.className('md').split(' ').includes(name))
+  expect(recipePadding).toHaveLength(1)
+  for (const joined of entry.overrides('sm')) {
+    expect(joined.split(' ')).toContain(entry.padding)
+    expect(joined.split(' ')).not.toContain(recipePadding[0])
+  }
 }
 
 describe('a recipe call compiled against a design system with a styled-system of its own', () => {
@@ -116,6 +146,7 @@ describe('a recipe call compiled against a design system with a styled-system of
     for (const size of ['sm', 'md']) {
       for (const atom of entry.className(size).split(' ')) expect(hasRuleFor(css, atom), atom).toBe(true)
     }
+    expect(hasRuleFor(css, entry.padding), entry.padding).toBe(true)
   }, 60_000)
 
   test('selects its classes from a dev server, for SSR and for the browser', async () => {
@@ -137,6 +168,7 @@ describe('a recipe call compiled against a design system with a styled-system of
       expect(transformed?.code).toContain(`/@id/__x00__${COMPILED_RUNTIME_ID}`)
       const helpers = await server.transformRequest(`\0${COMPILED_RUNTIME_ID}`)
       expect(helpers?.code).toMatch(/export\s*\{\s*cvaMap,\s*splitProps\s*\}/)
+      expect(helpers?.code).toMatch(/export\s*\{\s*cx\s*\}/)
     } finally {
       await server.close()
     }

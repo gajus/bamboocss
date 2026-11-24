@@ -1337,7 +1337,7 @@ describe('compiler', () => {
     expect(code).toContain('c_blue.500')
   })
 
-  test('keeps cx as a tiny joiner when external arguments cannot be analyzed', async () => {
+  test("keeps cx as a tiny joiner, the plugin's, when external arguments cannot be analyzed", async () => {
     const plugin = plugins({ cwd, reportSummary: false }).fold
     const buildStart = typeof plugin.buildStart === 'function' ? plugin.buildStart : plugin.buildStart?.handler
     const buildEnd = typeof plugin.buildEnd === 'function' ? plugin.buildEnd : plugin.buildEnd?.handler
@@ -1349,7 +1349,12 @@ describe('compiler', () => {
       join(cwd, 'src/static-composition-dynamic-cx.tsx'),
     )
 
-    expect(transformed).toBeNull()
+    // The call stays as written, and joins with the `cx` the plugin serves for this build's classes
+    // rather than the one the module imported, which can be another release's or another config's.
+    const code = (transformed as { code: string } | null)?.code
+    expect(code).toContain(`export const className = (external) => cx(external, 'selected')`)
+    expect(code).toContain(`import { cx } from 'virtual:bamboo/compiled'`)
+    expect(code).toMatch(/import \{ cx as __bambooCx_*0 \} from 'styled-system\/css'/)
     await expect(Promise.resolve().then(() => buildEnd?.call({} as never, undefined as never))).resolves.not.toThrow()
   })
 

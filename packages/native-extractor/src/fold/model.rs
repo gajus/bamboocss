@@ -243,6 +243,9 @@ pub struct FoldSplitCall {
 pub struct FoldImport {
     pub span: FoldSpan,
     pub module: String,
+    /// The Bamboo entrypoint the module is, as calls through its bindings are classified —
+    /// `css`, `token`, `recipe` or `pattern` — or none for any other module.
+    pub bamboo: Option<String>,
     pub type_only: bool,
     pub specifiers: Vec<FoldImportSpecifier>,
     pub default_local: Option<String>,
@@ -254,10 +257,30 @@ pub struct FoldImportSpecifier {
     pub imported: String,
     pub local: String,
     pub type_only: bool,
+    /// Start of the specifier, `cx` or `cx as merge`, so it can be rewritten whole.
+    pub start: u32,
     /// End of the specifier, where a sibling can be appended.
     pub end: u32,
     /// The local binding is shadowed somewhere in the module (a nested scope binds its name).
     pub shadowed_anywhere: bool,
+}
+
+/// `export { … } from` a Bamboo entrypoint, which hands its names on without binding them here.
+#[napi(object)]
+pub struct FoldReexport {
+    pub module: String,
+    /// As `FoldImport::bamboo`, which is never none here.
+    pub bamboo: String,
+    /// The module specifier's string literal, quotes included.
+    pub source: FoldSpan,
+    pub specifiers: Vec<FoldReexportSpecifier>,
+}
+
+#[napi(object)]
+pub struct FoldReexportSpecifier {
+    /// The name as the module re-exported from exports it.
+    pub local: String,
+    pub type_only: bool,
 }
 
 /// A value read of a binding the survivor check watches.
@@ -306,6 +329,9 @@ pub struct FoldAnalysis {
     pub calls: Vec<FoldCall>,
     pub split_calls: Vec<FoldSplitCall>,
     pub imports: Vec<FoldImport>,
+    /// Value re-exports from a Bamboo entrypoint. Collected whether or not references are, since
+    /// what the fold writes from them cannot depend on that.
+    pub reexports: Vec<FoldReexport>,
     /// Every name bound at module scope, including hoisted `var`s and imports.
     pub module_scope_names: Vec<String>,
     /// Value reads of each import binding and each module-scope recipe binding, in source

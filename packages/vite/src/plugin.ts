@@ -15,7 +15,7 @@ import { createCompilationHost, type CompilationGeneration } from './compilation
 import type { FoldRefusal, FoldUnknown } from '@bamboocss/native-extractor'
 import { MAX_CX_COMBINATIONS } from './combinations'
 import type { FoldResult, SkipReason, SkippedCall } from './fold'
-import { loadCssOutputModule, loadFoldModule } from './lazy-modules'
+import { loadCssOutputModule, loadFoldModule, loadNodeModule } from './lazy-modules'
 import type { StaticStyleSetCompiler } from './style-set'
 import {
   commitWrittenSheets,
@@ -3382,7 +3382,9 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     }
 
     const meta = { [TRANSFORM_META_KEY]: sealTransformArtifact(environmentName(this), artifact) }
-    if (!result.folded.length) {
+    // Unchanged, rather than nothing folded: a module that only joins classes at runtime folds no
+    // call and still has its `cx` import rebound to the plugin's.
+    if (result.map === null) {
       // A real bundler needs a transform result in order to retain metadata for this module,
       // including the zero-fold entry that makes coverage's file denominator accurate. Tiny
       // hook harnesses in this package deliberately omit the module graph and retain the old
@@ -3493,6 +3495,11 @@ export const bamboocss = (options: BambooVitePluginOptions = {}): Plugin[] => {
     bamboocssCssEarly({ session: staticSession, pruneCss }),
     compiler,
     compilerSfc,
-    bamboocssCompiledRuntime(),
+    // `cx` for this project's classes, from the context the compiler folds against: its prefix is
+    // what the classes compiled code joins carry.
+    bamboocssCompiledRuntime(async () => {
+      const [{ generateCxRuntime }, generation] = await Promise.all([loadNodeModule(), host.ensureGeneration()])
+      return generateCxRuntime(generation.context.utility.prefix)
+    }),
   ]
 }

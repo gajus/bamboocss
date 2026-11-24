@@ -1,26 +1,45 @@
 import { createContext } from '@bamboocss/fixture'
+import { generateCxRuntime } from '@bamboocss/node'
 import { esc } from '@bamboocss/shared'
 import type { Config } from '@bamboocss/types'
 import { createRequire } from 'node:module'
 import { dirname, isAbsolute, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { compiledRuntimeSource } from '../src/compiled-runtime'
 import { foldSource, type FoldResult } from '../src/fold'
-import compiledRuntimeModule from '../src/generated/compiled.mjs.json' with { type: 'json' }
 import { createRuntimeCss } from '../src/runtime-css'
 import { createStaticStyleSetCompiler } from '../src/style-set'
 
 export const FILE_PATH = 'app/src/test.tsx'
 
-/**
- * The helpers compiled code calls, evaluated from the text the plugin serves as
- * `virtual:bamboo/compiled` rather than imported from their source, since that text is what ships.
- */
-export const compiledRuntime = new Function(
-  compiledRuntimeModule.content.replace(/export\s*\{([^}]*)\};?\s*$/, 'return {$1}'),
-)() as {
+/** What a module exports, run from text whose only exports are `export { … }` lists. */
+export const evaluateModule = <T>(content: string): T => {
+  const entries: string[] = []
+  const body = content.replaceAll(/export\s*\{([^}]*)\};?/g, (_, list: string) => {
+    for (const specifier of list.split(',')) {
+      const [local, exported = local] = specifier.trim().split(/\s+as\s+/)
+      if (local) entries.push(`${JSON.stringify(exported)}: ${local}`)
+    }
+    return ''
+  })
+  return new Function(`${body}\nreturn { ${entries.join(', ')} }`)() as T
+}
+
+export interface CompiledRuntime {
   cvaMap: (values: unknown[], table: unknown) => unknown
   splitProps: (props: object, ...keys: unknown[]) => Array<Record<string, unknown>>
+  cx: (...args: unknown[]) => string
 }
+
+/**
+ * What compiled code calls, evaluated from the text the plugin serves as `virtual:bamboo/compiled`
+ * rather than imported from its source, since that text is what ships: for a project with `prefix`,
+ * none by default, as the fixture's context has none.
+ */
+export const compiledRuntimeFor = (prefix = '') =>
+  evaluateModule<CompiledRuntime>(compiledRuntimeSource(generateCxRuntime(prefix)))
+
+export const compiledRuntime = compiledRuntimeFor()
 
 export const createFoldFixture = (userConfig?: Parameters<typeof createContext>[0]) => {
   const ctx = createContext(userConfig)

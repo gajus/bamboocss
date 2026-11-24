@@ -1,19 +1,23 @@
 import { createGeneratorContext } from '@bamboocss/fixture'
+import { generateCxRuntime } from '@bamboocss/node'
 import { type CvaLookup, cvaMap, splitProps } from '@bamboocss/shared'
+import type { Config } from '@bamboocss/types'
 import { describe, expect, test } from 'vitest'
-import { bamboocssCompiledRuntime, COMPILED_RUNTIME_ID } from '../src/compiled-runtime'
+import { bamboocssCompiledRuntime, COMPILED_RUNTIME_ID, compiledRuntimeSource } from '../src/compiled-runtime'
 import { RECIPE_MAP_HELPER, SPLIT_PROPS_HELPER } from '../src/fold-recipe'
-import compiled from '../src/generated/compiled.mjs.json' with { type: 'json' }
-import { compiledRuntime } from './fixture'
+import { compiledRuntime, compiledRuntimeFor, createFoldFixture, evaluateModule } from './fixture'
 
-/** The helpers a fold can write a call to. */
+/** The helpers a fold can write a call to, which are no authoring API. */
 const HELPERS = [RECIPE_MAP_HELPER, SPLIT_PROPS_HELPER]
+
+/** Everything compiled code reaches at runtime: those helpers, and `cx`. */
+const SERVED = [...HELPERS, 'cx']
 
 /** The authoring API the barrel exists to expose. */
 const AUTHORING = ['css', 'cx', 'cva', 'sva', 'fallback', 'viewTransition']
 
-const generated = (id: 'css-index' | 'cx', file: string) => {
-  const [artifact] = createGeneratorContext().getArtifacts([id])
+const generated = (id: 'css-index' | 'cx', file: string, config?: Config) => {
+  const [artifact] = createGeneratorContext(config).getArtifacts([id])
   const code = artifact?.files.find((entry) => entry.file === file)?.code
   if (!code) throw new Error(`no ${file} in the ${id} artifact`)
   return code
@@ -55,8 +59,8 @@ describe('virtual:bamboo/compiled', () => {
    *
    * Nothing else, either: every export is shipped to every page that runs compiled code.
    */
-  test('exports every helper the fold can write a call to, and nothing else', () => {
-    expect([...exportedNames(compiled.content)].sort()).toEqual([...HELPERS].sort())
+  test('exports everything compiled code can call, and nothing else', () => {
+    expect([...exportedNames(compiledRuntimeSource(generateCxRuntime('')))].sort()).toEqual([...SERVED].sort())
   })
 
   /**
@@ -100,27 +104,81 @@ describe('virtual:bamboo/compiled', () => {
     expect(Object.getOwnPropertyDescriptor(rest, 'label')?.get).toBeTypeOf('function')
   })
 
-  test('is what the plugin resolves and loads the id to', () => {
-    const plugin = bamboocssCompiledRuntime()
+  /**
+   * The `cx` served is the one the generator writes into a `styled-system`, for the project's own
+   * config: whatever `styled-system` a compiled module imported `cx` from, it merges the classes
+   * this build names as the project's own `cx` would.
+   */
+  test("merges a project's classes as that project's own styled-system cx does", () => {
+    const configs: Config[] = [{}, { prefix: 'pfx' }, { hash: true }, { hash: true, prefix: 'pfx' }]
+    for (const config of configs) {
+      const label = JSON.stringify(config)
+      const { red, blue, prefix } = classesOf(config)
+      const own = evaluateModule<{ cx: (...args: unknown[]) => string }>(generated('cx', 'cx.mjs', config)).cx
+      const { cx } = compiledRuntimeFor(prefix)
+
+      const samples = [
+        [red, blue],
+        [blue, red],
+        [red, 'external'],
+        ['external', red, blue],
+        [red, null, false, [blue]],
+      ]
+      for (const args of samples) expect(cx(...args), label).toBe(own(...args))
+      // The later color wins, and the earlier one is gone.
+      expect(cx(red, blue).split(' '), label).not.toContain(red)
+    }
+  })
+
+  /**
+   * Why the `cx` has to be the project's: one generated for another prefix, as a workspace design
+   * system's own `styled-system` can be, reads none of this build's classes as atoms, and keeps the
+   * class an override was to replace.
+   */
+  test('a cx generated for another prefix merges none of them', () => {
+    const { red, blue } = classesOf({ prefix: 'pfx' })
+    expect(compiledRuntimeFor('').cx(red, blue)).toBe(`${red} ${blue}`)
+    expect(compiledRuntimeFor('ds').cx(red, blue)).toBe(`${red} ${blue}`)
+    expect(compiledRuntimeFor('pfx').cx(red, blue).split(' ')).not.toContain(red)
+  })
+
+  test("is what the plugin resolves and loads the id to, with the project's cx", async () => {
+    const plugin = bamboocssCompiledRuntime(async () => generateCxRuntime('pfx'))
     const resolveId = plugin.resolveId as (id: string) => string | null
-    const load = plugin.load as (id: string) => string | null
+    const load = plugin.load as (id: string) => Promise<string | null>
+    const served = compiledRuntimeSource(generateCxRuntime('pfx'))
 
     const resolved = resolveId(COMPILED_RUNTIME_ID)
     expect(resolved).toBe(`\0${COMPILED_RUNTIME_ID}`)
     expect(resolveId(resolved!)).toBe(resolved)
-    expect(load(resolved!)).toBe(compiled.content)
-    expect(load(`${resolved}?t=1`)).toBe(compiled.content)
+    expect(await load(resolved!)).toBe(served)
+    expect(await load(`${resolved}?t=1`)).toBe(served)
+    expect(served).toContain('"pfx-"')
 
     expect(resolveId('virtual:bamboo.css')).toBeNull()
-    expect(load('\0virtual:bamboo.css')).toBeNull()
+    expect(await load('\0virtual:bamboo.css')).toBeNull()
   })
 })
+
+/** Two colors the build names for `config`, the second with a padding of its own, and its class prefix. */
+const classesOf = (config: Config) => {
+  const { ctx, foldStrict } = createFoldFixture(config)
+  const result = foldStrict(
+    `import { css } from 'styled-system/css'\n` +
+      `export const red = css({ color: 'red.500' })\n` +
+      `export const blue = css({ color: 'blue.500', padding: '4' })\n`,
+  )
+  const [red, blue] = result.folded.map((call) => call.className)
+  if (!red || !blue || red.includes(' ')) throw new Error(`unexpected classes: ${red} / ${blue}`)
+  return { red, blue, prefix: ctx.utility.prefix }
+}
 
 describe('the generated styled-system', () => {
   /**
    * Compiled code imports none of these from a `styled-system`, which can be another release's,
    * so the generated runtime exports none: one it did is one compiled code could be pointed at
-   * again, and they are not authoring API.
+   * again, and they are not authoring API. `cx` is, so it stays, and compiled code reaches the
+   * plugin's instead.
    */
   test('exports none of the helpers compiled code calls', () => {
     const modules = [

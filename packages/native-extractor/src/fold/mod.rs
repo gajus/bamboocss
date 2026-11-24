@@ -726,6 +726,7 @@ fn empty_analysis(errors: Vec<String>) -> FoldAnalysis {
         calls: Vec::new(),
         split_calls: Vec::new(),
         imports: Vec::new(),
+        reexports: Vec::new(),
         module_scope_names: Vec::new(),
         references: Vec::new(),
         runtime_shapes: Vec::new(),
@@ -783,6 +784,7 @@ fn analyze_facts<'a>(
                         imported: named.imported.name().to_string(),
                         local: local.clone(),
                         type_only: named.import_kind.is_type(),
+                        start: utf16.at(named.span.start),
                         end: utf16.at(named.span.end),
                         shadowed_anywhere: shadowed,
                     });
@@ -825,11 +827,41 @@ fn analyze_facts<'a>(
         }
         imports.push(FoldImport {
             span: utf16.span(declaration.span),
+            bamboo: entrypoints.kind_of(&module).map(str::to_string),
             module,
             type_only: declaration.import_kind.is_type(),
             specifiers,
             default_local,
             namespace_local,
+        });
+    }
+
+    // Re-exports of a Bamboo entrypoint, whatever else is collected: what the fold writes from
+    // them has to be the same text whether or not the plugin asked for references.
+    let mut reexports = Vec::new();
+    for statement in &facts.program.body {
+        let Statement::ExportFromDeclaration(export) = statement else {
+            continue;
+        };
+        if export.export_kind.is_type() {
+            continue;
+        }
+        let module = export.source.value.to_string();
+        let Some(bamboo) = entrypoints.kind_of(&module) else {
+            continue;
+        };
+        reexports.push(FoldReexport {
+            module,
+            bamboo: bamboo.to_string(),
+            source: utf16.span(export.source.span),
+            specifiers: export
+                .specifiers
+                .iter()
+                .map(|specifier| FoldReexportSpecifier {
+                    local: module_export_name(&specifier.local),
+                    type_only: specifier.export_kind.is_type(),
+                })
+                .collect(),
         });
     }
 
@@ -1434,6 +1466,7 @@ fn analyze_facts<'a>(
         calls,
         split_calls,
         imports,
+        reexports,
         module_scope_names,
         references,
         runtime_shapes,

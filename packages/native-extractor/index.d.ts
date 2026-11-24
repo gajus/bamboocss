@@ -328,16 +328,37 @@ export interface FoldSplitCall {
 export interface FoldImport {
   span: FoldSpan
   module: string
+  /** The Bamboo entrypoint the module is, as calls through its bindings are classified; absent for any other. */
+  bamboo?: 'css' | 'token' | 'recipe' | 'pattern'
   typeOnly: boolean
-  specifiers: Array<{ imported: string; local: string; typeOnly: boolean; end: number; shadowedAnywhere: boolean }>
+  specifiers: Array<{
+    imported: string
+    local: string
+    typeOnly: boolean
+    start: number
+    end: number
+    shadowedAnywhere: boolean
+  }>
   defaultLocal?: string
   namespaceLocal?: string
+}
+
+/** `export { … } from` a Bamboo entrypoint, which hands its names on without binding them here. */
+export interface FoldReexport {
+  module: string
+  bamboo: 'css' | 'token' | 'recipe' | 'pattern'
+  /** The module specifier's string literal, quotes included. */
+  source: FoldSpan
+  /** Each name as the module re-exported from exports it. */
+  specifiers: Array<{ local: string; typeOnly: boolean }>
 }
 
 export interface FoldAnalysis {
   calls: FoldCall[]
   splitCalls: FoldSplitCall[]
   imports: FoldImport[]
+  /** Collected whether or not references are, since what the fold writes from them cannot depend on that. */
+  reexports: FoldReexport[]
   moduleScopeNames: string[]
   references: Array<{ name: string; span: FoldSpan }>
   runtimeShapes: Array<{

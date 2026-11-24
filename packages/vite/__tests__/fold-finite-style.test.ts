@@ -23,7 +23,7 @@ describe('finite css() choices', () => {
     expect(result.skipped).toEqual([])
     const [folded] = result.folded
     expect(folded?.classNames).toHaveLength(2)
-    const badge = new Function(`${result.code.replace(/^import.*\n/, '')}\nreturn badge`)()
+    const badge = badgeOf(result.code)
     let reads = 0
     for (const flag of [false, true]) {
       const chosen = badge(() => {
@@ -194,7 +194,7 @@ describe('finite css() choices', () => {
 
     expect(result.skipped).toEqual([])
     expect(result.code).toContain('void 0,')
-    const badge = new Function(`${result.code.replace(/^import.*\n/, '')}\nreturn badge`)()
+    const badge = badgeOf(result.code)
     expect(badge(false)).toBe('previous statement')
     expect(badge(true)).toBe('previous statement')
   })

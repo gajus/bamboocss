@@ -99,30 +99,36 @@ describe('generate classnames', () => {
     expect(css({ mx: '-2' })).toMatchInlineSnapshot(`"_0QmaUN:mx_-2"`)
   })
 
-  test('should not format the class name', () => {
-    const css = createCss(
-      createGeneratorContext({
-        plugins: [
-          {
-            name: 'test',
-            hooks: {
-              'tokens:created': ({ configure }) => {
-                configure({
-                  formatTokenName: (path) => '$' + path.join('-'),
-                  formatCssVar: (path) => {
-                    const variable = path.join('-').replace('$', '').replace('.', '')
-                    return {
-                      var: variable as any,
-                      ref: `var(--${variable})`,
-                    }
-                  },
-                })
-              },
+  /** A context whose tokens are named and declared through a `tokens:created` hook, checked to have run. */
+  const formattedTokens = () => {
+    const ctx = createGeneratorContext({
+      plugins: [
+        {
+          name: 'test',
+          hooks: {
+            'tokens:created': ({ configure }) => {
+              configure({
+                formatTokenName: (path) => '$' + path.join('-'),
+                formatCssVar: (path) => {
+                  const variable = path.join('-').replace('$', '').replace('.', '')
+                  return {
+                    var: variable as any,
+                    ref: `var(--${variable})`,
+                  }
+                },
+              })
             },
           },
-        ],
-      }).baseSheetContext,
-    )
+        },
+      ],
+    })
+    // The fixture once left a plugin's hooks out, and these passed with the tokens named as usual.
+    expect(ctx.tokens.getByName('$spacing-2')).toBeDefined()
+    return ctx
+  }
+
+  test('should not format the class name', () => {
+    const css = createCss(formattedTokens().baseSheetContext)
     expect(
       css({
         background: '$pink.400',
@@ -132,29 +138,7 @@ describe('generate classnames', () => {
   })
 
   test('should format the non-string values', () => {
-    const css = createCss(
-      createGeneratorContext({
-        plugins: [
-          {
-            name: 'test',
-            hooks: {
-              'tokens:created': ({ configure }) => {
-                configure({
-                  formatTokenName: (path) => '$' + path.join('-'),
-                  formatCssVar: (path) => {
-                    const variable = path.join('-').replace('$', '').replace('.', '')
-                    return {
-                      var: variable as any,
-                      ref: `var(--${variable})`,
-                    }
-                  },
-                })
-              },
-            },
-          },
-        ],
-      }).baseSheetContext,
-    )
+    const css = createCss(formattedTokens().baseSheetContext)
     expect(
       css({
         debug: true,

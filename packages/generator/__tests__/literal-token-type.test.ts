@@ -95,10 +95,15 @@ describe('LiteralToken', () => {
     [
       'a custom formatTokenName, which changes the spelling entirely',
       {
-        hooks: {
-          'tokens:created': ({ configure }: any) =>
-            configure({ formatTokenName: (path: string[]) => '$' + path.join('-') }),
-        },
+        plugins: [
+          {
+            name: 'token-names',
+            hooks: {
+              'tokens:created': ({ configure }: any) =>
+                configure({ formatTokenName: (path: string[]) => '$' + path.join('-') }),
+            },
+          },
+        ],
       },
     ],
   ])('every LiteralToken is assignable to Token — %s', (_label, config) => {

@@ -4,6 +4,7 @@ import { Generator } from '@bamboocss/generator'
 import { BambooContext } from '@bamboocss/node'
 import { omit, parseJson, pick, stringifyJson, traverse } from '@bamboocss/shared'
 import type { Config, LoadConfigResult, UserConfig } from '@bamboocss/types'
+import { assertNoRemovedOptions } from '../../config/src/validation/validate-removed'
 import { fixturePreset } from './config'
 
 const hookUtils = {
@@ -43,21 +44,23 @@ export const fixtureDefaults = {
  */
 const isBare = (userConfig?: Config) => userConfig?.presets?.length === 0
 
-export const createGeneratorContext = (userConfig?: Config) => {
-  const resolvedConfig = mergeConfigs([
-    isBare(userConfig) ? {} : fixtureDefaults.config,
-    userConfig ?? {},
-  ]) as UserConfig
-
-  return new Generator({ ...fixtureDefaults, config: resolvedConfig })
-}
-
-export const createContext = (userConfig?: Config & Pick<Partial<LoadConfigResult>, 'tsconfig' | 'tsOptions'>) => {
+/**
+ * A test's config as the product resolves one: laid over the fixture preset, refused if it sets an
+ * option that no longer exists, and given the hooks its plugins bring, with their `config:resolved`
+ * applied.
+ *
+ * Hooks come from `plugins`, the same and only source the real pipeline reads. Kept in step with
+ * it deliberately: a fixture that accepted a config shape the product does not would let a test
+ * pass against an input no user can write. Four did: `createGeneratorContext` left a plugin's
+ * hooks out and nothing refused a removed option, so two tests handing it `plugins`, and one each
+ * handing a fixture a top-level `hooks` or `globalCss`, ran without what they were written about,
+ * and passed.
+ */
+const resolveUserConfig = (userConfig?: Config) => {
   let resolvedConfig = mergeConfigs([isBare(userConfig) ? {} : fixtureDefaults.config, userConfig ?? {}]) as UserConfig
+  // On the merged config, as the product reads it.
+  assertNoRemovedOptions(resolvedConfig)
 
-  // From `plugins`, the same and only source the real pipeline reads. Kept in step with it
-  // deliberately: a fixture that accepted a config shape the product does not would let a
-  // test pass against an input no user can write.
   const plugins = userConfig?.plugins ?? []
   const hooks = mergeHooks(plugins)
 
@@ -76,6 +79,17 @@ export const createContext = (userConfig?: Config & Pick<Partial<LoadConfigResul
       resolvedConfig = result as UserConfig
     }
   }
+
+  return { resolvedConfig, hooks }
+}
+
+export const createGeneratorContext = (userConfig?: Config) => {
+  const { resolvedConfig, hooks } = resolveUserConfig(userConfig)
+  return new Generator({ ...fixtureDefaults, hooks, config: resolvedConfig })
+}
+
+export const createContext = (userConfig?: Config & Pick<Partial<LoadConfigResult>, 'tsconfig' | 'tsOptions'>) => {
+  const { resolvedConfig, hooks } = resolveUserConfig(userConfig)
 
   return new BambooContext({
     ...fixtureDefaults,

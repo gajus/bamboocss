@@ -34,10 +34,10 @@ describe('global.positionTry registers its names', () => {
 
   /**
    * The rule still ships when written by hand — this is only about the name being known, which
-   * is the whole reason the docs point at `globalPositionTry` instead.
+   * is the whole reason the docs point at `global.positionTry` instead.
    */
-  test('a raw @position-try in globalCss registers nothing', () => {
-    const raw = { globalCss: { '@position-try --flip': { top: 'auto' } } }
+  test('a raw @position-try in global.css registers nothing', () => {
+    const raw = { global: { css: { '@position-try --flip': { top: 'auto' } } } }
 
     expect(typesFor(raw, 'positionTryFallbacks')).toEqual([])
   })

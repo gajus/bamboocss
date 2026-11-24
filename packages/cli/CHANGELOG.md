@@ -1,5 +1,21 @@
 # @bamboocss/dev
 
+## 1.64.11
+
+### Patch Changes
+
+- Updated dependencies [03dee0d]
+- Updated dependencies [166401c]
+- Updated dependencies [db3c13a]
+- Updated dependencies [67b63c3]
+  - @bamboocss/node@1.64.11
+  - @bamboocss/shared@1.64.11
+  - @bamboocss/types@1.64.11
+  - @bamboocss/token-dictionary@1.64.11
+  - @bamboocss/logger@1.64.11
+  - @bamboocss/preset-bamboo@1.64.11
+  - @bamboocss/preset-base@1.64.11
+
 ## 1.64.10
 
 ### Patch Changes

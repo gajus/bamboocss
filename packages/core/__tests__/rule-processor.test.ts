@@ -222,6 +222,7 @@ describe('rule processor', () => {
       {
         name: 'async',
         hooks: {
+          // eslint-disable-next-line typescript/no-misused-promises -- the mistake this reports
           'tokens:created': async ({ configure }) => {
             await Promise.resolve()
             configure({ formatTokenName: (path) => '$' + path.join('-') })
@@ -340,6 +341,7 @@ describe('rule processor', () => {
       {
         name: 'async',
         hooks: {
+          // eslint-disable-next-line typescript/no-misused-promises -- the mistake this reports
           'utility:created': async ({ configure }) => {
             await Promise.resolve()
             configure({ toHash: (paths, toHash) => `x${toHash(paths.join(':'))}` })

@@ -3,7 +3,7 @@ import { join } from 'path'
 
 const fileMap = [['shared.mjs', 'helpers.mjs']]
 
-async function main() {
+function main() {
   fileMap.forEach(([input, outfile]) => {
     const inputPath = join(__dirname, '..', 'dist', input)
     const content = readFileSync(inputPath, 'utf8')

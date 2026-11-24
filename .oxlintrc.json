@@ -15,8 +15,17 @@
     "**/styled-system/**",
     "**/*-outdir/**",
     "**/outdir/**",
-    "**/__golden__/**"
+    "**/__golden__/**",
+    // These test bamboo's support for tsconfig `baseUrl`, which TypeScript 7 removed, so the
+    // type-aware linter refuses their tsconfigs outright.
+    "packages/config/__tests__/samples/with-tsconfig-paths/**",
+    "packages/node/__tests__/fixtures/solution-mixed/**"
   ],
+  // Type information reaches the rules through `oxlint-tsgolint`: a hook called without waiting
+  // for it reads as a statement like any other without it, and one went unseen that way.
+  "options": {
+    "typeAware": true
+  },
   "env": {
     "node": true,
     "browser": true
@@ -32,6 +41,22 @@
     "no-unassigned-vars": "off",
     "no-unsafe-optional-chaining": "off",
     "typescript/no-unnecessary-parameter-property-assignment": "off",
+    "typescript/no-floating-promises": "error",
+    "typescript/no-misused-promises": "error",
+    "typescript/await-thenable": "error",
+    // Type-aware rules `correctness` turns on. When type information came in, they found nothing
+    // that went wrong at runtime here, and mostly what was not there: a method signature
+    // destructured or passed whole, a `never` in an exhaustive switch's message, a value typed
+    // `{}` by a generic's default. `no-implied-eval` is the tests running the code they generate.
+    "typescript/unbound-method": "off",
+    "typescript/no-implied-eval": "off",
+    "typescript/restrict-template-expressions": "off",
+    "typescript/no-base-to-string": "off",
+    "typescript/no-redundant-type-constituents": "off",
+    "typescript/no-duplicate-type-constituents": "off",
+    "typescript/require-array-sort-compare": "off",
+    "typescript/no-useless-default-assignment": "off",
+    "typescript/no-misused-spread": "off",
     "typescript/no-unused-vars": [
       "error",
       {

@@ -117,7 +117,7 @@ describe('the virtual stylesheet', () => {
 
       const listeners = new Map<string, (file: string) => void>()
       const reloaded: string[] = []
-      hookOf(plugin.configureServer)!.call(
+      await hookOf(plugin.configureServer)!.call(
         {} as never,
         {
           environments: { client: { moduleGraph: { getModulesByFile: () => undefined } } },
@@ -366,7 +366,7 @@ describe('the virtual stylesheet', () => {
 
       // A change to an extracted file starts a new generation; the next load regenerates.
       const listeners = new Map<string, (file: string) => void>()
-      hookOf(plugin.configureServer)!.call(
+      await hookOf(plugin.configureServer)!.call(
         {} as never,
         {
           environments: { client: { moduleGraph: { getModulesByFile: () => undefined } } },
@@ -420,7 +420,7 @@ describe('the virtual stylesheet', () => {
     const inGraph = new Set<string>()
     const reloaded: string[] = []
     const listeners = new Map<string, (file: string) => void>()
-    hookOf(plugin.configureServer)!.call(
+    await hookOf(plugin.configureServer)!.call(
       {} as never,
       {
         // Deliberately not the same object as `moduleGraph`: the sheet is looked up in the mixed
@@ -481,7 +481,7 @@ describe('the virtual stylesheet', () => {
 
     const reloaded: string[] = []
     const listeners = new Map<string, (file: string) => void>()
-    hookOf(plugin.configureServer)!.call(
+    await hookOf(plugin.configureServer)!.call(
       {} as never,
       {
         environments: { client: { moduleGraph: { getModulesByFile: () => undefined } } },
@@ -518,7 +518,7 @@ describe('the virtual stylesheet', () => {
         {} as never,
         { build: { sourcemap: false }, command: 'serve', configFileDependencies: [], root: cwd } as never,
       )
-      hookOf(plugin.configureServer)!.call(
+      await hookOf(plugin.configureServer)!.call(
         {} as never,
         {
           middlewares: { use() {} },
@@ -628,10 +628,10 @@ describe('the folders a dev server watches beyond its root', () => {
     const plugin = bamboocssCss({ cwd: app, session: createStaticCompilationSession() })
     await hookOf(plugin.configResolved)?.call({} as never, { build: { sourcemap: false }, command: 'serve' } as never)
     const resolved = hookOf(plugin.resolveId)!.call({} as never, VIRTUAL_CSS_ID, undefined, {} as never) as string
-    const serve = () => {
+    const serve = async () => {
       const added: string[] = []
       const listeners = new Map<string, (file: string) => void>()
-      hookOf(plugin.configureServer)!.call(
+      await hookOf(plugin.configureServer)!.call(
         {} as never,
         {
           middlewares: { use() {} },
@@ -650,7 +650,7 @@ describe('the folders a dev server watches beyond its root', () => {
     }
     const pass = () => hookOf(plugin.load)!.call({ addWatchFile() {} } as never, resolved, undefined as never)
 
-    const first = serve()
+    const first = await serve()
     await pass()
     // `../later` is not there yet: the watcher looks out for it.
     expect(first.added).toEqual([join(root, 'shared'), join(root, 'later')])
@@ -668,7 +668,7 @@ describe('the folders a dev server watches beyond its root', () => {
 
     // A restart's new watcher, given them as it is configured: it may serve the sheet it remembers
     // without a pass.
-    expect(serve().added).toEqual([join(root, 'shared'), join(root, 'target')])
+    expect((await serve()).added).toEqual([join(root, 'shared'), join(root, 'target')])
   }, 60_000)
 })
 

@@ -68,7 +68,10 @@ importers:
         version: 0.51.0(svelte@5.45.4)
       oxlint:
         specifier: 1.66.0
-        version: 1.66.0
+        version: 1.66.0(oxlint-tsgolint@7.0.2008)
+      oxlint-tsgolint:
+        specifier: 7.0.2008
+        version: 7.0.2008
 
   packages/cli:
     dependencies:
@@ -798,7 +801,7 @@ importers:
         version: 27.2.0
       oxlint:
         specifier: 1.66.0
-        version: 1.66.0
+        version: 1.66.0(oxlint-tsgolint@7.0.2008)
       preact:
         specifier: 10.27.2
         version: 10.27.2
@@ -847,7 +850,7 @@ importers:
         version: link:../css-lib
       nuxt:
         specifier: 4.2.1
-        version: 4.2.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@parcel/watcher@2.5.1)(@types/node@24.10.1)(@vue/compiler-sfc@3.5.41)(db0@0.3.4)(eslint@9.39.1(jiti@2.6.1))(ioredis@5.8.2)(lightningcss@1.33.0)(magicast@0.5.2)(optionator@0.9.4)(oxlint@1.66.0)(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))(yaml@2.9.0)
+        version: 4.2.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@parcel/watcher@2.5.1)(@types/node@24.10.1)(@vue/compiler-sfc@3.5.41)(db0@0.3.4)(eslint@9.39.1(jiti@2.6.1))(ioredis@5.8.2)(lightningcss@1.33.0)(magicast@0.5.2)(optionator@0.9.4)(oxlint@1.66.0(oxlint-tsgolint@7.0.2008))(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))(yaml@2.9.0)
       postcss:
         specifier: 8.5.26
         version: 8.5.26
@@ -864,7 +867,7 @@ importers:
         version: link:../../packages/vite
       nuxt:
         specifier: 4.2.1
-        version: 4.2.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@parcel/watcher@2.5.1)(@types/node@24.10.1)(@vue/compiler-sfc@3.5.41)(db0@0.3.4)(eslint@9.39.1(jiti@2.7.0))(ioredis@5.8.2)(lightningcss@1.33.0)(optionator@0.9.4)(oxlint@1.66.0)(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))(yaml@2.9.0)
+        version: 4.2.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@parcel/watcher@2.5.1)(@types/node@24.10.1)(@vue/compiler-sfc@3.5.41)(db0@0.3.4)(eslint@9.39.1(jiti@2.7.0))(ioredis@5.8.2)(lightningcss@1.33.0)(optionator@0.9.4)(oxlint@1.66.0(oxlint-tsgolint@7.0.2008))(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))(yaml@2.9.0)
       postcss:
         specifier: 8.5.26
         version: 8.5.26
@@ -913,7 +916,7 @@ importers:
         version: 1.17.2(@types/node@24.10.1)(jiti@2.7.0)(lightningcss@1.33.0)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(yaml@2.9.0)
       oxlint:
         specifier: 1.66.0
-        version: 1.66.0
+        version: 1.66.0(oxlint-tsgolint@7.0.2008)
       typescript:
         specifier: 7.0.2
         version: 7.0.2
@@ -1109,7 +1112,7 @@ importers:
         version: 0.51.0(svelte@5.45.4)
       oxlint:
         specifier: 1.66.0
-        version: 1.66.0
+        version: 1.66.0(oxlint-tsgolint@7.0.2008)
       postcss:
         specifier: 8.5.26
         version: 8.5.26
@@ -1243,7 +1246,7 @@ importers:
         version: 10.5.4(postcss@8.5.26)
       oxlint:
         specifier: 1.66.0
-        version: 1.66.0
+        version: 1.66.0(oxlint-tsgolint@7.0.2008)
       postcss:
         specifier: 8.5.26
         version: 8.5.26
@@ -3303,6 +3306,36 @@ packages:
   '@oxfmt/binding-win32-x64-msvc@0.51.0':
     resolution: {integrity: sha512-73RqdAuVKQTkjZIDw08JaDHUM4lav5Qu+CaPwg4QbbA7k8o7LEW0p3UsfZ/F8dsO/pwVYh3RzFcanwLRTTahbQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [win32]
+
+  '@oxlint-tsgolint/darwin-arm64@7.0.2008':
+    resolution: {integrity: sha512-RXcQ439KXqspwHtw39825cyFmvrkOa1AA2CnqFNNG0pVJB0FdhpfQZsDLjRc/3Mt/uEG0MWOG50Hl09J2Ra9UA==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@oxlint-tsgolint/darwin-x64@7.0.2008':
+    resolution: {integrity: sha512-4FpkHVDF1I4W0Owgsff8rDdf/XVcI9aoqflqyh3JiMCg7zCzWNkB0hfKMNjMDYDAeK/k1CNawAb7Y7mYGr/Xhg==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@oxlint-tsgolint/linux-arm64@7.0.2008':
+    resolution: {integrity: sha512-CmheyZowc+sbXlZ2ksFrbqR6Mnu+HHheZZKTP3FpDBe64eCp6DzSrjcR2VHRj6mC2UKF1ZO0J8Z1e9Bgji4kKw==}
+    cpu: [arm64]
+    os: [linux]
+
+  '@oxlint-tsgolint/linux-x64@7.0.2008':
+    resolution: {integrity: sha512-7by4bup5rF9q7i19G6zPDXgywBi3tFB6jGzefoc/BfleNS0Q/eleYpD2SDLmsXzN2hFpDrfAskx7H0WnUtKbtQ==}
+    cpu: [x64]
+    os: [linux]
+
+  '@oxlint-tsgolint/win32-arm64@7.0.2008':
+    resolution: {integrity: sha512-u12UqT/xG64vXclqfe3/7I4j2mWSMZmXsMRBxbgmGfHaEfZUEzxl1QCNyx3TDM5OfsWWKH4dAHJtDRxTAiYA7A==}
+    cpu: [arm64]
+    os: [win32]
+
+  '@oxlint-tsgolint/win32-x64@7.0.2008':
+    resolution: {integrity: sha512-Vjev4Ns8rdGa4Tb85ZsBkei0reLa77j3FNJsCKPo2gi5oTPK5O2eN42sim2ewoorgx7JQ3+49YuUKa1d6UKHPw==}
     cpu: [x64]
     os: [win32]
 
@@ -8371,6 +8404,10 @@ packages:
       svelte:
         optional: true
 
+  oxlint-tsgolint@7.0.2008:
+    resolution: {integrity: sha512-QuRK+gdriCwpOs+1PGq6/aImEEEK+EClNptdVtI0y4bDOhJ0uH/v3noz+yPKe+DYOTdkej75/5f3ouOGP5EGrQ==}
+    hasBin: true
+
   oxlint@1.66.0:
     resolution: {integrity: sha512-N4LLxYLd94KEBqXDMDM5f+2PUpItTjDLreXe2Gn5KhjhCK4Qp2YUXaBi8Yu325ryOgKwt22m45fpD7nPOn69Yw==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -12861,7 +12898,7 @@ snapshots:
     transitivePeerDependencies:
       - magicast
 
-  '@nuxt/nitro-server@4.2.1(db0@0.3.4)(ioredis@5.8.2)(magicast@0.5.2)(nuxt@4.2.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@parcel/watcher@2.5.1)(@types/node@24.10.1)(@vue/compiler-sfc@3.5.41)(db0@0.3.4)(eslint@9.39.1(jiti@2.6.1))(ioredis@5.8.2)(lightningcss@1.33.0)(magicast@0.5.2)(optionator@0.9.4)(oxlint@1.66.0)(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))(yaml@2.9.0))(rolldown@1.2.5)(typescript@7.0.2)':
+  '@nuxt/nitro-server@4.2.1(db0@0.3.4)(ioredis@5.8.2)(magicast@0.5.2)(nuxt@4.2.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@parcel/watcher@2.5.1)(@types/node@24.10.1)(@vue/compiler-sfc@3.5.41)(db0@0.3.4)(eslint@9.39.1(jiti@2.6.1))(ioredis@5.8.2)(lightningcss@1.33.0)(magicast@0.5.2)(optionator@0.9.4)(oxlint@1.66.0(oxlint-tsgolint@7.0.2008))(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))(yaml@2.9.0))(rolldown@1.2.5)(typescript@7.0.2)':
     dependencies:
       '@nuxt/devalue': 2.0.2
       '@nuxt/kit': 4.2.1(magicast@0.5.2)
@@ -12879,7 +12916,7 @@ snapshots:
       klona: 2.0.6
       mocked-exports: 0.1.1
       nitropack: 2.12.9(rolldown@1.2.5)
-      nuxt: 4.2.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@parcel/watcher@2.5.1)(@types/node@24.10.1)(@vue/compiler-sfc@3.5.41)(db0@0.3.4)(eslint@9.39.1(jiti@2.6.1))(ioredis@5.8.2)(lightningcss@1.33.0)(magicast@0.5.2)(optionator@0.9.4)(oxlint@1.66.0)(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))(yaml@2.9.0)
+      nuxt: 4.2.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@parcel/watcher@2.5.1)(@types/node@24.10.1)(@vue/compiler-sfc@3.5.41)(db0@0.3.4)(eslint@9.39.1(jiti@2.6.1))(ioredis@5.8.2)(lightningcss@1.33.0)(magicast@0.5.2)(optionator@0.9.4)(oxlint@1.66.0(oxlint-tsgolint@7.0.2008))(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))(yaml@2.9.0)
       pathe: 2.0.3
       pkg-types: 2.3.0
       radix3: 1.1.2
@@ -12925,7 +12962,7 @@ snapshots:
       - uploadthing
       - xml2js
 
-  '@nuxt/nitro-server@4.2.1(db0@0.3.4)(ioredis@5.8.2)(nuxt@4.2.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@parcel/watcher@2.5.1)(@types/node@24.10.1)(@vue/compiler-sfc@3.5.41)(db0@0.3.4)(eslint@9.39.1(jiti@2.7.0))(ioredis@5.8.2)(lightningcss@1.33.0)(optionator@0.9.4)(oxlint@1.66.0)(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))(yaml@2.9.0))(rolldown@1.2.5)(typescript@7.0.2)':
+  '@nuxt/nitro-server@4.2.1(db0@0.3.4)(ioredis@5.8.2)(nuxt@4.2.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@parcel/watcher@2.5.1)(@types/node@24.10.1)(@vue/compiler-sfc@3.5.41)(db0@0.3.4)(eslint@9.39.1(jiti@2.7.0))(ioredis@5.8.2)(lightningcss@1.33.0)(optionator@0.9.4)(oxlint@1.66.0(oxlint-tsgolint@7.0.2008))(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))(yaml@2.9.0))(rolldown@1.2.5)(typescript@7.0.2)':
     dependencies:
       '@nuxt/devalue': 2.0.2
       '@nuxt/kit': 4.2.1
@@ -12943,7 +12980,7 @@ snapshots:
       klona: 2.0.6
       mocked-exports: 0.1.1
       nitropack: 2.12.9(rolldown@1.2.5)
-      nuxt: 4.2.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@parcel/watcher@2.5.1)(@types/node@24.10.1)(@vue/compiler-sfc@3.5.41)(db0@0.3.4)(eslint@9.39.1(jiti@2.7.0))(ioredis@5.8.2)(lightningcss@1.33.0)(optionator@0.9.4)(oxlint@1.66.0)(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))(yaml@2.9.0)
+      nuxt: 4.2.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@parcel/watcher@2.5.1)(@types/node@24.10.1)(@vue/compiler-sfc@3.5.41)(db0@0.3.4)(eslint@9.39.1(jiti@2.7.0))(ioredis@5.8.2)(lightningcss@1.33.0)(optionator@0.9.4)(oxlint@1.66.0(oxlint-tsgolint@7.0.2008))(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))(yaml@2.9.0)
       pathe: 2.0.3
       pkg-types: 2.3.0
       radix3: 1.1.2
@@ -13031,7 +13068,7 @@ snapshots:
     transitivePeerDependencies:
       - magicast
 
-  '@nuxt/vite-builder@4.2.1(@types/node@24.10.1)(eslint@9.39.1(jiti@2.6.1))(lightningcss@1.33.0)(magicast@0.5.2)(nuxt@4.2.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@parcel/watcher@2.5.1)(@types/node@24.10.1)(@vue/compiler-sfc@3.5.41)(db0@0.3.4)(eslint@9.39.1(jiti@2.6.1))(ioredis@5.8.2)(lightningcss@1.33.0)(magicast@0.5.2)(optionator@0.9.4)(oxlint@1.66.0)(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))(yaml@2.9.0))(optionator@0.9.4)(oxlint@1.66.0)(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vue@3.5.25(typescript@7.0.2))(yaml@2.9.0)':
+  '@nuxt/vite-builder@4.2.1(@types/node@24.10.1)(eslint@9.39.1(jiti@2.6.1))(lightningcss@1.33.0)(magicast@0.5.2)(nuxt@4.2.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@parcel/watcher@2.5.1)(@types/node@24.10.1)(@vue/compiler-sfc@3.5.41)(db0@0.3.4)(eslint@9.39.1(jiti@2.6.1))(ioredis@5.8.2)(lightningcss@1.33.0)(magicast@0.5.2)(optionator@0.9.4)(oxlint@1.66.0(oxlint-tsgolint@7.0.2008))(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))(yaml@2.9.0))(optionator@0.9.4)(oxlint@1.66.0(oxlint-tsgolint@7.0.2008))(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vue@3.5.25(typescript@7.0.2))(yaml@2.9.0)':
     dependencies:
       '@nuxt/kit': 4.2.1(magicast@0.5.2)
       '@rollup/plugin-replace': 6.0.3(rollup@4.53.1)
@@ -13051,7 +13088,7 @@ snapshots:
       magic-string: 0.30.21
       mlly: 1.8.0
       mocked-exports: 0.1.1
-      nuxt: 4.2.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@parcel/watcher@2.5.1)(@types/node@24.10.1)(@vue/compiler-sfc@3.5.41)(db0@0.3.4)(eslint@9.39.1(jiti@2.6.1))(ioredis@5.8.2)(lightningcss@1.33.0)(magicast@0.5.2)(optionator@0.9.4)(oxlint@1.66.0)(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))(yaml@2.9.0)
+      nuxt: 4.2.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@parcel/watcher@2.5.1)(@types/node@24.10.1)(@vue/compiler-sfc@3.5.41)(db0@0.3.4)(eslint@9.39.1(jiti@2.6.1))(ioredis@5.8.2)(lightningcss@1.33.0)(magicast@0.5.2)(optionator@0.9.4)(oxlint@1.66.0(oxlint-tsgolint@7.0.2008))(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))(yaml@2.9.0)
       pathe: 2.0.3
       pkg-types: 2.3.0
       postcss: 8.5.26
@@ -13062,7 +13099,7 @@ snapshots:
       unenv: 2.0.0-rc.24
       vite: 7.2.6(@types/node@24.10.1)(jiti@2.6.1)(lightningcss@1.33.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0)
       vite-node: 5.2.0(@types/node@24.10.1)(jiti@2.6.1)(lightningcss@1.33.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0)
-      vite-plugin-checker: 0.11.0(eslint@9.39.1(jiti@2.6.1))(optionator@0.9.4)(oxlint@1.66.0)(typescript@7.0.2)(vite@7.2.6(@types/node@24.10.1)(jiti@2.6.1)(lightningcss@1.33.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))
+      vite-plugin-checker: 0.11.0(eslint@9.39.1(jiti@2.6.1))(optionator@0.9.4)(oxlint@1.66.0(oxlint-tsgolint@7.0.2008))(typescript@7.0.2)(vite@7.2.6(@types/node@24.10.1)(jiti@2.6.1)(lightningcss@1.33.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))
       vue: 3.5.25(typescript@7.0.2)
       vue-bundle-renderer: 2.2.0
     optionalDependencies:
@@ -13092,7 +13129,7 @@ snapshots:
       - vue-tsc
       - yaml
 
-  '@nuxt/vite-builder@4.2.1(@types/node@24.10.1)(eslint@9.39.1(jiti@2.7.0))(lightningcss@1.33.0)(nuxt@4.2.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@parcel/watcher@2.5.1)(@types/node@24.10.1)(@vue/compiler-sfc@3.5.41)(db0@0.3.4)(eslint@9.39.1(jiti@2.7.0))(ioredis@5.8.2)(lightningcss@1.33.0)(optionator@0.9.4)(oxlint@1.66.0)(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))(yaml@2.9.0))(optionator@0.9.4)(oxlint@1.66.0)(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vue@3.5.25(typescript@7.0.2))(yaml@2.9.0)':
+  '@nuxt/vite-builder@4.2.1(@types/node@24.10.1)(eslint@9.39.1(jiti@2.7.0))(lightningcss@1.33.0)(nuxt@4.2.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@parcel/watcher@2.5.1)(@types/node@24.10.1)(@vue/compiler-sfc@3.5.41)(db0@0.3.4)(eslint@9.39.1(jiti@2.7.0))(ioredis@5.8.2)(lightningcss@1.33.0)(optionator@0.9.4)(oxlint@1.66.0(oxlint-tsgolint@7.0.2008))(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))(yaml@2.9.0))(optionator@0.9.4)(oxlint@1.66.0(oxlint-tsgolint@7.0.2008))(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vue@3.5.25(typescript@7.0.2))(yaml@2.9.0)':
     dependencies:
       '@nuxt/kit': 4.2.1
       '@rollup/plugin-replace': 6.0.3(rollup@4.53.1)
@@ -13112,7 +13149,7 @@ snapshots:
       magic-string: 0.30.21
       mlly: 1.8.0
       mocked-exports: 0.1.1
-      nuxt: 4.2.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@parcel/watcher@2.5.1)(@types/node@24.10.1)(@vue/compiler-sfc@3.5.41)(db0@0.3.4)(eslint@9.39.1(jiti@2.7.0))(ioredis@5.8.2)(lightningcss@1.33.0)(optionator@0.9.4)(oxlint@1.66.0)(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))(yaml@2.9.0)
+      nuxt: 4.2.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@parcel/watcher@2.5.1)(@types/node@24.10.1)(@vue/compiler-sfc@3.5.41)(db0@0.3.4)(eslint@9.39.1(jiti@2.7.0))(ioredis@5.8.2)(lightningcss@1.33.0)(optionator@0.9.4)(oxlint@1.66.0(oxlint-tsgolint@7.0.2008))(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))(yaml@2.9.0)
       pathe: 2.0.3
       pkg-types: 2.3.0
       postcss: 8.5.26
@@ -13123,7 +13160,7 @@ snapshots:
       unenv: 2.0.0-rc.24
       vite: 7.2.6(@types/node@24.10.1)(jiti@2.6.1)(lightningcss@1.33.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0)
       vite-node: 5.2.0(@types/node@24.10.1)(jiti@2.6.1)(lightningcss@1.33.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0)
-      vite-plugin-checker: 0.11.0(eslint@9.39.1(jiti@2.7.0))(optionator@0.9.4)(oxlint@1.66.0)(typescript@7.0.2)(vite@7.2.6(@types/node@24.10.1)(jiti@2.6.1)(lightningcss@1.33.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))
+      vite-plugin-checker: 0.11.0(eslint@9.39.1(jiti@2.7.0))(optionator@0.9.4)(oxlint@1.66.0(oxlint-tsgolint@7.0.2008))(typescript@7.0.2)(vite@7.2.6(@types/node@24.10.1)(jiti@2.6.1)(lightningcss@1.33.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))
       vue: 3.5.25(typescript@7.0.2)
       vue-bundle-renderer: 2.2.0
     optionalDependencies:
@@ -13499,6 +13536,24 @@ snapshots:
     optional: true
 
   '@oxfmt/binding-win32-x64-msvc@0.51.0':
+    optional: true
+
+  '@oxlint-tsgolint/darwin-arm64@7.0.2008':
+    optional: true
+
+  '@oxlint-tsgolint/darwin-x64@7.0.2008':
+    optional: true
+
+  '@oxlint-tsgolint/linux-arm64@7.0.2008':
+    optional: true
+
+  '@oxlint-tsgolint/linux-x64@7.0.2008':
+    optional: true
+
+  '@oxlint-tsgolint/win32-arm64@7.0.2008':
+    optional: true
+
+  '@oxlint-tsgolint/win32-x64@7.0.2008':
     optional: true
 
   '@oxlint/binding-android-arm-eabi@1.66.0':
@@ -19223,16 +19278,16 @@ snapshots:
     dependencies:
       boolbase: 1.0.0
 
-  nuxt@4.2.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@parcel/watcher@2.5.1)(@types/node@24.10.1)(@vue/compiler-sfc@3.5.41)(db0@0.3.4)(eslint@9.39.1(jiti@2.6.1))(ioredis@5.8.2)(lightningcss@1.33.0)(magicast@0.5.2)(optionator@0.9.4)(oxlint@1.66.0)(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))(yaml@2.9.0):
+  nuxt@4.2.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@parcel/watcher@2.5.1)(@types/node@24.10.1)(@vue/compiler-sfc@3.5.41)(db0@0.3.4)(eslint@9.39.1(jiti@2.6.1))(ioredis@5.8.2)(lightningcss@1.33.0)(magicast@0.5.2)(optionator@0.9.4)(oxlint@1.66.0(oxlint-tsgolint@7.0.2008))(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))(yaml@2.9.0):
     dependencies:
       '@dxup/nuxt': 0.2.2(magicast@0.5.2)
       '@nuxt/cli': 3.30.0(magicast@0.5.2)
       '@nuxt/devtools': 3.1.1(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))(vue@3.5.25(typescript@7.0.2))
       '@nuxt/kit': 4.2.1(magicast@0.5.2)
-      '@nuxt/nitro-server': 4.2.1(db0@0.3.4)(ioredis@5.8.2)(magicast@0.5.2)(nuxt@4.2.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@parcel/watcher@2.5.1)(@types/node@24.10.1)(@vue/compiler-sfc@3.5.41)(db0@0.3.4)(eslint@9.39.1(jiti@2.6.1))(ioredis@5.8.2)(lightningcss@1.33.0)(magicast@0.5.2)(optionator@0.9.4)(oxlint@1.66.0)(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))(yaml@2.9.0))(rolldown@1.2.5)(typescript@7.0.2)
+      '@nuxt/nitro-server': 4.2.1(db0@0.3.4)(ioredis@5.8.2)(magicast@0.5.2)(nuxt@4.2.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@parcel/watcher@2.5.1)(@types/node@24.10.1)(@vue/compiler-sfc@3.5.41)(db0@0.3.4)(eslint@9.39.1(jiti@2.6.1))(ioredis@5.8.2)(lightningcss@1.33.0)(magicast@0.5.2)(optionator@0.9.4)(oxlint@1.66.0(oxlint-tsgolint@7.0.2008))(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))(yaml@2.9.0))(rolldown@1.2.5)(typescript@7.0.2)
       '@nuxt/schema': 4.2.1
       '@nuxt/telemetry': 2.6.6(magicast@0.5.2)
-      '@nuxt/vite-builder': 4.2.1(@types/node@24.10.1)(eslint@9.39.1(jiti@2.6.1))(lightningcss@1.33.0)(magicast@0.5.2)(nuxt@4.2.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@parcel/watcher@2.5.1)(@types/node@24.10.1)(@vue/compiler-sfc@3.5.41)(db0@0.3.4)(eslint@9.39.1(jiti@2.6.1))(ioredis@5.8.2)(lightningcss@1.33.0)(magicast@0.5.2)(optionator@0.9.4)(oxlint@1.66.0)(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))(yaml@2.9.0))(optionator@0.9.4)(oxlint@1.66.0)(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vue@3.5.25(typescript@7.0.2))(yaml@2.9.0)
+      '@nuxt/vite-builder': 4.2.1(@types/node@24.10.1)(eslint@9.39.1(jiti@2.6.1))(lightningcss@1.33.0)(magicast@0.5.2)(nuxt@4.2.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@parcel/watcher@2.5.1)(@types/node@24.10.1)(@vue/compiler-sfc@3.5.41)(db0@0.3.4)(eslint@9.39.1(jiti@2.6.1))(ioredis@5.8.2)(lightningcss@1.33.0)(magicast@0.5.2)(optionator@0.9.4)(oxlint@1.66.0(oxlint-tsgolint@7.0.2008))(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))(yaml@2.9.0))(optionator@0.9.4)(oxlint@1.66.0(oxlint-tsgolint@7.0.2008))(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vue@3.5.25(typescript@7.0.2))(yaml@2.9.0)
       '@unhead/vue': 2.0.19(vue@3.5.25(typescript@7.0.2))
       '@vue/shared': 3.5.25
       c12: 3.3.1(magicast@0.5.2)
@@ -19346,16 +19401,16 @@ snapshots:
       - xml2js
       - yaml
 
-  nuxt@4.2.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@parcel/watcher@2.5.1)(@types/node@24.10.1)(@vue/compiler-sfc@3.5.41)(db0@0.3.4)(eslint@9.39.1(jiti@2.7.0))(ioredis@5.8.2)(lightningcss@1.33.0)(optionator@0.9.4)(oxlint@1.66.0)(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))(yaml@2.9.0):
+  nuxt@4.2.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@parcel/watcher@2.5.1)(@types/node@24.10.1)(@vue/compiler-sfc@3.5.41)(db0@0.3.4)(eslint@9.39.1(jiti@2.7.0))(ioredis@5.8.2)(lightningcss@1.33.0)(optionator@0.9.4)(oxlint@1.66.0(oxlint-tsgolint@7.0.2008))(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))(yaml@2.9.0):
     dependencies:
       '@dxup/nuxt': 0.2.2
       '@nuxt/cli': 3.30.0
       '@nuxt/devtools': 3.1.1(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))(vue@3.5.25(typescript@7.0.2))
       '@nuxt/kit': 4.2.1
-      '@nuxt/nitro-server': 4.2.1(db0@0.3.4)(ioredis@5.8.2)(nuxt@4.2.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@parcel/watcher@2.5.1)(@types/node@24.10.1)(@vue/compiler-sfc@3.5.41)(db0@0.3.4)(eslint@9.39.1(jiti@2.7.0))(ioredis@5.8.2)(lightningcss@1.33.0)(optionator@0.9.4)(oxlint@1.66.0)(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))(yaml@2.9.0))(rolldown@1.2.5)(typescript@7.0.2)
+      '@nuxt/nitro-server': 4.2.1(db0@0.3.4)(ioredis@5.8.2)(nuxt@4.2.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@parcel/watcher@2.5.1)(@types/node@24.10.1)(@vue/compiler-sfc@3.5.41)(db0@0.3.4)(eslint@9.39.1(jiti@2.7.0))(ioredis@5.8.2)(lightningcss@1.33.0)(optionator@0.9.4)(oxlint@1.66.0(oxlint-tsgolint@7.0.2008))(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))(yaml@2.9.0))(rolldown@1.2.5)(typescript@7.0.2)
       '@nuxt/schema': 4.2.1
       '@nuxt/telemetry': 2.6.6
-      '@nuxt/vite-builder': 4.2.1(@types/node@24.10.1)(eslint@9.39.1(jiti@2.7.0))(lightningcss@1.33.0)(nuxt@4.2.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@parcel/watcher@2.5.1)(@types/node@24.10.1)(@vue/compiler-sfc@3.5.41)(db0@0.3.4)(eslint@9.39.1(jiti@2.7.0))(ioredis@5.8.2)(lightningcss@1.33.0)(optionator@0.9.4)(oxlint@1.66.0)(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))(yaml@2.9.0))(optionator@0.9.4)(oxlint@1.66.0)(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vue@3.5.25(typescript@7.0.2))(yaml@2.9.0)
+      '@nuxt/vite-builder': 4.2.1(@types/node@24.10.1)(eslint@9.39.1(jiti@2.7.0))(lightningcss@1.33.0)(nuxt@4.2.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@parcel/watcher@2.5.1)(@types/node@24.10.1)(@vue/compiler-sfc@3.5.41)(db0@0.3.4)(eslint@9.39.1(jiti@2.7.0))(ioredis@5.8.2)(lightningcss@1.33.0)(optionator@0.9.4)(oxlint@1.66.0(oxlint-tsgolint@7.0.2008))(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0))(yaml@2.9.0))(optionator@0.9.4)(oxlint@1.66.0(oxlint-tsgolint@7.0.2008))(rolldown@1.2.5)(rollup@4.53.1)(terser@5.44.1)(tsx@4.20.6)(typescript@7.0.2)(vue@3.5.25(typescript@7.0.2))(yaml@2.9.0)
       '@unhead/vue': 2.0.19(vue@3.5.25(typescript@7.0.2))
       '@vue/shared': 3.5.25
       c12: 3.3.1
@@ -19722,7 +19777,16 @@ snapshots:
       '@oxfmt/binding-win32-x64-msvc': 0.51.0
       svelte: 5.45.4
 
-  oxlint@1.66.0:
+  oxlint-tsgolint@7.0.2008:
+    optionalDependencies:
+      '@oxlint-tsgolint/darwin-arm64': 7.0.2008
+      '@oxlint-tsgolint/darwin-x64': 7.0.2008
+      '@oxlint-tsgolint/linux-arm64': 7.0.2008
+      '@oxlint-tsgolint/linux-x64': 7.0.2008
+      '@oxlint-tsgolint/win32-arm64': 7.0.2008
+      '@oxlint-tsgolint/win32-x64': 7.0.2008
+
+  oxlint@1.66.0(oxlint-tsgolint@7.0.2008):
     optionalDependencies:
       '@oxlint/binding-android-arm-eabi': 1.66.0
       '@oxlint/binding-android-arm64': 1.66.0
@@ -19743,6 +19807,7 @@ snapshots:
       '@oxlint/binding-win32-arm64-msvc': 1.66.0
       '@oxlint/binding-win32-ia32-msvc': 1.66.0
       '@oxlint/binding-win32-x64-msvc': 1.66.0
+      oxlint-tsgolint: 7.0.2008
 
   p-filter@2.1.0:
     dependencies:
@@ -21953,7 +22018,7 @@ snapshots:
       - tsx
       - yaml
 
-  vite-plugin-checker@0.11.0(eslint@9.39.1(jiti@2.6.1))(optionator@0.9.4)(oxlint@1.66.0)(typescript@7.0.2)(vite@7.2.6(@types/node@24.10.1)(jiti@2.6.1)(lightningcss@1.33.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0)):
+  vite-plugin-checker@0.11.0(eslint@9.39.1(jiti@2.6.1))(optionator@0.9.4)(oxlint@1.66.0(oxlint-tsgolint@7.0.2008))(typescript@7.0.2)(vite@7.2.6(@types/node@24.10.1)(jiti@2.6.1)(lightningcss@1.33.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0)):
     dependencies:
       '@babel/code-frame': 7.27.1
       chokidar: 4.0.3
@@ -21967,10 +22032,10 @@ snapshots:
     optionalDependencies:
       eslint: 9.39.1(jiti@2.6.1)
       optionator: 0.9.4
-      oxlint: 1.66.0
+      oxlint: 1.66.0(oxlint-tsgolint@7.0.2008)
       typescript: 7.0.2
 
-  vite-plugin-checker@0.11.0(eslint@9.39.1(jiti@2.7.0))(optionator@0.9.4)(oxlint@1.66.0)(typescript@7.0.2)(vite@7.2.6(@types/node@24.10.1)(jiti@2.6.1)(lightningcss@1.33.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0)):
+  vite-plugin-checker@0.11.0(eslint@9.39.1(jiti@2.7.0))(optionator@0.9.4)(oxlint@1.66.0(oxlint-tsgolint@7.0.2008))(typescript@7.0.2)(vite@7.2.6(@types/node@24.10.1)(jiti@2.6.1)(lightningcss@1.33.0)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0)):
     dependencies:
       '@babel/code-frame': 7.27.1
       chokidar: 4.0.3
@@ -21984,7 +22049,7 @@ snapshots:
     optionalDependencies:
       eslint: 9.39.1(jiti@2.7.0)
       optionator: 0.9.4
-      oxlint: 1.66.0
+      oxlint: 1.66.0(oxlint-tsgolint@7.0.2008)
       typescript: 7.0.2
 
   vite-plugin-inspect@11.3.3(@nuxt/kit@4.2.1(magicast@0.5.2))(vite@8.2.2(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.6.1)(terser@5.44.1)(tsx@4.20.6)(yaml@2.9.0)):

@@ -13,7 +13,7 @@ const fileMap = [
   'composition.ts',
 ]
 
-export async function main() {
+export function main() {
   fileMap.forEach((input) => {
     const inputPath = join(__dirname, '..', 'src', input)
     let content = readFileSync(inputPath, 'utf8').replace("'./tokens'", "'../tokens'")

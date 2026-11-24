@@ -156,7 +156,7 @@ export const CommandMenu = (props: Props) => {
               composite={false}
               onValueChange={(e) => {
                 const target = filteredItems.find((item) => item.value === e.value[0])
-                if (target) navigate(target.url)
+                if (target) void navigate(target.url)
                 requestAnimationFrame(() => {
                   setOpen(false)
                 })

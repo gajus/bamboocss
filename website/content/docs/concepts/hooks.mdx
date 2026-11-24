@@ -219,11 +219,12 @@ export interface BambooHooks {
    * `configure` sets. Call it before the hook awaits anything: a call past an `await` comes after
    * the tokens are built, and is reported.
    */
-  'tokens:created': (args: TokenCreatedHookArgs) => MaybeAsyncReturn
+  'tokens:created': (args: TokenCreatedHookArgs) => void
   /**
-   * Called when the classname engine has been created
+   * Called when the classname engine has been created, which reads what `configure` sets as soon
+   * as the hook returns.
    */
-  'utility:created': (args: UtilityCreatedHookArgs) => MaybeAsyncReturn
+  'utility:created': (args: UtilityCreatedHookArgs) => void
   /**
    * Called when the Bamboo context has been created and the API is ready to be used.
    */

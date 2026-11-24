@@ -145,7 +145,7 @@ describe('watch rebuilds', () => {
     expect(withoutMergeCodes(await fold())).toContain('"c_red.300"')
 
     writeDependency('blue.500')
-    change('update')
+    await change('update')
     await start()
 
     // Without the refresh this is still `c_red.300`: the class is correct for source the
@@ -161,7 +161,7 @@ describe('watch rebuilds', () => {
     expect(withoutMergeCodes(await fold())).toContain('"c_red.300"')
 
     rmSync(DEPENDENCY, { force: true })
-    change('delete')
+    await change('delete')
     await start()
 
     // The import resolves to nothing now, so there is no static value to fold. `null` is
@@ -348,7 +348,7 @@ describe('a dependent the edit does not actually change', () => {
 
     // One export moves. `beta` is untouched, so the module reading it folds to the same bytes.
     writePair('red.400', 'blue.500')
-    change('update')
+    await change('update')
 
     const first = stubGraph({ [CONSUMER]: [{ id: CONSUMER }], [OTHER_CONSUMER]: [{ id: OTHER_CONSUMER }] })
     expect(hot(DEPENDENCY, first.graph, [])).toEqual([{ id: CONSUMER }])
@@ -360,7 +360,7 @@ describe('a dependent the edit does not actually change', () => {
     // The other half of the same claim: suppression is per edit, not a state a module gets stuck
     // in. Move `beta` this time and the two swap places.
     writePair('red.400', 'blue.600')
-    change('update')
+    await change('update')
 
     const second = stubGraph({ [CONSUMER]: [{ id: CONSUMER }], [OTHER_CONSUMER]: [{ id: OTHER_CONSUMER }] })
     expect(hot(DEPENDENCY, second.graph, [])).toEqual([{ id: OTHER_CONSUMER }])
@@ -383,7 +383,7 @@ describe('a dependent the edit does not actually change', () => {
     // the compiled module changed; the retained post-plugin bytes can.
     writeFileSync(file, `<script setup>const templateOnly = true</script>\n<template><div /></template>\n`)
     writePair('red.400', 'blue.500')
-    change()
+    await change()
 
     const graph = stubGraph({ [file]: [{ id: file }] })
     expect(hot(DEPENDENCY, graph.graph)).toBeUndefined()
@@ -406,7 +406,7 @@ describe('a dependent the edit does not actually change', () => {
       '"c_red.300"',
     )
 
-    change(file)
+    await change(file)
     await fold(file, recipe('blue.500'))
     const updated = await foldModule(consumer, useRecipe)
     expect(withoutMergeCodes(typeof updated === 'object' && updated !== null ? updated.code : updated)).toContain(
@@ -472,7 +472,7 @@ describe('what the unchanged check has to get right', () => {
     // `a` moves and `b` does not, so re-folding disk still produces the recorded output while the
     // module that was really served no longer does.
     writeFileSync(DEPENDENCY, `export const values = { a: { color: 'red.400' }, b: { color: 'red.300' } }\n`)
-    change('update')
+    await change('update')
 
     const { graph, invalidated } = stubGraph({ [CONSUMER]: [{ id: CONSUMER }] })
     expect(hot(DEPENDENCY, graph, []), 'disk is not this module').toEqual([{ id: CONSUMER }])
@@ -501,7 +501,7 @@ describe('what the unchanged check has to get right', () => {
     expect(withoutMergeCodes(await foldFile(CONSUMER, CONSUMER_CODE))).toContain('"c_red.300"')
 
     writeFileSync(DEPENDENCY, `declare const make: () => { color: string }\nexport const shared = make()\n`)
-    change('update')
+    await change('update')
 
     const client = stubGraph({ [CONSUMER]: [{ id: CONSUMER }] })
     const ssr = stubGraph({ [CONSUMER]: [{ id: CONSUMER }] })
@@ -533,7 +533,7 @@ describe('what the unchanged check has to get right', () => {
 
     // Same value, reached through `base.ts` now. The consumer's bytes do not move.
     writeFileSync(DEPENDENCY, `export { shared } from './base'\n`)
-    changeFile(DEPENDENCY)
+    await changeFile(DEPENDENCY)
 
     const quiet = stubGraph({ [CONSUMER]: [{ id: CONSUMER }] })
     expect(hot(DEPENDENCY, quiet.graph, []), 'same class either way').toBeUndefined()
@@ -541,7 +541,7 @@ describe('what the unchanged check has to get right', () => {
 
     // The edge that only the suppressed re-fold could have learned about.
     writeFileSync(BASE, `export const shared = { color: 'red.400' }\n`)
-    changeFile(BASE)
+    await changeFile(BASE)
 
     const { graph, invalidated } = stubGraph({ [CONSUMER]: [{ id: CONSUMER }] })
     expect(hot(BASE, graph, []), 'the fold reads through base.ts now').toEqual([{ id: CONSUMER }])
@@ -587,13 +587,13 @@ export const d = (s: string) => badge({ size: s })
     // The dependency grows a variant axis past the limit. The consumer is untouched, and its
     // compile throws.
     writeSizes(BIG)
-    changeFile(DEPENDENCY)
+    await changeFile(DEPENDENCY)
     expect(await foldFile(CONSUMER, source), 'the compile failed').toBeNull()
 
     // The dependency is put back. `css(shared)` folds to what it always did, so an output digest
     // kept from before the break would match and suppress the one module that has to re-transform.
     writeSizes(SMALL)
-    changeFile(DEPENDENCY)
+    await changeFile(DEPENDENCY)
 
     const { graph, invalidated } = stubGraph({ [CONSUMER]: [{ id: CONSUMER }] })
     expect(hot(DEPENDENCY, graph, []), 'nothing to compare against is not the same as nothing changed').toEqual([
@@ -638,7 +638,7 @@ export const d = (s: string) => badge({ size: s })
     expect(withoutMergeCodes(await foldFile(CONSUMER, consumerOf('beta')))).toContain('"c_blue.500"')
 
     writeDep('red.400')
-    change('update')
+    await change('update')
 
     const entries: Array<[string, { id: string }[]]> = [...moved, CONSUMER].map((file) => [file, [{ id: file }]])
     const { graph, invalidated } = stubGraph(Object.fromEntries(entries))
@@ -676,7 +676,7 @@ export const d = (s: string) => badge({ size: s })
     await foldFile(OTHER_CONSUMER, consumerOf('beta'))
 
     writeDep('red.400')
-    change('update')
+    await change('update')
 
     const entries: Array<[string, { id: string }[]]> = [...moved, CONSUMER, OTHER_CONSUMER].map((file) => [
       file,

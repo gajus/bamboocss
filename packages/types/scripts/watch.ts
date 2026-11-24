@@ -6,12 +6,11 @@ import { join } from 'path'
 
 const main = () => {
   build()
-  return postbuild()
+  postbuild()
 }
 
-main().then(() => {
-  watch(join(__dirname, '..', 'src')).on('change', () => {
-    console.log('Rebuild types')
-    main()
-  })
+main()
+watch(join(__dirname, '..', 'src')).on('change', () => {
+  console.log('Rebuild types')
+  main()
 })

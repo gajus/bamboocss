@@ -1233,13 +1233,13 @@ export class BambooContext extends Generator {
       cwd,
     })
 
-    watcher.on(
-      'all',
-      debounce(async (event, file) => {
-        logger.info(`file:${event}`, file)
-        await reportRebuildFailure(() => cb(event, file))
-      }),
-    )
+    const onFile = debounce(async (event: WatcherEventType, file: string) => {
+      logger.info(`file:${event}`, file)
+      await reportRebuildFailure(() => cb(event, file))
+    })
+    // Not waited on, like `rebuild` above: `reportRebuildFailure` catches what a rebuild throws,
+    // so this never rejects.
+    watcher.on('all', (event, file) => void onFile(event, file))
   }
 }
 

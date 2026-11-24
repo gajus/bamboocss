@@ -31,7 +31,8 @@ const run = async (code: string, file: string) => {
     if (!finished) {
       finished = true
       try {
-        hookOf(plugin.buildEnd)?.call({} as never, undefined as never)
+        // Synchronous, as `expect(end).toThrow` needs: its failure is thrown, not returned.
+        void hookOf(plugin.buildEnd)?.call({} as never, undefined as never)
       } catch (error) {
         failure = error
       }

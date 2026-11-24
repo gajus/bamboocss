@@ -179,6 +179,12 @@ Nor does it run the native extractor's Rust checks, which are CI's "Rust" job. B
 `packages/native-extractor/src`, run them there:
 `cargo fmt --check && cargo clippy --locked --all-targets -- -D warnings && cargo test --locked`.
 
+**`pnpm lint` is type-aware.** oxlint reads types through `oxlint-tsgolint` (`options.typeAware` in `.oxlintrc.json`),
+and `no-floating-promises` and `no-misused-promises` are errors: a merged hook typed to maybe return a promise, called
+without waiting, ran a second plugin's `tokens:created` only after the tokens were built. A promise left unwaited on
+purpose is written `void`; a hook the caller does not wait on is typed to return `void`. TypeScript 7 refuses tsconfig
+`baseUrl`, and so does the linter, so a fixture testing bamboo's support for it goes in `ignorePatterns`, as two do.
+
 🚨 **Nothing drives a real browser any more, and no check reads a computed style.** The browser-parity suite built the
 sandbox twice — folded and unfolded — and compared what Chromium computed. Mandatory compilation (`13ce729fc`) left no
 unfolded build to compare against, so it went along with its fixtures, the `playwright` dependency and its CI job.

@@ -177,7 +177,7 @@ describe('plugin contract', () => {
     expect(plugins().css.sharedDuringBuild).toBe(true)
   })
 
-  test('output lifecycle plugins stay flat and follow a reordered output slot', () => {
+  test('output lifecycle plugins stay flat and follow a reordered output slot', async () => {
     const { fold } = plugins()
     const firstUserPlugin = { name: 'test:first-output' }
     const secondUserPlugin = { name: 'test:second-output' }
@@ -188,7 +188,7 @@ describe('plugin contract', () => {
     const context = { environment: { name: 'client' } }
     const names = (output: typeof first) => (output.plugins as Array<{ name?: string }>).map((plugin) => plugin.name)
 
-    options.call(context as never, input as never)
+    await options.call(context as never, input as never)
     expect(names(first)).toEqual([
       'bamboocss:output-start:client:0',
       firstUserPlugin.name,
@@ -202,9 +202,9 @@ describe('plugin contract', () => {
 
     // Repeated resolution is idempotent, while swapping reused output objects replaces their
     // private slot identity without nesting or moving the user's plugin.
-    options.call(context as never, input as never)
+    await options.call(context as never, input as never)
     input.output = [second, first]
-    options.call(context as never, input as never)
+    await options.call(context as never, input as never)
     expect(names(second)).toEqual([
       'bamboocss:output-start:client:0',
       secondUserPlugin.name,
@@ -880,7 +880,7 @@ describe('compiler', () => {
 
       // SSR first, to completion: what the client's sheet keeps is what SSR's output names.
       const first = await start(environments.ssr, widths.kept)
-      hookOf(compiler.buildEnd)?.call(first.hooks as never, undefined as never)
+      await hookOf(compiler.buildEnd)?.call(first.hooks as never, undefined as never)
 
       // The client emits its sheet with no `buildEnd`, so no generation of its own.
       const { stylesheet } = await start(environments.client, widths.kept)
@@ -943,7 +943,7 @@ describe('compiler', () => {
       const client = await compile('client', '70.101px')
 
       writeFileSync(recipePath, recipe('70.202px'))
-      watchChange.call({} as never, recipePath, { event: 'update' } as never)
+      await watchChange.call({} as never, recipePath, { event: 'update' } as never)
       const ssr = await compile('ssr', '70.202px')
 
       const clientCode = typeof client === 'string' ? client : client?.code
@@ -1078,7 +1078,7 @@ describe('compiler', () => {
       expect(watched).not.toContain(slash(unrelated))
 
       writeFileSync(leaf, tone('blue.500'))
-      hookOf(plugin.watchChange)?.call({} as never, leaf, { event: 'update' } as never)
+      await hookOf(plugin.watchChange)?.call({} as never, leaf, { event: 'update' } as never)
       const update = hookOf(plugin.hotUpdate)?.call(
         { environment: { ...environment, moduleGraph: graph } } as never,
         { file: leaf, modules: [] } as never,
@@ -1098,7 +1098,7 @@ describe('compiler', () => {
 
       invalidated.length = 0
       writeFileSync(leaf, tone('red.300'))
-      hookOf(plugin.watchChange)?.call({} as never, leaf, { event: 'update' } as never)
+      await hookOf(plugin.watchChange)?.call({} as never, leaf, { event: 'update' } as never)
       const repeatedUpdate = hookOf(plugin.hotUpdate)?.call(
         { environment: { ...environment, moduleGraph: graph } } as never,
         { file: leaf, modules: [] } as never,
@@ -1181,7 +1181,7 @@ describe('compiler', () => {
       )
 
       writeFileSync(leaf, tone('blue.500'))
-      watchChange.call({} as never, leaf, { event: 'update' } as never)
+      await watchChange.call({} as never, leaf, { event: 'update' } as never)
       const clientUpdate = hotUpdate.call(
         { environment: { name: 'client', moduleGraph: graph('client', clientModule) } } as never,
         { file: leaf, modules: [] } as never,
@@ -1232,7 +1232,7 @@ describe('compiler', () => {
       }
       await hookOf(compiler.buildStart)?.call(context as never, {} as never)
       await hookOf(compiler.transform)?.call(context as never, source, entry, {} as never)
-      hookOf(compiler.buildEnd)?.call(context as never, undefined as never)
+      await hookOf(compiler.buildEnd)?.call(context as never, undefined as never)
     }
 
     writeFileSync(entry, source)

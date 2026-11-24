@@ -166,10 +166,11 @@ const callAllAsync =
     }
   }
 
+/** For the hooks in `syncHooks`, which return nothing a caller waits on. */
 const callAll =
-  <T extends (...a: any[]) => void | Promise<void>>(...fns: (T | undefined)[]) =>
+  <T extends (...a: any[]) => void>(...fns: (T | undefined)[]) =>
   (...a: Parameters<T>) => {
-    fns.forEach((fn) => fn?.(...a))
+    for (const fn of fns) fn?.(...a)
   }
 
 const tryCatch = (name: string, fn: AnyFunction) => {

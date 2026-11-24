@@ -417,8 +417,9 @@ export const nodeRuntime: Runtime = {
 
       logger.debug('watch:file', `Watching [ ${dirnames.join(', ')} ]`)
 
-      const onInterrupt = async () => {
-        await watcher.close()
+      // Nothing waits on a signal listener, so nothing waits on the close it starts.
+      const onInterrupt = () => {
+        void watcher.close()
       }
       process.once('SIGINT', onInterrupt)
 

@@ -1,5 +1,14 @@
 # @bamboocss/types
 
+## 1.64.11
+
+### Patch Changes
+
+- 67b63c3: Type the `tokens:created` and `utility:created` hooks as returning `void`. Each plugin's hook runs to
+  completion before what it configured is read, and nothing waits on a promise one returns, so the type said a hook
+  could be async when only what it does before its first `await` counts. An `async` hook still type-checks; a linter
+  checking for misused promises now flags it, as it should.
+
 ## 1.64.10
 
 ### Patch Changes

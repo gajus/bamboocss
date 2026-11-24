@@ -1,5 +1,5 @@
 import type { FoldAnalysis, FoldCall, FoldSelection } from '@bamboocss/native-extractor'
-import { inferSlots } from '@bamboocss/shared'
+import { compiledHelperName, inferSlots } from '@bamboocss/shared'
 import { type ClassLookup, createRecipeLookups, type SlotsLookup } from './recipe-table'
 import type { StaticStyleSetCompiler, StyleSetRecipeConfig } from './style-set'
 
@@ -96,6 +96,7 @@ const optionalAccess = (key: string) => (IDENTIFIER.test(key) ? `?.${key}` : `?.
 /** Where a helper import can be written, and under what name the call site can reach it. */
 export interface HelperInsert {
   pos: number
+  /** Import specifiers, each the helper's release name bound to its own: `cvaMap$bamboo_… as cvaMap`. */
   names: string[]
   module?: string
 }
@@ -106,9 +107,12 @@ export interface HelperInsert {
  * Unlike `cx`, an inline recipe's callee is a local binding, so there is nothing to match —
  * the host here is any import of the generated css module, which a file defining a recipe
  * necessarily has, since `cva` came from it.
+ *
+ * Imported by this release's name for it, which only a runtime this release generated exports,
+ * and bound to its own, which is what the call is written with. @see compiledHelperName
  */
 export const ensureRecipeHelperImport = (
-  imported: string,
+  helper: typeof RECIPE_MAP_HELPER | typeof SPLIT_PROPS_HELPER,
   analysis: Pick<FoldAnalysis, 'imports' | 'moduleScopeNames'>,
   /** Helper names a nested scope around the call site rebinds. */
   shadowedHere: readonly string[],
@@ -129,6 +133,7 @@ export const ensureRecipeHelperImport = (
    */
   helperModuleFromSubpath?: (mod: string) => string | undefined,
 ): { name: string; insert?: HelperInsert } | undefined => {
+  const imported = compiledHelperName(helper)
   let host: FoldAnalysis['imports'][number] | undefined
   let subpathModule: string | undefined
 
@@ -157,8 +162,10 @@ export const ensureRecipeHelperImport = (
 
   // A module-scope binding of this name would collide with the one being added, and one in
   // scope at the call site would be reached instead of it.
-  if (analysis.moduleScopeNames.includes(imported)) return undefined
-  if (shadowedHere.includes(imported)) return undefined
+  if (analysis.moduleScopeNames.includes(helper)) return undefined
+  if (shadowedHere.includes(helper)) return undefined
+
+  const specifier = `${imported} as ${helper}`
 
   if (!host) {
     // After the last import rather than at the top of the file. A directive prologue —
@@ -167,13 +174,13 @@ export const ensureRecipeHelperImport = (
     const anchor = analysis.imports.at(-1)
     if (!anchor) return undefined
 
-    return { name: imported, insert: { pos: anchor.span.end, names: [imported], module: fallbackModule } }
+    return { name: helper, insert: { pos: anchor.span.end, names: [specifier], module: fallbackModule } }
   }
 
   const last = host.specifiers.at(-1)
   if (!last) return undefined
 
-  return { name: imported, insert: { pos: last.end, names: [imported] } }
+  return { name: helper, insert: { pos: last.end, names: [specifier] } }
 }
 
 export type LowerResult =

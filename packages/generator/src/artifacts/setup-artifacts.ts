@@ -1,4 +1,5 @@
 import type { Context } from '@bamboocss/core'
+import { compiledHelperName } from '@bamboocss/shared'
 import type { AffectedArtifacts, Artifact, ArtifactFilters, ArtifactId } from '@bamboocss/types'
 import outdent from 'outdent'
 import { generateConditions } from './js/conditions'
@@ -249,13 +250,14 @@ function setupCssIndex(ctx: Context): Artifact {
 
   // Written by the source transform, never by hand. They are exported here because the
   // transform adds them to whatever \`styled-system/css\` import the file already has, so
-  // this is the specifier its emitted calls resolve against.
+  // this is the specifier its emitted calls resolve against. By this release's names, which
+  // are the ones it imports, so code compiled by another release finds nothing here to call.
   //
   // The declaration file below deliberately omits them. Folded code is rewritten in memory
   // during the bundler's transform and never typechecked, so a declaration here would buy
   // nothing but an autocomplete entry advertising them as API. Each stays fully typed in
   // the module that defines it, for anyone deep-importing on purpose.
-  ${ctx.file.reExport('cvaMap, splitProps', './cx')}
+  ${ctx.file.reExport(`${compiledHelperName('cvaMap')}, ${compiledHelperName('splitProps')}`, './cx')}
  `,
     dts: outdent`
   ${ctx.file.reExportDts('css, fallback, keyframes, viewTransition', './css')}

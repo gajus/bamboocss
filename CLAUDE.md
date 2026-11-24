@@ -105,6 +105,14 @@ opening, which is why both patterns look ahead at a specifier rather than consum
 component's compiled script is held as a project overlay under `X.__bamboo__.ts[x]` so an importer resolves the same
 text; nothing is written to disk.
 
+**Compiled code calls the generated runtime of its own release, and no other.** The compiler imports each helper it
+writes a call to (`cvaMap`, `splitProps`) by `compiledHelperName` (`packages/shared/src/compiled-helper.ts`), which
+names the release, and the generated `styled-system/css` exports it under that name. The plugin writes the project's own
+`styled-system` before anything imports it, so a mismatch comes only from one it did not write, such as a workspace
+package's own. That one then fails the build with `MISSING_EXPORT`. Before this, it read tables written in another
+format as selecting nothing, which gave no error. A new helper the compiler calls goes through the same function on both
+sides. `packages/vite/__tests__/styled-system-release.test.ts` builds against another release's runtime.
+
 **Cross-file answers are cached across native calls.** Each transform builds a fresh `ProjectEvaluator`, so without it a
 module importing from a large barrel re-parsed the barrel's members every time. `evaluate_export`, the imported-recipe
 walk and `module_recipes` keep process-wide entries holding the result, the reads to replay into the caller's dependency

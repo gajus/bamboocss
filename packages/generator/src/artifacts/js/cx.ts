@@ -1,4 +1,5 @@
 import type { Context } from '@bamboocss/core'
+import { compiledHelperName } from '@bamboocss/shared'
 import outdent from 'outdent'
 
 /**
@@ -244,7 +245,9 @@ export function generateCx(ctx: Context) {
     return current < 0 ? (table[2][~current] ?? '') : ''
   }
 
-  export { cx, cvaMap, splitProps }
+  // Compiled code imports the two by the names that follow, this release's, so code compiled by
+  // another release finds nothing to call here rather than a table read in the wrong format.
+  export { cx, cvaMap, splitProps, cvaMap as ${compiledHelperName('cvaMap')}, splitProps as ${compiledHelperName('splitProps')} }
 `,
     dts: declaration,
   }

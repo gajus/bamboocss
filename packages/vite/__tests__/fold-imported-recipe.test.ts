@@ -1,5 +1,9 @@
+import { compiledHelperName } from '@bamboocss/shared'
 import { describe, expect, test } from 'vitest'
 import { createFoldFixture, selectorsFor } from './fixture'
+
+/** The helper's import as the fold writes it: by this release's name, bound to its own. */
+const CVA_MAP = `${compiledHelperName('cvaMap')} as cvaMap`
 
 /**
  * A recipe declared in one module and called in another.
@@ -129,7 +133,7 @@ describe('the helper import a lowered axis needs', () => {
     const result = fold(dynamic, 'app/use.tsx')
 
     expect(result.folded).toHaveLength(1)
-    expect(result.code).toContain(`import { cvaMap } from 'styled-system/css'`)
+    expect(result.code).toContain(`import { ${CVA_MAP} } from 'styled-system/css'`)
     expect(result.code).toContain('cvaMap([size]')
   })
 
@@ -156,7 +160,7 @@ describe('the helper import a lowered axis needs', () => {
     const result = fold(`import { css } from 'styled-system/css'\n${dynamic}`, 'app/use.tsx')
 
     expect(result.folded).toHaveLength(1)
-    expect(result.code).toContain(`import { css, cvaMap } from 'styled-system/css'`)
+    expect(result.code).toContain(`import { css, ${CVA_MAP} } from 'styled-system/css'`)
     expect(result.code.match(/from 'styled-system\/css'/g)).toHaveLength(1)
   })
 
@@ -176,7 +180,7 @@ export const b = (size) => textInput({ size })
     )
 
     expect(result.folded).toHaveLength(2)
-    expect(result.code.match(/import \{ cvaMap \}/g)).toHaveLength(1)
+    expect(result.code.split(`import { ${CVA_MAP} }`)).toHaveLength(2)
   })
 
   /**
@@ -308,7 +312,7 @@ describe('the shared config cache', () => {
     )
 
     expect(second.folded).toHaveLength(1)
-    expect(second.code).toContain(`import { cvaMap } from 'styled-system/css'`)
+    expect(second.code).toContain(`import { ${CVA_MAP} } from 'styled-system/css'`)
   })
 })
 

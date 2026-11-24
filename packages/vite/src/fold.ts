@@ -8,7 +8,7 @@ import type {
   FoldSpan,
   FoldUnknown,
 } from '@bamboocss/native-extractor'
-import { BambooError, viewTransitionClassName } from '@bamboocss/shared'
+import { BambooError, compiledHelperName, viewTransitionClassName } from '@bamboocss/shared'
 import type { Dict } from '@bamboocss/types'
 import MagicString from 'magic-string'
 import { dirname, relative, resolve as resolvePath } from 'node:path'
@@ -196,9 +196,16 @@ export const SURVIVES_TO_RUNTIME = new Set<SkipReason>([
  * Imports a surviving reference to is not a failure.
  *
  * These are what the compiler itself writes; all live in `cx` and pull no engine, so a
- * reference to one is the fold having worked.
+ * reference to one is the fold having worked. The helpers by their release names, which are
+ * the ones it imports, and by their own.
  */
-const PERMITTED_BINDINGS = new Set(['cx', RECIPE_MAP_HELPER, SPLIT_PROPS_HELPER])
+const PERMITTED_BINDINGS = new Set([
+  'cx',
+  RECIPE_MAP_HELPER,
+  SPLIT_PROPS_HELPER,
+  compiledHelperName(RECIPE_MAP_HELPER),
+  compiledHelperName(SPLIT_PROPS_HELPER),
+])
 
 const LEADING_RELATIVE = /^(?:\.\.?\/)+/
 const TRAILING_SLASH = /\/$/
@@ -819,7 +826,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
         candidates.push({ call, name, start, end: replaceEnd, failed: true })
         continue
       }
-      const helperFor = (helper: string) =>
+      const helperFor = (helper: typeof RECIPE_MAP_HELPER) =>
         ensureRecipeHelperImport(
           helper,
           analysis,

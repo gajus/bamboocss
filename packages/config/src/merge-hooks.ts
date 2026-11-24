@@ -148,7 +148,9 @@ const syncHooks: Array<keyof BambooHooks> = [
   'context:created',
   // The context reads what every plugin's hook configured as soon as the hooks return. Run one
   // after another across microtasks, only the first had: a later plugin's `configure` arrived
-  // after that, and its `toHash` went unreported.
+  // after that, its token names and variables once the tokens were built, its `toHash` once the
+  // check that reports one had run.
+  'tokens:created',
   'utility:created',
   'parser:before',
   'parser:after',

@@ -95,8 +95,13 @@ export class Context {
     conf.config = config
 
     this.tokens = this.createTokenDictionary(theme, theme.variants)
+    let tokensBuilt = false
     this.hooks['tokens:created']?.({
       configure: (opts) => {
+        // The tokens are built from what the hooks configured once they return. A hook configuring
+        // past an `await` calls this after that, when its names and variables can no longer apply,
+        // so it is said rather than dropped in silence.
+        if (tokensBuilt) return this.reportLateTokenConfigure(config)
         if (opts.formatTokenName) {
           this.tokens.formatTokenName = opts.formatTokenName
         }
@@ -106,6 +111,7 @@ export class Context {
       },
     })
     this.tokens.init()
+    tokensBuilt = true
 
     this.utility = this.createUtility(config)
     let hooksReturned = false
@@ -418,6 +424,16 @@ export class Context {
       'utility class name has the fixed shape the runtime `cx` reads to merge it. Remove it from the hook.\n'
     if (config.validation === 'error' && !late) throw new BambooError('CONFIG_ERROR', errors)
     logger.warn('config', errors)
+  }
+
+  private reportLateTokenConfigure = (config: UserConfig): void => {
+    if (config.validation === 'off') return
+
+    logger.warn(
+      'config',
+      '⚠️ Invalid config:\n- [plugins] A `tokens:created` hook called `configure` after the tokens were built, past ' +
+        'an `await`, so the token names and variables it set do not apply. Call `configure` before the hook awaits.\n',
+    )
   }
 
   get baseSheetContext() {

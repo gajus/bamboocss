@@ -1,6 +1,6 @@
-import { createGeneratorContext } from '@bamboocss/fixture'
+import { createContext, createGeneratorContext } from '@bamboocss/fixture'
 import { logger } from '@bamboocss/logger'
-import type { Config, Dict, RecipeDefinition, SlotRecipeDefinition } from '@bamboocss/types'
+import type { BambooPlugin, Config, Dict, RecipeDefinition, SlotRecipeDefinition } from '@bamboocss/types'
 import { describe, expect, test, vi } from 'vitest'
 import { RuleProcessor } from '../src/rule-processor'
 import { createRuleProcessor } from './fixture'
@@ -187,6 +187,61 @@ describe('rule processor', () => {
         }
       }"
     `)
+  })
+
+  // Hooks of one name run in plugin order. Run across microtasks, only the first plugin's ran
+  // before the tokens were built: what a later plugin configured arrived after them, and a token
+  // spelled its way was not one.
+  test('what a tokens:created hook configures applies whichever plugin it is in', () => {
+    const names: BambooPlugin = {
+      name: 'names',
+      hooks: {
+        'tokens:created': ({ configure }) => {
+          configure({ formatTokenName: (path) => '$' + path.join('-') })
+        },
+      },
+    }
+    const vars: BambooPlugin = {
+      name: 'vars',
+      hooks: {
+        'tokens:created': ({ configure }) => {
+          configure({ formatCssVar: (path) => ({ var: `--t-${path.join('-')}`, ref: `var(--t-${path.join('-')})` }) })
+        },
+      },
+    }
+    const other: BambooPlugin = { name: 'other', hooks: { 'tokens:created': () => {} } }
+
+    expect(css({ color: '$blue-300' }, { plugins: [names] }).css).toContain('color: var(--colors-blue-300);')
+    expect(css({ color: '$blue-300' }, { plugins: [other, names] }).css).toContain('color: var(--colors-blue-300);')
+    expect(css({ color: '$blue-300' }, { plugins: [vars, names] }).css).toContain('color: var(--t-colors-blue-300);')
+  })
+
+  test('what a tokens:created hook configures past an await is reported, as it cannot apply', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {})
+    const plugins: Config['plugins'] = [
+      {
+        name: 'async',
+        hooks: {
+          'tokens:created': async ({ configure }) => {
+            await Promise.resolve()
+            configure({ formatTokenName: (path) => '$' + path.join('-') })
+          },
+        },
+      },
+    ]
+
+    try {
+      const ctx = createContext({ plugins })
+      await new Promise((resolve) => setTimeout(resolve))
+      expect(warn).toHaveBeenCalledWith(
+        'config',
+        expect.stringContaining('called `configure` after the tokens were built'),
+      )
+      // Nor is it half applied: the tokens were named before it came, and they keep those names.
+      expect(ctx.tokens.formatTokenName(['colors', 'blue', '300'])).toBe('colors.blue.300')
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   test('simple - hash: true', () => {

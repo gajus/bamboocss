@@ -41,6 +41,10 @@ export default defineConfig({
 })
 ```
 
+Each plugin's `tokens:created` hook runs, in the order of `plugins`, and the tokens are built from what they configured
+as soon as they return. Call `configure` before the hook awaits anything: a call that comes after the tokens are built
+cannot change them, and is reported.
+
 ### Customizing the hash function
 
 A `utility:created` hook could once replace the function class names are hashed with, through `configure({ toHash })`.
@@ -211,7 +215,9 @@ export interface BambooHooks {
    */
   'preset:resolved': (args: PresetResolvedHookArgs) => MaybeAsyncReturn<void | false | PresetResolvedHookArgs['preset']>
   /**
-   * Called when the token engine has been created
+   * Called when the token engine has been created, before the tokens are built from what
+   * `configure` sets. Call it before the hook awaits anything: a call past an `await` comes after
+   * the tokens are built, and is reported.
    */
   'tokens:created': (args: TokenCreatedHookArgs) => MaybeAsyncReturn
   /**

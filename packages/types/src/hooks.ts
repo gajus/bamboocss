@@ -18,7 +18,9 @@ export interface BambooHooks {
    */
   'preset:resolved': (args: PresetResolvedHookArgs) => MaybeAsyncReturn<void | false | PresetResolvedHookArgs['preset']>
   /**
-   * Called when the token engine has been created
+   * Called when the token engine has been created, before the tokens are built from what
+   * `configure` sets. Call it before the hook awaits anything: a call past an `await` comes after
+   * the tokens are built, and is reported.
    */
   'tokens:created': (args: TokenCreatedHookArgs) => MaybeAsyncReturn
   /**

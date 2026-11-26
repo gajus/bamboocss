@@ -125,7 +125,21 @@ export function mergeConfigs(configs: ExtendableConfig[]) {
   // level it is handed — so merging `theme` leaves a nested `extend` sitting there as literal
   // data. Merged explicitly against the source configs instead. Was a top-level `themes`,
   // which got this for free by being its own key.
-  const themeVariants = mergeExtensions(reversed.map((config) => (config.theme as Dict | undefined)?.variants ?? {}))
+  //
+  // `theme.extend.variants` is a config's extension of them too, as `theme.variants.extend` is: both
+  // are typed. Merging `theme` put the first into `theme.variants`, and the variants merged here,
+  // from `theme.variants` alone, replaced it, so a variant declared that way was dropped in silence.
+  const themeVariants = mergeExtensions(
+    reversed.map((config) => {
+      const theme = config.theme as Dict | undefined
+      const variants: Dict = theme?.variants ?? {}
+      const extended: Dict | undefined = theme?.extend?.variants
+      if (!extended) return variants
+      const { extend: nested, ...declared } = extended
+      const extension = mergeAndConcat({}, variants.extend ?? {}, declared, nested ?? {})
+      return { ...variants, extend: extension }
+    }),
+  )
   if (isEmptyObject(themeVariants)) delete theme.variants
   else theme.variants = themeVariants
 

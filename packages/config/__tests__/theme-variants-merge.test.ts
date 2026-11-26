@@ -50,6 +50,44 @@ describe('theme.variants merging', () => {
     expect(result.theme!.variants!.dark).toEqual(variant('black'))
   })
 
+  // `theme.extend.variants` is typed as an extension of the variants, beside `theme.variants.extend`.
+  // The variants were merged from `theme.variants` alone, which dropped a variant declared this way.
+  test('takes a variant declared under theme.extend', () => {
+    const result = merge(
+      { theme: { variants: { dark: variant('black') } } },
+      {
+        theme: { extend: { variants: { sepia: variant('#704214') } } },
+      },
+    )
+
+    expect(result.theme!.variants!.sepia).toEqual(variant('#704214'))
+    expect(result.theme!.variants!.dark).toEqual(variant('black'))
+  })
+
+  test('extends a variant another config declares, under theme.extend', () => {
+    const result = merge(
+      { theme: { variants: { dark: variant('black') } } },
+      {
+        theme: { extend: { variants: { dark: { tokens: { colors: { muted: { value: '#555' } } } } } } },
+      },
+    )
+
+    expect(result.theme!.variants!.dark!.tokens).toEqual({
+      colors: { primary: { value: 'black' }, muted: { value: '#555' } },
+    })
+  })
+
+  test('combines theme.extend.variants with a theme.variants.extend in one config', () => {
+    const result = merge({
+      theme: {
+        variants: { extend: { dark: variant('black') } },
+        extend: { variants: { sepia: variant('#704214') } },
+      },
+    })
+
+    expect(Object.keys(result.theme!.variants!).sort()).toEqual(['dark', 'sepia'])
+  })
+
   test('leaves no empty variants key when nobody declares one', () => {
     const result = merge({ theme: { tokens: { colors: { red: { value: 'red' } } } } }, {})
 

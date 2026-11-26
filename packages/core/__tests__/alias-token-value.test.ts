@@ -60,6 +60,12 @@ describe('a token keeps its reference', () => {
     const themed: Config = { theme: { variants: { roomy: { tokens: { spacing: { 0: { value: '1px' } } } } } } }
 
     expect(css({ padding: '0' }, themed)).toContain('padding: var(--spacing-0);')
+
+    // Declared as an extension of the theme's variants, which the config merge once dropped.
+    const extended: Config = {
+      theme: { extend: { variants: { roomy: { tokens: { spacing: { 0: { value: '1px' } } } } } } },
+    }
+    expect(css({ padding: '0' }, extended)).toContain('padding: var(--spacing-0);')
   })
 
   test('where the value is written as a reference', () => {

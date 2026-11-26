@@ -1,6 +1,7 @@
 /**
  * The runtime compiled code calls: what the Vite compiler writes in place of a recipe call
- * (`cvaMap`) and of a `recipe.splitVariantProps` (`splitProps`).
+ * (`cvaMap`, or `cvaJoin` for one compiled in segments) and of a `recipe.splitVariantProps`
+ * (`splitProps`).
  *
  * Bundled on its own as `dist/compiled.mjs`, which `scripts/postbuild.ts` copies into the Vite
  * plugin, and the plugin serves it as `virtual:bamboo/compiled`. Compiled code imports these from
@@ -12,5 +13,5 @@
  *
  * Nothing else belongs here: every export is shipped to every page that runs compiled code.
  */
-export { cvaMap } from './cva-map'
+export { cvaJoin, cvaMap } from './cva-map'
 export { splitProps } from './split-props'

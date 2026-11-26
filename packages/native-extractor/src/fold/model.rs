@@ -33,7 +33,7 @@ pub struct FoldCall {
     /// Whether it names a slot is the caller's to decide, against the recipe's config.
     pub slot: Option<String>,
     pub slot_end: Option<u32>,
-    /// Helper names (`cvaMap`, `splitProps`, or a local alias of either) that a nested scope
+    /// Helper names (`cvaMap`, `cvaJoin`, `splitProps`, or a local alias of one) that a nested scope
     /// enclosing this call rebinds, so a rewrite calling one would reach the wrong binding.
     pub shadowed_helpers: Vec<String>,
     /// The callee is `x.raw` (or `x.raw?.`, or `x['raw']`).

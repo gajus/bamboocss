@@ -931,13 +931,18 @@ fn analyze_facts<'a>(
     // Of `imported_styles`, those a `cx()` argument names: the only ones the fold reads.
     let mut cx_imported_styles: HashSet<String> = HashSet::new();
 
-    let helper_names: Vec<&str> = ["cvaMap", "splitProps"]
+    let helper_names: Vec<&str> = ["cvaMap", "cvaJoin", "splitProps"]
         .into_iter()
         .chain(imports.iter().flat_map(|import| {
             import
                 .specifiers
                 .iter()
-                .filter(|specifier| matches!(specifier.imported.as_str(), "cvaMap" | "splitProps"))
+                .filter(|specifier| {
+                    matches!(
+                        specifier.imported.as_str(),
+                        "cvaMap" | "cvaJoin" | "splitProps"
+                    )
+                })
                 .map(|specifier| specifier.local.as_str())
         }))
         .collect();

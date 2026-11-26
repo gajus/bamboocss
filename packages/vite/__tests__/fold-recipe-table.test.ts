@@ -9,15 +9,25 @@ import { compiledRuntime, createFoldFixture } from './fixture'
 const RECIPE = `const badge = cva({ variants: { tone: { quiet: { color: 'gray.500' }, loud: { color: 'red.500' } } } })`
 
 /** Fold `source` and run it against the `cvaMap` the plugin serves, with `globals` in scope. */
-const run = (source: string, exports: string[], globals: Record<string, unknown> = {}) => {
+const run = (
+  source: string,
+  exports: string[],
+  globals: Record<string, unknown> = {},
+  {
+    cvaMap = compiledRuntime.cvaMap,
+    files = {},
+  }: { cvaMap?: (...args: never[]) => unknown; files?: Record<string, string> } = {},
+) => {
   const fixture = createFoldFixture()
+  fixture.addFiles(files)
   const { code } = fixture.foldStrict(source)
-  const { cvaMap } = compiledRuntime
   const body = code.replace(/^import .*$/gm, '').replaceAll('export const ', 'const ')
-  const module = new Function('cvaMap', ...Object.keys(globals), `${body}\nreturn { ${exports.join(', ')} }`)(
-    cvaMap,
-    ...Object.values(globals),
-  )
+  const module = new Function(
+    'cvaMap',
+    'cvaJoin',
+    ...Object.keys(globals),
+    `${body}\nreturn { ${exports.join(', ')} }`,
+  )(cvaMap, compiledRuntime.cvaJoin, ...Object.values(globals))
   return { code, module: module as Record<string, any>, fixture }
 }
 
@@ -56,15 +66,37 @@ describe('a recipe lookup table', () => {
   })
 
   // A statement before the first import runs before anything declared there could be initialized.
-  test('stays in its call when a statement comes before the first import', () => {
+  // The table is a `var` there, hoisted, and the first call to read it assigns it. Written into the
+  // call, it was built again on every one.
+  test('is assigned by the first call to read it when a statement comes before the first import', () => {
+    const tables: unknown[] = []
     const { code, module, fixture } = run(
-      `const early = 1\nimport { cva } from 'styled-system/css'\n${RECIPE}\nexport const a = (tone) => badge({ tone })\n`,
-      ['a', 'early'],
+      `const early = 1\nimport { cva } from 'styled-system/css'\n${RECIPE}\nexport const a = (tone) => badge({ tone })\nexport const b = (tone) => badge({ tone })\n`,
+      ['a', 'b', 'early'],
+      {},
+      { cvaMap: (values: never, table: never) => (tables.push(table), compiledRuntime.cvaMap(values, table)) },
     )
 
     expect(declarations(code)).toEqual([])
-    expect(code).toContain('cvaMap([tone], [0,')
+    expect(code).toMatch(/\nvar __bambooLookup0;\n$/)
+    expect(code.match(/cvaMap\(\[tone\], \(__bambooLookup0 \|\| \(__bambooLookup0 = \[0,/g)).toHaveLength(2)
     expect(module.a('loud')).toBe(fixture.runtimeCss({ color: 'red.500' }))
+    expect(module.b('quiet')).toBe(fixture.runtimeCss({ color: 'gray.500' }))
+    expect(module.a('quiet')).toBe(fixture.runtimeCss({ color: 'gray.500' }))
+    expect(new Set(tables).size).toBe(1)
+  })
+
+  // What the `var` is for: a call at module scope ahead of the first import, through a binding the
+  // import initializes before the module runs. A table declared at the import is not initialized yet.
+  test('is read by a call at module scope ahead of the first import', () => {
+    const { module, fixture } = run(
+      `export const early = badge({ tone: readTone() })\nimport { badge } from './styles'\n`,
+      ['early'],
+      { readTone: () => 'loud' },
+      { files: { 'app/src/styles.ts': `import { cva } from 'styled-system/css'\nexport ${RECIPE}\n` } },
+    )
+
+    expect(module.early).toBe(fixture.runtimeCss({ color: 'red.500' }))
   })
 
   test('is named so that no binding in the module is taken or shadowed', () => {

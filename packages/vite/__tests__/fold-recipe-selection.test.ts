@@ -60,9 +60,10 @@ const compileAndRun = (source: string, exports: string[]) => {
   const { js } = generateCx(fixture.ctx as never)
   const helpers = new Function(js.replace(/export\s*\{[^}]*\}/, 'return { cx }'))()
   const code = result.code.replace(/^import .*$/gm, '').replaceAll('export const ', 'const ')
-  const module = new Function('cx', 'cvaMap', `${code}\nreturn { ${exports.join(', ')} }`)(
+  const module = new Function('cx', 'cvaMap', 'cvaJoin', `${code}\nreturn { ${exports.join(', ')} }`)(
     helpers.cx,
     compiledRuntime.cvaMap,
+    compiledRuntime.cvaJoin,
   )
   return { result, code, module: module as Record<string, any> }
 }
@@ -214,6 +215,43 @@ export const literal = [${rows.map((row) => `badge(${literalSelection(names, row
   test('compiles every call, the dynamic ones to segments', () => {
     expect(result.skipped).toEqual([])
     expect(tablesIn(code).some(isSegments)).toBe(true)
+  })
+
+  // Its own helper rather than `cvaMap`'s branch: V8 keeps one record of what a function calls, and a
+  // `cvaMap` that ran segments took the join with it wherever it was inlined, every table lookup too.
+  test('calls cvaJoin for them, imported from the compiled runtime', () => {
+    expect(result.code).toMatch(/^import \{[^}]*\bcvaJoin\b[^}]*\} from 'virtual:bamboo\/compiled'$/m)
+    expect(code).toMatch(/=> cvaJoin\(\[size, tone, shape\], __bambooLookup\d+\)/)
+    expect(code).not.toMatch(/\bcvaMap\(/)
+  })
+
+  // `cvaMap` joins segments too, so a module leaving `cvaJoin` no name to take is compiled to it.
+  test.each([
+    [
+      'at module scope',
+      `const cvaJoin = 'mine'\nexport const className = (size, tone, shape) => badge({ size, tone, shape })`,
+    ],
+    [
+      'in a scope around the call',
+      `export const className = (size, tone, shape) => { const cvaJoin = 'mine'; return badge({ size, tone, shape }) }`,
+    ],
+  ])('calls cvaMap for them where the module binds cvaJoin %s', (_label, call) => {
+    const fixture = createFoldFixture()
+    const declared = source.slice(0, source.indexOf('export const className'))
+    const { code: bound } = fixture.foldStrict(
+      `${declared}${call}\nexport const literal = badge({ size: 'lg', shape: 'pill' })\n`,
+    )
+    expect(bound).toMatch(/\bcvaMap\(\[size, tone, shape\], __bambooLookup\d+\)/)
+    expect(bound).not.toMatch(/\bcvaJoin\(/)
+
+    const { js } = generateCx(fixture.ctx as never)
+    const helpers = new Function(js.replace(/export\s*\{[^}]*\}/, 'return { cx }'))()
+    const body = bound.replace(/^import .*$/gm, '').replaceAll('export const ', 'const ')
+    const run = new Function('cx', 'cvaMap', `${body}\nreturn { className, literal }`)(
+      helpers.cx,
+      compiledRuntime.cvaMap,
+    )
+    expect(run.className('lg', undefined, 'pill')).toBe(run.literal)
   })
 
   test.each(rows.map((row, index) => [describeRow(names, row), row, index] as const))(

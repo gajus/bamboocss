@@ -81,6 +81,13 @@ export const collectRecipeConfigs = (analysis: Pick<FoldAnalysis, 'calls'>): Map
 /** Pick a complete precompiled StyleSet for one or more runtime recipe axes. */
 export const RECIPE_MAP_HELPER = 'cvaMap'
 
+/**
+ * What a lookup compiled in segments calls: the string `cvaMap` would join, the same one again for a
+ * selection it has joined before. Its own helper so that `cvaMap`, at every table's call site, is
+ * optimized without it.
+ */
+export const RECIPE_JOIN_HELPER = 'cvaJoin'
+
 /** Guard the exact compiler against accidentally materialising an enormous Cartesian product. */
 export const DEFAULT_MAX_RECIPE_STATES = 65_536
 
@@ -107,7 +114,7 @@ export interface HelperInsert {
  * module's last one, which a module calling a recipe has: the recipe's, or the `cva` that made it.
  */
 export const ensureRecipeHelperImport = (
-  helper: typeof RECIPE_MAP_HELPER | typeof SPLIT_PROPS_HELPER,
+  helper: typeof RECIPE_MAP_HELPER | typeof RECIPE_JOIN_HELPER | typeof SPLIT_PROPS_HELPER,
   analysis: Pick<FoldAnalysis, 'imports' | 'moduleScopeNames'>,
   /** Helper names a nested scope around the call site rebinds. */
   shadowedHere: readonly string[],
@@ -158,6 +165,8 @@ export interface CompiledStyleMap {
   outputKind: 'class' | 'slots'
   /** Whether `source` actually calls `cvaMap`; reduced constant maps do not. */
   usesHelper: boolean
+  /** Whether the lookup is segments, which `RECIPE_JOIN_HELPER` reads, rather than one table. */
+  segmented: boolean
 }
 
 /** A finite recipe state space kept symbolic until an enclosing `cx()` has composed it. */
@@ -425,6 +434,8 @@ export const lowerRecipeCall = (
         staticClasses: typeof lookup === 'string' ? lookup : '',
         outputKind: wholeSlots ? 'slots' : 'class',
         usesHelper,
+        // A table opens with its root's index, and segments with a constant or a table.
+        segmented: Array.isArray(lookup) && typeof lookup[0] !== 'number',
       }
     },
   }

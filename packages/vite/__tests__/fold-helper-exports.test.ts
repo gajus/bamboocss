@@ -1,14 +1,14 @@
 import { createGeneratorContext } from '@bamboocss/fixture'
 import { generateCxRuntime } from '@bamboocss/node'
-import { type CvaLookup, cvaMap, splitProps } from '@bamboocss/shared'
+import { type CvaLookup, cvaJoin, cvaMap, splitProps } from '@bamboocss/shared'
 import type { Config } from '@bamboocss/types'
 import { describe, expect, test } from 'vitest'
 import { bamboocssCompiledRuntime, COMPILED_RUNTIME_ID, compiledRuntimeSource } from '../src/compiled-runtime'
-import { RECIPE_MAP_HELPER, SPLIT_PROPS_HELPER } from '../src/fold-recipe'
+import { RECIPE_JOIN_HELPER, RECIPE_MAP_HELPER, SPLIT_PROPS_HELPER } from '../src/fold-recipe'
 import { compiledRuntime, compiledRuntimeFor, createFoldFixture, evaluateModule } from './fixture'
 
 /** The helpers a fold can write a call to, which are no authoring API. */
-const HELPERS = [RECIPE_MAP_HELPER, SPLIT_PROPS_HELPER]
+const HELPERS = [RECIPE_MAP_HELPER, RECIPE_JOIN_HELPER, SPLIT_PROPS_HELPER]
 
 /** Everything compiled code reaches at runtime: those helpers, and `cx`. */
 const SERVED = [...HELPERS, 'cx']
@@ -92,6 +92,7 @@ describe('virtual:bamboo/compiled', () => {
       for (const lookup of [table, segments, slots]) {
         expect(compiledRuntime.cvaMap(values, lookup)).toEqual(cvaMap(values, lookup))
       }
+      expect(compiledRuntime.cvaJoin(values, segments)).toBe(cvaJoin(values, segments as never))
     }
 
     // An accessor stays one, which reading it eagerly would undo.

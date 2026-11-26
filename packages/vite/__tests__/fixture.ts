@@ -27,6 +27,7 @@ export const evaluateModule = <T>(content: string): T => {
 
 export interface CompiledRuntime {
   cvaMap: (values: unknown[], table: unknown) => unknown
+  cvaJoin: (values: unknown[], segments: unknown) => string
   splitProps: (props: object, ...keys: unknown[]) => Array<Record<string, unknown>>
   cx: (...args: unknown[]) => string
 }

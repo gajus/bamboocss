@@ -239,9 +239,9 @@ describe('static style-set folding', () => {
     `)
 
     expect(result.skipped).toEqual([])
-    const { cvaMap } = compiledRuntime
+    const { cvaMap, cvaJoin } = compiledRuntime
     const code = result.code.replace(/^import .*$/gm, '').replaceAll('export const ', 'const ')
-    const module = new Function('cvaMap', `${code}\nreturn { className, literal }`)(cvaMap)
+    const module = new Function('cvaMap', 'cvaJoin', `${code}\nreturn { className, literal }`)(cvaMap, cvaJoin)
     const props = Object.fromEntries(names.map((name, index) => [name, index % 2 ? 'a' : 'b']))
     expect(module.className(props)).toBe(module.literal)
     expect(module.className({})).toBe(fixture.runtimeCss({ display: 'flex' }))

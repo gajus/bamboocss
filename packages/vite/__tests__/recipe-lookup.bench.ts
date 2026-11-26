@@ -12,9 +12,11 @@ import { compiledRuntime, createFoldFixture } from './fixture'
  * a variant can be in (declared, omitted, `null` and unknown), so no single edge of the table is
  * all that gets measured. `.root` is the table that leaves a decision out: `tone` styles only
  * the icon, so its root node decides `size`. `button` has three variants of three values, each
- * styling a property of its own: past `SEGMENT_ABOVE_STATES`, so it is compiled in segments.
+ * styling a property of its own: past `SEGMENT_ABOVE_STATES`, so it is compiled in segments, which
+ * `cvaJoin` reads. `composed` hands it to `cx` with a class of the caller's, as a wrapper forwarding
+ * one does: what the string `cvaJoin` returns again for a selection is for.
  */
-const SOURCE = `import { cva, sva } from 'styled-system/css'
+const SOURCE = `import { cva, cx, sva } from 'styled-system/css'
 const badge = cva({
   base: { display: 'inline-flex' },
   variants: {
@@ -43,6 +45,7 @@ const button = cva({
 })
 export const className = (tone, size) => badge({ tone, size })
 export const segmented = (tone, size, shape) => button({ tone, size, shape })
+export const composed = (tone, size, shape, className) => cx(button({ tone, size, shape }), className)
 export const root = (tone, size) => field({ tone, size }).root
 export const slots = (tone, size) => field({ tone, size })
 `
@@ -54,9 +57,14 @@ const helpers = new Function(js.replace(/export\s*\{[^}]*\}/, 'return { cx }'))(
 const compiled = new Function(
   'cx',
   'cvaMap',
-  `${code.replace(/^import .*$/gm, '').replaceAll('export const ', 'const ')}\nreturn { className, root, slots, segmented }`,
-)(helpers.cx, compiledRuntime.cvaMap) as Record<'className' | 'root', (tone: unknown, size: unknown) => string> & {
+  'cvaJoin',
+  `${code.replace(/^import .*$/gm, '').replaceAll('export const ', 'const ')}\nreturn { className, root, slots, segmented, composed }`,
+)(helpers.cx, compiledRuntime.cvaMap, compiledRuntime.cvaJoin) as Record<
+  'className' | 'root',
+  (tone: unknown, size: unknown) => string
+> & {
   segmented: (tone: unknown, size: unknown, shape: unknown) => string
+  composed: (tone: unknown, size: unknown, shape: unknown, className: string) => string
   slots: (tone: unknown, size: unknown) => Record<string, string>
 }
 
@@ -117,9 +125,28 @@ describe(`compiled recipe lookup x${CALLS}`, () => {
   )
 
   bench(
+    'cx(button({ tone, size, shape }), className), in segments',
+    () => {
+      for (let i = 0; i < CALLS; i++) sink += compiled.composed(tones[i], sizes[i], shapes[i], 'card-action').length
+    },
+    options,
+  )
+
+  bench(
     'field({ tone, size }), the slot object',
     () => {
       for (let i = 0; i < CALLS; i++) sink += compiled.slots(tones[i], sizes[i]).root.length
+    },
+    options,
+  )
+
+  // The first row again, once segments have run: rows run in order, and what V8 optimizes a table's
+  // lookup to depends on what else the process has called. With segments memoized in a branch of
+  // `cvaMap`, this row read 25% below what it reads with `cvaJoin`, and the first row did not move.
+  bench(
+    'badge({ tone, size }), once segments have run',
+    () => {
+      for (let i = 0; i < CALLS; i++) sink += compiled.className(tones[i], sizes[i]).length
     },
     options,
   )

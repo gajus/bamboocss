@@ -167,7 +167,7 @@ describe('a recipe call compiled against a design system with a styled-system of
       const transformed = await server.transformRequest('/src/entry.ts')
       expect(transformed?.code).toContain(`/@id/__x00__${COMPILED_RUNTIME_ID}`)
       const helpers = await server.transformRequest(`\0${COMPILED_RUNTIME_ID}`)
-      expect(helpers?.code).toMatch(/export\s*\{\s*cvaMap,\s*splitProps\s*\}/)
+      expect(helpers?.code).toMatch(/export\s*\{\s*cvaJoin,\s*cvaMap,\s*splitProps\s*\}/)
       expect(helpers?.code).toMatch(/export\s*\{\s*cx\s*\}/)
     } finally {
       await server.close()

@@ -162,9 +162,10 @@ export const passed = css({ padding: '3' })
   const { js } = generateCx(fixture.ctx as never)
   const helpers = new Function(js.replace(/export\s*\{[^}]*\}/, 'return { cx }'))()
   const code = result.code.replace(/^import .*$/gm, '').replaceAll('export const ', 'const ')
-  const exports = new Function('cx', 'cvaMap', `${code}\nreturn { composed, own, passed }`)(
+  const exports = new Function('cx', 'cvaMap', 'cvaJoin', `${code}\nreturn { composed, own, passed }`)(
     helpers.cx,
     compiledRuntime.cvaMap,
+    compiledRuntime.cvaJoin,
   ) as {
     composed: (tone: string) => string
     own: (tone: string) => string

@@ -18,6 +18,7 @@ import {
   ensureRecipeHelperImport,
   type HelperInsert,
   lowerRecipeCall,
+  RECIPE_JOIN_HELPER,
   RECIPE_MAP_HELPER,
   SPLIT_PROPS_HELPER,
   type DynamicStyleMap,
@@ -624,7 +625,6 @@ export const foldSource = (options: FoldOptions): FoldResult => {
   let tablePrefix: string | undefined
   /** A reference to `table` for one replacement, recording the names it reads into `tables`. */
   const tableRef = (tables: string[]) => (table: string) => {
-    if (tablesAt === undefined) return table
     let name = tableNames.get(table)
     if (!name) {
       // A prefix the module never spells, so no binding anywhere in it is named like a table.
@@ -633,7 +633,25 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       tableNames.set(table, name)
     }
     tables.push(name)
-    return name
+    // A statement ahead of the first import runs before a table declared there is initialized, and
+    // a call it makes would read the table in its temporal dead zone. There the table is a `var`,
+    // which is hoisted, and the first call to read it assigns it. Written into the call instead, it
+    // was built again on every one, and the identity `cvaJoin` keys what it joins by was never the
+    // same twice.
+    return tablesAt === undefined ? `(${name} || (${name} = ${table}))` : name
+  }
+  /**
+   * The helper a compiled lookup calls, and the import that adds it: `cvaJoin` for segments, and
+   * `cvaMap` for the rest. `cvaMap` joins segments as well, and is called for them instead where
+   * the module binds `cvaJoin` itself, at module scope or in a scope around the call.
+   */
+  const lookupHelper = (
+    compiled: ReturnType<DynamicStyleMap['compile']>,
+    candidate: Candidate,
+  ): { name: string; insert?: HelperInsert } => {
+    const map = { name: candidate.mapHelperName ?? RECIPE_MAP_HELPER, insert: candidate.insert }
+    if (!compiled.segmented) return map
+    return ensureRecipeHelperImport(RECIPE_JOIN_HELPER, analysis, candidate.call.shadowedHelpers) ?? map
   }
   /**
    * `token.value()` calls whose token holds what no literal stands in for, neither a string nor a
@@ -1401,7 +1419,8 @@ export const foldSource = (options: FoldOptions): FoldResult => {
         continue
       }
       const tables: string[] = []
-      const expression = compiled.source(dynamicCandidate.mapHelperName ?? RECIPE_MAP_HELPER, tableRef(tables))
+      const helper = lookupHelper(compiled, dynamicCandidate)
+      const expression = compiled.source(helper.name, tableRef(tables))
 
       const arguments_: string[] = []
       let wroteCompiled = false
@@ -1429,7 +1448,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
           ...parts.filter((part) => part.kind === 'class').flatMap((part) => part.value.split(' ')),
         ].filter(Boolean),
         literalClassNames: literalClasses(),
-        insert: compiled.usesHelper ? dynamicCandidate.insert : undefined,
+        insert: compiled.usesHelper ? helper.insert : undefined,
         tables,
         foreign: styleParts.flatMap((part) => part.candidate.foreign ?? []),
       })
@@ -1507,8 +1526,9 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       continue
     }
     candidate.tables = []
-    candidate.replacement = compiled.source(candidate.mapHelperName ?? RECIPE_MAP_HELPER, tableRef(candidate.tables))
-    if (!compiled.usesHelper) candidate.insert = undefined
+    const helper = lookupHelper(compiled, candidate)
+    candidate.replacement = compiled.source(helper.name, tableRef(candidate.tables))
+    candidate.insert = compiled.usesHelper ? helper.insert : undefined
     candidate.className = compiled.staticClasses
     candidate.classNames = compiled.classNames
     candidate.outputKind = compiled.outputKind === 'slots' ? 'slots' : undefined
@@ -1671,6 +1691,10 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     let declarations = ''
     for (const [table, name] of tableNames) if (readTables.has(name)) declarations += `const ${name} = ${table};\n`
     magic.appendLeft(tablesAt, declarations)
+  } else if (readTables.size) {
+    // Hoisted, so a call that runs ahead of this line reads `undefined` rather than throwing, and
+    // assigns the table where `tableRef` wrote it.
+    magic.append(`\nvar ${[...readTables].join(', ')};\n`)
   }
 
   // `input.splitVariantProps(props)` — the other way a wrapper reaches its recipe. Lowered to

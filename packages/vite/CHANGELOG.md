@@ -1,5 +1,45 @@
 # @bamboocss/vite
 
+## 1.64.12
+
+### Patch Changes
+
+- 41dcb79: Compile only the combinations of a `cx()` call's conditions that a value can reach. Conditions comparing one
+  value with different literals were treated as independent, so
+  `cx(base, variant === 'secondary' && secondary, variant === 'ghost' && ghost)` wrote out a class string for `variant`
+  being both, and a component comparing one prop with each of its values doubled what it compiled to at every
+  comparison. Six such comparisons were sixty-four combinations, past the thirty-two a call compiles to, and the call
+  was left to the runtime `cx`.
+
+  A condition the answers before it have decided is no longer asked: where `size === 'sm'` answered yes, `size === 'lg'`
+  is not asked, and neither is `!active` where `active` was. This holds for a value read as it is (`size`,
+  `props.size`), tested or negated, or compared with a literal by `===` or `!==`, and stops at a condition that could
+  run something, such as a call, which may change what a later one answers. A `css()` call holding choices is decided
+  the same way, within the call and by the conditions of a `cx()` composing it.
+
+- 61f3ff0: Return the same class string again for a selection a recipe compiled in segments has made before. Joining the
+  segments built a new string on every call, and a `cx()` the call was passed to, as in `cx(button(props), className)`,
+  could only find a string it had not seen in its cache by hashing it whole. On the docs site's button that call takes
+  87 ns where it took 472 ns.
+  - Segments are read by `cvaJoin`, a helper of their own beside `cvaMap`. Memoized in a branch of `cvaMap`, the join
+    was inlined wherever `cvaMap` was, and a table's lookup ran about 25% slower once segments had run. An app with no
+    recipe compiled in segments ships about 9 B more gzipped; one with them, about 181 B.
+  - A lookup table in a module where a statement comes before the first import is a hoisted `var` that the first call to
+    read it assigns, where it was built in the call on every one: such a call on the docs site's button takes 53 ns
+    where it took 277 ns.
+
+- Updated dependencies [a1d6bb3]
+- Updated dependencies [41dcb79]
+- Updated dependencies [7474779]
+- Updated dependencies [61f3ff0]
+- Updated dependencies [cc699d7]
+  - @bamboocss/core@1.64.12
+  - @bamboocss/node@1.64.12
+  - @bamboocss/shared@1.64.12
+  - @bamboocss/config@1.64.12
+  - @bamboocss/logger@1.64.12
+  - @bamboocss/types@1.64.12
+
 ## 1.64.11
 
 ### Patch Changes

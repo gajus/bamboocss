@@ -1,5 +1,20 @@
 # @bamboocss/config
 
+## 1.64.12
+
+### Patch Changes
+
+- cc699d7: Apply theme variants declared under `theme.extend.variants`. The option is typed beside
+  `theme.variants.extend`, but the config merge rebuilt `theme.variants` from `theme.variants` alone and dropped them
+  with no error: the variant's tokens were never declared, and an element under its `[data-bamboo-theme=name]` root kept
+  the base values. Both spellings now extend the variants the presets and other configs declare, merged the same way.
+- Updated dependencies [61f3ff0]
+  - @bamboocss/shared@1.64.12
+  - @bamboocss/logger@1.64.12
+  - @bamboocss/preset-bamboo@1.64.12
+  - @bamboocss/preset-base@1.64.12
+  - @bamboocss/types@1.64.12
+
 ## 1.64.11
 
 ### Patch Changes

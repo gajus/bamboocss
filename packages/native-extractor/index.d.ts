@@ -171,6 +171,8 @@ export interface FoldCxArgument {
    * recipe, since the fold copies it into what it writes.
    */
   test?: FoldSpan
+  /** For `when` and `choose`: what the condition asks, as its index in the call's `conditions`, where it has them. */
+  condition?: number
   /** For a `binding` declared in this module: the style call it is initialised with. */
   definition?: FoldSpan
   /** For a `binding` imported from another module: the local name `importedStyles` is keyed by. */
@@ -191,11 +193,50 @@ export interface FoldStyleChoice {
    */
   tests: FoldSpan[]
   /**
+   * For a call a `cx()` composes: what each of `tests` asks, by index, so that the `cx()` decides one
+   * an answer on its path has decided, as `tree` already does within the call. JSON, a
+   * `FoldCondition[]`. Absent for any other call, whose `tree` is all the fold reads.
+   */
+  conditions?: string
+  /**
    * The decision, as the call asks it, as JSON: a node is `{ test, then, otherwise }`, `test`
    * indexing `tests`, and a leaf is `{ styles }`, the call's arguments on that path, each a style
    * object.
    */
   tree: string
+}
+
+/**
+ * What a condition the fold copies asks, so that one answer on a path can decide a later one.
+ *
+ * A condition asks about one value where it reads that value alone, `size` or `props.size`, and
+ * either tests it, `size` or `!size`, or compares it strictly with a literal, `size === 'sm'` or
+ * `size !== 'sm'`. Two such conditions reading one value answer together: where `size === 'sm'`
+ * answered yes, `size === 'lg'` can only answer no, so the decision does not ask it there, and the
+ * combination of both answering yes, which no value reaches, is not written out.
+ *
+ * Crossed as JSON, a call's at a time (`FoldCall.conditions`, `FoldStyleChoice.conditions`): one
+ * object per condition, set field by field across the boundary, cost more than classifying it.
+ */
+export interface FoldCondition {
+  /**
+   * The condition can run nothing but the reads it makes — reads, literals, and `!`, `typeof`,
+   * `void`, `===`, `!==`, `&&`, `||`, `??` and `?:` over them — so asking it changes no value a later
+   * one reads. After one that could run something, nothing asked before it decides anything after.
+   */
+  inert: boolean
+  /** The value it asks about, as it is read: `size`, `props.size`. Absent where it asks anything else. */
+  subject?: string
+  /**
+   * The literal `subject` is compared with, `===` or `!==`, as JavaScript writes it — `"sm"`, `0`,
+   * `true`, `null`, `undefined` — so two are strictly equal where they are the same text. Absent where
+   * the condition asks whether `subject` is truthy.
+   */
+  literal?: string
+  /** Whether `literal` is truthy, where there is one. */
+  literalTruthy?: boolean
+  /** The condition answers the opposite of what it asks: `!size`, `size !== 'sm'`. */
+  negated: boolean
 }
 
 export interface FoldCall {
@@ -236,6 +277,12 @@ export interface FoldCall {
   origin?: { filePath: string; name: string }
   binding?: string
   cxArguments: FoldCxArgument[]
+  /**
+   * For a `cx()` call holding conditions: what each asks, which `FoldCxArgument.condition` indexes.
+   * JSON, a `FoldCondition[]`. Absent where no answer to one can decide another — no two read one
+   * value, and the call composes no choice — and so then is every index.
+   */
+  conditions?: string
   /** For an exact `keyframes()` call: the name it returns, which the fold writes in its place. */
   value?: string
   /**

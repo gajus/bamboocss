@@ -10,5 +10,9 @@
  * written as, and a join does not merge: where two arguments set one property, the browser applies
  * whichever rule the stylesheet holds later, not the later argument. At eight, a variant component
  * with four conditions — a state, two variants and a flag — was left to that.
+ *
+ * Only the combinations a value can reach are counted, and written: a condition the answers before
+ * it on a path decide is not asked there (`FoldCondition`), so `size === 'sm'`, `size === 'lg'` and
+ * `size === 'xl'` are four combinations, not eight.
  */
 export const MAX_CX_COMBINATIONS = 32

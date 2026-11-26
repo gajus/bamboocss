@@ -1,4 +1,5 @@
 import { withoutMergeCodes } from '@bamboocss/fixture'
+import type { FoldCondition } from '@bamboocss/native-extractor'
 import { describe, expect, test } from 'vitest'
 import { MAX_CX_COMBINATIONS } from '../src/fold'
 import { createFoldFixture, selectorsFor } from './fixture'
@@ -186,6 +187,256 @@ export const pick = (active, size, full) => cx(base, !active && muted, size === 
 
     expect(result.code).toContain('void 0, (')
     expect(evaluate(result.code, ['touched']).touched).toEqual(['ran'])
+  })
+})
+
+/** How many class strings a compiled call chooses between: one more than the conditions it writes. */
+const combinationsIn = (code: string) => (code.match(/ \? /g) ?? []).length + 1
+
+/**
+ * Conditions reading one value answer together: where `size === 'sm'` answered yes, `size === 'lg'`
+ * can only answer no. Every combination of answers used to be written out, these too, so a variant
+ * component comparing one prop with each of its values doubled what it compiled to at every
+ * comparison, and past the limit was left to the runtime join. A condition its path has decided is
+ * not asked there, which it can tell only of one that runs nothing.
+ */
+describe('cx() conditions an earlier answer decides', () => {
+  test('writes no combination no value reaches, and asks nothing its path has decided', () => {
+    const fixture = createFoldFixture()
+    const result = fixture.foldStrict(
+      module(`export const pick = (props) => cx(base, props.size === 'sm' && small, props.size === 'lg' && large)`),
+    )
+
+    expect(result.code).not.toContain('cx(')
+    expect(combinationsIn(result.code)).toBe(3)
+    const { pick } = evaluate(result.code, ['pick'])
+    for (const [size, reads, fontSize] of [
+      ['sm', 1, 'sm'],
+      ['lg', 2, 'lg'],
+      ['md', 2, undefined],
+    ] as const) {
+      let read = 0
+      const props = new Proxy({ size }, { get: (target, key) => (read++, target[key as 'size']) })
+      expect(pick!(props)).toBe(
+        fixture.runtimeCss({ display: 'flex', color: 'red.300', ...(fontSize && { fontSize }) }),
+      )
+      expect(read, `reads of a size of ${size}`).toBe(reads)
+    }
+  })
+
+  test('reads a value once however its conditions ask it: as it is, negated, or again', () => {
+    const fixture = createFoldFixture()
+    const result = fixture.foldStrict(
+      module(`export const pick = (props) => cx(base, props.on && loud, !props.on && small, props.on ? large : null)`),
+    )
+
+    expect(combinationsIn(result.code)).toBe(2)
+    const { pick } = evaluate(result.code, ['pick'])
+    for (const on of [true, false]) {
+      let read = 0
+      const props = new Proxy({ on }, { get: (target, key) => (read++, target[key as 'on']) })
+      expect(pick!(props)).toBe(
+        fixture.runtimeCss(
+          on
+            ? { display: 'flex', color: 'blue.500', fontSize: 'lg' }
+            : { display: 'flex', color: 'red.300', fontSize: 'sm' },
+        ),
+      )
+      expect(read).toBe(1)
+    }
+  })
+
+  test('reads a comparison however it is written', () => {
+    const fixture = createFoldFixture()
+    const result = fixture.foldStrict(
+      module(
+        `export const pick = (size) => cx(base, 'sm' === size && small, size !== 'sm' && loud, !(size === 'sm') ? large : null)`,
+      ),
+    )
+
+    expect(combinationsIn(result.code)).toBe(2)
+    const { pick } = evaluate(result.code, ['pick'])
+    expect(pick!('sm')).toBe(fixture.runtimeCss({ display: 'flex', color: 'red.300', fontSize: 'sm' }))
+    expect(pick!('lg')).toBe(fixture.runtimeCss({ display: 'flex', color: 'blue.500', fontSize: 'lg' }))
+  })
+
+  // `0` and `-0` are strictly equal, and a binding named `undefined` holds whatever it was given.
+  test('compares literals as strict equality does', () => {
+    const zero = createFoldFixture()
+    const zeroes = zero.foldStrict(module(`export const pick = (n) => cx(base, n === 0 && small, n === -0 && large)`))
+    expect(combinationsIn(zeroes.code)).toBe(2)
+    expect(evaluate(zeroes.code, ['pick']).pick!(0)).toBe(
+      zero.runtimeCss({ display: 'flex', color: 'red.300', fontSize: 'lg' }),
+    )
+
+    const global = createFoldFixture().foldStrict(
+      module(`export const pick = (size) => cx(base, size === undefined && small, size === 'sm' && large)`),
+    )
+    expect(combinationsIn(global.code)).toBe(3)
+
+    const local = createFoldFixture()
+    const shadowed = local.foldStrict(
+      module(
+        `export const pick = (size) => { const undefined = 'sm'; return cx(base, size === undefined && small, size === 'sm' && large) }`,
+      ),
+    )
+    expect(combinationsIn(shadowed.code)).toBe(4)
+    expect(evaluate(shadowed.code, ['pick']).pick!('sm')).toBe(
+      local.runtimeCss({ display: 'flex', color: 'red.300', fontSize: 'lg' }),
+    )
+  })
+
+  test('decides across a condition that runs nothing, and not across one that could run something', () => {
+    const inert = createFoldFixture().foldStrict(
+      module(
+        `export const pick = (size, a, b) => cx(base, size === 'sm' && small, (a || b) && loud, size === 'lg' && large)`,
+      ),
+    )
+    // Where `size` is `'sm'`, either answer of `a || b` leaves `size === 'lg'` decided.
+    expect(combinationsIn(inert.code)).toBe(6)
+
+    const fixture = createFoldFixture()
+    const running = fixture.foldStrict(
+      module(
+        `export const pick = (props, touch) => cx(base, props.size === 'sm' && small, touch() && loud, props.size === 'lg' && large)`,
+      ),
+    )
+    expect(combinationsIn(running.code)).toBe(8)
+    const props = { size: 'sm' }
+    const touch = () => ((props.size = 'lg'), true)
+    expect(evaluate(running.code, ['pick']).pick!(props, touch)).toBe(
+      fixture.runtimeCss({ display: 'flex', color: 'blue.500', fontSize: 'lg' }),
+    )
+  })
+
+  test('decides across a css() choice the call composes', () => {
+    const fixture = createFoldFixture()
+    const result = fixture.foldStrict(
+      module(
+        `export const pick = (tone) => cx(base, css({ color: tone === 'loud' ? 'blue.500' : 'gray.700' }), tone === 'quiet' && small)`,
+      ),
+    )
+
+    expect(result.code).not.toMatch(/\bcx\(/)
+    expect(combinationsIn(result.code)).toBe(3)
+    const { pick } = evaluate(result.code, ['pick'])
+    expect(pick!('loud')).toBe(fixture.runtimeCss({ display: 'flex', color: 'blue.500' }))
+    expect(pick!('quiet')).toBe(fixture.runtimeCss({ display: 'flex', color: 'gray.700', fontSize: 'sm' }))
+    expect(pick!('plain')).toBe(fixture.runtimeCss({ display: 'flex', color: 'gray.700' }))
+
+    // Inside a condition's value, which is where the choice is asked.
+    const inner = createFoldFixture()
+    const nested = inner.foldStrict(
+      module(
+        `export const pick = (tone) => cx(base, tone === 'loud' && css({ color: tone === 'quiet' ? 'gray.500' : 'blue.500' }))`,
+      ),
+    )
+    expect(nested.code).not.toMatch(/\bcx\(/)
+    expect(combinationsIn(nested.code)).toBe(2)
+    const nestedPick = evaluate(nested.code, ['pick']).pick!
+    expect(nestedPick('loud')).toBe(inner.runtimeCss({ display: 'flex', color: 'blue.500' }))
+    expect(nestedPick('quiet')).toBe(inner.runtimeCss({ display: 'flex', color: 'red.300' }))
+  })
+
+  /**
+   * Six comparisons are sixty-four combinations of answers, twice the limit, which left the call the
+   * runtime join. Two values compared with three literals each reach sixteen.
+   */
+  test('compiles a call by the combinations its values reach, not those its conditions are written as', () => {
+    const fixture = createFoldFixture()
+    const result = fixture.foldStrict(`import { css, cx } from 'styled-system/css'
+${STYLES}
+const muted = css({ color: 'gray.700' })
+const quiet = css({ color: 'gray.500' })
+const huge = css({ fontSize: 'xl' })
+export const pick = (size, tone) => cx(base, size === 'sm' && small, size === 'lg' && large, size === 'xl' && huge, tone === 'loud' && loud, tone === 'muted' && muted, tone === 'quiet' && quiet)
+`)
+
+    expect(result.skipped).toEqual([])
+    expect(result.code).not.toContain('cx(')
+    expect(combinationsIn(result.code)).toBe(16)
+    const { pick } = evaluate(result.code, ['pick'])
+    const fontSizes: Record<string, string> = { sm: 'sm', lg: 'lg', xl: 'xl' }
+    const colors: Record<string, string> = { loud: 'blue.500', muted: 'gray.700', quiet: 'gray.500' }
+    for (const size of ['sm', 'lg', 'xl', 'md']) {
+      for (const tone of ['loud', 'muted', 'quiet', 'plain']) {
+        const fontSize = fontSizes[size]
+        expect(pick!(size, tone), `${size} ${tone}`).toBe(
+          fixture.runtimeCss({ display: 'flex', color: colors[tone] ?? 'red.300', ...(fontSize && { fontSize }) }),
+        )
+      }
+    }
+  })
+
+  test('classifies each condition by the value it reads and what it asks of it', () => {
+    const fixture = createFoldFixture()
+    const truthy = (subject: string, negated = false) => ({ inert: true, subject, negated })
+    const compared = (subject: string, literal: string, literalTruthy: boolean, negated = false) => ({
+      inert: true,
+      subject,
+      literal,
+      literalTruthy,
+      negated,
+    })
+    const other = (inert: boolean) => ({ inert, negated: false })
+    const conditions: Array<[string, object]> = [
+      ['on', truthy('on')],
+      ['!on', truthy('on', true)],
+      ['!!props.on', truthy('props.on')],
+      ['this.props.on', truthy('this.props.on')],
+      ["props.size === 'sm'", compared('props.size', '"sm"', true)],
+      ["'sm' !== size", compared('size', '"sm"', true, true)],
+      ["!(size !== 'sm')", compared('size', '"sm"', true)],
+      ["!(size === '')", compared('size', '""', false, true)],
+      ['n === -0', compared('n', '0', false)],
+      ['n === 1.50', compared('n', '1.5', true)],
+      ['x === null', compared('x', 'null', false)],
+      ['x === undefined', compared('x', 'undefined', false)],
+      ['x === void 0', compared('x', 'undefined', false)],
+      ['x === `sm`', compared('x', '"sm"', true)],
+      ['x === true', compared('x', 'true', true)],
+      // Read through `?.`, which a plain `.` read of the same value would throw on, so neither decides the other.
+      ["props?.size === 'sm'", other(true)],
+      ['a || b', other(true)],
+      ['a === b', other(true)],
+      ["typeof a === 'string'", other(true)],
+      ['a > 1', other(false)],
+      ['touch()', other(false)],
+      ['`${a}`', other(false)],
+    ]
+    const source = `import { css, cx } from 'styled-system/css'
+const tint = css({ color: 'red.300' })
+${conditions.map(([condition], index) => `export const c${index} = (on, props, size, n, x, a, b, touch) => cx(css({ color: on ? 'blue.500' : 'red.300' }), (${condition}) && tint)`).join('\n')}
+`
+    const [analysis] = fixture.ctx.compileModules([{ filename: fixture.pathOf('app/src/conditions.tsx'), source }], {
+      references: false,
+    })
+    const asked = analysis!.calls
+      .filter((call) => call.kind === 'cx')
+      .map((call) => {
+        const index = call.cxArguments[1]?.condition
+        return index === undefined ? undefined : (JSON.parse(call.conditions!) as FoldCondition[])[index]
+      })
+    expect(asked).toEqual(conditions.map(([, condition]) => condition))
+  })
+
+  // Handing them over costs more than classifying them, which buys nothing where no answer can decide another.
+  test('hands over no condition where none can decide another', () => {
+    const fixture = createFoldFixture()
+    const source = `import { css, cx } from 'styled-system/css'
+const tint = css({ color: 'red.300' })
+export const apart = (on, size) => cx(tint, on && tint, size === 'sm' ? tint : null)
+export const shared = (size) => cx(tint, size === 'sm' && tint, size === 'lg' && tint)
+export const still = (on) => cx(css({ color: 'blue.500' }), on && tint)
+export const choosing = (on, loud) => cx(css({ color: loud ? 'blue.500' : 'red.300' }), on && tint)
+`
+    const [analysis] = fixture.ctx.compileModules([{ filename: fixture.pathOf('app/src/handed.tsx'), source }], {
+      references: false,
+    })
+    const calls = analysis!.calls.filter((call) => call.kind === 'cx')
+    expect(calls.map((call) => call.conditions !== undefined)).toEqual([false, true, false, true])
+    // Nor the index into them that each of its conditions would hold.
+    expect(calls[0]!.cxArguments.map((argument) => argument.condition)).toEqual([undefined, undefined, undefined])
   })
 })
 

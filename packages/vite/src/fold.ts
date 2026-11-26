@@ -3,6 +3,7 @@ import type { Context } from '@bamboocss/core'
 import type {
   FoldAnalysis,
   FoldCall,
+  FoldCondition,
   FoldCxArgument,
   FoldRefusal,
   FoldSpan,
@@ -250,6 +251,8 @@ type CxPart<C> =
 interface CxBranch<C> {
   kind: 'branch'
   test: FoldSpan
+  /** What the condition asks, which is what lets an answer before it on a path decide it. */
+  condition?: FoldCondition
   then: CxItem<C>[]
   otherwise: CxItem<C>[]
 }
@@ -262,40 +265,109 @@ const flattenCxItems = <C>(items: CxItem<C>[]): CxPart<C>[] =>
     item.kind === 'branch' ? [...flattenCxItems(item.then), ...flattenCxItems(item.otherwise)] : [item],
   )
 
+/**
+ * The answers a path has given to conditions asking about a value, since the last condition on it
+ * that could have run something: what holds of those values where the path has reached.
+ */
+type CxKnown = ReadonlyArray<readonly [FoldCondition, boolean]>
+
+/**
+ * What `query` answers where `known`, asked earlier on the same path, answered `answer`, if that
+ * decides it: both ask about one value, and the answer leaves `query` only one. The native
+ * analysis decides a `css()` call's choices by the same rules (`implied`, `fold/condition.rs`).
+ */
+const impliedAnswer = (known: FoldCondition, answer: boolean, query: FoldCondition): boolean | undefined => {
+  if (known.subject === undefined || known.subject !== query.subject) return undefined
+  // Whether what `known` asks, before it is negated, holds of the value.
+  const holds = answer !== known.negated
+  let decided: boolean | undefined
+  if (known.literal === undefined) {
+    // The value is truthy, or it is not: it is no literal whose truthiness is the other.
+    decided = query.literal === undefined ? holds : query.literalTruthy === holds ? undefined : false
+  } else if (holds) {
+    // The value is the literal.
+    decided = query.literal === undefined ? known.literalTruthy : known.literal === query.literal
+  } else {
+    // The value is not the literal.
+    decided = known.literal === query.literal ? false : undefined
+  }
+  return decided === undefined ? undefined : decided !== query.negated
+}
+
+/** What `known` decides `condition` answers, where it decides it. */
+const decidedAnswer = (condition: FoldCondition | undefined, known: CxKnown): boolean | undefined => {
+  if (condition?.subject === undefined) return undefined
+  for (let index = known.length - 1; index >= 0; index--) {
+    const [asked, answer] = known[index]!
+    const decided = impliedAnswer(asked, answer, condition)
+    if (decided !== undefined) return decided
+  }
+  return undefined
+}
+
+/**
+ * What a path knows once `condition` has answered `answer`: one that could have run something may
+ * have changed any value, which leaves nothing known.
+ */
+const afterAnswer = (known: CxKnown, condition: FoldCondition | undefined, answer: boolean): CxKnown => {
+  if (!condition?.inert) return []
+  return condition.subject === undefined ? known : [...known, [condition, answer]]
+}
+
 /** How many combinations of answers `items` can produce, counting no further than past `limit`. */
-const countCxCombinations = <C>(items: CxItem<C>[], limit: number): number => {
+const countCxCombinations = <C>(items: CxItem<C>[], limit: number, known: CxKnown = []): number => {
   const index = items.findIndex((item) => item.kind === 'branch')
   if (index < 0) return 1
   const branch = items[index] as CxBranch<C>
   const rest = items.slice(index + 1)
-  const then = countCxCombinations([...branch.then, ...rest], limit)
+  const decided = decidedAnswer(branch.condition, known)
+  if (decided !== undefined)
+    return countCxCombinations([...(decided ? branch.then : branch.otherwise), ...rest], limit, known)
+  const then = countCxCombinations([...branch.then, ...rest], limit, afterAnswer(known, branch.condition, true))
   if (then > limit) return then
-  return then + countCxCombinations([...branch.otherwise, ...rest], limit - then)
+  return (
+    then +
+    countCxCombinations([...branch.otherwise, ...rest], limit - then, afterAnswer(known, branch.condition, false))
+  )
 }
 
 /**
- * A ternary choosing between the class strings `items` compose to, one per combination of answers.
+ * A ternary choosing between the class strings `items` compose to, one per combination of answers
+ * a value can reach.
  *
  * Each condition is asked where its argument asked it, and only on the path that reached it: the
  * conditions after it are asked again in each of its answers, as they would have been once in the
- * one taken. So every condition runs exactly when, and as often as, it did in the call.
+ * one taken. So every condition runs when, and as often as, it did in the call — but for one the
+ * answers before it on the path have decided, `size === 'lg'` where `size === 'sm'` answered yes,
+ * which runs nothing, so that not asking it changes nothing but the combinations written out.
  */
 const writeCxBranches = <C>(
   items: CxItem<C>[],
   leaf: (parts: CxPart<C>[]) => string,
   testSource: (span: FoldSpan) => string,
   before: CxPart<C>[] = [],
+  known: CxKnown = [],
 ): string => {
   const index = items.findIndex((item) => item.kind === 'branch')
   if (index < 0) return JSON.stringify(leaf([...before, ...(items as CxPart<C>[])]))
   const branch = items[index] as CxBranch<C>
   const rest = items.slice(index + 1)
   const prefix = [...before, ...(items.slice(0, index) as CxPart<C>[])]
-  const answer = (answered: CxItem<C>[]) => {
-    const written = writeCxBranches([...answered, ...rest], leaf, testSource, prefix)
+  const decided = decidedAnswer(branch.condition, known)
+  if (decided !== undefined) {
+    return writeCxBranches([...(decided ? branch.then : branch.otherwise), ...rest], leaf, testSource, prefix, known)
+  }
+  const answer = (answered: CxItem<C>[], given: boolean) => {
+    const written = writeCxBranches(
+      [...answered, ...rest],
+      leaf,
+      testSource,
+      prefix,
+      afterAnswer(known, branch.condition, given),
+    )
     return written.startsWith('"') ? written : `(${written})`
   }
-  return `(${testSource(branch.test)}) ? ${answer(branch.then)} : ${answer(branch.otherwise)}`
+  return `(${testSource(branch.test)}) ? ${answer(branch.then, true)} : ${answer(branch.otherwise, false)}`
 }
 
 /**
@@ -495,8 +567,11 @@ export const foldSource = (options: FoldOptions): FoldResult => {
     name: string
     /** Symbolic declarations this candidate contributes, before class allocation. */
     styleSet?: Dict
-    /** A `css()` call's choices, which can also compose with the other arguments of an enclosing `cx()`. */
-    styleChoice?: { tests: FoldSpan[]; tree: ChoiceTree }
+    /**
+     * A `css()` call's choices, which can also compose with the other arguments of an enclosing `cx()`.
+     * `conditions` is the analysis's JSON, which it gives only where a `cx()` composes the call.
+     */
+    styleChoice?: { tests: FoldSpan[]; conditions?: string; tree: ChoiceTree }
     className?: string
     /** Every class literal emitted, when that is more than `className` — see FoldedCall. */
     classNames?: string[]
@@ -908,6 +983,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
         end,
         styleChoice: {
           tests: call.styleChoice.tests,
+          conditions: call.styleChoice.conditions,
           tree: composeChoice(JSON.parse(call.styleChoice.tree) as NativeChoice),
         },
       })
@@ -1022,6 +1098,8 @@ export const foldSource = (options: FoldOptions): FoldResult => {
   for (const call of analysis.calls) {
     if (call.kind !== 'cx' || call.notImported) continue
 
+    /** What each condition the arguments hold asks, by the index each argument names. */
+    const conditions = call.conditions === undefined ? [] : (JSON.parse(call.conditions) as FoldCondition[])
     const matched: Candidate[] = []
     const items: CxItem<Candidate>[] = []
     const dynamic: Candidate[] = []
@@ -1068,7 +1146,8 @@ export const foldSource = (options: FoldOptions): FoldResult => {
         const otherwise: CxItem<Candidate>[] = []
         if (!take(consequent, then) || (alternate && !take(alternate, otherwise))) return false
         tests.push(arg.test)
-        into.push({ kind: 'branch', test: arg.test, then, otherwise })
+        const condition = arg.condition === undefined ? undefined : conditions[arg.condition]
+        into.push({ kind: 'branch', test: arg.test, condition, then, otherwise })
         return true
       }
       const candidate = byRange.get(`${arg.span.start}:${arg.span.end}`)
@@ -1088,6 +1167,8 @@ export const foldSource = (options: FoldOptions): FoldResult => {
       }
       if (candidate?.styleChoice) {
         const choice = candidate.styleChoice
+        // Absent, each test is one that could run something, and decides nothing.
+        const asked = choice.conditions === undefined ? [] : (JSON.parse(choice.conditions) as FoldCondition[])
         matched.push(candidate)
         tests.push(...choice.tests)
         const branch = (tree: ChoiceTree): CxItem<Candidate> =>
@@ -1096,6 +1177,7 @@ export const foldSource = (options: FoldOptions): FoldResult => {
             : {
                 kind: 'branch',
                 test: choice.tests[tree.test]!,
+                condition: asked[tree.test],
                 then: [branch(tree.then)],
                 otherwise: [branch(tree.otherwise)],
               }

@@ -1,5 +1,6 @@
 //! Per-module facts for the Vite compiler. See `model.rs`.
 
+mod condition;
 pub mod exact;
 pub mod model;
 mod style_choice;
@@ -1095,6 +1096,7 @@ fn analyze_facts<'a>(
                     origin: None,
                     binding: None,
                     cx_arguments: Vec::new(),
+                    conditions: None,
                     value: None,
                     guarded: false,
                     statement_start: false,
@@ -1132,6 +1134,7 @@ fn analyze_facts<'a>(
                 origin: None,
                 binding,
                 cx_arguments: Vec::new(),
+                conditions: None,
                 value: None,
                 guarded: false,
                 statement_start: false,
@@ -1148,11 +1151,16 @@ fn analyze_facts<'a>(
                 imported_styles: &imported_style_symbols,
                 guarded_reads,
             };
-            let cx_arguments: Vec<FoldCxArgument> = call
+            let mut conditions = CxConditions::default();
+            let mut cx_arguments: Vec<FoldCxArgument> = call
                 .arguments
                 .iter()
-                .map(|argument| cx_argument(argument, &scope))
+                .map(|argument| cx_argument(argument, &scope, &mut conditions))
                 .collect();
+            let conditions = conditions.decisive();
+            if conditions.is_none() {
+                forget_conditions(&mut cx_arguments);
+            }
             named_styles(&cx_arguments, &mut cx_imported_styles);
             calls.push(FoldCall {
                 name,
@@ -1175,6 +1183,7 @@ fn analyze_facts<'a>(
                 origin: None,
                 binding: None,
                 cx_arguments,
+                conditions,
                 value: None,
                 guarded: false,
                 statement_start: is_statement_start(semantic, node.id()),
@@ -1240,7 +1249,18 @@ fn analyze_facts<'a>(
         let mut choice_unknown = None;
         let style_choice = if chooses && !exact && data.len() > 1 {
             let guarded_reads = guarded_reads.get_or_insert_with(read_spans);
-            match style_choice::analyze(&mut evaluator, &call.arguments, &utf16, guarded_reads) {
+            // Only a `cx()` composing the call reads what its tests ask.
+            let composed = composed_by_cx(semantic.nodes(), node.id(), |outer| {
+                classify_callee(&outer.callee, scoping, &bindings, entrypoints)
+                    .is_some_and(|(kind, ..)| kind == "cx")
+            });
+            match style_choice::analyze(
+                &mut evaluator,
+                &call.arguments,
+                &utf16,
+                guarded_reads,
+                composed,
+            ) {
                 Ok(choice) => Some(choice),
                 Err(unknown) => {
                     choice_unknown = unknown;
@@ -1268,10 +1288,16 @@ fn analyze_facts<'a>(
             let mut found = choice_unknown;
             if found.is_none() && chooses && data.len() <= 1 {
                 let guarded_reads = guarded_reads.get_or_insert_with(read_spans);
-                found =
-                    style_choice::analyze(&mut evaluator, &call.arguments, &utf16, guarded_reads)
-                        .err()
-                        .flatten();
+                // Only why it does not compile is read here.
+                found = style_choice::analyze(
+                    &mut evaluator,
+                    &call.arguments,
+                    &utf16,
+                    guarded_reads,
+                    false,
+                )
+                .err()
+                .flatten();
             }
             if found.is_none() {
                 found = call.arguments.iter().take(judged).find_map(|argument| {
@@ -1310,6 +1336,7 @@ fn analyze_facts<'a>(
             origin: None,
             binding: None,
             cx_arguments: Vec::new(),
+            conditions: None,
             value,
             guarded,
             statement_start,
@@ -1587,6 +1614,42 @@ fn is_statement_start(semantic: &Semantic<'_>, call: oxc_semantic::NodeId) -> bo
     }
 }
 
+/// Whether the call at `call` is one a `cx()` composes with its other arguments: an argument of it,
+/// or one inside an argument the way `cx()` reads it — an element of an array, the value of
+/// `test && value` or an answer of `test ? a : b`. Anything else around it is opaque to the `cx()`.
+fn composed_by_cx(
+    nodes: &oxc_semantic::AstNodes<'_>,
+    call: oxc_semantic::NodeId,
+    is_cx: impl Fn(&oxc_ast::ast::CallExpression<'_>) -> bool,
+) -> bool {
+    let mut current = call;
+    loop {
+        let span = nodes.kind(current).span();
+        let parent = nodes.parent_id(current);
+        if parent == current {
+            return false;
+        }
+        match nodes.kind(parent) {
+            AstKind::ParenthesizedExpression(_)
+            | AstKind::TSAsExpression(_)
+            | AstKind::TSSatisfiesExpression(_)
+            | AstKind::TSNonNullExpression(_)
+            | AstKind::TSTypeAssertion(_)
+            | AstKind::ArrayExpression(_) => current = parent,
+            AstKind::LogicalExpression(logical)
+                if logical.operator == LogicalOperator::And && logical.right.span() == span =>
+            {
+                current = parent
+            }
+            AstKind::ConditionalExpression(conditional) if conditional.test.span() != span => {
+                current = parent
+            }
+            AstKind::CallExpression(outer) => return outer.callee.span() != span && is_cx(outer),
+            _ => return false,
+        }
+    }
+}
+
 /// `call(...).slot` or `call(...)['slot']` directly around the call.
 fn slot_access(
     semantic: &Semantic<'_>,
@@ -1741,6 +1804,7 @@ fn recipe_invocation<'a>(
         origin,
         binding: None,
         cx_arguments: Vec::new(),
+        conditions: None,
         value: None,
         guarded: false,
         statement_start: false,
@@ -1775,10 +1839,71 @@ fn holds_guarded_read(reads: &[Span], span: Span) -> bool {
         .is_some_and(|read| read.start < span.end)
 }
 
-fn cx_argument<'a>(argument: &'a Argument<'a>, scope: &CxScope<'_>) -> FoldCxArgument {
+/// What the conditions among a `cx()` call's arguments ask, in the order they are met, and whether
+/// the call composes another call with them that holds a choice, as a `css()` holding one does.
+#[derive(Default)]
+struct CxConditions {
+    asked: Vec<FoldCondition>,
+    composes_choice: bool,
+}
+
+impl CxConditions {
+    /// What `test` asks, recorded: its index.
+    fn ask(&mut self, test: &Expression<'_>, scoping: &Scoping) -> Option<u32> {
+        self.asked.push(condition::condition(test, scoping));
+        Some(self.asked.len() as u32 - 1)
+    }
+
+    /// The conditions, as JSON, where an answer to one can decide another: two read one value, or
+    /// the call composes a call whose choices may read it. Elsewhere nothing is decided, and
+    /// handing them over, which costs more than classifying them, would buy nothing. Absent too
+    /// where the text cannot be written, which leaves every condition asked.
+    fn decisive(self) -> Option<String> {
+        let shared = self.asked.iter().enumerate().any(|(index, condition)| {
+            condition.subject.is_some()
+                && self.asked[..index]
+                    .iter()
+                    .any(|earlier| earlier.subject == condition.subject)
+        });
+        ((shared || self.composes_choice) && !self.asked.is_empty())
+            .then(|| serde_json::to_string(&self.asked).ok())
+            .flatten()
+    }
+}
+
+/// Where the conditions of a call's arguments are not handed over, the index each holds into them,
+/// which would only cost a property apiece.
+fn forget_conditions(arguments: &mut [FoldCxArgument]) {
+    for argument in arguments {
+        argument.condition = None;
+        if let Some(elements) = &mut argument.elements {
+            forget_conditions(elements);
+        }
+    }
+}
+
+/// Whether an argument of a call holds a choice as `css()` takes one: a ternary, written as the
+/// argument or as the value of a property of an object written there.
+fn holds_choice(expression: &Expression<'_>) -> bool {
+    match unwrap(expression) {
+        Expression::ConditionalExpression(_) => true,
+        Expression::ObjectExpression(object) => object.properties.iter().any(|property| {
+            matches!(property, ObjectPropertyKind::ObjectProperty(property) if holds_choice(&property.value))
+        }),
+        _ => false,
+    }
+}
+
+/// One argument of a `cx()` call, classified, and what each condition it holds asks, added to
+/// `conditions`, which the argument's conditions index.
+fn cx_argument<'a>(
+    argument: &'a Argument<'a>,
+    scope: &CxScope<'_>,
+    conditions: &mut CxConditions,
+) -> FoldCxArgument {
     let written = scope.utf16.span(argument.span());
     let classified = match argument.as_expression() {
-        Some(expression) => cx_expression(expression, scope),
+        Some(expression) => cx_expression(expression, scope, conditions),
         None => cx_leaf(written, "spread"),
     };
     FoldCxArgument {
@@ -1795,6 +1920,7 @@ fn cx_leaf(span: FoldSpan, kind: &str) -> FoldCxArgument {
         value: None,
         elements: None,
         test: None,
+        condition: None,
         definition: None,
         binding: None,
         written: None,
@@ -1802,7 +1928,11 @@ fn cx_leaf(span: FoldSpan, kind: &str) -> FoldCxArgument {
     }
 }
 
-fn cx_expression<'a>(expression: &'a Expression<'a>, scope: &CxScope<'_>) -> FoldCxArgument {
+fn cx_expression<'a>(
+    expression: &'a Expression<'a>,
+    scope: &CxScope<'_>,
+    conditions: &mut CxConditions,
+) -> FoldCxArgument {
     let expression = unwrap(expression);
     let span = scope.utf16.span(expression.span());
     match expression {
@@ -1849,7 +1979,8 @@ fn cx_expression<'a>(expression: &'a Expression<'a>, scope: &CxScope<'_>) -> Fol
                 && !scope.holds_guarded_read(logical.left.span()) =>
         {
             FoldCxArgument {
-                elements: Some(vec![cx_expression(&logical.right, scope)]),
+                condition: conditions.ask(&logical.left, scope.scoping),
+                elements: Some(vec![cx_expression(&logical.right, scope, conditions)]),
                 test: Some(scope.utf16.span(logical.left.span())),
                 ..cx_leaf(span, "when")
             }
@@ -1858,9 +1989,10 @@ fn cx_expression<'a>(expression: &'a Expression<'a>, scope: &CxScope<'_>) -> Fol
             if !scope.holds_guarded_read(conditional.test.span()) =>
         {
             FoldCxArgument {
+                condition: conditions.ask(&conditional.test, scope.scoping),
                 elements: Some(vec![
-                    cx_expression(&conditional.consequent, scope),
-                    cx_expression(&conditional.alternate, scope),
+                    cx_expression(&conditional.consequent, scope, conditions),
+                    cx_expression(&conditional.alternate, scope, conditions),
                 ]),
                 test: Some(scope.utf16.span(conditional.test.span())),
                 ..cx_leaf(span, "choose")
@@ -1871,7 +2003,7 @@ fn cx_expression<'a>(expression: &'a Expression<'a>, scope: &CxScope<'_>) -> Fol
             let mut spread = false;
             for element in &array.elements {
                 match element.as_expression() {
-                    Some(expression) => elements.push(cx_expression(expression, scope)),
+                    Some(expression) => elements.push(cx_expression(expression, scope, conditions)),
                     None => spread = true,
                 }
             }
@@ -1879,6 +2011,17 @@ fn cx_expression<'a>(expression: &'a Expression<'a>, scope: &CxScope<'_>) -> Fol
                 elements: (!spread).then_some(elements),
                 ..cx_leaf(span, "array")
             }
+        }
+        // A call, matched against a folded one by span: a `css()` holding choices among them.
+        Expression::CallExpression(call) => {
+            if call
+                .arguments
+                .iter()
+                .any(|argument| argument.as_expression().is_some_and(holds_choice))
+            {
+                conditions.composes_choice = true;
+            }
+            cx_leaf(span, "expression")
         }
         _ => cx_leaf(span, "expression"),
     }

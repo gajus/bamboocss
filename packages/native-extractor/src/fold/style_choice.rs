@@ -1,7 +1,5 @@
 //! The finite choices in an otherwise exact `css()` call.
 
-use std::collections::HashMap;
-
 use oxc_ast::ast::{Argument, Expression, ObjectPropertyKind, PropertyKind};
 use oxc_span::{GetSpan, Span};
 use serde_json::{Map, Value};
@@ -9,7 +7,11 @@ use serde_json::{Map, Value};
 use crate::{evaluator::FileEvaluator, offsets::Utf16};
 
 use super::{
-    Exactness, Unknown, holds_guarded_read, model::FoldStyleChoice, spread_kind, unknown, unwrap,
+    Exactness, Unknown,
+    condition::{condition, implied},
+    holds_guarded_read,
+    model::{FoldCondition, FoldStyleChoice},
+    spread_kind, unknown, unwrap,
 };
 
 /// The most combinations of answers one call is compiled to, as `MAX_CX_COMBINATIONS` bounds a
@@ -26,13 +28,17 @@ const MAX_COMBINATIONS: usize = 32;
 /// A test can be anything a copied condition can be — `compact`, `props.size === 'sm'` — reading
 /// neither a Bamboo import nor a recipe: `guarded_reads`, sorted by start. Each answer, and every
 /// other value in the arguments, has to be exact. An exact spread is merged where it is written, and
-/// a second argument after the first, as `css()` merges them. Where every test is a plain read, one
-/// written twice is asked once, as reading it again would answer the same.
+/// a second argument after the first, as `css()` merges them. A test the answers on its path decide
+/// is not asked there (`answer`): a plain read written twice answers as it did, and `size === 'lg'`
+/// answers no where `size === 'sm'` answered yes, so no combination is written that no value reaches.
+///
+/// `composed`: a `cx()` composes the call, and is handed what its tests ask (`conditions`).
 pub(super) fn analyze<'a>(
     evaluator: &mut FileEvaluator<'a, '_, '_>,
     arguments: &'a [Argument<'a>],
     utf16: &Utf16,
     guarded_reads: &[Span],
+    composed: bool,
 ) -> Result<FoldStyleChoice, Option<Unknown<'a>>> {
     let mut expressions = Vec::with_capacity(arguments.len());
     for argument in arguments {
@@ -60,16 +66,12 @@ pub(super) fn analyze<'a>(
         );
         Some(Unknown::choices(span, written.len() as u32))
     };
-    // A test that could run something may change what a later read answers, so a read is asked
-    // once only where no test can.
-    let once = written.iter().all(|test| plain_read(test).is_some());
 
     let mut choices = Choices {
         evaluator,
         guarded_reads,
-        once,
         tests: Vec::new(),
-        by_read: HashMap::new(),
+        conditions: Vec::new(),
     };
     let mut call = Tree::Leaf(Vec::new());
     for expression in expressions {
@@ -83,6 +85,7 @@ pub(super) fn analyze<'a>(
             call,
             argument,
             &mut Vec::new(),
+            &choices.conditions,
             &mut |mut styles: Vec<Value>, value| {
                 match value {
                     // `css()` drops a nullish argument.
@@ -101,19 +104,11 @@ pub(super) fn analyze<'a>(
     call.write_json(&mut tree);
     Ok(FoldStyleChoice {
         tests: choices.tests.iter().map(|test| utf16.span(*test)).collect(),
+        conditions: composed
+            .then(|| serde_json::to_string(&choices.conditions).ok())
+            .flatten(),
         tree,
     })
-}
-
-/// `active` or `props.size`: a read with nothing to run.
-fn plain_read(expression: &Expression<'_>) -> Option<String> {
-    match unwrap(expression) {
-        Expression::Identifier(identifier) => Some(identifier.name.to_string()),
-        Expression::StaticMemberExpression(member) if !member.optional => {
-            plain_read(&member.object).map(|object| format!("{object}.{}", member.property.name))
-        }
-        _ => None,
-    }
 }
 
 /// Every test `explore` meets, in the order it meets them, and the first of those it cannot ask:
@@ -168,23 +163,23 @@ impl<L: Clone> Tree<L> {
         }
     }
 
-    /// The tree on a path that answered `decided`: a test asked again takes the answer it was given.
-    fn decided(self, decided: &mut Vec<(usize, bool)>) -> Tree<L> {
+    /// The tree on a path that answered `decided`: a test those answers decide takes its answer.
+    fn decided(self, decided: &mut Vec<(usize, bool)>, conditions: &[FoldCondition]) -> Tree<L> {
         match self {
             Tree::Leaf(leaf) => Tree::Leaf(leaf),
             Tree::Node {
                 test,
                 then,
                 otherwise,
-            } => match answer(decided, test) {
-                Some(true) => then.decided(decided),
-                Some(false) => otherwise.decided(decided),
+            } => match answer(decided, test, conditions) {
+                Some(true) => then.decided(decided, conditions),
+                Some(false) => otherwise.decided(decided, conditions),
                 None => {
                     decided.push((test, true));
-                    let then = then.decided(decided);
+                    let then = then.decided(decided, conditions);
                     decided.pop();
                     decided.push((test, false));
-                    let otherwise = otherwise.decided(decided);
+                    let otherwise = otherwise.decided(decided, conditions);
                     decided.pop();
                     node(test, then, otherwise)
                 }
@@ -233,11 +228,21 @@ fn node<L>(test: usize, then: Tree<L>, otherwise: Tree<L>) -> Tree<L> {
     }
 }
 
-fn answer(decided: &[(usize, bool)], test: usize) -> Option<bool> {
-    decided
-        .iter()
-        .find(|(asked, _)| *asked == test)
-        .map(|(_, answered)| *answered)
+/// What a path that answered `decided`, in the order it asked, says `test` answers, where an answer
+/// decides it (`implied`): the latest first, and none from before a test that could have run
+/// something, after which what an earlier answer said of a value may no longer hold.
+fn answer(decided: &[(usize, bool)], test: usize, conditions: &[FoldCondition]) -> Option<bool> {
+    let query = &conditions[test];
+    for &(asked, answered) in decided.iter().rev() {
+        let known = &conditions[asked];
+        if let Some(answer) = implied(known, answered, query) {
+            return Some(answer);
+        }
+        if !known.inert {
+            return None;
+        }
+    }
+    None
 }
 
 fn bounded<L: Clone>(tree: &Tree<L>) -> Option<()> {
@@ -257,31 +262,34 @@ fn sequence<A: Clone, B: Clone>(
     first: Tree<A>,
     second: Tree<B>,
     decided: &mut Vec<(usize, bool)>,
+    conditions: &[FoldCondition],
     combine: &mut impl FnMut(A, B) -> Option<A>,
 ) -> Option<Tree<A>> {
     match first {
-        Tree::Leaf(leaf) => graft(leaf, second, decided, combine),
+        Tree::Leaf(leaf) => graft(leaf, second, decided, conditions, combine),
         Tree::Node {
             test,
             then,
             otherwise,
         } => {
             decided.push((test, true));
-            let then = sequence(*then, second.clone(), decided, combine);
+            let then = sequence(*then, second.clone(), decided, conditions, combine);
             decided.pop();
             decided.push((test, false));
-            let otherwise = sequence(*otherwise, second, decided, combine);
+            let otherwise = sequence(*otherwise, second, decided, conditions, combine);
             decided.pop();
             Some(node(test, then?, otherwise?))
         }
     }
 }
 
-/// `second` where a path through `first` left `leaf`: a test that path answered takes its answer.
+/// `second` where a path through `first` left `leaf`: a test that path's answers decide takes its
+/// answer.
 fn graft<A: Clone, B: Clone>(
     leaf: A,
     second: Tree<B>,
     decided: &mut Vec<(usize, bool)>,
+    conditions: &[FoldCondition],
     combine: &mut impl FnMut(A, B) -> Option<A>,
 ) -> Option<Tree<A>> {
     match second {
@@ -290,15 +298,15 @@ fn graft<A: Clone, B: Clone>(
             test,
             then,
             otherwise,
-        } => match answer(decided, test) {
-            Some(true) => graft(leaf, *then, decided, combine),
-            Some(false) => graft(leaf, *otherwise, decided, combine),
+        } => match answer(decided, test, conditions) {
+            Some(true) => graft(leaf, *then, decided, conditions, combine),
+            Some(false) => graft(leaf, *otherwise, decided, conditions, combine),
             None => {
                 decided.push((test, true));
-                let yes = graft(leaf.clone(), *then, decided, combine);
+                let yes = graft(leaf.clone(), *then, decided, conditions, combine);
                 decided.pop();
                 decided.push((test, false));
-                let no = graft(leaf, *otherwise, decided, combine);
+                let no = graft(leaf, *otherwise, decided, conditions, combine);
                 decided.pop();
                 Some(node(test, yes?, no?))
             }
@@ -309,25 +317,17 @@ fn graft<A: Clone, B: Clone>(
 struct Choices<'e, 'a, 'p, 's, 'g> {
     evaluator: &'e mut FileEvaluator<'a, 'p, 's>,
     guarded_reads: &'g [Span],
-    /// Every test is a plain read, so one written twice is asked once.
-    once: bool,
     /// Each test asked, as written.
     tests: Vec<Span>,
-    /// A plain read → the test it was first asked as, when `once`.
-    by_read: HashMap<String, usize>,
+    /// What each of `tests` asks, by index.
+    conditions: Vec<FoldCondition>,
 }
 
 impl<'a> Choices<'_, 'a, '_, '_, '_> {
     fn test(&mut self, test: &'a Expression<'a>) -> usize {
-        if self.once
-            && let Some(read) = plain_read(test)
-        {
-            if let Some(&known) = self.by_read.get(&read) {
-                return known;
-            }
-            self.by_read.insert(read, self.tests.len());
-        }
         self.tests.push(test.span());
+        self.conditions
+            .push(condition(test, self.evaluator.scoping));
         self.tests.len() - 1
     }
 
@@ -344,13 +344,9 @@ impl<'a> Choices<'_, 'a, '_, '_, '_> {
                 let test = self.test(&choice.test);
                 let then = self.explore(&choice.consequent)?;
                 let otherwise = self.explore(&choice.alternate)?;
-                let tree = node(test, then, otherwise);
-                // A test asked twice can only be one a read written twice shares.
-                let tree = if self.once {
-                    tree.decided(&mut Vec::new())
-                } else {
-                    tree
-                };
+                // An answer asking another, `size === 'sm' ? (size === 'lg' ? …) : …`, which this
+                // answer may decide.
+                let tree = node(test, then, otherwise).decided(&mut Vec::new(), &self.conditions);
                 bounded(&tree).ok_or_else(|| too_many(choice.span))?;
                 Ok(tree)
             }
@@ -381,6 +377,7 @@ impl<'a> Choices<'_, 'a, '_, '_, '_> {
                                 built,
                                 value,
                                 &mut Vec::new(),
+                                &self.conditions,
                                 &mut |mut map: Map<String, Value>, value| {
                                     match value {
                                         Some(value) => {
@@ -406,6 +403,7 @@ impl<'a> Choices<'_, 'a, '_, '_, '_> {
                                 built,
                                 Tree::Leaf(value),
                                 &mut Vec::new(),
+                                &self.conditions,
                                 &mut |mut map: Map<String, Value>, value| {
                                     match value {
                                         None => {}

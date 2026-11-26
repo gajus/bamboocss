@@ -191,11 +191,22 @@ cx(badge, discount >= 30 && badgeHigh)
 // compiles to: (discount >= 30) ? "_w1ddk4:bg_red.600 _Btm_AK:c_white" : "_w1ddk4:bg_amber.500 _Btm_AK:c_white"
 ```
 
-Every condition still runs exactly when, and as often as, it did in the call. Up to five independent conditions —
-thirty-two combinations — are compiled this way; a call with more, a condition that reads a Bamboo import or a recipe,
-or a binding that is not a `const` whose call is static stays the runtime `cx` it was written as, which keeps the last
-class per property and conditions, so the later argument still wins. A component choosing between that many styles is
-better written as a recipe.
+Every condition still runs when, and as often as, it did in the call, except one the answers before it have already
+decided. Conditions reading one value answer together: where `size === 'sm'` answered yes, `size === 'lg'` can only
+answer no, so it is not asked there, and the combination of both answering yes is not written out. That holds for a
+value read as it is (`size`, `props.size`), tested or negated, or compared with a literal by `===` or `!==`, and only
+across conditions that run nothing but reads — a call in between may change what a later one answers.
+
+```tsx
+cx(base, variant === 'secondary' && secondary, variant === 'ghost' && ghost, full && wide)
+// twelve combinations, not sixteen: variant is never both
+```
+
+Up to thirty-two combinations a value can reach are compiled this way — five independent conditions, or more that
+compare one value with different literals; a call with more, a condition that reads a Bamboo import or a recipe, or a
+binding that is not a `const` whose call is static stays the runtime `cx` it was written as, which keeps the last class
+per property and conditions, so the later argument still wins. A component choosing between that many styles is better
+written as a recipe.
 
 For a finite dynamic recipe plus static Bamboo styles, the static styles are composed into every decision-table leaf.
 

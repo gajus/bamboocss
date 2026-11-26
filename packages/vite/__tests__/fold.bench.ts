@@ -337,8 +337,9 @@ export const forwarded${index} = (active, className) => cx(base${index}, active 
 
 /**
  * `cx()` with four conditions — a button's state, two exclusive variants and a flag — which is sixteen
- * combinations, each composed and written out whole. While the limit was eight the fold declined the
- * call and left it the runtime join, which cost it nothing, so this reads what compiling one costs.
+ * combinations of answers, twelve of which a value reaches, each composed and written out whole. While
+ * the limit was eight the fold declined the call and left it the runtime join, which cost it nothing,
+ * so this reads what compiling one costs.
  */
 const cxVariantStyles = (index: number) => `
 const base${index} = css({ display: 'inline-flex', padding: '${index % 4}', bg: 'blue.500', color: 'white', borderRadius: 'md' })

@@ -51,9 +51,11 @@ const className = css({ padding: compact ? '2' : '4' })
 Each test runs where the call ran it, as often as it did, so it can be anything — a prop, `size === 'sm'`, a helper's
 result — that reads neither a Bamboo import nor a recipe, which the compiler removes. A call can hold several choices,
 side by side or inside one another's answers, beside a spread of known styles or after another argument: it compiles to
-one class string per combination of answers, with a test inside an answer asked only where that answer is taken. A plain
-read such as `props.active` written twice is asked once, where every test in the call is a plain read. Past 32
-combinations the call is rejected, and so is a choice of a runtime value:
+one class string per combination of answers, with a test inside an answer asked only where that answer is taken. A test
+the answers before it have decided is not asked either: a plain read such as `props.active` written twice is asked once,
+and `size === 'lg'` is not asked where `size === 'sm'` answered yes, so no combination is written that no value reaches.
+That reasoning stops at a test that could run something, such as a call, which may change what a later test answers.
+Past 32 combinations a value can reach the call is rejected, and so is a choice of a runtime value:
 
 ```tsx
 css({ padding: compact ? '2' : '4', color: loud ? 'orange.500' : 'blue.500' })

@@ -71,6 +71,10 @@ pub struct FoldCall {
     pub binding: Option<String>,
     /// For a `cx()` call: its arguments, classified.
     pub cx_arguments: Vec<FoldCxArgument>,
+    /// For a `cx()` call holding conditions: what each asks, which `FoldCxArgument::condition`
+    /// indexes. JSON, an array of `FoldCondition`s. Absent where no answer to one can decide another
+    /// — no two read one value, and the call composes no choice — and so then is every index.
+    pub conditions: Option<String>,
     /// For an exact `keyframes()` call: the name it returns, which the fold writes in its place.
     pub value: Option<String>,
     /// A `token()` call whose result is tested or defaulted rather than used as it is,
@@ -88,11 +92,51 @@ pub struct FoldStyleChoice {
     /// Each test, as written: anything but one reading a Bamboo binding or a recipe, since the
     /// fold copies it into what it writes, to choose between the styles where the call was.
     pub tests: Vec<FoldSpan>,
+    /// For a call a `cx()` composes: what each of `tests` asks, by index, so that the `cx()` decides
+    /// one an answer on its path has decided, as `tree` already does within the call. JSON, an array
+    /// of `FoldCondition`s. Absent for any other call, whose `tree` is all the fold reads, and where
+    /// the text cannot be written, which leaves every test asked.
+    pub conditions: Option<String>,
     /// The decision, as the call asks it, as JSON: a node is `{ test, then, otherwise }`, `test`
     /// indexing `tests`, and a leaf is `{ styles }`, the call's arguments on that path, each a style
     /// object. Text, since a tree of objects crossed into JavaScript one object at a time cost more
     /// than building it.
     pub tree: String,
+}
+
+/// What a condition the fold copies asks, so that one answer on a path can decide a later one.
+///
+/// A condition asks about one value where it reads that value alone, `size` or `props.size`, and
+/// either tests it, `size` or `!size`, or compares it strictly with a literal, `size === 'sm'` or
+/// `size !== 'sm'`. Two such conditions reading one value answer together: where `size === 'sm'`
+/// answered yes, `size === 'lg'` can only answer no, so the decision does not ask it there, and the
+/// combination of both answering yes, which no value reaches, is not written out.
+///
+/// Crossed into JavaScript as JSON, a call's at a time (`FoldCall::conditions`,
+/// `FoldStyleChoice::conditions`): one object per condition, set field by field across the
+/// boundary, cost more than the analysis that classified it.
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FoldCondition {
+    /// The condition can run nothing but the reads it makes — reads, literals, and `!`, `typeof`,
+    /// `void`, `===`, `!==`, `&&`, `||`, `??` and `?:` over them — so asking it changes no value a
+    /// later one reads. After one that could run something, what earlier answers said may no
+    /// longer hold, and nothing asked before it decides anything asked after it.
+    pub inert: bool,
+    /// The value it asks about, as it is read: `size`, `props.size`. Absent where it asks
+    /// anything else, which decides nothing and is decided by nothing.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subject: Option<String>,
+    /// The literal `subject` is compared with, `===` or `!==`, as JavaScript writes it — `"sm"`,
+    /// `0`, `true`, `null`, `undefined` — so two are strictly equal where they are the same text.
+    /// Absent where the condition asks whether `subject` is truthy.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub literal: Option<String>,
+    /// Whether `literal` is truthy, where there is one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub literal_truthy: Option<bool>,
+    /// The condition answers the opposite of what it asks: `!size`, `size !== 'sm'`.
+    pub negated: bool,
 }
 
 /// Code the evaluator does not run, which is why a call's arguments are not known.
@@ -193,6 +237,9 @@ pub struct FoldCxArgument {
     /// For `when` and `choose`: the condition, as written. Never one reading a Bamboo binding or
     /// a recipe: the fold copies it into what it writes, and a copy would keep that read alive.
     pub test: Option<FoldSpan>,
+    /// For `when` and `choose`: what the condition asks, as its index in the call's `conditions`,
+    /// where the call has them.
+    pub condition: Option<u32>,
     /// For a `binding` declared in this module: the style call it is initialised with, which is
     /// where the fold finds its declarations.
     pub definition: Option<FoldSpan>,

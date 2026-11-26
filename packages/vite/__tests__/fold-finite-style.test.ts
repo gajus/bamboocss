@@ -325,6 +325,75 @@ describe('several choices in one css() call', () => {
     expectRules(fixture, result)
   })
 
+  // Choices reading one value answer together: `size` is never both `'sm'` and `'lg'`.
+  test('compiles no combination no value reaches', () => {
+    const fixture = createFoldFixture()
+    const result = fixture.foldStrict(
+      withCss(`function badge(size) {
+      return css({ color: size === 'sm' ? 'white' : 'gray.700', bg: size === 'lg' ? 'red.500' : 'transparent' });
+    }`),
+    )
+
+    expect(result.skipped).toEqual([])
+    expect(result.folded[0]?.classNames).toHaveLength(3)
+    const badge = badgeOf(result.code)
+    for (const size of ['sm', 'lg', 'md']) {
+      const styles = { color: size === 'sm' ? 'white' : 'gray.700', bg: size === 'lg' ? 'red.500' : 'transparent' }
+      expect(badge(size), size).toBe(fixture.runtimeCss(styles))
+    }
+    expectRules(fixture, result)
+  })
+
+  test('decides a choice across one that runs nothing, and not across one that could run something', () => {
+    const fold = (fixture: ReturnType<typeof createFoldFixture>, between: string) =>
+      fixture.foldStrict(
+        withCss(`function badge(props, a, b, pick) {
+      return css({ color: props.size === 'sm' ? 'white' : 'gray.700', bg: ${between} ? 'red.500' : 'transparent', padding: props.size === 'lg' ? '2' : '4' });
+    }`),
+      )
+
+    expect(fold(createFoldFixture(), '(a || b)').folded[0]?.classNames).toHaveLength(6)
+    const fixture = createFoldFixture()
+    const running = fold(fixture, 'pick()')
+    expect(running.folded[0]?.classNames).toHaveLength(8)
+    const props = { size: 'sm' }
+    const pick = () => ((props.size = 'lg'), true)
+    expect(badgeOf(running.code)(props, false, false, pick)).toBe(
+      fixture.runtimeCss({ color: 'white', bg: 'red.500', padding: '2' }),
+    )
+    expectRules(fixture, running)
+  })
+
+  // Six comparisons of one value are sixty-four combinations of answers, past the limit; a value reaches seven.
+  test('counts the combinations a value can reach against the limit', () => {
+    const choices = [
+      `color: v === 'a' ? 'white' : 'gray.700'`,
+      `bg: v === 'b' ? 'red.500' : 'transparent'`,
+      `padding: v === 'c' ? '2' : '4'`,
+      `margin: v === 'd' ? '1' : '2'`,
+      `opacity: v === 'e' ? 0.5 : 1`,
+      `fontWeight: v === 'f' ? 'bold' : 'light'`,
+    ]
+    const fixture = createFoldFixture()
+    const result = fixture.foldStrict(withCss(`function badge(v) { return css({ ${choices.join(', ')} }); }`))
+
+    expect(result.skipped).toEqual([])
+    expect(result.folded[0]?.classNames).toHaveLength(7)
+    const badge = badgeOf(result.code)
+    for (const v of ['a', 'b', 'c', 'd', 'e', 'f', 'z']) {
+      const styles = {
+        color: v === 'a' ? 'white' : 'gray.700',
+        bg: v === 'b' ? 'red.500' : 'transparent',
+        padding: v === 'c' ? '2' : '4',
+        margin: v === 'd' ? '1' : '2',
+        opacity: v === 'e' ? 0.5 : 1,
+        fontWeight: v === 'f' ? 'bold' : 'light',
+      }
+      expect(badge(v), v).toBe(fixture.runtimeCss(styles))
+    }
+    expectRules(fixture, result)
+  })
+
   test('merges a spread and a second argument where they are written', () => {
     const fixture = createFoldFixture()
     const result = fixture.foldStrict(

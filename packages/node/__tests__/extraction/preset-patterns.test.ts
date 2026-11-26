@@ -207,7 +207,7 @@ describe('preset patterns', () => {
 
         @layer s011-c1-p1000 {
           ._LAfdp8\\:before\\:inset_0::before {
-            inset: var(--spacing-0);
+            inset: 0rem;
       }
         }
 
@@ -275,7 +275,7 @@ describe('preset patterns', () => {
       }
 
           ._7xURoC\\:inset-bs_0 {
-            inset-block-start: var(--spacing-0);
+            inset-block-start: 0rem;
       }
 
           ._lFBHho\\:inset-be_auto {
@@ -287,7 +287,7 @@ describe('preset patterns', () => {
       }
 
           ._tikPb5\\:inset-e_0 {
-            inset-inline-end: var(--spacing-0);
+            inset-inline-end: 0rem;
       }
 
           ._nZtn2j\\:translate_50\\%_-50\\% {
@@ -550,7 +550,7 @@ describe('preset patterns', () => {
 
         @layer s010-c1-p1000 {
           ._hmTE0v\\:\\[\\&\\>\\*\\]\\:inset_0>* {
-            inset: var(--spacing-0);
+            inset: 0rem;
       }
         }
 
@@ -607,7 +607,7 @@ describe('preset patterns', () => {
 
         @layer s011-c2-p4000 {
           ._LlFmNu\\:before\\:h_0::before {
-            height: var(--sizes-0);
+            height: 0rem;
       }
 
           ._XLvIYN\\:before\\:pb_75\\%::before {
@@ -751,7 +751,7 @@ describe('staticCss', () => {
 
         @layer s010-c1-p1000 {
           ._hmTE0v\\:\\[\\&\\>\\*\\]\\:inset_0>* {
-            inset: var(--spacing-0);
+            inset: 0rem;
       }
         }
 
@@ -808,7 +808,7 @@ describe('staticCss', () => {
 
         @layer s011-c2-p4000 {
           ._LlFmNu\\:before\\:h_0::before {
-            height: var(--sizes-0);
+            height: 0rem;
       }
 
           ._XLvIYN\\:before\\:pb_75\\%::before {
@@ -853,7 +853,7 @@ describe('staticCss', () => {
 
         @layer s010-c1-p1000 {
           ._hmTE0v\\:\\[\\&\\>\\*\\]\\:inset_0>* {
-            inset: var(--spacing-0);
+            inset: 0rem;
       }
         }
 
@@ -902,7 +902,7 @@ describe('staticCss', () => {
         @layer s010-c5-p1000 {
           @media (width >= 48rem) {
             ._k-kWTu\\:md\\:\\[\\&\\>\\*\\]\\:inset_0>* {
-              inset: var(--spacing-0);
+              inset: 0rem;
       }
       }
         }
@@ -962,7 +962,7 @@ describe('staticCss', () => {
 
         @layer s011-c2-p4000 {
           ._LlFmNu\\:before\\:h_0::before {
-            height: var(--sizes-0);
+            height: 0rem;
       }
 
           ._XLvIYN\\:before\\:pb_400\\%::before {
@@ -992,7 +992,7 @@ describe('staticCss', () => {
         @layer s011-c6-p4000 {
           @media (width >= 48rem) {
             ._OEc4P_\\:md\\:before\\:h_0::before {
-              height: var(--sizes-0);
+              height: 0rem;
       }
             ._h64Bfy\\:md\\:before\\:pb_400\\%::before {
               padding-bottom: 400%;
@@ -1763,7 +1763,7 @@ describe('staticCss', () => {
       }
 
           ._7xURoC\\:inset-bs_0 {
-            inset-block-start: var(--spacing-0);
+            inset-block-start: 0rem;
       }
 
           ._lFBHho\\:inset-be_auto {
@@ -1775,7 +1775,7 @@ describe('staticCss', () => {
       }
 
           ._tikPb5\\:inset-e_0 {
-            inset-inline-end: var(--spacing-0);
+            inset-inline-end: 0rem;
       }
 
           ._nZtn2j\\:translate_50\\%_-50\\% {
@@ -2363,7 +2363,7 @@ describe('staticCss', () => {
       }
 
           ._lFBHho\\:inset-be_0 {
-            inset-block-end: var(--spacing-0);
+            inset-block-end: 0rem;
       }
 
           ._nZtn2j\\:translate_50\\%_50\\% {
@@ -2371,7 +2371,7 @@ describe('staticCss', () => {
       }
 
           ._oCxt6h\\:inset-s_0 {
-            inset-inline-start: var(--spacing-0);
+            inset-inline-start: 0rem;
       }
 
           ._tikPb5\\:inset-e_auto {

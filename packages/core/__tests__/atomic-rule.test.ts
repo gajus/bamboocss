@@ -633,7 +633,7 @@ describe('atomic / with direct nesting', () => {
 
         @layer s010-c0-p1000 {
           ._Ucco6y\\:bd_none {
-            border: var(--borders-none);
+            border: none;
       }
 
           ._DJEIKl\\:p_\\$3_\\$3 {

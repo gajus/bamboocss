@@ -78,7 +78,7 @@ describe('static-css', () => {
       }
 
         .buttonStyle:is(:hover, [data-hover]) {
-          background-color: var(--colors-red-200);
+          background-color: red.200;
           font-size: var(--font-sizes-3xl);
           color: white;
       }
@@ -168,15 +168,15 @@ describe('static-css', () => {
 
         @layer s010-c0-p3000 {
           ._Btm_AK\\:c_red\\.200 {
-            color: var(--colors-red-200);
+            color: red.200;
       }
 
           ._Btm_AK\\:c_blue\\.200 {
-            color: var(--colors-blue-200);
+            color: blue.200;
       }
 
           ._Btm_AK\\:c_green\\.200 {
-            color: var(--colors-green-200);
+            color: green.200;
       }
 
           ._Btm_AK\\:c_colorPalette\\.200 {
@@ -227,15 +227,15 @@ describe('static-css', () => {
         @layer s020-c1-p3000 {
 
           [data-theme=light] ._IcPIb3\\:light\\:c_red\\.200,.light ._IcPIb3\\:light\\:c_red\\.200,._IcPIb3\\:light\\:c_red\\.200.light,._IcPIb3\\:light\\:c_red\\.200[data-theme=light] {
-            color: var(--colors-red-200);
+            color: red.200;
       }
 
           [data-theme=light] ._IcPIb3\\:light\\:c_blue\\.200,.light ._IcPIb3\\:light\\:c_blue\\.200,._IcPIb3\\:light\\:c_blue\\.200.light,._IcPIb3\\:light\\:c_blue\\.200[data-theme=light] {
-            color: var(--colors-blue-200);
+            color: blue.200;
       }
 
           [data-theme=light] ._IcPIb3\\:light\\:c_green\\.200,.light ._IcPIb3\\:light\\:c_green\\.200,._IcPIb3\\:light\\:c_green\\.200.light,._IcPIb3\\:light\\:c_green\\.200[data-theme=light] {
-            color: var(--colors-green-200);
+            color: green.200;
       }
 
           [data-theme=light] ._IcPIb3\\:light\\:c_colorPalette\\.200,.light ._IcPIb3\\:light\\:c_colorPalette\\.200,._IcPIb3\\:light\\:c_colorPalette\\.200.light,._IcPIb3\\:light\\:c_colorPalette\\.200[data-theme=light] {
@@ -246,15 +246,15 @@ describe('static-css', () => {
         @layer s020-c2-p3000 {
 
           [data-theme=dark] ._gtEApe\\:dark\\:c_red\\.200,.dark ._gtEApe\\:dark\\:c_red\\.200,._gtEApe\\:dark\\:c_red\\.200.dark,._gtEApe\\:dark\\:c_red\\.200[data-theme=dark] {
-            color: var(--colors-red-200);
+            color: red.200;
       }
 
           [data-theme=dark] ._gtEApe\\:dark\\:c_blue\\.200,.dark ._gtEApe\\:dark\\:c_blue\\.200,._gtEApe\\:dark\\:c_blue\\.200.dark,._gtEApe\\:dark\\:c_blue\\.200[data-theme=dark] {
-            color: var(--colors-blue-200);
+            color: blue.200;
       }
 
           [data-theme=dark] ._gtEApe\\:dark\\:c_green\\.200,.dark ._gtEApe\\:dark\\:c_green\\.200,._gtEApe\\:dark\\:c_green\\.200.dark,._gtEApe\\:dark\\:c_green\\.200[data-theme=dark] {
-            color: var(--colors-green-200);
+            color: green.200;
       }
 
           [data-theme=dark] ._gtEApe\\:dark\\:c_colorPalette\\.200,.dark ._gtEApe\\:dark\\:c_colorPalette\\.200,._gtEApe\\:dark\\:c_colorPalette\\.200.dark,._gtEApe\\:dark\\:c_colorPalette\\.200[data-theme=dark] {
@@ -388,7 +388,7 @@ describe('static-css', () => {
       }
 
         .buttonStyle:is(:hover, [data-hover]) {
-          background-color: var(--colors-red-200);
+          background-color: red.200;
           font-size: var(--font-sizes-3xl);
           color: white;
       }
@@ -617,15 +617,15 @@ describe('static-css', () => {
 
         @layer s010-c0-p3000 {
           ._Btm_AK\\:c_red\\.200 {
-            color: var(--colors-red-200);
+            color: red.200;
       }
 
           ._Btm_AK\\:c_blue\\.200 {
-            color: var(--colors-blue-200);
+            color: blue.200;
       }
 
           ._Btm_AK\\:c_green\\.200 {
-            color: var(--colors-green-200);
+            color: green.200;
       }
 
           ._Btm_AK\\:c_colorPalette\\.200 {
@@ -635,15 +635,15 @@ describe('static-css', () => {
 
         @layer s020-c1-p3000 {
           ._yZXLUJ\\:focus\\:c_red\\.200:is(:focus, [data-focus]) {
-            color: var(--colors-red-200);
+            color: red.200;
       }
 
           ._yZXLUJ\\:focus\\:c_blue\\.200:is(:focus, [data-focus]) {
-            color: var(--colors-blue-200);
+            color: blue.200;
       }
 
           ._yZXLUJ\\:focus\\:c_green\\.200:is(:focus, [data-focus]) {
-            color: var(--colors-green-200);
+            color: green.200;
       }
 
           ._yZXLUJ\\:focus\\:c_colorPalette\\.200:is(:focus, [data-focus]) {
@@ -653,15 +653,15 @@ describe('static-css', () => {
 
         @layer s020-c2-p3000 {
           ._nRd69H\\:hover\\:c_red\\.200:is(:hover, [data-hover]) {
-            color: var(--colors-red-200);
+            color: red.200;
       }
 
           ._nRd69H\\:hover\\:c_blue\\.200:is(:hover, [data-hover]) {
-            color: var(--colors-blue-200);
+            color: blue.200;
       }
 
           ._nRd69H\\:hover\\:c_green\\.200:is(:hover, [data-hover]) {
-            color: var(--colors-green-200);
+            color: green.200;
       }
 
           ._nRd69H\\:hover\\:c_colorPalette\\.200:is(:hover, [data-hover]) {
@@ -724,7 +724,7 @@ describe('static-css', () => {
       }
 
         .buttonStyle:is(:hover, [data-hover]) {
-          background-color: var(--colors-red-200);
+          background-color: red.200;
           font-size: var(--font-sizes-3xl);
           color: white;
       }
@@ -1919,7 +1919,7 @@ describe('static-css', () => {
       }
 
         .buttonStyle:is(:hover, [data-hover]) {
-          background-color: var(--colors-red-200);
+          background-color: red.200;
           font-size: var(--font-sizes-3xl);
           color: white;
       }

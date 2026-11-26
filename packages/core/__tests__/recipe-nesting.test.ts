@@ -58,8 +58,8 @@ test('[recipe] direct nesting / recipe ruleset', () => {
       .text {
         object-pos: center;
         margin-top: auto;
-        margin-bottom: var(--spacing-0);
-        padding-top: var(--spacing-0);
+        margin-bottom: 0rem;
+        padding-top: 0rem;
     }
 
       .text--variant_sm:disabled {
@@ -88,8 +88,8 @@ test('[recipe] direct nesting / recipe ruleset', () => {
       .text {
         object-pos: center;
         margin-top: auto;
-        margin-bottom: var(--spacing-0);
-        padding-top: var(--spacing-0);
+        margin-bottom: 0rem;
+        padding-top: 0rem;
     }
 
       .text--variant_md:before {

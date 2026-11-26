@@ -806,8 +806,8 @@ describe('Global css', () => {
         #corner {
           position: fixed;
           cursor: nwse-resize;
-          right: var(--spacing-0);
-          bottom: var(--spacing-0);
+          right: 0rem;
+          bottom: 0rem;
       }
 
         .color-picker .react-colorful {
@@ -2766,11 +2766,11 @@ describe('Global css', () => {
     expect(sheet).toMatchInlineSnapshot(`
       "@layer base {
         p {
-          margin: var(--spacing-0);
+          margin: 0rem;
       }
 
         p ~ p {
-          margin-top: var(--spacing-0);
+          margin-top: 0rem;
       }
 
         @property --focus-ring-color {
@@ -3423,7 +3423,7 @@ describe('Global css', () => {
     expect(sheet).toMatchInlineSnapshot(`
       "@layer base {
         body > p,body > ul {
-          margin: var(--spacing-0);
+          margin: 0rem;
       }
 
         :is(body > p) ~ :is(body > p),:is(body > ul) ~ :is(body > ul) {

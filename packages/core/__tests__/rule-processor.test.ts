@@ -725,13 +725,13 @@ describe('rule processor', () => {
 
         .cva_ikTMbL--variant_outline {
           border: 1px solid blue;
-          background-color: var(--colors-transparent);
+          background-color: rgb(0 0 0 / 0);
           color: blue;
       }
 
         .cva_ikTMbL--variant_outline[data-disabled] {
           border: 1px solid gray;
-          background-color: var(--colors-transparent);
+          background-color: rgb(0 0 0 / 0);
           color: gray;
       }
 

@@ -82,7 +82,7 @@ describe('generate reset', () => {
 
         button,input,optgroup,select,textarea,::file-selector-button {
           font: inherit;
-          background: var(--colors-transparent);
+          background: rgb(0 0 0 / 0);
           font-feature-settings: inherit;
           font-variation-settings: inherit;
           letter-spacing: inherit;
@@ -234,7 +234,7 @@ describe('generate reset', () => {
 
         .pd-reset button,.pd-reset input,.pd-reset optgroup,.pd-reset select,.pd-reset textarea,.pd-reset ::file-selector-button {
           font: inherit;
-          background: var(--colors-transparent);
+          background: rgb(0 0 0 / 0);
           font-feature-settings: inherit;
           font-variation-settings: inherit;
           letter-spacing: inherit;
@@ -446,7 +446,7 @@ describe('generate reset', () => {
 
         button.pd-reset,input.pd-reset,optgroup.pd-reset,select.pd-reset,textarea.pd-reset,::file-selector-button.pd-reset {
           font: inherit;
-          background: var(--colors-transparent);
+          background: rgb(0 0 0 / 0);
           font-feature-settings: inherit;
           font-variation-settings: inherit;
           letter-spacing: inherit;

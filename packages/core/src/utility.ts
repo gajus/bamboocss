@@ -151,6 +151,56 @@ export interface UtilityOptions {
   invalidDeclaration?: InvalidDeclarationSeverity
 }
 
+/** A zero in a length unit, or with none: the value a scale's `0` names. A `0%` is not one. */
+const ZERO_LENGTH =
+  /^[+-]?(?:0+(?:\.0*)?|\.0+)(?:px|r?em|ch|ex|r?lh|v[whib]|vmin|vmax|[sld]v[whib]|cm|mm|q|in|pt|pc)?$/i
+
+/** Transparent black, which `transparent` is, in a colour's other spellings. */
+const TRANSPARENT =
+  /^(?:transparent|#0000(?:0000)?|rgba?\(\s*0(?:\s*,\s*|\s+)0(?:\s*,\s*|\s+)0\s*(?:,|\/)\s*(?:0+(?:\.0*)?|\.0+)%?\s*\))$/i
+
+/**
+ * Whether a token's name, as a value is written, spells the token's value: the same text, or a zero
+ * length named `0`, or transparent black named `transparent`. @see Utility.getPropertyRawValue
+ */
+const spellsValue = (name: string, value: string) => {
+  if (name === value) return true
+  if (name === '0') return ZERO_LENGTH.test(value)
+  if (name === 'transparent') return TRANSPARENT.test(value)
+  return false
+}
+
+/**
+ * Per dictionary, the value each token that is only an alias resolves to, by the reference the
+ * lookups write for it. @see Utility.getPropertyRawValue
+ *
+ * Built once, beside the dictionary rather than on the `Utility`: a field more on an object every
+ * style lookup reads slowed the lookups that never reach this, and deciding per lookup cost each
+ * style created about 4% on a wildcard `staticCss`.
+ */
+const aliasValues = new WeakMap<TokenDictionary, Map<string, { name: string; value: string }>>()
+
+const aliasValuesOf = (tokens: TokenDictionary) => {
+  let aliases = aliasValues.get(tokens)
+  if (aliases !== undefined) return aliases
+  // A variable some token declares under a condition or for a theme, where it has another value.
+  const conditional = new Set<string>()
+  for (const token of tokens.allTokens) {
+    const { condition, theme, var: declared } = token.extensions
+    if (theme || (condition !== undefined && condition !== 'base')) conditional.add(declared)
+  }
+  aliases = new Map()
+  for (const token of tokens.allTokens) {
+    const { condition, isNegative, isVirtual, theme, prop, var: declared, varRef } = token.extensions
+    if (isNegative || isVirtual || theme || (condition !== undefined && condition !== 'base')) continue
+    if (prop === undefined || varRef === undefined || conditional.has(declared)) continue
+    const value = String(token.value)
+    if (spellsValue(prop, value)) aliases.set(varRef, { name: prop, value })
+  }
+  aliasValues.set(tokens, aliases)
+  return aliases
+}
+
 export class Utility {
   /**
    * The token map or dictionary of tokens
@@ -486,7 +536,32 @@ export class Utility {
     return values
   }
 
+  /**
+   * The value a property's lookup gives `value`, with a reference to a token that is only an alias
+   * replaced by the token's value.
+   *
+   * `padding: '0'` compiled to `var(--spacing-0)`, and the stylesheet declared the variable for it,
+   * because `0` names a spacing token. A token whose value is what its name says — `spacing.0` is
+   * `0rem`, `borders.none` is `none`, `colors.transparent` is `rgb(0 0 0 / 0)` — and that no
+   * condition or theme gives another value can only ever be that, so the reference bought nothing
+   * and cost every element it styles a substitution: 3% of the CSS-in-JS benchmark's stylesheet
+   * bytes across its pages. The token's value is written rather than its name, being exactly what
+   * the reference resolved to, so it is valid wherever that was: a `0rem` inside a utility's
+   * `calc()`, where a bare `0` is not.
+   *
+   * A token its name does not spell keeps its reference — `padding: '4'` is `spacing.4`, and
+   * `lineHeight: 'none'` is `1` — and so does one a condition or a theme gives another value,
+   * whose reference is how that value applies. A reference written as one, `token(spacing.0)`,
+   * does not come through here.
+   */
   getPropertyRawValue(config: PropertyConfig, value: string) {
+    const raw = this.lookupPropertyValue(config, value)
+    const alias = typeof raw === 'string' ? aliasValuesOf(this.tokens).get(raw) : undefined
+    // The value written is the token's name, not a reference to it, which asks for the token.
+    return alias !== undefined && alias.name === String(value) ? alias.value : raw
+  }
+
+  private lookupPropertyValue(config: PropertyConfig, value: string) {
     const { values } = config
     if (!values) return value
 

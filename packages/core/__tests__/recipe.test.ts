@@ -123,11 +123,11 @@ describe('recipe ruleset', () => {
                   "color": "var(--colors-white)",
                 },
                 "&[data-disabled]": {
-                  "backgroundColor": "var(--colors-transparent)",
+                  "backgroundColor": "rgb(0 0 0 / 0)",
                   "border": "1px solid gray",
                   "color": "gray",
                 },
-                "backgroundColor": "var(--colors-transparent)",
+                "backgroundColor": "rgb(0 0 0 / 0)",
                 "border": "1px solid blue",
                 "color": "blue",
               },
@@ -243,13 +243,13 @@ describe('recipe ruleset', () => {
         @media (width >= 64rem) {
           .lg\\:buttonStyle--variant_outline {
             border: 1px solid blue;
-            background-color: var(--colors-transparent);
+            background-color: rgb(0 0 0 / 0);
             color: blue;
       }
 
           .lg\\:buttonStyle--variant_outline[data-disabled] {
             border: 1px solid gray;
-            background-color: var(--colors-transparent);
+            background-color: rgb(0 0 0 / 0);
             color: gray;
       }
 

@@ -115,8 +115,22 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../../..')
 /** Folders holding nothing the repository wrote: installed, built, generated or hidden. */
 const SKIPPED = new Set(['node_modules', 'dist', 'build', 'out', 'outdir', 'coverage', 'styled-system', 'target'])
 
+/**
+ * A path the walk listed that is gone by the time it is read: a fixture another test made and removed
+ * meanwhile, such as the rebuild test in `sandbox/runtime-perf`, which writes `src/__watch-tmp` while
+ * the suite runs in parallel. None is a source of this repository's, and reading one failed the run.
+ */
+const vanished = (error: unknown) => (error as NodeJS.ErrnoException | undefined)?.code === 'ENOENT'
+
 const sourceFiles = (directory: string, files: string[] = []) => {
-  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+  let entries
+  try {
+    entries = readdirSync(directory, { withFileTypes: true })
+  } catch (error) {
+    if (vanished(error)) return files
+    throw error
+  }
+  for (const entry of entries) {
     if (entry.name.startsWith('.') || SKIPPED.has(entry.name) || entry.name.endsWith('-outdir')) continue
     const path = join(directory, entry.name)
     if (entry.isDirectory()) sourceFiles(path, files)
@@ -130,7 +144,13 @@ describe('the import scans, judged by a parser', () => {
     const misses: string[] = []
     let checked = 0
     for (const file of sourceFiles(ROOT)) {
-      const code = readFileSync(file, 'utf8')
+      let code: string
+      try {
+        code = readFileSync(file, 'utf8')
+      } catch (error) {
+        if (vanished(error)) continue
+        throw error
+      }
       const specifiers = parsedSpecifiers(file, code)
       if (!specifiers) continue
       checked += specifiers.length

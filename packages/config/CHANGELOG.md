@@ -1,5 +1,26 @@
 # @bamboocss/config
 
+## 1.64.11
+
+### Patch Changes
+
+- 7bf6545: Apply what every plugin's `tokens:created` hook configures. The hooks ran one after another across
+  microtasks, and the tokens were built as soon as the first had run, so a plugin listed after another plugin with a
+  `tokens:created` hook had its `formatTokenName` and `formatCssVar` ignored, with nothing said: a token spelled its
+  way, such as `$blue-300`, was left in the CSS as written. Each plugin's hook now runs before the tokens are built, as
+  each `utility:created` hook already did.
+
+  A hook that calls `configure` after an `await` comes too late for the tokens, which are built by then, and is now
+  reported instead of ignored in silence.
+
+- Updated dependencies [166401c]
+- Updated dependencies [67b63c3]
+  - @bamboocss/shared@1.64.11
+  - @bamboocss/types@1.64.11
+  - @bamboocss/logger@1.64.11
+  - @bamboocss/preset-bamboo@1.64.11
+  - @bamboocss/preset-base@1.64.11
+
 ## 1.64.10
 
 ### Patch Changes

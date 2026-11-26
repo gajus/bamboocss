@@ -85,8 +85,20 @@ export const nativeBinaryName = () =>
       : `${process.platform}-${process.arch}`
   ]
 
-/** Load the required Rust extractor from the workspace or the published prebuild directory. */
-export const loadNativeExtractor = (): NativeExtractor => {
+let loaded: NativeExtractor | undefined
+
+/**
+ * The required Rust extractor, loaded once.
+ *
+ * Every native call reaches it through this — each module compiled, each extraction pass, each
+ * token accounting — and resolving it again each time cost a published install a failed lookup of
+ * `@bamboocss/native-extractor`, which only the workspace has, before the prebuild it then found:
+ * about 47 µs a call. A failure is not kept, so the next call tries again.
+ */
+export const loadNativeExtractor = (): NativeExtractor => (loaded ??= requireNativeExtractor())
+
+/** Load the extractor from the workspace or the published prebuild directory. */
+const requireNativeExtractor = (): NativeExtractor => {
   const nativeRequire = createRequire(import.meta.url)
   try {
     return nativeRequire('@bamboocss/native-extractor') as NativeExtractor

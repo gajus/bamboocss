@@ -1,5 +1,17 @@
 # @bamboocss/reporter
 
+## 1.64.12
+
+### Patch Changes
+
+- Updated dependencies [a1d6bb3]
+- Updated dependencies [61f3ff0]
+  - @bamboocss/core@1.64.12
+  - @bamboocss/shared@1.64.12
+  - @bamboocss/generator@1.64.12
+  - @bamboocss/logger@1.64.12
+  - @bamboocss/types@1.64.12
+
 ## 1.64.11
 
 ### Patch Changes
